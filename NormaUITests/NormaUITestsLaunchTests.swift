@@ -1,13 +1,13 @@
 //
-//  CollectorUITestsLaunchTests.swift
-//  CollectorUITests
+//  NormaUITestsLaunchTests.swift
+//  NormaUITests
 //
 //  Created by Chris Mauldin on 5/8/25.
 //
 
 import XCTest
 
-final class CollectorUITestsLaunchTests: XCTestCase {
+final class NormaUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
