@@ -1,0 +1,417 @@
+//
+//  BudgetDisclosureView.swift
+//  Norma
+//
+//  Created by Claude on 5/19/25.
+//
+
+import SwiftUI
+
+struct BudgetDisclosureView: View {
+    @State private var categoryBudgets: [ExpenseCategory: Double] = [
+        .food: 800,
+        .transportation: 300,
+        .entertainment: 200,
+        .shopping: 400,
+        .utilities: 250,
+        .health: 150,
+        .other: 300
+    ]
+    @State private var showingAllCategories = false
+    
+    let expenses: [FinancialItem]
+    let month: String
+    
+    private let maxCategoriesToShow = 3
+    
+    private var expensesByCategory: [ExpenseCategory: Double] {
+        var totals: [ExpenseCategory: Double] = [:]
+        
+        for expense in expenses where expense.category == .expense {
+            let category = expense.asExpenseCategory ?? .other
+            totals[category, default: 0] += expense.amount
+        }
+        
+        return totals
+    }
+    
+    private var categoriesWithBudgets: [ExpenseCategory] {
+        return categoryBudgets.compactMap { category, budget in
+            budget > 0 ? category : nil
+        }.sorted { category1, category2 in
+            let spent1 = expensesByCategory[category1] ?? 0
+            let spent2 = expensesByCategory[category2] ?? 0
+            let budget1 = categoryBudgets[category1] ?? 0
+            let budget2 = categoryBudgets[category2] ?? 0
+            let percentage1 = budget1 > 0 ? spent1 / budget1 : 0
+            let percentage2 = budget2 > 0 ? spent2 / budget2 : 0
+            return percentage1 > percentage2
+        }
+    }
+    
+    private var displayedCategories: [ExpenseCategory] {
+        Array(categoriesWithBudgets.prefix(maxCategoriesToShow))
+    }
+    
+    private var totalBudget: Double {
+        categoryBudgets.values.reduce(0, +)
+    }
+    
+    private var totalSpent: Double {
+        expensesByCategory.values.reduce(0, +)
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header section
+            VStack(spacing: 12) {
+                Text("\(month.uppercased()) BUDGET")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+                
+                // Summary stats
+                HStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("Total Budget")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(totalBudget))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    VStack(spacing: 4) {
+                        Text("Spent")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(totalSpent))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(totalSpent > totalBudget ? .red : .primary)
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    VStack(spacing: 4) {
+                        Text("Remaining")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(max(0, totalBudget - totalSpent)))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(totalSpent > totalBudget ? .red : .green)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            
+            // Budget categories container
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(UIColor.systemBackground),
+                                Color.gray.opacity(0.02)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.gray.opacity(0.2),
+                                        Color.gray.opacity(0.05)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                
+                VStack(spacing: 0) {
+                    if displayedCategories.isEmpty {
+                        // Empty state
+                        VStack(spacing: 12) {
+                            Image(systemName: "chart.pie.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.blue.opacity(0.5))
+                            
+                            Text("No budget categories")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 40)
+                    } else {
+                        // Budget category items
+                        ForEach(displayedCategories, id: \.self) { category in
+                            BudgetCategoryRow(
+                                category: category,
+                                budgetAmount: categoryBudgets[category] ?? 0,
+                                spentAmount: expensesByCategory[category] ?? 0,
+                                onBudgetChanged: { newBudget in
+                                    categoryBudgets[category] = newBudget
+                                }
+                            )
+                            
+                            if category != displayedCategories.last {
+                                Divider()
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        
+                        // See all button
+                        if categoriesWithBudgets.count > maxCategoriesToShow {
+                            Divider()
+                                .padding(.horizontal, 20)
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showingAllCategories.toggle()
+                                }
+                            }) {
+                                HStack {
+                                    Text("See All Categories")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.blue)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(categoriesWithBudgets.count - maxCategoriesToShow) more")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.blue)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .sheet(isPresented: $showingAllCategories) {
+                                NavigationStack {
+                                    ScrollView {
+                                        VStack(spacing: 0) {
+                                            ForEach(categoriesWithBudgets, id: \.self) { category in
+                                                BudgetCategoryRow(
+                                                    category: category,
+                                                    budgetAmount: categoryBudgets[category] ?? 0,
+                                                    spentAmount: expensesByCategory[category] ?? 0,
+                                                    onBudgetChanged: { newBudget in
+                                                        categoryBudgets[category] = newBudget
+                                                    }
+                                                )
+                                                
+                                                if category != categoriesWithBudgets.last {
+                                                    Divider()
+                                                        .padding(.horizontal, 20)
+                                                }
+                                            }
+                                        }
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .fill(Color(UIColor.systemBackground))
+                                                .shadow(color: .black.opacity(0.05), radius: 10)
+                                        )
+                                        .padding()
+                                    }
+                                    .navigationTitle("All Budget Categories")
+                                    .navigationBarTitleDisplayMode(.inline)
+                                    .toolbar {
+                                        ToolbarItem(placement: .navigationBarTrailing) {
+                                            Button("Done") {
+                                                showingAllCategories = false
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
+    }
+}
+
+struct BudgetCategoryRow: View {
+    let category: ExpenseCategory
+    let budgetAmount: Double
+    let spentAmount: Double
+    let onBudgetChanged: (Double) -> Void
+    
+    @State private var isEditingBudget = false
+    @State private var tempBudgetText: String = ""
+    
+    private var percentageUsed: Double {
+        guard budgetAmount > 0 else { return 0 }
+        return min(spentAmount / budgetAmount, 1.5) // Cap at 150% for visual purposes
+    }
+    
+    private var isOverBudget: Bool {
+        spentAmount > budgetAmount
+    }
+    
+    private var statusColor: Color {
+        if percentageUsed < 0.5 {
+            return .green
+        } else if percentageUsed < 0.8 {
+            return .yellow
+        } else if percentageUsed < 1.0 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                // Category icon
+                ZStack {
+                    Circle()
+                        .fill(category.color.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: category.icon)
+                        .font(.system(size: 16))
+                        .foregroundColor(category.color)
+                }
+                
+                // Category info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(category.rawValue)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    HStack(spacing: 4) {
+                        Text("$\(Int(spentAmount))")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(isOverBudget ? .red : .primary)
+                        
+                        Text("of")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        
+                        if isEditingBudget {
+                            TextField("Budget", text: $tempBudgetText)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.blue)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .frame(width: 60)
+                                .onSubmit {
+                                    saveBudget()
+                                }
+                        } else {
+                            Text("$\(Int(budgetAmount))")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.blue)
+                                .onTapGesture {
+                                    tempBudgetText = "\(Int(budgetAmount))"
+                                    isEditingBudget = true
+                                }
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                // Percentage and remaining
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(Int(percentageUsed * 100))%")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(statusColor)
+                    
+                    if !isOverBudget {
+                        Text("$\(Int(budgetAmount - spentAmount)) left")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("$\(Int(spentAmount - budgetAmount)) over")
+                            .font(.system(size: 11))
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.gray.opacity(0.1))
+                        .frame(height: 8)
+                    
+                    // Progress fill
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(statusColor)
+                        .frame(width: min(geometry.size.width * percentageUsed, geometry.size.width), height: 8)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: percentageUsed)
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .onTapGesture {
+            if isEditingBudget {
+                saveBudget()
+            }
+        }
+    }
+    
+    private func saveBudget() {
+        if let newBudget = Double(tempBudgetText), newBudget > 0 {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                onBudgetChanged(newBudget)
+            }
+        }
+        isEditingBudget = false
+    }
+}
+
+extension ExpenseCategory: CaseIterable {
+    static var allCases: [ExpenseCategory] {
+        return [.food, .transportation, .entertainment, .shopping, .utilities, .health, .other]
+    }
+}
+
+struct BudgetDisclosureView_Previews: PreviewProvider {
+    static let sampleExpenses: [FinancialItem] = [
+        FinancialItem(name: "Groceries", amount: 350, category: .expense, date: Date(), expenseCategory: .food),
+        FinancialItem(name: "Restaurant", amount: 200, category: .expense, date: Date(), expenseCategory: .food),
+        FinancialItem(name: "Gas", amount: 150, category: .expense, date: Date(), expenseCategory: .transportation),
+        FinancialItem(name: "Uber", amount: 80, category: .expense, date: Date(), expenseCategory: .transportation),
+        FinancialItem(name: "Movie", amount: 50, category: .expense, date: Date(), expenseCategory: .entertainment),
+        FinancialItem(name: "Concert", amount: 180, category: .expense, date: Date(), expenseCategory: .entertainment),
+        FinancialItem(name: "Clothes", amount: 300, category: .expense, date: Date(), expenseCategory: .shopping),
+        FinancialItem(name: "Electric Bill", amount: 120, category: .expense, date: Date(), expenseCategory: .utilities),
+        FinancialItem(name: "Doctor Visit", amount: 100, category: .expense, date: Date(), expenseCategory: .health)
+    ]
+    
+    static var previews: some View {
+        ScrollView {
+            BudgetDisclosureView(expenses: sampleExpenses, month: "December")
+                .padding()
+        }
+        .preferredColorScheme(.light)
+    }
+}

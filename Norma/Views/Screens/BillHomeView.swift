@@ -12,6 +12,12 @@ struct BillHomeView: View {
     
     @State private var showMyBills: Bool = false
     
+    private var currentMonth: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        return formatter.string(from: Date())
+    }
+    
     let sampleBills = [
         Bill(name: "Rent", date: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
         Bill(name: "Electricity", date: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
@@ -30,12 +36,16 @@ struct BillHomeView: View {
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 2000,
-                    incomeAmount: 3000
+                    incomeAmount: 3000,
+                    month: currentMonth
                 )
                 .padding(.horizontal)
     
                 
                 BillDisclosureView(bills: sampleBills)
+                .padding(.top)
+                .padding(.horizontal)
+                .padding(.horizontal)
                 .padding(.horizontal)
                 .padding(.horizontal)
             }
@@ -79,5 +89,5 @@ struct BillHomeView: View {
 
 #Preview {
     BillHomeView()
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
 }

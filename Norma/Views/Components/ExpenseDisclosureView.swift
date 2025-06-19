@@ -9,19 +9,12 @@ import SwiftUI
 import Foundation
 
 struct ExpenseDisclosureView: View {
-    // Array of all expenses
     let expenses: [FinancialItem]
-    
-    // Category to filter by, nil means show all
     let category: ExpenseCategory?
-    
-    // Maximum number of expenses to display in preview
-    let maxExpensesToShow = 3
-    
-    // State to track when the sheet is presented
     @State private var showingAllExpenses = false
     
-    // Title to show in the header
+    private let maxExpensesToShow = 5
+    
     var title: String {
         if let category = category {
             return "\(category.rawValue) Expenses"
@@ -30,141 +23,220 @@ struct ExpenseDisclosureView: View {
         }
     }
     
-    // Computed property to get filtered and sorted expenses
     private var filteredExpenses: [FinancialItem] {
-        // Filter for matching category if provided, and ensure they're actually expenses
         let filtered = expenses.filter { expense in
             expense.category == .expense && 
             (category == nil || expense.asExpenseCategory == category)
         }
-        
-        // Sort by date (most recent first)
         return filtered.sorted { $0.date > $1.date }
     }
     
-    // Expenses to display in the preview
-    private var previewExpenses: [FinancialItem] {
-        return Array(filteredExpenses.prefix(maxExpensesToShow))
+    private var displayedExpenses: [FinancialItem] {
+        Array(filteredExpenses.prefix(maxExpensesToShow))
+    }
+    
+    private var totalExpenseAmount: Double {
+        filteredExpenses.reduce(0) { $0 + $1.amount }
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack(alignment: .top) {
-                VStack(alignment: .leading) {
-                    Text(title)
-                        .font(.headline)
-                        .padding(.bottom, 4)
-                    // Total amount for this category/all expenses
-                    if !filteredExpenses.isEmpty {
-                        HStack {
-                            Text("Total:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            Text("$\(filteredExpenses.reduce(0) { $0 + $1.amount }, specifier: "%.2f")")
-                                .font(.subheadline)
-                                .foregroundColor(.red)
-                        }
+        VStack(spacing: 24) {
+            // Header section matching ExpenseTrackerChartView style
+            VStack(spacing: 12) {
+                Text("RECENT EXPENSES")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+                
+                // Summary stats
+                HStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("Total Spent")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(totalExpenseAmount))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    VStack(spacing: 4) {
+                        Text("Transactions")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("\(filteredExpenses.count)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            
+            // Expenses list container
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(UIColor.systemBackground),
+                                Color.gray.opacity(0.02)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.gray.opacity(0.2),
+                                        Color.gray.opacity(0.05)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    )
                 
-                Spacer()
-                
-                // See All Button
-                if filteredExpenses.count > maxExpensesToShow {
-                    Button(action: {
-                        showingAllExpenses = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Text("See All")
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
+                VStack(spacing: 0) {
+                    if displayedExpenses.isEmpty {
+                        // Empty state
+                        VStack(spacing: 12) {
+                            Image(systemName: "creditcard.circle")
+                                .font(.system(size: 40))
+                                .foregroundColor(.purple.opacity(0.5))
                             
-                            Image(systemName: "chevron.up")
-                                .font(.caption)
-                                .foregroundColor(.blue)
+                            Text("No recent expenses")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
                         }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .sheet(isPresented: $showingAllExpenses) {
-                        // This will be replaced with a full screen view of all expenses
-                        NavigationStack {
-                            List(filteredExpenses) { expense in
-                                ExpenseCardView(
-                                    name: expense.name,
-                                    date: expense.date,
-                                    amount: expense.amount,
-                                    category: expense.asExpenseCategory ?? .other
-                                )
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        .padding(.vertical, 40)
+                    } else {
+                        // Expense items
+                        ForEach(displayedExpenses) { expense in
+                            ExpenseRowView(expense: expense)
+                            
+                            if expense.id != displayedExpenses.last?.id {
+                                Divider()
+                                    .padding(.horizontal, 20)
                             }
-                            .listStyle(.plain)
-                            .navigationTitle(title)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button(action: {
-                                        showingAllExpenses = false
-                                    }) {
-                                        Text("Done")
+                        }
+                        
+                        // See all button
+                        if filteredExpenses.count > maxExpensesToShow {
+                            Divider()
+                                .padding(.horizontal, 20)
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showingAllExpenses.toggle()
+                                }
+                            }) {
+                                HStack {
+                                    Text("See All Expenses")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.purple)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(filteredExpenses.count - maxExpensesToShow) more")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.purple)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .sheet(isPresented: $showingAllExpenses) {
+                                NavigationStack {
+                                    List(filteredExpenses) { expense in
+                                        ExpenseRowView(expense: expense)
+                                            .listRowSeparator(.hidden)
+                                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                    }
+                                    .listStyle(.plain)
+                                    .navigationTitle(title)
+                                    .toolbar {
+                                        ToolbarItem(placement: .navigationBarTrailing) {
+                                            Button("Done") {
+                                                showingAllExpenses = false
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-            
-            // Expense List
-            VStack(spacing: 12) {
-                if previewExpenses.isEmpty {
-                    // Empty state
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Image(systemName: "creditcard")
-                                .font(.largeTitle)
-                                .foregroundColor(.blue.opacity(0.7))
-                            
-                            Text("No expenses found")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                        Spacer()
-                    }
-                } else {
-                    // List of expenses
-                    ForEach(previewExpenses) { expense in
-                        ExpenseCardView(
-                            name: expense.name,
-                            date: expense.date,
-                            amount: expense.amount,
-                            category: expense.asExpenseCategory ?? .other
-                        )
-                    }
-                }
-            }
-            
-            // Footer with total count
-            if filteredExpenses.count > maxExpensesToShow {
-                HStack {
-                    Spacer()
-                    Text("+ \(filteredExpenses.count - maxExpensesToShow) more expenses")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
+                .padding(.vertical, 8)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemFill).opacity(0.2))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-        )
+    }
+}
+
+struct ExpenseRowView: View {
+    let expense: FinancialItem
+    
+    private var expenseCategory: ExpenseCategory {
+        expense.asExpenseCategory ?? .other
+    }
+    
+    private var timeAgoText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: expense.date, relativeTo: Date())
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Category icon
+            ZStack {
+                Circle()
+                    .fill(expenseCategory.color.opacity(0.1))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: expenseCategory.icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(expenseCategory.color)
+            }
+            
+            // Expense info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(expense.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text(timeAgoText)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Amount
+            Text("$\(Int(expense.amount))")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 }
 

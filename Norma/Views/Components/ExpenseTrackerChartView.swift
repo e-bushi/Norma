@@ -4,6 +4,16 @@ struct ExpenseTrackerChartView: View {
     let billAmount: Double
     let currentExpenseAmount: Double
     let incomeAmount: Double
+    let month: String
+    
+    @State private var showDescription = false
+    
+    init(billAmount: Double, currentExpenseAmount: Double, incomeAmount: Double, month: String = "Monthly") {
+        self.billAmount = billAmount
+        self.currentExpenseAmount = currentExpenseAmount
+        self.incomeAmount = incomeAmount
+        self.month = month
+    }
     
     private let lineHeight: CGFloat = 400
     private let dotSize: CGFloat = 16
@@ -44,8 +54,8 @@ struct ExpenseTrackerChartView: View {
             // Enhanced header with status
             VStack(spacing: 12) {
                 // Progress badge
-                Text("MONTHLY PROGRESS")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                Text("\(month.uppercased())'S PROGRESS")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
                 
@@ -53,10 +63,10 @@ struct ExpenseTrackerChartView: View {
                 HStack(spacing: 20) {
                     VStack(spacing: 4) {
                         Text("Remaining")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
                         Text("$\(Int(max(0, incomeAmount - currentExpenseAmount)))")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
                     
@@ -65,10 +75,10 @@ struct ExpenseTrackerChartView: View {
                     
                     VStack(spacing: 4) {
                         Text("Daily Budget")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
                         Text("$\(Int((incomeAmount - billAmount) / 30))")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
                 }
@@ -80,29 +90,6 @@ struct ExpenseTrackerChartView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                
-                HStack(spacing: 8) {
-                    Text("\(Int(expensePercentage))% used")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                    
-                    Text("•")
-                        .font(.system(size: 16))
-                        .foregroundColor(budgetStatus.color.opacity(0.5))
-                    
-                    Text(budgetStatus.text)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                }
-                .foregroundColor(budgetStatus.color)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(budgetStatus.color.opacity(0.1))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(budgetStatus.color.opacity(0.2), lineWidth: 1)
                         )
                 )
             }
@@ -150,38 +137,6 @@ struct ExpenseTrackerChartView: View {
                     }
                     .frame(width: chartWidth * 0.8)
                     
-                    // Horizontal expense line (right side only)
-                    if currentExpenseAmount > 0 {
-                        let lineWidth = (chartWidth * 0.45) - (dotSize / 2) - 10
-                        
-                        // Subtle shadow for depth
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.black.opacity(0.08))
-                            .frame(width: lineWidth, height: 2)
-                            .offset(y: 2)
-                            .position(x: centerX + (lineWidth / 2) + (dotSize / 2), y: expensePosition)
-                        
-                        // Main gradient line
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.purple,
-                                        Color.blue
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: lineWidth, height: 2)
-                            .position(x: centerX + (lineWidth / 2) + (dotSize / 2), y: expensePosition)
-                        
-                        // End dot
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 6, height: 6)
-                            .position(x: centerX + lineWidth + (dotSize / 2), y: expensePosition)
-                    }
                     
                     // Vertical reference line
                     RoundedRectangle(cornerRadius: 1)
@@ -218,12 +173,12 @@ struct ExpenseTrackerChartView: View {
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("INCOME")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.green.opacity(0.8))
                                 .tracking(0.5)
                             
                             Text("$\(Int(incomeAmount))")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.green)
                         }
                     }
@@ -259,12 +214,12 @@ struct ExpenseTrackerChartView: View {
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("BILLS")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.red.opacity(0.8))
                                 .tracking(0.5)
                             
                             Text("$\(Int(billAmount))")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.red)
                         }
                     }
@@ -283,10 +238,6 @@ struct ExpenseTrackerChartView: View {
                     // Current expense indicator dot
                     ZStack {
                         Circle()
-                            .stroke(Color.purple.opacity(0.3), lineWidth: 2)
-                            .frame(width: dotSize + 16, height: dotSize + 16)
-                        
-                        Circle()
                             .fill(Color(UIColor.systemBackground))
                             .frame(width: dotSize + 8, height: dotSize + 8)
                         
@@ -296,28 +247,34 @@ struct ExpenseTrackerChartView: View {
                     }
                     .position(x: centerX, y: expensePosition)
                     
-                    // Current expense label (right side, below line)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("CURRENT")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.purple.opacity(0.7))
-                            .tracking(0.5)
+                    // Current expense label (right side)
+                    HStack(spacing: 12) {
+                        Image(systemName: "creditcard.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.purple.opacity(0.8))
                         
-                        Text("$\(Int(currentExpenseAmount))")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(.purple)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("CURRENT")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.purple.opacity(0.8))
+                                .tracking(0.5)
+                            
+                            Text("$\(Int(currentExpenseAmount))")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.purple)
+                        }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 12)
                             .fill(Color.purple.opacity(0.08))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.purple.opacity(0.15), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.purple.opacity(0.2), lineWidth: 1)
                             )
                     )
-                    .position(x: chartWidth - 50, y: expensePosition + 40)
+                    .position(x: chartWidth - 80, y: expensePosition)
                 }
                 .frame(width: chartWidth, height: lineHeight)
                 .padding(.vertical, 60)
@@ -325,6 +282,88 @@ struct ExpenseTrackerChartView: View {
             }
             .padding(.horizontal)
             .padding(.horizontal)
+            
+            // Toggle button for explanation
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showDescription.toggle()
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: showDescription ? "info.circle.fill" : "info.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(.blue)
+                    
+                    Text(showDescription ? "Hide explanation" : "How to read this chart")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.blue)
+                    
+                    Spacer()
+                    
+                    Image(systemName: showDescription ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.blue.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal)
+            .padding(.horizontal)
+            
+            // Animated explanation content
+            if showDescription {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Your income ($\(Int(incomeAmount))) starts at the top.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary.opacity(0.8))
+                    
+                    Text("Your bills ($\(Int(billAmount))) are fixed costs at the bottom.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary.opacity(0.8))
+                    
+                    Text("The purple dot shows your total spending ($\(Int(currentExpenseAmount))) so far.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary.opacity(0.8))
+                    
+                    HStack(spacing: 4) {
+                        Text("You have")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Text("$\(Int(max(0, incomeAmount - currentExpenseAmount)))")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(currentExpenseAmount > incomeAmount ? .red : .green)
+                        
+                        Text(currentExpenseAmount > incomeAmount ? "over budget" : "left to spend")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+                .padding(.top, -8)
+                .transition(.asymmetric(
+                    insertion: .push(from: .top).combined(with: .opacity),
+                    removal: .push(from: .bottom).combined(with: .opacity)
+                ))
+            }
         }
     }
 }
@@ -342,19 +381,22 @@ struct ExpenseTrackerChartView_Previews: PreviewProvider {
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 2500,
-                    incomeAmount: 3000
+                    incomeAmount: 3000,
+                    month: "December"
                 )
                 
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 2800,
-                    incomeAmount: 3000
+                    incomeAmount: 3000,
+                    month: "December"
                 )
                 
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 3200,
-                    incomeAmount: 3000
+                    incomeAmount: 3000,
+                    month: "December"
                 )
             }
         }

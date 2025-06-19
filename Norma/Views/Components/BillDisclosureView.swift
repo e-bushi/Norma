@@ -9,110 +9,231 @@ import SwiftUI
 import Foundation
 
 struct BillDisclosureView: View {
-    // Array of all bills
     let bills: [Bill]
-    
-    // Maximum number of bills to display in preview
-    let maxBillsToShow = 3
-    
-    // State to track when the sheet is presented
     @State private var showingAllBills = false
     
-    // Computed property to get sorted upcoming bills
+    private let maxBillsToShow = 5
+    
     private var upcomingBills: [Bill] {
-        // Filter for only scheduled bills and sort by date (earliest first)
-        return bills
-            .filter { $0.status == .scheduled }
+        bills.filter { $0.status == .scheduled || $0.status == .overdue }
             .sorted { $0.date < $1.date }
     }
     
-    // Bills to display in the preview
-    private var previewBills: [Bill] {
-        return Array(upcomingBills.prefix(maxBillsToShow))
+    private var displayedBills: [Bill] {
+        Array(upcomingBills.prefix(maxBillsToShow))
+    }
+    
+    private var totalUpcomingAmount: Double {
+        upcomingBills.reduce(0) { $0 + $1.amount }
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack {
-                Text("Upcoming Bills")
-                    .font(.headline)
+        VStack(spacing: 24) {
+            // Header section matching ExpenseTrackerChartView style
+            VStack(spacing: 12) {
+                Text("UPCOMING BILLS")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
                 
-                Spacer()
-                
-                // See All Button
-                if upcomingBills.count > maxBillsToShow {
-                    Button(action: {
-                        showingAllBills = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Text("See All")
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
-                            
-                            Image(systemName: "chevron.up")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+                // Summary stats
+                HStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("Total Due")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(totalUpcomingAmount))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .sheet(isPresented: $showingAllBills) {
-                        // This will be replaced with a full screen view of all bills
-                        // For now, using a placeholder
-                        MyBillsView()
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    VStack(spacing: 4) {
+                        Text("Bill Count")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("\(upcomingBills.count)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
             }
             
-            // Bills List
-            VStack(spacing: 12) {
-                if previewBills.isEmpty {
-                    // Empty state
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
+            // Bills list container
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(UIColor.systemBackground),
+                                Color.gray.opacity(0.02)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.gray.opacity(0.2),
+                                        Color.gray.opacity(0.05)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                
+                VStack(spacing: 0) {
+                    if displayedBills.isEmpty {
+                        // Empty state
+                        VStack(spacing: 12) {
                             Image(systemName: "calendar.badge.checkmark")
-                                .font(.largeTitle)
-                                .foregroundColor(.blue.opacity(0.7))
+                                .font(.system(size: 40))
+                                .foregroundColor(.blue.opacity(0.5))
                             
                             Text("No upcoming bills")
-                                .font(.headline)
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
-                        .padding()
-                        Spacer()
-                    }
-                } else {
-                    // List of upcoming bills
-                    ForEach(previewBills) { bill in
-                        BillCardView(
-                            name: bill.name,
-                            date: bill.date,
-                            amount: bill.amount,
-                            status: bill.status,
-                            frequency: bill.frequency
-                        )
+                        .padding(.vertical, 40)
+                    } else {
+                        // Bill items
+                        ForEach(displayedBills) { bill in
+                            BillRowView(bill: bill)
+                            
+                            if bill.id != displayedBills.last?.id {
+                                Divider()
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        
+                        // See all button
+                        if upcomingBills.count > maxBillsToShow {
+                            Divider()
+                                .padding(.horizontal, 20)
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showingAllBills.toggle()
+                                }
+                            }) {
+                                HStack {
+                                    Text("See All Bills")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.blue)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(upcomingBills.count - maxBillsToShow) more")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.blue)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .sheet(isPresented: $showingAllBills) {
+                                MyBillsView()
+                            }
+                        }
                     }
                 }
-            }
-            
-            // Footer with total count
-            if upcomingBills.count > maxBillsToShow {
-                HStack {
-                    Spacer()
-                    Text("+ \(upcomingBills.count - maxBillsToShow) more upcoming bills")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                .padding(.vertical, 8)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemFill).opacity(0.2))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-        )
+    }
+}
+
+struct BillRowView: View {
+    let bill: Bill
+    
+    private var statusIcon: String {
+        switch bill.status {
+        case .paid: return "checkmark.circle.fill"
+        case .overdue: return "exclamationmark.circle.fill"
+        case .scheduled: return "calendar.circle.fill"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch bill.status {
+        case .paid: return .green
+        case .overdue: return .red
+        case .scheduled: return .blue
+        }
+    }
+    
+    private var daysUntilDue: Int {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: Date(), to: bill.date).day ?? 0
+        return days
+    }
+    
+    private var dueDateText: String {
+        if daysUntilDue == 0 {
+            return "Due today"
+        } else if daysUntilDue == 1 {
+            return "Due tomorrow"
+        } else if daysUntilDue < 0 {
+            return "\(abs(daysUntilDue)) days overdue"
+        } else {
+            return "Due in \(daysUntilDue) days"
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Status icon
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.1))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: statusIcon)
+                    .font(.system(size: 18))
+                    .foregroundColor(statusColor)
+            }
+            
+            // Bill info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(bill.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text(dueDateText)
+                    .font(.system(size: 12))
+                    .foregroundColor(bill.status == .overdue ? .red : .secondary)
+            }
+            
+            Spacer()
+            
+            // Amount
+            Text("$\(Int(bill.amount))")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(bill.status == .overdue ? .red : .primary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 }
 

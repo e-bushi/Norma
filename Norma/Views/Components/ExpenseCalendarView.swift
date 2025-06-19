@@ -18,74 +18,135 @@ struct ExpenseCalendarView: View {
     // Dictionary to track expenses per day (for the dots)
     var expensesPerDay: [Date: [Double]] = [:]
     
+    private var totalExpensesThisMonth: Double {
+        let calendar = Calendar.current
+        let expenses = expensesPerDay.filter { date, _ in
+            calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
+        }
+        return expenses.values.flatMap { $0 }.reduce(0, +)
+    }
+    
+    private var daysWithExpenses: Int {
+        let calendar = Calendar.current
+        return expensesPerDay.filter { date, _ in
+            calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
+        }.count
+    }
+    
     var body: some View {
-        VStack(spacing: 20) {
-            // Month selector
-            HStack {
-                Button(action: previousMonth) {
-                    Image(systemName: "chevron.left")
-                        .font(.title3)
-                        .foregroundColor(.primary)
-                }
+        VStack(spacing: 24) {
+            // Header section matching ExpenseTrackerChartView style
+            VStack(spacing: 12) {
+                Text(monthYearFormatter.string(from: currentMonth).uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
                 
-                Spacer()
-                
-                Text(monthYearFormatter.string(from: currentMonth))
-                    .font(.title2.bold())
-                
-                Spacer()
-                
-                Button(action: nextMonth) {
-                    Image(systemName: "chevron.right")
-                        .font(.title3)
-                        .foregroundColor(.primary)
-                }
-            }
-            .padding(.horizontal)
-            
-            // Day labels
-            HStack(spacing: 0) {
-                ForEach(days, id: \.self) { day in
-                    Text(day)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // Calendar grid
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(extractDates(), id: \.self) { date in
-                    if let date = date {
-                        DayCell(
-                            date: date,
-                            isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
-                            isToday: Calendar.current.isDateInToday(date),
-                            isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonth, toGranularity: .month),
-                            expenseCount: expensesPerDay[date.startOfDay]?.count ?? 0
-                        )
-                        .onTapGesture {
-                            withAnimation(.easeInOut) {
-                                selectedDate = date
-                            }
-                        }
-                    } else {
-                        // Empty cell for placeholders
-                        Rectangle()
-                            .foregroundColor(.clear)
-                            .frame(height: 40)
+                // Summary stats
+                HStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("Month Total")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("$\(Int(totalExpensesThisMonth))")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    VStack(spacing: 4) {
+                        Text("Active Days")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("\(daysWithExpenses)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            
+            // Calendar container
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(UIColor.systemBackground),
+                                Color.gray.opacity(0.02)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.gray.opacity(0.2),
+                                        Color.gray.opacity(0.05)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                
+                VStack(spacing: 20) {
+                    // Day labels
+                    HStack(spacing: 0) {
+                        ForEach(days, id: \.self) { day in
+                            Text(day)
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Calendar grid
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(extractDates(), id: \.self) { date in
+                            if let date = date {
+                                DayCell(
+                                    date: date,
+                                    isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
+                                    isToday: Calendar.current.isDateInToday(date),
+                                    isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonth, toGranularity: .month),
+                                    expenseCount: expensesPerDay[date.startOfDay]?.count ?? 0,
+                                    expenseTotal: expensesPerDay[date.startOfDay]?.reduce(0, +) ?? 0
+                                )
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedDate = date
+                                    }
+                                }
+                            } else {
+                                // Empty cell for placeholders
+                                Rectangle()
+                                    .foregroundColor(.clear)
+                                    .frame(height: 45)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical, 20)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemFill).opacity(0.2))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-        )
     }
     
     // Extract all the dates for the current month's calendar view (including leading/trailing days)
@@ -129,17 +190,6 @@ struct ExpenseCalendarView: View {
         return dates
     }
     
-    private func previousMonth() {
-        withAnimation {
-            currentMonth = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth)!
-        }
-    }
-    
-    private func nextMonth() {
-        withAnimation {
-            currentMonth = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth)!
-        }
-    }
     
     private var monthYearFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -155,67 +205,56 @@ struct DayCell: View {
     let isToday: Bool
     let isCurrentMonth: Bool
     let expenseCount: Int
+    let expenseTotal: Double
     
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 4) {
             Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 16))
-                .fontWeight(isToday ? .bold : .regular)
+                .font(.system(size: 14, weight: isToday ? .semibold : .regular))
                 .foregroundColor(cellTextColor)
             
-            // Expense indicator dots (if any)
+            // Expense indicator
             if expenseCount > 0 {
-                HStack(spacing: 4) {
-                    ForEach(0..<min(expenseCount, 3), id: \.self) { _ in
-                        Circle()
-                            .fill(cellColor)
-                            .frame(width: 4, height: 4)
-                    }
-                    
-                    if expenseCount > 3 {
-                        Text("+\(expenseCount - 3)")
-                            .font(.system(size: 8))
-                            .foregroundColor(cellColor)
-                    }
-                }
-                .padding(.top, 2)
+                Text("$\(Int(expenseTotal))")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.purple.opacity(0.8))
+            } else {
+                Text(" ")
+                    .font(.system(size: 9))
             }
         }
-        .frame(height: 40)
+        .frame(height: 45)
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? cellColor.opacity(0.2) : Color.clear)
-
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(cellColor.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.purple.opacity(0.1))
+                    
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.purple.opacity(0.3), lineWidth: 1.5)
+                } else if isToday {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.blue.opacity(0.05))
+                    
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                } else if expenseCount > 0 {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.purple.opacity(0.05))
                 }
             }
         )
         .opacity(isCurrentMonth ? 1 : 0.3)
     }
     
-    private var cellColor: Color {
-        if isSelected {
-            return .blue
-        } else if isToday {
-            return .green
-        } else if expenseCount > 0 {
-            return .blue
-        } else {
-            return .primary
-        }
-    }
-    
     private var cellTextColor: Color {
         if isSelected {
-            return cellColor
+            return .purple
         } else if isToday {
-            return .green
+            return .blue
         } else if !isCurrentMonth {
-            return .secondary
+            return .secondary.opacity(0.5)
         } else {
             return .primary
         }
