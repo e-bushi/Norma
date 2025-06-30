@@ -15,8 +15,8 @@ struct BillDisclosureView: View {
     private let maxBillsToShow = 5
     
     private var upcomingBills: [Bill] {
-        bills.filter { $0.status == .scheduled || $0.status == .overdue }
-            .sorted { $0.date < $1.date }
+        bills.filter { $0.status == .scheduled || $0.status == .overdue || $0.status == .active }
+            .sorted { $0.dueDate < $1.dueDate }
     }
     
     private var displayedBills: [Bill] {
@@ -101,17 +101,111 @@ struct BillDisclosureView: View {
                 
                 VStack(spacing: 0) {
                     if displayedBills.isEmpty {
-                        // Empty state
-                        VStack(spacing: 12) {
-                            Image(systemName: "calendar.badge.checkmark")
-                                .font(.system(size: 40))
-                                .foregroundColor(.blue.opacity(0.5))
+                        // Enhanced empty state
+                        VStack(spacing: 24) {
+                            // Icon with gradient background
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.blue.opacity(0.1),
+                                                Color.blue.opacity(0.05)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 80, height: 80)
+                                
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.system(size: 36))
+                                    .foregroundColor(.blue)
+                            }
                             
-                            Text("No upcoming bills")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.secondary)
+                            VStack(spacing: 12) {
+                                Text("No bills yet")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Start tracking your monthly bills\nto never miss a payment")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineSpacing(4)
+                            }
+                            
+                            // Quick tips
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "lightbulb.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.yellow)
+                                    
+                                    Text("Track rent, utilities, subscriptions")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                HStack(spacing: 12) {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.blue)
+                                    
+                                    Text("Get reminders before due dates")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                HStack(spacing: 12) {
+                                    Image(systemName: "chart.line.uptrend.xyaxis")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.green)
+                                    
+                                    Text("See your spending patterns")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.gray.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                            
+                            // Add bill button
+                            Button(action: {
+                                // Add bill action
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.blue)
+                                    
+                                    Text("Add your first bill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.blue)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.blue.opacity(0.05))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.horizontal, 20)
                         }
                         .padding(.vertical, 40)
+                        .padding(.horizontal, 20)
                     } else {
                         // Bill items
                         ForEach(displayedBills) { bill in
@@ -172,6 +266,7 @@ struct BillRowView: View {
         case .paid: return "checkmark.circle.fill"
         case .overdue: return "exclamationmark.circle.fill"
         case .scheduled: return "calendar.circle.fill"
+        case .active: return "clock.circle.fill"
         }
     }
     
@@ -180,12 +275,13 @@ struct BillRowView: View {
         case .paid: return .green
         case .overdue: return .red
         case .scheduled: return .blue
+        case .active: return .orange
         }
     }
     
     private var daysUntilDue: Int {
         let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: Date(), to: bill.date).day ?? 0
+        let days = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
         return days
     }
     
@@ -240,15 +336,16 @@ struct BillRowView: View {
 
 #Preview {
     // Sample data for preview
+    let sampleUserId = "preview-user-123"
     let sampleBills = [
-        Bill(name: "Rent", date: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
-        Bill(name: "Electricity", date: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
-        Bill(name: "Internet", date: Date().addingTimeInterval(86400 * 7), amount: 59.99, status: .scheduled, frequency: .monthly),
-        Bill(name: "Phone Bill", date: Date().addingTimeInterval(86400 * 10), amount: 45.00, status: .scheduled, frequency: .monthly),
-        Bill(name: "Water Bill", date: Date().addingTimeInterval(86400 * 12), amount: 32.75, status: .scheduled, frequency: .quarterly),
-        Bill(name: "Streaming Service", date: Date().addingTimeInterval(86400 * 15), amount: 14.99, status: .scheduled, frequency: .monthly),
-        Bill(name: "Credit Card", date: Date().addingTimeInterval(-86400 * 2), amount: 220.30, status: .paid, frequency: .monthly),
-        Bill(name: "Car Insurance", date: Date().addingTimeInterval(-86400 * 5), amount: 110.50, status: .overdue, frequency: .quarterly)
+        Bill(userId: sampleUserId, name: "Rent", dueDate: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Electricity", dueDate: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Internet", dueDate: Date().addingTimeInterval(86400 * 7), amount: 59.99, status: .scheduled, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Phone Bill", dueDate: Date().addingTimeInterval(86400 * 10), amount: 45.00, status: .scheduled, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Water Bill", dueDate: Date().addingTimeInterval(86400 * 12), amount: 32.75, status: .scheduled, frequency: .quarterly),
+        Bill(userId: sampleUserId, name: "Streaming Service", dueDate: Date().addingTimeInterval(86400 * 15), amount: 14.99, status: .scheduled, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Credit Card", dueDate: Date().addingTimeInterval(-86400 * 2), amount: 220.30, status: .paid, frequency: .monthly),
+        Bill(userId: sampleUserId, name: "Car Insurance", dueDate: Date().addingTimeInterval(-86400 * 5), amount: 110.50, status: .overdue, frequency: .quarterly)
     ]
     
     return ScrollView {

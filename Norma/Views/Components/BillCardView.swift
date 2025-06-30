@@ -21,6 +21,7 @@ struct BillCardView: View {
         case .paid: return "checkmark.circle.fill"
         case .overdue: return "exclamationmark.circle.fill"
         case .scheduled: return "calendar.circle.fill"
+        case .active: return "clock.circle.fill"
         }
     }
     
@@ -77,6 +78,8 @@ struct BillCardView: View {
             return .red
         case .scheduled:
             return .blue
+        case .active:
+            return .orange
         }
     }
 }

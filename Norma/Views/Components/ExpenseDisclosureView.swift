@@ -129,10 +129,7 @@ struct ExpenseDisclosureView: View {
                         ForEach(displayedExpenses) { expense in
                             ExpenseRowView(expense: expense)
                             
-                            if expense.id != displayedExpenses.last?.id {
-                                Divider()
-                                    .padding(.horizontal, 20)
-                            }
+                            
                         }
                         
                         // See all button

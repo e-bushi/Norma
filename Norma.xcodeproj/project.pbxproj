@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F6938D312E0B2B6100C98852 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F6938D302E0B2B6100C98852 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		F6638D502DCD6C40009D95C3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F6938D312E0B2B6100C98852 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Norma;
 			packageProductDependencies = (
+				F6938D302E0B2B6100C98852 /* Supabase */,
 			);
 			productName = Norma;
 			productReference = F6638D402DCD6C3F009D95C3 /* Norma.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = F6638D372DCD6C3F009D95C3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F6638D412DCD6C3F009D95C3 /* Products */;
 			projectDirPath = "";
@@ -558,6 +567,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F6938D302E0B2B6100C98852 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F6638D382DCD6C3F009D95C3 /* Project object */;
 }

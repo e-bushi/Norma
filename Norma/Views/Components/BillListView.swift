@@ -46,7 +46,7 @@ struct BillListView: View {
         } else {
             let calendar = Calendar.current
             return filteredBills.filter { bill in
-                calendar.isDate(bill.date, inSameDayAs: selectedDate)
+                calendar.isDate(bill.dueDate, inSameDayAs: selectedDate)
             }
         }
     }
@@ -141,7 +141,7 @@ struct BillListView: View {
                 }) {
                     BillCardView(
                         name: bill.name,
-                        date: bill.date,
+                        date: bill.dueDate,
                         amount: bill.amount,
                         status: bill.status,
                         frequency: bill.frequency
@@ -203,29 +203,35 @@ struct TapToBounceStyle: ButtonStyle {
 struct BillListView_Previews: PreviewProvider {
     static var previews: some View {
         struct PreviewWrapper: View {
-            let sampleBills = [
-                Bill(
-                    name: "Electricity Bill",
-                    date: Date(),
-                    amount: 87.50,
-                    status: .paid,
-                    frequency: .monthly
-                ),
-                Bill(
-                    name: "Internet Service",
-                    date: Date().addingTimeInterval(-86400 * 5),
-                    amount: 65.99,
-                    status: .overdue,
-                    frequency: .monthly
-                ),
-                Bill(
-                    name: "Rent Payment",
-                    date: Date().addingTimeInterval(86400 * 3),
-                    amount: 1200.00,
-                    status: .scheduled,
-                    frequency: .monthly
-                )
-            ]
+            let sampleBills: [Bill] = {
+                let sampleUserId = "preview-user-123"
+                return [
+                    Bill(
+                        userId: sampleUserId,
+                        name: "Electricity Bill",
+                        dueDate: Date(),
+                        amount: 87.50,
+                        status: .paid,
+                        frequency: .monthly
+                    ),
+                    Bill(
+                        userId: sampleUserId,
+                        name: "Internet Service",
+                        dueDate: Date().addingTimeInterval(-86400 * 5),
+                        amount: 65.99,
+                        status: .overdue,
+                        frequency: .monthly
+                    ),
+                    Bill(
+                        userId: sampleUserId,
+                        name: "Rent Payment",
+                        dueDate: Date().addingTimeInterval(86400 * 3),
+                        amount: 1200.00,
+                        status: .scheduled,
+                        frequency: .monthly
+                    )
+                ]
+            }()
             
             @State private var selectedFilter: BillFilter = .all
             @State private var selectedDate: Date = Date()

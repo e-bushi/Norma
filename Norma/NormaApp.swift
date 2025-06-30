@@ -10,10 +10,12 @@ import SwiftData
 
 @main
 struct NormaApp: App {
+    @StateObject private var appCoordinator = AppCoordinator()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppCoordinatorView()
+                .environmentObject(appCoordinator)
         }
     }
 }

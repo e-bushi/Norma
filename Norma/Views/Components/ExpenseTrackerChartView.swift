@@ -5,14 +5,16 @@ struct ExpenseTrackerChartView: View {
     let currentExpenseAmount: Double
     let incomeAmount: Double
     let month: String
+    let isOnboardingMode: Bool
     
     @State private var showDescription = false
     
-    init(billAmount: Double, currentExpenseAmount: Double, incomeAmount: Double, month: String = "Monthly") {
+    init(billAmount: Double = 0, currentExpenseAmount: Double = 0, incomeAmount: Double, month: String = "Monthly", isOnboardingMode: Bool = false) {
         self.billAmount = billAmount
         self.currentExpenseAmount = currentExpenseAmount
         self.incomeAmount = incomeAmount
         self.month = month
+        self.isOnboardingMode = isOnboardingMode
     }
     
     private let lineHeight: CGFloat = 400
@@ -20,7 +22,14 @@ struct ExpenseTrackerChartView: View {
     private let chartWidth: CGFloat = 320
     
     private var expensePosition: CGFloat {
+        // When bills and expenses are both zero, they should be at the same level
+        if billAmount == 0 && currentExpenseAmount == 0 {
+            return lineHeight - 40
+        }
+        
         let range = incomeAmount - billAmount
+        guard range > 0 else { return lineHeight - 40 }
+        
         let progress = (currentExpenseAmount - billAmount) / range
         return CGFloat(1 - progress.clamped(to: 0...1)) * lineHeight
     }
@@ -50,6 +59,206 @@ struct ExpenseTrackerChartView: View {
     }
     
     var body: some View {
+        VStack(spacing: 24) {
+            if isOnboardingMode {
+                onboardingContent
+            } else {
+                regularContent
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var onboardingContent: some View {
+        VStack(spacing: 24) {
+            // Header for onboarding mode
+            VStack(spacing: 8) {
+                Text("YOUR FINANCIAL TRACKER")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+                
+                Text("Ready to track your spending")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+            
+            // Main onboarding card - matching ProfileView style
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(UIColor.systemBackground),
+                                Color.gray.opacity(0.02)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.gray.opacity(0.2),
+                                        Color.gray.opacity(0.05)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                
+                VStack(spacing: 32) {
+                    // Income icon
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.green.opacity(0.1),
+                                        Color.green.opacity(0.05)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: "dollarsign.circle.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.green)
+                    }
+                    
+                    // Main content
+                    VStack(spacing: 20) {
+                        VStack(spacing: 8) {
+                            Text("Monthly Income")                                 .font(.system(size: 12, weight: .medium))         .foregroundColor(.secondary)
+                            
+                            Text("$\(Int(incomeAmount))")
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundColor(.green)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("Let's start tracking where your money goes")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        
+                        Divider()
+                            .frame(maxWidth: 280)
+                        
+                        // How it works
+                        VStack(spacing: 16) {
+                            Text("How your tracker works")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+                            
+                            VStack(spacing: 12) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.1))
+                                            .frame(width: 28, height: 28)
+                                        
+                                        Text("1")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.blue)
+                                    }
+                                    
+                                    Text("Add your recurring bills (rent, utilities, subscriptions)")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    Spacer()
+                                }
+                                
+                                HStack(alignment: .top, spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.purple.opacity(0.1))
+                                            .frame(width: 28, height: 28)
+                                        
+                                        Text("2")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.purple)
+                                    }
+                                    
+                                    Text("Track daily expenses as they happen")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    Spacer()
+                                }
+                                
+                                HStack(alignment: .top, spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.green.opacity(0.1))
+                                            .frame(width: 28, height: 28)
+                                        
+                                        Text("3")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.green)
+                                    }
+                                    
+                                    Text("See how much you have left to spend")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 40)
+                .padding(.horizontal, 32)
+            }
+            .padding(.horizontal)
+            .padding(.horizontal)
+            
+            // Call to action
+            Button(action: {
+                // Navigate to add bills
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.blue)
+                    
+                    Text("Add your first bill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.blue)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.blue.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal)
+            .padding(.horizontal)
+        }
+    }
+    
+    @ViewBuilder
+    private var regularContent: some View {
         VStack(spacing: 24) {
             // Enhanced header with status
             VStack(spacing: 12) {
@@ -378,10 +587,18 @@ struct ExpenseTrackerChartView_Previews: PreviewProvider {
     static var previews: some View {
         ScrollView {
             VStack(spacing: 30) {
+                // Onboarding mode preview
                 ExpenseTrackerChartView(
-                    billAmount: 1500,
-                    currentExpenseAmount: 2500,
                     incomeAmount: 3000,
+                    month: "December",
+                    isOnboardingMode: true
+                )
+                
+                // Regular mode previews
+                ExpenseTrackerChartView(
+                    billAmount: 0,
+                    currentExpenseAmount: 0,
+                    incomeAmount: 0,
                     month: "December"
                 )
                 

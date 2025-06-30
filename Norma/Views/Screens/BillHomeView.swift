@@ -10,6 +10,10 @@ import Foundation
 
 struct BillHomeView: View {
     
+    @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject var incomeViewModel: IncomeViewModel
+    @EnvironmentObject var sessionViewModel: SessionViewModel
     @State private var showMyBills: Bool = false
     
     private var currentMonth: String {
@@ -18,40 +22,61 @@ struct BillHomeView: View {
         return formatter.string(from: Date())
     }
     
-    let sampleBills = [
-        Bill(name: "Rent", date: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
-        Bill(name: "Electricity", date: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
-        Bill(name: "Internet", date: Date().addingTimeInterval(86400 * 7), amount: 59.99, status: .scheduled, frequency: .monthly),
-        Bill(name: "Phone Bill", date: Date().addingTimeInterval(86400 * 10), amount: 45.00, status: .scheduled, frequency: .monthly),
-        Bill(name: "Water Bill", date: Date().addingTimeInterval(86400 * 12), amount: 32.75, status: .scheduled, frequency: .quarterly),
-        Bill(name: "Streaming Service", date: Date().addingTimeInterval(86400 * 15), amount: 14.99, status: .scheduled, frequency: .monthly),
-        Bill(name: "Credit Card", date: Date().addingTimeInterval(-86400 * 2), amount: 220.30, status: .paid, frequency: .monthly),
-        Bill(name: "Car Insurance", date: Date().addingTimeInterval(-86400 * 5), amount: 110.50, status: .overdue, frequency: .quarterly)
-    ]
+    private var profileIncomeAmount: Double {
+        // Use income from profile settings if available, otherwise fall back to IncomeViewModel
+        return sessionViewModel.currentUser?.settings.monthlyIncome ?? incomeViewModel.totalMonthlyIncome
+    }
+    
+    private var shouldShowOnboardingMode: Bool {
+        // Show onboarding mode if:
+        // 1. User has no bills yet (hasn't started tracking)
+        // 2. User has income from profile (came from onboarding)
+        return billViewModel.activeBills.isEmpty && profileIncomeAmount > 0
+    }
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 
                 ExpenseTrackerChartView(
-                    billAmount: 1500,
-                    currentExpenseAmount: 2000,
-                    incomeAmount: 3000,
-                    month: currentMonth
+                    billAmount: billViewModel.totalMonthlyBills,
+                    currentExpenseAmount: expenseViewModel.totalExpenses,
+                    incomeAmount: profileIncomeAmount,
+                    month: currentMonth,
+                    isOnboardingMode: shouldShowOnboardingMode
                 )
-                .padding(.horizontal)
     
                 
-                BillDisclosureView(bills: sampleBills)
-                .padding(.top)
-                .padding(.horizontal)
-                .padding(.horizontal)
+                BillDisclosureView(bills: billViewModel.activeBills)
+                .padding(.vertical)
                 .padding(.horizontal)
                 .padding(.horizontal)
             }
             .navigationTitle(Text("Home"))
             .navigationBarTitleDisplayMode(.inline)
+            .refreshable {
+                await refreshData()
+            }
+            .onAppear {
+                Task {
+                    await loadInitialData()
+                }
+            }
         }
+    }
+    
+    // MARK: - Data Loading
+    
+    private func loadInitialData() async {
+        await billViewModel.refreshBills()
+        await expenseViewModel.refreshExpenses()
+        await incomeViewModel.refreshIncomes()
+    }
+    
+    private func refreshData() async {
+        await billViewModel.refreshBills()
+        await expenseViewModel.refreshExpenses()
+        await incomeViewModel.refreshIncomes()
     }
     
     func getDaysInCurrentMonth() -> Int {
@@ -88,6 +113,16 @@ struct BillHomeView: View {
 }
 
 #Preview {
-    BillHomeView()
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    
+    return BillHomeView()
+        .environmentObject(sessionViewModel)
+        .environmentObject(billViewModel)
+        .environmentObject(expenseViewModel)
+        .environmentObject(incomeViewModel)
         .preferredColorScheme(.light)
 }

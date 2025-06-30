@@ -8,19 +8,31 @@
 import SwiftUI
 
 struct BudgetDisclosureView: View {
-    @State private var categoryBudgets: [ExpenseCategory: Double] = [
-        .food: 800,
-        .transportation: 300,
-        .entertainment: 200,
-        .shopping: 400,
-        .utilities: 250,
-        .health: 150,
-        .other: 300
-    ]
+    @State private var categoryBudgets: [ExpenseCategory: Double] = [:]
     @State private var showingAllCategories = false
+    let isOnboardingMode: Bool
     
     let expenses: [FinancialItem]
     let month: String
+    
+    init(expenses: [FinancialItem], month: String, isOnboardingMode: Bool = false) {
+        self.expenses = expenses
+        self.month = month
+        self.isOnboardingMode = isOnboardingMode
+        
+        // Only set sample data if not in onboarding mode
+        if !isOnboardingMode {
+            _categoryBudgets = State(initialValue: [
+                .food: 800,
+                .transportation: 300,
+                .entertainment: 200,
+                .shopping: 400,
+                .utilities: 250,
+                .health: 150,
+                .other: 300
+            ])
+        }
+    }
     
     private let maxCategoriesToShow = 3
     
@@ -147,17 +159,127 @@ struct BudgetDisclosureView: View {
                 
                 VStack(spacing: 0) {
                     if displayedCategories.isEmpty {
-                        // Empty state
-                        VStack(spacing: 12) {
-                            Image(systemName: "chart.pie.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.blue.opacity(0.5))
-                            
-                            Text("No budget categories")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.secondary)
+                        // Enhanced empty state
+                        VStack(spacing: 24) {
+                            if isOnboardingMode {
+                                // Onboarding empty state
+                                VStack(spacing: 16) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    gradient: Gradient(colors: [
+                                                        Color.blue.opacity(0.1),
+                                                        Color.blue.opacity(0.05)
+                                                    ]),
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .frame(width: 80, height: 80)
+                                        
+                                        Image(systemName: "target")
+                                            .font(.system(size: 36))
+                                            .foregroundColor(.blue)
+                                    }
+                                    
+                                    VStack(spacing: 8) {
+                                        Text("Ready to set budgets?")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("Create spending limits for different categories to stay on track")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                }
+                                
+                                Divider()
+                                    .frame(maxWidth: 200)
+                                
+                                // Quick budget suggestions
+                                VStack(spacing: 12) {
+                                    Text("Popular budget categories")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    
+                                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                                        ForEach([ExpenseCategory.food, .transportation, .entertainment, .shopping], id: \.self) { category in
+                                            Button(action: {
+                                                addQuickBudget(for: category)
+                                            }) {
+                                                HStack(spacing: 8) {
+                                                    Image(systemName: category.icon)
+                                                        .font(.system(size: 14))
+                                                        .foregroundColor(category.color)
+                                                    
+                                                    Text(category.rawValue)
+                                                        .font(.system(size: 12, weight: .medium))
+                                                        .foregroundColor(.primary)
+                                                }
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .fill(category.color.opacity(0.05))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 8)
+                                                                .stroke(category.color.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                )
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Regular empty state
+                                VStack(spacing: 16) {
+                                    Image(systemName: "chart.pie.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.blue.opacity(0.5))
+                                    
+                                    VStack(spacing: 8) {
+                                        Text("No budgets set")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("Add budget categories to track your spending")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                }
+                                
+                                Button(action: {
+                                    // Add budget action
+                                }) {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 14))
+                                        
+                                        Text("Add Budget Category")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.blue.opacity(0.05))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
                         }
                         .padding(.vertical, 40)
+                        .padding(.horizontal, 24)
                     } else {
                         // Budget category items
                         ForEach(displayedCategories, id: \.self) { category in
@@ -169,11 +291,6 @@ struct BudgetDisclosureView: View {
                                     categoryBudgets[category] = newBudget
                                 }
                             )
-                            
-                            if category != displayedCategories.last {
-                                Divider()
-                                    .padding(.horizontal, 20)
-                            }
                         }
                         
                         // See all button
@@ -248,6 +365,22 @@ struct BudgetDisclosureView: View {
                 }
                 .padding(.vertical, 8)
             }
+        }
+    }
+    
+    private func addQuickBudget(for category: ExpenseCategory) {
+        let suggestedBudgets: [ExpenseCategory: Double] = [
+            .food: 600,
+            .transportation: 300,
+            .entertainment: 200,
+            .shopping: 400,
+            .utilities: 250,
+            .health: 150,
+            .other: 200
+        ]
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            categoryBudgets[category] = suggestedBudgets[category] ?? 200
         }
     }
 }
@@ -352,22 +485,30 @@ struct BudgetCategoryRow: View {
                 }
             }
             
-            // Progress bar
+            // Enhanced progress bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     // Background track
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(height: 8)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.gray.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .frame(height: 12)
                     
-                    // Progress fill
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(statusColor)
-                        .frame(width: min(geometry.size.width * percentageUsed, geometry.size.width), height: 8)
+                    // Progress fill - styled like quick add budget buttons
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(statusColor.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(statusColor.opacity(0.2), lineWidth: 1)
+                        )
+                        .frame(width: min(geometry.size.width * percentageUsed, geometry.size.width), height: 12)
                         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: percentageUsed)
                 }
             }
-            .frame(height: 8)
+            .frame(height: 12)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -409,8 +550,14 @@ struct BudgetDisclosureView_Previews: PreviewProvider {
     
     static var previews: some View {
         ScrollView {
-            BudgetDisclosureView(expenses: sampleExpenses, month: "December")
-                .padding()
+            VStack(spacing: 30) {
+                // Onboarding mode (empty state)
+                BudgetDisclosureView(expenses: [], month: "December", isOnboardingMode: true)
+                
+                // Regular mode with data
+                BudgetDisclosureView(expenses: sampleExpenses, month: "December")
+            }
+            .padding()
         }
         .preferredColorScheme(.light)
     }

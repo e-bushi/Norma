@@ -9,43 +9,54 @@ import SwiftUI
 
 struct MyBillsView: View {
     // Sample data for testing
-    @State private var bills: [Bill] = [
-        Bill(
-            name: "Electricity Bill",
-            date: Date(),
-            amount: 87.50,
-            status: .paid,
-            frequency: .monthly
-        ),
-        Bill(
-            name: "Internet Service",
-            date: Date().addingTimeInterval(-86400 * 5),
-            amount: 65.99,
-            status: .overdue,
-            frequency: .monthly
-        ),
-        Bill(
-            name: "Rent Payment",
-            date: Date().addingTimeInterval(86400 * 3),
-            amount: 1200.00,
-            status: .scheduled,
-            frequency: .monthly
-        ),
-        Bill(
-            name: "Car Insurance",
-            date: Date().addingTimeInterval(86400 * 30),
-            amount: 420.00,
-            status: .scheduled,
-            frequency: .quarterly
-        ),
-        Bill(
-            name: "Property Tax",
-            date: Date().addingTimeInterval(86400 * 60),
-            amount: 2500.00,
-            status: .scheduled,
-            frequency: .yearly
-        )
-    ]
+    private let sampleUserId = "sample-user-123"
+    @State private var bills: [Bill] = []
+    
+    init() {
+        let userId = sampleUserId
+        _bills = State(initialValue: [
+            Bill(
+                userId: userId,
+                name: "Electricity Bill",
+                dueDate: Date(),
+                amount: 87.50,
+                status: .paid,
+                frequency: .monthly
+            ),
+            Bill(
+                userId: userId,
+                name: "Internet Service",
+                dueDate: Date().addingTimeInterval(-86400 * 5),
+                amount: 65.99,
+                status: .overdue,
+                frequency: .monthly
+            ),
+            Bill(
+                userId: userId,
+                name: "Rent Payment",
+                dueDate: Date().addingTimeInterval(86400 * 3),
+                amount: 1200.00,
+                status: .scheduled,
+                frequency: .monthly
+            ),
+            Bill(
+                userId: userId,
+                name: "Car Insurance",
+                dueDate: Date().addingTimeInterval(86400 * 30),
+                amount: 420.00,
+                status: .scheduled,
+                frequency: .quarterly
+            ),
+            Bill(
+                userId: userId,
+                name: "Property Tax",
+                dueDate: Date().addingTimeInterval(86400 * 60),
+                amount: 2500.00,
+                status: .scheduled,
+                frequency: .yearly
+            )
+        ])
+    }
     
     // Filter options for the list
     @State private var selectedFilter: BillFilter = .all
