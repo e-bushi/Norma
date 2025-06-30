@@ -9,7 +9,7 @@ import SwiftUI
 import Foundation
 
 struct ExpenseDisclosureView: View {
-    let expenses: [FinancialItem]
+    let expenses: [Expense]
     let category: ExpenseCategory?
     @State private var showingAllExpenses = false
     
@@ -23,15 +23,16 @@ struct ExpenseDisclosureView: View {
         }
     }
     
-    private var filteredExpenses: [FinancialItem] {
+    private var filteredExpenses: [Expense] {
         let filtered = expenses.filter { expense in
-            expense.category == .expense && 
-            (category == nil || expense.asExpenseCategory == category)
+            // For now, include all expenses since we don't have category filtering implemented
+            // TODO: Implement category filtering with the Category model
+            return true
         }
         return filtered.sorted { $0.date > $1.date }
     }
     
-    private var displayedExpenses: [FinancialItem] {
+    private var displayedExpenses: [Expense] {
         Array(filteredExpenses.prefix(maxExpensesToShow))
     }
     
@@ -113,17 +114,84 @@ struct ExpenseDisclosureView: View {
                 
                 VStack(spacing: 0) {
                     if displayedExpenses.isEmpty {
-                        // Empty state
-                        VStack(spacing: 12) {
-                            Image(systemName: "creditcard.circle")
-                                .font(.system(size: 40))
-                                .foregroundColor(.purple.opacity(0.5))
+                        // Enhanced empty state
+                        VStack(spacing: 24) {
+                            // Icon with gradient background
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.purple.opacity(0.1),
+                                                Color.purple.opacity(0.05)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 80, height: 80)
+                                
+                                Image(systemName: "creditcard.circle.fill")
+                                    .font(.system(size: 36))
+                                    .foregroundColor(.purple)
+                            }
                             
-                            Text("No recent expenses")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.secondary)
+                            VStack(spacing: 12) {
+                                Text("No expenses yet")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Start tracking your spending to see your patterns")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineSpacing(4)
+                            }
+                            
+                            // Quick tips
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.green)
+                                    
+                                    Text("Tap + to add an expense")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                HStack(spacing: 12) {
+                                    Image(systemName: "chart.line.uptrend.xyaxis")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.blue)
+                                    
+                                    Text("Watch your spending trends grow")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                HStack(spacing: 12) {
+                                    Image(systemName: "target")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.orange)
+                                    
+                                    Text("Stay within your budget goals")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.gray.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
                         .padding(.vertical, 40)
+                        .padding(.horizontal, 20)
                     } else {
                         // Expense items
                         ForEach(displayedExpenses) { expense in
@@ -189,10 +257,12 @@ struct ExpenseDisclosureView: View {
 }
 
 struct ExpenseRowView: View {
-    let expense: FinancialItem
+    let expense: Expense
     
     private var expenseCategory: ExpenseCategory {
-        expense.asExpenseCategory ?? .other
+        // TODO: Map category from Expense.categoryId to ExpenseCategory
+        // For now, default to .other since we don't have the mapping implemented
+        .other
     }
     
     private var timeAgoText: String {
@@ -239,18 +309,18 @@ struct ExpenseRowView: View {
 
 #Preview {
     // Sample data for preview
-    let sampleExpenses: [FinancialItem] = [
-        FinancialItem(name: "Groceries", amount: 120.50, category: .expense, date: Date().addingTimeInterval(-86400 * 1), expenseCategory: .food),
-        FinancialItem(name: "Gas", amount: 45.00, category: .expense, date: Date().addingTimeInterval(-86400 * 2), expenseCategory: .transportation),
-        FinancialItem(name: "Movie Tickets", amount: 32.99, category: .expense, date: Date().addingTimeInterval(-86400 * 3), expenseCategory: .entertainment),
-        FinancialItem(name: "Restaurant", amount: 85.75, category: .expense, date: Date().addingTimeInterval(-86400 * 4), expenseCategory: .food),
-        FinancialItem(name: "Uber Ride", amount: 18.50, category: .expense, date: Date().addingTimeInterval(-86400 * 5), expenseCategory: .transportation),
-        FinancialItem(name: "Clothing", amount: 99.99, category: .expense, date: Date().addingTimeInterval(-86400 * 6), expenseCategory: .shopping),
-        FinancialItem(name: "Doctor Visit", amount: 75.00, category: .expense, date: Date().addingTimeInterval(-86400 * 7), expenseCategory: .health),
-        FinancialItem(name: "Electricity Bill", amount: 135.62, category: .expense, date: Date().addingTimeInterval(-86400 * 8), expenseCategory: .utilities)
+    let sampleExpenses: [Expense] = [
+        Expense(userId: "preview-user", name: "Groceries", amount: 120.50, date: Date().addingTimeInterval(-86400 * 1), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Gas", amount: 45.00, date: Date().addingTimeInterval(-86400 * 2), paymentMethod: .debitCard),
+        Expense(userId: "preview-user", name: "Movie Tickets", amount: 32.99, date: Date().addingTimeInterval(-86400 * 3), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Restaurant", amount: 85.75, date: Date().addingTimeInterval(-86400 * 4), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Uber Ride", amount: 18.50, date: Date().addingTimeInterval(-86400 * 5), paymentMethod: .digitalWallet),
+        Expense(userId: "preview-user", name: "Clothing", amount: 99.99, date: Date().addingTimeInterval(-86400 * 6), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Doctor Visit", amount: 75.00, date: Date().addingTimeInterval(-86400 * 7), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, date: Date().addingTimeInterval(-86400 * 8), paymentMethod: .bankTransfer)
     ]
     
-    return ScrollView {
+    ScrollView {
         VStack {
             Text("All Expenses")
                 .font(.headline)
@@ -267,27 +337,17 @@ struct ExpenseRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            ExpenseDisclosureView(expenses: sampleExpenses, category: .food)
+            ExpenseDisclosureView(expenses: sampleExpenses, category: nil)
                 .padding(.horizontal)
             
             Divider().padding()
             
-            Text("Health Expenses (Just One)")
+            Text("Empty State")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            ExpenseDisclosureView(expenses: sampleExpenses, category: .health)
-                .padding(.horizontal)
-            
-            Divider().padding()
-            
-            Text("Shopping Expenses (Empty)")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-            
-            ExpenseDisclosureView(expenses: sampleExpenses.filter { $0.asExpenseCategory != .shopping }, category: .shopping)
+            ExpenseDisclosureView(expenses: [], category: nil)
                 .padding(.horizontal)
         }
     }

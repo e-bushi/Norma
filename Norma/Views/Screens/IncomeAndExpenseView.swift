@@ -9,23 +9,11 @@ import SwiftUI
 import Charts
 
 struct IncomeAndExpenseView: View {
-    // Sample income and expense data
-    @State private var incomeSources: [FinancialItem] = [
-        FinancialItem(name: "Salary", amount: 4500.00, category: .income, date: Date()),
-        FinancialItem(name: "Freelance Work", amount: 850.00, category: .income, date: Date()),
-        FinancialItem(name: "Investments", amount: 320.00, category: .income, date: Date())
-    ]
-    
-    @State private var expenses: [FinancialItem] = [
-        FinancialItem(name: "Rent", amount: 1200.00, category: .expense, date: Date(), expenseCategory: .utilities),
-        FinancialItem(name: "Utilities", amount: 180.00, category: .expense, date: Date(), expenseCategory: .utilities),
-        FinancialItem(name: "Groceries", amount: 450.00, category: .expense, date: Date(), expenseCategory: .food),
-        FinancialItem(name: "Uber", amount: 200.00, category: .expense, date: Date(), expenseCategory: .transportation),
-        FinancialItem(name: "Netflix", amount: 80.00, category: .expense, date: Date(), expenseCategory: .entertainment),
-        FinancialItem(name: "Dining Out", amount: 350.00, category: .expense, date: Date(), expenseCategory: .food),
-        FinancialItem(name: "New Headphones", amount: 149.99, category: .expense, date: Date().addingTimeInterval(-86400 * 7), expenseCategory: .shopping),
-        FinancialItem(name: "Doctor Visit", amount: 75.00, category: .expense, date: Date().addingTimeInterval(-86400 * 10), expenseCategory: .health)
-    ]
+    // View Models from Environment
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var incomeViewModel: IncomeViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var dataManager: DataManager
     
     // Animation states
     @State private var chartAppearAnimation = false
@@ -33,11 +21,11 @@ struct IncomeAndExpenseView: View {
     
     // Computed properties for totals
     private var totalIncome: Double {
-        incomeSources.reduce(0) { $0 + $1.amount }
+        incomeViewModel.totalMonthlyIncome
     }
     
     private var totalExpenses: Double {
-        expenses.reduce(0) { $0 + $1.amount }
+        expenseViewModel.totalExpenses
     }
     
     private var netIncome: Double {
@@ -60,7 +48,7 @@ struct IncomeAndExpenseView: View {
     private var expensesPerDay: [Date: [Double]] {
         var expenseMap: [Date: [Double]] = [:]
         
-        for expense in expenses {
+        for expense in expenseViewModel.expenses {
             let startOfDay = Calendar.current.startOfDay(for: expense.date)
             if expenseMap[startOfDay] != nil {
                 expenseMap[startOfDay]?.append(expense.amount)
@@ -73,8 +61,8 @@ struct IncomeAndExpenseView: View {
     }
     
     // Filtered expenses for the selected date
-    private var filteredExpenses: [FinancialItem] {
-        expenses.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+    private var filteredExpenses: [Expense] {
+        expenseViewModel.expenses.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
     }
     
     var body: some View {
@@ -94,13 +82,13 @@ struct IncomeAndExpenseView: View {
                     Group {
                         switch selectedView {
                         case .budget:
-                            BudgetDisclosureView(expenses: expenses, month: currentMonth)
+                            BudgetDisclosureView(expenses: expenseViewModel.expenses, month: currentMonth)
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .trailing).combined(with: .opacity),
                                     removal: .move(edge: .leading).combined(with: .opacity)
                                 ))
                         case .expenses:
-                            ExpenseDisclosureView(expenses: expenses, category: nil)
+                            ExpenseDisclosureView(expenses: expenseViewModel.expenses, category: nil)
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
@@ -118,9 +106,16 @@ struct IncomeAndExpenseView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         // Add income/expense action
+                        expenseViewModel.showAddExpense = true
                     }) {
                         Image(systemName: "plus")
                     }
+                }
+            }
+            .onAppear {
+                Task {
+                    await expenseViewModel.refreshExpenses()
+                    await incomeViewModel.refreshIncomes()
                 }
             }
         }
@@ -129,25 +124,14 @@ struct IncomeAndExpenseView: View {
 
 // MARK: - Supporting Types
 
-// Financial item model representing income or expense
-struct FinancialItem: Identifiable {
-    let id = UUID().uuidString
-    let name: String
-    let amount: Double
-    let category: FinancialCategory
-    let date: Date
-    var expenseCategory: ExpenseCategory?
-    
-    // Returns the expense category if this is an expense, nil otherwise
-    var asExpenseCategory: ExpenseCategory? {
-        if category == .expense {
-            return expenseCategory ?? .other
-        }
-        return nil
-    }
-}
-
 // Preview
 #Preview {
-    IncomeAndExpenseView()
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    
+    return IncomeAndExpenseView()
+        .environmentObject(dataManager)
+        .environmentObject(sessionViewModel)
+        .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }

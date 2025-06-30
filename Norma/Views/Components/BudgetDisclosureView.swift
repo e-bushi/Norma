@@ -12,26 +12,16 @@ struct BudgetDisclosureView: View {
     @State private var showingAllCategories = false
     let isOnboardingMode: Bool
     
-    let expenses: [FinancialItem]
+    let expenses: [Expense]
     let month: String
     
-    init(expenses: [FinancialItem], month: String, isOnboardingMode: Bool = false) {
+    init(expenses: [Expense], month: String, isOnboardingMode: Bool = false) {
         self.expenses = expenses
         self.month = month
         self.isOnboardingMode = isOnboardingMode
         
-        // Only set sample data if not in onboarding mode
-        if !isOnboardingMode {
-            _categoryBudgets = State(initialValue: [
-                .food: 800,
-                .transportation: 300,
-                .entertainment: 200,
-                .shopping: 400,
-                .utilities: 250,
-                .health: 150,
-                .other: 300
-            ])
-        }
+        // Initialize with empty budgets - users should set their own
+        _categoryBudgets = State(initialValue: [:])
     }
     
     private let maxCategoriesToShow = 3
@@ -39,8 +29,10 @@ struct BudgetDisclosureView: View {
     private var expensesByCategory: [ExpenseCategory: Double] {
         var totals: [ExpenseCategory: Double] = [:]
         
-        for expense in expenses where expense.category == .expense {
-            let category = expense.asExpenseCategory ?? .other
+        for expense in expenses {
+            // TODO: Map expense.categoryId to ExpenseCategory
+            // For now, default all to .other since we don't have the mapping implemented
+            let category = ExpenseCategory.other
             totals[category, default: 0] += expense.amount
         }
         
@@ -161,8 +153,8 @@ struct BudgetDisclosureView: View {
                     if displayedCategories.isEmpty {
                         // Enhanced empty state
                         VStack(spacing: 24) {
-                            if isOnboardingMode {
-                                // Onboarding empty state
+                            if true {
+                                // Enhanced empty state with category grid
                                 VStack(spacing: 16) {
                                     ZStack {
                                         Circle()
@@ -536,16 +528,16 @@ extension ExpenseCategory: CaseIterable {
 }
 
 struct BudgetDisclosureView_Previews: PreviewProvider {
-    static let sampleExpenses: [FinancialItem] = [
-        FinancialItem(name: "Groceries", amount: 350, category: .expense, date: Date(), expenseCategory: .food),
-        FinancialItem(name: "Restaurant", amount: 200, category: .expense, date: Date(), expenseCategory: .food),
-        FinancialItem(name: "Gas", amount: 150, category: .expense, date: Date(), expenseCategory: .transportation),
-        FinancialItem(name: "Uber", amount: 80, category: .expense, date: Date(), expenseCategory: .transportation),
-        FinancialItem(name: "Movie", amount: 50, category: .expense, date: Date(), expenseCategory: .entertainment),
-        FinancialItem(name: "Concert", amount: 180, category: .expense, date: Date(), expenseCategory: .entertainment),
-        FinancialItem(name: "Clothes", amount: 300, category: .expense, date: Date(), expenseCategory: .shopping),
-        FinancialItem(name: "Electric Bill", amount: 120, category: .expense, date: Date(), expenseCategory: .utilities),
-        FinancialItem(name: "Doctor Visit", amount: 100, category: .expense, date: Date(), expenseCategory: .health)
+    static let sampleExpenses: [Expense] = [
+        Expense(userId: "preview-user", name: "Groceries", amount: 350, paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Restaurant", amount: 200, paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Gas", amount: 150, paymentMethod: .debitCard),
+        Expense(userId: "preview-user", name: "Uber", amount: 80, paymentMethod: .digitalWallet),
+        Expense(userId: "preview-user", name: "Movie", amount: 50, paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Concert", amount: 180, paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Clothes", amount: 300, paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Electric Bill", amount: 120, paymentMethod: .bankTransfer),
+        Expense(userId: "preview-user", name: "Doctor Visit", amount: 100, paymentMethod: .creditCard)
     ]
     
     static var previews: some View {
