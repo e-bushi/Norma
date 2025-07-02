@@ -10,6 +10,7 @@ import Foundation
 
 struct BillDisclosureView: View {
     let bills: [Bill]
+    @Binding var showNormaChat: Bool
     @State private var showingAllBills = false
     
     private let maxBillsToShow = 5
@@ -179,7 +180,7 @@ struct BillDisclosureView: View {
                             
                             // Add bill button
                             Button(action: {
-                                // Add bill action
+                                showNormaChat = true
                             }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "plus.circle.fill")
@@ -355,7 +356,7 @@ struct BillRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            BillDisclosureView(bills: sampleBills)
+            BillDisclosureView(bills: sampleBills, showNormaChat: .constant(false))
                 .padding(.horizontal)
             
             Divider().padding()
@@ -366,7 +367,7 @@ struct BillRowView: View {
                 .padding(.horizontal)
             
             // Scenario with just 2 bills
-            BillDisclosureView(bills: Array(sampleBills.prefix(2)))
+            BillDisclosureView(bills: Array(sampleBills.prefix(2)), showNormaChat: .constant(false))
                 .padding(.horizontal)
             
             Divider().padding()
@@ -377,7 +378,7 @@ struct BillRowView: View {
                 .padding(.horizontal)
             
             // Empty scenario
-            BillDisclosureView(bills: [])
+            BillDisclosureView(bills: [], showNormaChat: .constant(false))
                 .padding(.horizontal)
         }
     }

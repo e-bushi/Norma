@@ -6,15 +6,17 @@ struct ExpenseTrackerChartView: View {
     let incomeAmount: Double
     let month: String
     let isOnboardingMode: Bool
+    @Binding var showNormaChat: Bool
     
     @State private var showDescription = false
     
-    init(billAmount: Double = 0, currentExpenseAmount: Double = 0, incomeAmount: Double, month: String = "Monthly", isOnboardingMode: Bool = false) {
+    init(billAmount: Double = 0, currentExpenseAmount: Double = 0, incomeAmount: Double, month: String = "Monthly", isOnboardingMode: Bool = false, showNormaChat: Binding<Bool> = .constant(false)) {
         self.billAmount = billAmount
         self.currentExpenseAmount = currentExpenseAmount
         self.incomeAmount = incomeAmount
         self.month = month
         self.isOnboardingMode = isOnboardingMode
+        self._showNormaChat = showNormaChat
     }
     
     private let lineHeight: CGFloat = 400
@@ -229,7 +231,7 @@ struct ExpenseTrackerChartView: View {
             
             // Call to action
             Button(action: {
-                // Navigate to add bills
+                showNormaChat = true
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")
@@ -591,7 +593,8 @@ struct ExpenseTrackerChartView_Previews: PreviewProvider {
                 ExpenseTrackerChartView(
                     incomeAmount: 3000,
                     month: "December",
-                    isOnboardingMode: true
+                    isOnboardingMode: true,
+                    showNormaChat: .constant(false)
                 )
                 
                 // Regular mode previews
@@ -599,21 +602,24 @@ struct ExpenseTrackerChartView_Previews: PreviewProvider {
                     billAmount: 0,
                     currentExpenseAmount: 0,
                     incomeAmount: 0,
-                    month: "December"
+                    month: "December",
+                    showNormaChat: .constant(false)
                 )
                 
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 2800,
                     incomeAmount: 3000,
-                    month: "December"
+                    month: "December",
+                    showNormaChat: .constant(false)
                 )
                 
                 ExpenseTrackerChartView(
                     billAmount: 1500,
                     currentExpenseAmount: 3200,
                     incomeAmount: 3000,
-                    month: "December"
+                    month: "December",
+                    showNormaChat: .constant(false)
                 )
             }
         }

@@ -15,6 +15,7 @@ struct BillHomeView: View {
     @EnvironmentObject var incomeViewModel: IncomeViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @State private var showMyBills: Bool = false
+    @State private var showNormaChat: Bool = false
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -43,11 +44,12 @@ struct BillHomeView: View {
                     currentExpenseAmount: expenseViewModel.totalExpenses,
                     incomeAmount: profileIncomeAmount,
                     month: currentMonth,
-                    isOnboardingMode: shouldShowOnboardingMode
+                    isOnboardingMode: shouldShowOnboardingMode,
+                    showNormaChat: $showNormaChat
                 )
     
                 
-                BillDisclosureView(bills: billViewModel.activeBills)
+                BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
                 .padding(.vertical)
                 .padding(.horizontal)
                 .padding(.horizontal)
@@ -61,6 +63,9 @@ struct BillHomeView: View {
                 Task {
                     await loadInitialData()
                 }
+            }
+            .sheet(isPresented: $showNormaChat) {
+                NormaChatView(context: .bills)
             }
         }
     }
