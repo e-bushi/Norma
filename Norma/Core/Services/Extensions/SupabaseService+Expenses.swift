@@ -17,7 +17,7 @@ extension SupabaseService {
         let response: [Expense] = try await from("expenses")
             .select()
             .eq("user_id", value: userId)
-            .order("date", ascending: false)
+            .order("expense_date", ascending: false)
             .execute()
             .value
         

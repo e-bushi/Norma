@@ -38,6 +38,9 @@ struct IncomeAndExpenseView: View {
     // Custom picker selection
     @State private var selectedView: BudgetExpensePicker.ViewType = .expenses
     
+    // Sheet presentation
+    @State private var showNormaChatView = false
+    
     private var currentMonth: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM"
@@ -47,9 +50,12 @@ struct IncomeAndExpenseView: View {
     // Computed property to create expense map for calendar
     private var expensesPerDay: [Date: [Double]] {
         var expenseMap: [Date: [Double]] = [:]
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current // Use local timezone
         
         for expense in expenseViewModel.expenses {
-            let startOfDay = Calendar.current.startOfDay(for: expense.date)
+            guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else { continue }
+            let startOfDay = Calendar.current.startOfDay(for: expenseDate)
             if expenseMap[startOfDay] != nil {
                 expenseMap[startOfDay]?.append(expense.amount)
             } else {
@@ -62,7 +68,12 @@ struct IncomeAndExpenseView: View {
     
     // Filtered expenses for the selected date
     private var filteredExpenses: [Expense] {
-        expenseViewModel.expenses.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current // Use local timezone
+        return expenseViewModel.expenses.filter { expense in
+            guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
+            return Calendar.current.isDate(expenseDate, inSameDayAs: selectedDate)
+        }
     }
     
     var body: some View {
@@ -105,8 +116,7 @@ struct IncomeAndExpenseView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // Add income/expense action
-                        expenseViewModel.showAddExpense = true
+                        showNormaChatView = true
                     }) {
                         Image(systemName: "plus")
                     }
@@ -117,6 +127,9 @@ struct IncomeAndExpenseView: View {
                     await expenseViewModel.refreshExpenses()
                     await incomeViewModel.refreshIncomes()
                 }
+            }
+            .sheet(isPresented: $showNormaChatView) {
+                NormaChatView(context: .expenses)
             }
         }
     }

@@ -12,7 +12,7 @@ struct Expense: Identifiable, Codable {
     let userId: String
     let name: String
     let amount: Double
-    let date: Date
+    let expenseDate: String
     let categoryId: String?
     let billId: String?
     let paymentMethod: PaymentMethod
@@ -31,7 +31,7 @@ struct Expense: Identifiable, Codable {
         case userId = "user_id"
         case name
         case amount
-        case date
+        case expenseDate = "expense_date"
         case categoryId = "category_id"
         case billId = "bill_id"
         case paymentMethod = "payment_method"
@@ -51,7 +51,7 @@ struct Expense: Identifiable, Codable {
         userId: String,
         name: String,
         amount: Double,
-        date: Date = Date(),
+        expenseDate: String,
         categoryId: String? = nil,
         billId: String? = nil,
         paymentMethod: PaymentMethod,
@@ -69,7 +69,7 @@ struct Expense: Identifiable, Codable {
         self.userId = userId
         self.name = name
         self.amount = amount
-        self.date = date
+        self.expenseDate = expenseDate
         self.categoryId = categoryId
         self.billId = billId
         self.paymentMethod = paymentMethod

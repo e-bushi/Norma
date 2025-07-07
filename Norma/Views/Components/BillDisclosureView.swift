@@ -13,11 +13,16 @@ struct BillDisclosureView: View {
     @Binding var showNormaChat: Bool
     @State private var showingAllBills = false
     
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var dataManager: DataManager
+    
     private let maxBillsToShow = 5
     
     private var upcomingBills: [Bill] {
-        bills.filter { $0.status == .scheduled || $0.status == .overdue || $0.status == .active }
-            .sorted { $0.dueDate < $1.dueDate }
+        // Show all bills, including paid ones
+        bills.sorted { $0.dueDate < $1.dueDate }
     }
     
     private var displayedBills: [Bill] {
@@ -28,17 +33,35 @@ struct BillDisclosureView: View {
         upcomingBills.reduce(0) { $0 + $1.amount }
     }
     
+    private var totalPaidAmount: Double {
+        upcomingBills.filter { bill in
+            bill.calculateStatus(from: expenseViewModel.expenses) == .paid
+        }.reduce(0) { $0 + $1.amount }
+    }
+    
     var body: some View {
         VStack(spacing: 24) {
             // Header section matching ExpenseTrackerChartView style
             VStack(spacing: 12) {
-                Text("UPCOMING BILLS")
+                Text("BILLS")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
                 
                 // Summary stats
-                HStack(spacing: 20) {
+                HStack(spacing: 16) {
+                    VStack(spacing: 4) {
+                        Text("Bill Count")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("\(upcomingBills.count)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
                     VStack(spacing: 4) {
                         Text("Total Due")
                             .font(.system(size: 11, weight: .medium))
@@ -52,12 +75,12 @@ struct BillDisclosureView: View {
                         .frame(height: 30)
                     
                     VStack(spacing: 4) {
-                        Text("Bill Count")
+                        Text("Paid So Far")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("\(upcomingBills.count)")
+                        Text("$\(Int(totalPaidAmount))")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .foregroundColor(.green)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -262,75 +285,98 @@ struct BillDisclosureView: View {
 struct BillRowView: View {
     let bill: Bill
     
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @State private var showBillDetail = false
+    
+    // Calculate the actual status based on expenses
+    private var calculatedStatus: BillStatus {
+        bill.calculateStatus(from: expenseViewModel.expenses)
+    }
+    
     private var statusIcon: String {
-        switch bill.status {
+        switch calculatedStatus {
         case .paid: return "checkmark.circle.fill"
         case .overdue: return "exclamationmark.circle.fill"
         case .scheduled: return "calendar.circle.fill"
-        case .active: return "clock.circle.fill"
         }
     }
     
     private var statusColor: Color {
-        switch bill.status {
+        switch calculatedStatus {
         case .paid: return .green
         case .overdue: return .red
         case .scheduled: return .blue
-        case .active: return .orange
         }
     }
     
-    private var daysUntilDue: Int {
-        let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
-        return days
+    private var nextDueDate: Date {
+        // Just return the actual due date - no need to calculate next period
+        return bill.dueDate
     }
     
     private var dueDateText: String {
-        if daysUntilDue == 0 {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
+        
+        if calculatedStatus == .paid {
+            // Show when it's due next
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return "Paid ✓ • Next: \(formatter.string(from: bill.dueDate))"
+        } else if days == 0 {
             return "Due today"
-        } else if daysUntilDue == 1 {
+        } else if days == 1 {
             return "Due tomorrow"
-        } else if daysUntilDue < 0 {
-            return "\(abs(daysUntilDue)) days overdue"
+        } else if days < 0 {
+            return "\(abs(days)) days overdue"
         } else {
-            return "Due in \(daysUntilDue) days"
+            return "Due in \(days) days"
         }
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Status icon
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.1))
-                    .frame(width: 40, height: 40)
+        Button(action: {
+            showBillDetail = true
+        }) {
+            HStack(spacing: 16) {
+                // Status icon
+                ZStack {
+                    Circle()
+                        .fill(statusColor.opacity(0.1))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 18))
+                        .foregroundColor(statusColor)
+                }
                 
-                Image(systemName: statusIcon)
-                    .font(.system(size: 18))
-                    .foregroundColor(statusColor)
-            }
-            
-            // Bill info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(bill.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
+                // Bill info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(bill.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(dueDateText)
+                        .font(.system(size: 12))
+                        .foregroundColor(bill.status == .overdue ? .red : .secondary)
+                }
                 
-                Text(dueDateText)
-                    .font(.system(size: 12))
-                    .foregroundColor(bill.status == .overdue ? .red : .secondary)
+                Spacer()
+                
+                // Amount
+                Text("$\(String(format: "%.2f", bill.amount))")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(bill.status == .overdue ? .red : .primary)
             }
-            
-            Spacer()
-            
-            // Amount
-            Text("$\(Int(bill.amount))")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(bill.status == .overdue ? .red : .primary)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showBillDetail) {
+            BillDetailView(bill: bill, expenses: expenseViewModel.expenses)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 }
 
@@ -339,22 +385,27 @@ struct BillRowView: View {
     // Sample data for preview
     let sampleUserId = "preview-user-123"
     let sampleBills = [
-        Bill(userId: sampleUserId, name: "Rent", dueDate: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Electricity", dueDate: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Internet", dueDate: Date().addingTimeInterval(86400 * 7), amount: 59.99, status: .scheduled, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Phone Bill", dueDate: Date().addingTimeInterval(86400 * 10), amount: 45.00, status: .scheduled, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Water Bill", dueDate: Date().addingTimeInterval(86400 * 12), amount: 32.75, status: .scheduled, frequency: .quarterly),
-        Bill(userId: sampleUserId, name: "Streaming Service", dueDate: Date().addingTimeInterval(86400 * 15), amount: 14.99, status: .scheduled, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Credit Card", dueDate: Date().addingTimeInterval(-86400 * 2), amount: 220.30, status: .paid, frequency: .monthly),
-        Bill(userId: sampleUserId, name: "Car Insurance", dueDate: Date().addingTimeInterval(-86400 * 5), amount: 110.50, status: .overdue, frequency: .quarterly)
+        Bill(id: "1", userId: sampleUserId, name: "Rent", dueDate: Date().addingTimeInterval(86400 * 2), amount: 1200.00, status: .scheduled, frequency: .monthly),
+        Bill(id: "2", userId: sampleUserId, name: "Electricity", dueDate: Date().addingTimeInterval(86400 * 5), amount: 85.50, status: .scheduled, frequency: .monthly),
+        Bill(id: "3", userId: sampleUserId, name: "Internet", dueDate: Date().addingTimeInterval(86400 * 7), amount: 59.99, status: .scheduled, frequency: .monthly),
+        Bill(id: "4", userId: sampleUserId, name: "Phone Bill", dueDate: Date().addingTimeInterval(86400 * 10), amount: 45.00, status: .scheduled, frequency: .monthly),
+        Bill(id: "5", userId: sampleUserId, name: "Water Bill", dueDate: Date().addingTimeInterval(86400 * 12), amount: 32.75, status: .scheduled, frequency: .quarterly),
+        Bill(id: "6", userId: sampleUserId, name: "Streaming Service", dueDate: Date().addingTimeInterval(86400 * 15), amount: 14.99, status: .scheduled, frequency: .monthly),
+        Bill(id: "7", userId: sampleUserId, name: "Credit Card", dueDate: Date().addingTimeInterval(-86400 * 2), amount: 220.30, status: .paid, frequency: .monthly),
+        Bill(id: "8", userId: sampleUserId, name: "Car Insurance", dueDate: Date().addingTimeInterval(-86400 * 5), amount: 110.50, status: .overdue, frequency: .quarterly)
     ]
+    
+    // Create preview view models
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     return ScrollView {
         VStack {
             Text("With Multiple Bills")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
+                .padding()
             
             BillDisclosureView(bills: sampleBills, showNormaChat: .constant(false))
                 .padding(.horizontal)
@@ -364,7 +415,7 @@ struct BillRowView: View {
             Text("With Few Bills")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
+                .padding()
             
             // Scenario with just 2 bills
             BillDisclosureView(bills: Array(sampleBills.prefix(2)), showNormaChat: .constant(false))
@@ -375,11 +426,12 @@ struct BillRowView: View {
             Text("With No Bills")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
+                .padding()
             
             // Empty scenario
             BillDisclosureView(bills: [], showNormaChat: .constant(false))
                 .padding(.horizontal)
         }
     }
+    .environmentObject(expenseViewModel)
 }

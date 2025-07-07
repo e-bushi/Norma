@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Supabase
+import SwiftData
 
 @MainActor
 class DataManager: ObservableObject {
@@ -37,32 +38,56 @@ class DataManager: ObservableObject {
     // MARK: - Services
     let supabaseService = SupabaseService.shared
     
+    // SwiftData
+    var modelContext: ModelContext?
+    
     // MARK: - Initialization
     
     init() {
         loadCachedData()
     }
     
+    // Set the model context (called from view)
+    func setModelContext(_ context: ModelContext) {
+        print("🔍 [DEBUG] DataManager.setModelContext called")
+        self.modelContext = context
+        print("✅ [DEBUG] DataManager.setModelContext: ModelContext set successfully")
+        loadCachedBills()
+        print("✅ [DEBUG] DataManager.setModelContext: loadCachedBills completed")
+        loadCachedExpenses()
+        print("✅ [DEBUG] DataManager.setModelContext: loadCachedExpenses completed")
+    }
+    
     // MARK: - User Profile Methods
     
     func getCurrentUserProfile() async throws -> Profile? {
+        print("🔍 [DEBUG] DataManager.getCurrentUserProfile called")
+        
         // Check if we have a current user from Supabase
         if let supabaseUser = supabaseService.currentUser {
+            print("✅ [DEBUG] DataManager: Supabase user found: \(supabaseUser.id.uuidString)")
+            
             // Fetch existing profile from database
+            print("🔄 [DEBUG] DataManager: About to fetch profile from database...")
             if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
+                print("✅ [DEBUG] DataManager: Existing profile found: \(existingProfile)")
                 currentProfile = existingProfile
                 return existingProfile
             } else {
+                print("❌ [DEBUG] DataManager: No existing profile found, creating fallback profile")
                 // Fallback: create basic profile if none exists in database
                 let profile = Profile(
                     userId: supabaseUser.id.uuidString,
                     email: supabaseUser.email ?? "",
                     name: extractNameFromUserMetadata(supabaseUser.userMetadata)
                 )
+                print("✅ [DEBUG] DataManager: Created fallback profile: \(profile)")
                 currentProfile = profile
                 return profile
             }
         }
+        
+        print("❌ [DEBUG] DataManager: No Supabase user found")
         return nil
     }
     

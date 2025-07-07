@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct RootView: View {
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var sessionViewModel: SessionViewModel
+    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
@@ -39,6 +41,12 @@ struct RootView: View {
                     .environmentObject(sessionViewModel)
                     .environmentObject(dataManager)
             }
+        }
+        .onAppear {
+            // Set the model context on DataManager
+            print("🔍 [DEBUG] RootView.onAppear: Setting model context on DataManager")
+            dataManager.setModelContext(modelContext)
+            print("✅ [DEBUG] RootView.onAppear: Model context set successfully")
         }
         .task {
             // Load user data when main app becomes active

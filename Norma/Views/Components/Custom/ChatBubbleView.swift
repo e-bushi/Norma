@@ -49,33 +49,33 @@ struct ChatBubbleView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(
-                                message.isUser ?
                                 LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.primary,
-                                        Color.primary.opacity(0.8)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ) :
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
+                                    gradient: Gradient(colors: 
+                                        message.isUser ? [
+                                            Color.blue.opacity(0.05),
+                                            Color.blue.opacity(0.05)
+                                        ] : [
+                                            Color(UIColor.systemBackground),
+                                            Color.gray.opacity(0.02)
+                                        ]
+                                    ),
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
                             .overlay(
-                                message.isUser ? nil :
                                 RoundedRectangle(cornerRadius: 20)
                                     .stroke(
                                         LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
+                                            gradient: Gradient(colors: 
+                                                message.isUser ? [
+                                                    Color.blue.opacity(0.1),
+                                                    Color.blue.opacity(0.1)
+                                                ] : [
+                                                    Color.gray.opacity(0.2),
+                                                    Color.gray.opacity(0.05)
+                                                ]
+                                            ),
                                             startPoint: .top,
                                             endPoint: .bottom
                                         ),
@@ -83,7 +83,7 @@ struct ChatBubbleView: View {
                                     )
                             )
                     )
-                    .foregroundColor(message.isUser ? Color(UIColor.systemBackground) : .primary)
+                    .foregroundColor(message.isUser ? .blue : .primary)
                     .frame(maxWidth: 280, alignment: message.isUser ? .trailing : .leading)
             }
             

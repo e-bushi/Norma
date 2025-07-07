@@ -528,16 +528,17 @@ extension ExpenseCategory: CaseIterable {
 }
 
 struct BudgetDisclosureView_Previews: PreviewProvider {
+    static let dateFormatter = ISO8601DateFormatter()
     static let sampleExpenses: [Expense] = [
-        Expense(userId: "preview-user", name: "Groceries", amount: 350, paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Restaurant", amount: 200, paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Gas", amount: 150, paymentMethod: .debitCard),
-        Expense(userId: "preview-user", name: "Uber", amount: 80, paymentMethod: .digitalWallet),
-        Expense(userId: "preview-user", name: "Movie", amount: 50, paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Concert", amount: 180, paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Clothes", amount: 300, paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Electric Bill", amount: 120, paymentMethod: .bankTransfer),
-        Expense(userId: "preview-user", name: "Doctor Visit", amount: 100, paymentMethod: .creditCard)
+        Expense(userId: "preview-user", name: "Groceries", amount: 350, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 1)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Restaurant", amount: 200, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 2)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Gas", amount: 150, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 3)), paymentMethod: .debitCard),
+        Expense(userId: "preview-user", name: "Uber", amount: 80, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 4)), paymentMethod: .digitalWallet),
+        Expense(userId: "preview-user", name: "Movie", amount: 50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 5)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Concert", amount: 180, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 6)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Clothes", amount: 300, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 7)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Electric Bill", amount: 120, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 8)), paymentMethod: .bankTransfer),
+        Expense(userId: "preview-user", name: "Doctor Visit", amount: 100, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 9)), paymentMethod: .creditCard)
     ]
     
     static var previews: some View {

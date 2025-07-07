@@ -39,7 +39,7 @@ enum NormaChatContext {
         case .bills:
             return NormaSystemPrompts.billCreationPrompt()
         case .expenses:
-            return NormaSystemPrompts.generalAssistantPrompt() // TODO: Create expense-specific prompt
+            return NormaSystemPrompts.expenseCreationPrompt()
         case .profile:
             return NormaSystemPrompts.generalAssistantPrompt() // TODO: Create profile-specific prompt
         }
@@ -188,6 +188,8 @@ struct NormaChatView: View {
             // Context-specific quick action buttons
             if context == .bills {
                 quickActionButtonsForBills
+            } else if context == .expenses {
+                quickActionButtonsForExpenses
             }
             
             // Text input
@@ -245,6 +247,49 @@ struct NormaChatView: View {
                     title: "Insurance",
                     color: .green,
                     action: { inputText = "I need to add an insurance bill" }
+                )
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    @ViewBuilder
+    private var quickActionButtonsForExpenses: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                QuickActionButton(
+                    icon: "cup.and.saucer.fill",
+                    title: "Food & Dining",
+                    color: .orange,
+                    action: { inputText = "I spent money on food" }
+                )
+                
+                QuickActionButton(
+                    icon: "fuelpump.fill",
+                    title: "Gas",
+                    color: .blue,
+                    action: { inputText = "I bought gas" }
+                )
+                
+                QuickActionButton(
+                    icon: "cart.fill",
+                    title: "Groceries",
+                    color: .green,
+                    action: { inputText = "I went grocery shopping" }
+                )
+                
+                QuickActionButton(
+                    icon: "creditcard.fill",
+                    title: "Shopping",
+                    color: .purple,
+                    action: { inputText = "I bought something" }
+                )
+                
+                QuickActionButton(
+                    icon: "car.fill",
+                    title: "Transportation",
+                    color: .indigo,
+                    action: { inputText = "I paid for transportation" }
                 )
             }
             .padding(.horizontal)
@@ -340,23 +385,58 @@ struct NormaChatView: View {
                 tools: tools
             )
             
-            await MainActor.run {
-                isLoading = false
-                
-                // Handle the response content
-                switch response {
-                case .text(let text):
+            // Handle the response content
+            switch response {
+            case .text(let text):
+                await MainActor.run {
+                    isLoading = false
                     let aiMessage = ChatMessage(text: text, isUser: false)
                     messages.append(aiMessage)
-                    
-                case .toolUse(let id, let name, let input):
-                    // Handle tool use based on context
-                    handleToolUse(toolId: id, name: name, input: input)
-                    
-                case .toolResult:
-                    // Tool results are not expected as direct responses
-                    break
                 }
+                
+            case .toolUse(let id, let name, let input):
+                // Claude wants to use a tool - execute it and continue conversation
+                print("🔧 Tool use requested: \(name)")
+                print("📝 Tool input: \(input)")
+                
+                // Execute the tool and get result
+                let toolResult = await executeToolAndGetResult(toolId: id, name: name, input: input)
+                print("✅ Tool result: \(toolResult)")
+                
+                // Continue conversation with tool result
+                var updatedHistory = conversationHistory
+                updatedHistory.append(AnthropicMessage(
+                    role: "assistant",
+                    content: .toolUse(id: id, name: name, input: input)
+                ))
+                updatedHistory.append(AnthropicMessage(
+                    role: "user",
+                    content: .toolResult(toolUseId: id, content: toolResult)
+                ))
+                
+                // Get Claude's final response after tool execution
+                let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
+                    messages: updatedHistory,
+                    systemPrompt: context.systemPrompt,
+                    tools: tools
+                )
+                
+                await MainActor.run {
+                    isLoading = false
+                    
+                    // Handle final response
+                    if case .text(let text) = finalResponse {
+                        let aiMessage = ChatMessage(text: text, isUser: false)
+                        messages.append(aiMessage)
+                    }
+                }
+                
+            case .toolResult:
+                // Tool results are not expected as direct responses
+                await MainActor.run {
+                    isLoading = false
+                }
+                break
             }
             
         } catch {
@@ -381,7 +461,7 @@ struct NormaChatView: View {
         case .bills:
             return [getBillCreationTool()]
         case .expenses:
-            return [] // TODO: Add expense tools
+            return [getExpenseCreationTool()]
         case .profile:
             return [] // TODO: Add profile tools
         }
@@ -409,85 +489,296 @@ struct NormaChatView: View {
                     "frequency": AnthropicToolProperty(
                         type: "string",
                         description: "How often the bill occurs"
+                    ),
+                    "status": AnthropicToolProperty(
+                        type: "string",
+                        description: "Bill status: 'Paid', 'Overdue', or 'Scheduled'"
                     )
                 ],
-                required: ["name", "amount", "due_date", "frequency"]
+                required: ["name", "amount", "due_date", "frequency", "status"]
             )
         )
     }
     
-    private func handleToolUse(toolId: String, name: String, input: [String: Any]) {
-        Task {
-            switch name {
-            case "create_bill":
-                await handleCreateBill(toolId: toolId, input: input)
-            default:
-                await MainActor.run {
-                    let errorMessage = ChatMessage(text: "Sorry, I couldn't process that request right now.", isUser: false)
-                    messages.append(errorMessage)
-                }
-            }
+    private func getExpenseCreationTool() -> AnthropicTool {
+        return AnthropicTool(
+            name: "create_expense",
+            description: "Create a new expense record for the user",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "Name/description of the expense (e.g. 'Lunch at Subway', 'Gas for car')"
+                    ),
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "Amount spent on this expense"
+                    ),
+                    "expense_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "Date of the expense in ISO8601 format with timezone (e.g. 2025-07-07T12:00:00-07:00). Default to today if not specified"
+                    ),
+                    "payment_method": AnthropicToolProperty(
+                        type: "string",
+                        description: "Payment method used: 'Cash', 'Credit Card', 'Debit Card', 'Bank Transfer', 'Digital Wallet', 'Check', or 'Other'"
+                    ),
+                    "merchant": AnthropicToolProperty(
+                        type: "string",
+                        description: "Name of the merchant/store (optional)"
+                    ),
+                    "location": AnthropicToolProperty(
+                        type: "string",
+                        description: "Location where the expense occurred (optional)"
+                    ),
+                    "tags": AnthropicToolProperty(
+                        type: "array",
+                        description: "Array of tags to categorize the expense (optional)"
+                    ),
+                    "notes": AnthropicToolProperty(
+                        type: "string",
+                        description: "Additional notes about the expense (optional)"
+                    )
+                ],
+                required: ["name", "amount", "expense_date", "payment_method"]
+            )
+        )
+    }
+    
+    private func executeToolAndGetResult(toolId: String, name: String, input: [String: Any]) async -> String {
+        switch name {
+        case "create_bill":
+            return await executeBillCreation(input: input)
+        case "create_expense":
+            return await executeExpenseCreation(input: input)
+        default:
+            return "Error: Unknown tool '\(name)'"
         }
     }
     
-    private func handleCreateBill(toolId: String, input: [String: Any]) async {
-        guard let _ = sessionViewModel.currentUser?.userId,
-              let name = input["name"] as? String,
-              let amount = input["amount"] as? Double,
-              let dueDateString = input["due_date"] as? String,
-              let frequencyString = input["frequency"] as? String else {
-            
-            await MainActor.run {
-                let errorMessage = ChatMessage(text: "I'm missing some information to create the bill. Could you provide the name, amount, due date, and frequency?", isUser: false)
-                messages.append(errorMessage)
-            }
-            return
+    private func executeBillCreation(input: [String: Any]) async -> String {
+        print("🔍 [DEBUG] executeBillCreation called with input: \(input)")
+        
+        guard let userId = sessionViewModel.currentUser?.userId else {
+            print("❌ [DEBUG] No user ID found in sessionViewModel.currentUser")
+            return "Error: No user found"
         }
         
-        // Parse date
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        guard let dueDate = formatter.date(from: dueDateString) else {
-            await MainActor.run {
-                let errorMessage = ChatMessage(text: "I couldn't understand the due date format. Could you provide it as YYYY-MM-DD?", isUser: false)
-                messages.append(errorMessage)
+        print("✅ [DEBUG] User ID found: \(userId)")
+        
+        guard let name = input["name"] as? String,
+              let amount = input["amount"] as? Double,
+              let dueDateString = input["due_date"] as? String,
+              let frequencyString = input["frequency"] as? String,
+              let statusString = input["status"] as? String else {
+            print("❌ [DEBUG] Missing required information in input")
+            return "Error: Missing required information (name, amount, due_date, frequency, or status)"
+        }
+        
+        print("✅ [DEBUG] All required parameters found - name: \(name), amount: \(amount), due_date: \(dueDateString), frequency: \(frequencyString), status: \(statusString)")
+        
+        // Parse date with multiple formats
+        let dueDate: Date
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withFullDate]
+        
+        if let parsedDate = isoFormatter.date(from: dueDateString) {
+            dueDate = parsedDate
+        } else {
+            // Try alternative formats or provide a fallback
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            
+            if let parsedDate = dateFormatter.date(from: dueDateString) {
+                dueDate = parsedDate
+            } else {
+                return "Error: Invalid date format. Expected YYYY-MM-DD (e.g., 2025-08-01)"
             }
-            return
         }
         
         // Parse frequency
         let frequency: BillFrequency
-        switch frequencyString.lowercased() {
-        case "monthly":
+        switch frequencyString {
+        case "Monthly":
             frequency = .monthly
-        case "quarterly":
+        case "Quarterly":
             frequency = .quarterly
-        case "annually", "yearly":
+        case "Yearly":
             frequency = .yearly
         default:
-            frequency = .monthly
+            // Fallback for case-insensitive matching
+            switch frequencyString.lowercased() {
+            case "monthly":
+                frequency = .monthly
+            case "quarterly":
+                frequency = .quarterly
+            case "annually", "yearly":
+                frequency = .yearly
+            default:
+                frequency = .monthly
+            }
         }
         
-        do {
-            await billViewModel.addBill(
+        // Parse status
+        let status: BillStatus
+        switch statusString {
+        case "Paid":
+            status = .paid
+        case "Overdue":
+            status = .overdue
+        case "Scheduled":
+            status = .scheduled
+        default:
+            status = .scheduled
+        }
+        
+        print("🔄 [DEBUG] About to call billViewModel.addBill with status: \(status)...")
+        
+        // Create the bill through billViewModel with the specified status
+        let createdBill = await billViewModel.addBill(
+            name: name,
+            amount: amount,
+            dueDate: dueDate,
+            frequency: frequency,
+            status: status
+        )
+        
+        print("✅ [DEBUG] billViewModel.addBill completed successfully")
+        
+        // If status is "Paid", create an expense record
+        if status == .paid, let bill = createdBill, let billId = bill.id {
+            print("🔄 [DEBUG] Bill status is Paid, creating expense record with billId: \(billId)...")
+            
+            // Convert bill frequency to expense frequency
+            let expenseFrequency: ExpenseFrequency = {
+                switch frequency {
+                case .monthly: return .monthly
+                case .quarterly: return .quarterly  
+                case .yearly: return .annually
+                }
+            }()
+            
+            // Format today's date as ISO8601 string for expense_date in local timezone
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.timeZone = TimeZone.current
+            let todayString = dateFormatter.string(from: Date())
+            
+            await expenseViewModel.addExpense(
                 name: name,
                 amount: amount,
-                dueDate: dueDate,
-                frequency: frequency
+                expenseDate: todayString,
+                categoryId: nil,
+                billId: billId,
+                paymentMethod: .debitCard,
+                isRecurring: true, // Bill payments are recurring
+                recurringFrequency: expenseFrequency,
+                merchant: name,
+                location: nil,
+                tags: ["Bill Payment"],
+                createdAt: nil, // Let Supabase fill this in
+                updatedAt: nil,
+                notes: "Bill payment",
+                attachmentUrls: []
             )
             
-            await MainActor.run {
-                let successMessage = ChatMessage(
-                    text: "Perfect! I've created your '\(name)' bill for $\(Int(amount)) due on \(formatDateForDisplay(dueDate)). It's set to recur \(frequencyString). You can view it in your Bills tab! 🎉\n\nWould you like to add another bill?",
-                    isUser: false
-                )
-                messages.append(successMessage)
+            print("✅ [DEBUG] Expense created for paid bill")
+        } else if status == .paid {
+            print("⚠️ [DEBUG] Could not create expense: Bill creation failed or bill ID is missing")
+        }
+        
+        return "Successfully created bill '\(name)' for $\(String(format: "%.2f", amount)) due on \(formatDateForDisplay(dueDate))"
+    }
+    
+    private func executeExpenseCreation(input: [String: Any]) async -> String {
+        print("🔍 [DEBUG] executeExpenseCreation called with input: \(input)")
+        
+        guard let userId = sessionViewModel.currentUser?.userId else {
+            print("❌ [DEBUG] No user ID found in sessionViewModel.currentUser")
+            return "Error: No user found"
+        }
+        
+        print("✅ [DEBUG] User ID found: \(userId)")
+        
+        guard let name = input["name"] as? String,
+              let amount = input["amount"] as? Double,
+              let expenseDateString = input["expense_date"] as? String,
+              let paymentMethodString = input["payment_method"] as? String else {
+            print("❌ [DEBUG] Missing required information in input")
+            return "Error: Missing required information (name, amount, expense_date, or payment_method)"
+        }
+        
+        print("✅ [DEBUG] All required parameters found - name: \(name), amount: \(amount), expense_date: \(expenseDateString), payment_method: \(paymentMethodString)")
+        
+        // Parse payment method
+        let paymentMethod: PaymentMethod
+        switch paymentMethodString {
+        case "Cash":
+            paymentMethod = .cash
+        case "Credit Card":
+            paymentMethod = .creditCard
+        case "Debit Card":
+            paymentMethod = .debitCard
+        case "Bank Transfer":
+            paymentMethod = .bankTransfer
+        case "Digital Wallet":
+            paymentMethod = .digitalWallet
+        case "Check":
+            paymentMethod = .check
+        case "Other":
+            paymentMethod = .other
+        default:
+            // Fallback for case-insensitive matching
+            switch paymentMethodString.lowercased() {
+            case "cash":
+                paymentMethod = .cash
+            case "credit card":
+                paymentMethod = .creditCard
+            case "debit card":
+                paymentMethod = .debitCard
+            case "bank transfer":
+                paymentMethod = .bankTransfer
+            case "digital wallet":
+                paymentMethod = .digitalWallet
+            case "check":
+                paymentMethod = .check
+            default:
+                paymentMethod = .debitCard // default fallback
             }
-        } catch {
-            await MainActor.run {
-                let errorMessage = ChatMessage(text: "Sorry, I couldn't create the bill right now. Please try again later.", isUser: false)
-                messages.append(errorMessage)
-            }
+        }
+        
+        // Parse optional parameters
+        let merchant = input["merchant"] as? String
+        let location = input["location"] as? String
+        let notes = input["notes"] as? String
+        let tags = input["tags"] as? [String] ?? []
+        
+        print("🔄 [DEBUG] About to call expenseViewModel.addExpense...")
+        
+        // Create the expense through expenseViewModel
+        let success = await expenseViewModel.addExpense(
+            name: name,
+            amount: amount,
+            expenseDate: expenseDateString,
+            categoryId: nil,
+            billId: nil,
+            paymentMethod: paymentMethod,
+            isRecurring: false,
+            recurringFrequency: nil,
+            merchant: merchant,
+            location: location,
+            tags: tags,
+            createdAt: nil,
+            updatedAt: nil,
+            notes: notes,
+            attachmentUrls: []
+        )
+        
+        print("✅ [DEBUG] expenseViewModel.addExpense completed successfully")
+        
+        if success {
+            return "Successfully recorded expense '\(name)' for $\(String(format: "%.2f", amount)) paid with \(paymentMethod.rawValue)"
+        } else {
+            return "Error: Failed to create expense"
         }
     }
     

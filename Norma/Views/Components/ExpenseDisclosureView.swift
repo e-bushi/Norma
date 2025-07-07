@@ -29,7 +29,12 @@ struct ExpenseDisclosureView: View {
             // TODO: Implement category filtering with the Category model
             return true
         }
-        return filtered.sorted { $0.date > $1.date }
+        let dateFormatter = ISO8601DateFormatter()
+        return filtered.sorted { 
+            guard let date1 = dateFormatter.date(from: $0.expenseDate),
+                  let date2 = dateFormatter.date(from: $1.expenseDate) else { return false }
+            return date1 > date2
+        }
     }
     
     private var displayedExpenses: [Expense] {
@@ -55,7 +60,7 @@ struct ExpenseDisclosureView: View {
                         Text("Total Spent")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalExpenseAmount))")
+                        Text("$\(String(format: "%.2f", totalExpenseAmount))")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -268,7 +273,11 @@ struct ExpenseRowView: View {
     private var timeAgoText: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
-        return formatter.localizedString(for: expense.date, relativeTo: Date())
+        let dateFormatter = ISO8601DateFormatter()
+        guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else {
+            return "Unknown"
+        }
+        return formatter.localizedString(for: expenseDate, relativeTo: Date())
     }
     
     var body: some View {
@@ -298,7 +307,7 @@ struct ExpenseRowView: View {
             Spacer()
             
             // Amount
-            Text("$\(Int(expense.amount))")
+            Text("$\(String(format: "%.2f", expense.amount))")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.primary)
         }
@@ -309,15 +318,16 @@ struct ExpenseRowView: View {
 
 #Preview {
     // Sample data for preview
+    let dateFormatter = ISO8601DateFormatter()
     let sampleExpenses: [Expense] = [
-        Expense(userId: "preview-user", name: "Groceries", amount: 120.50, date: Date().addingTimeInterval(-86400 * 1), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Gas", amount: 45.00, date: Date().addingTimeInterval(-86400 * 2), paymentMethod: .debitCard),
-        Expense(userId: "preview-user", name: "Movie Tickets", amount: 32.99, date: Date().addingTimeInterval(-86400 * 3), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Restaurant", amount: 85.75, date: Date().addingTimeInterval(-86400 * 4), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Uber Ride", amount: 18.50, date: Date().addingTimeInterval(-86400 * 5), paymentMethod: .digitalWallet),
-        Expense(userId: "preview-user", name: "Clothing", amount: 99.99, date: Date().addingTimeInterval(-86400 * 6), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Doctor Visit", amount: 75.00, date: Date().addingTimeInterval(-86400 * 7), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, date: Date().addingTimeInterval(-86400 * 8), paymentMethod: .bankTransfer)
+        Expense(userId: "preview-user", name: "Groceries", amount: 120.50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 1)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Gas", amount: 45.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 2)), paymentMethod: .debitCard),
+        Expense(userId: "preview-user", name: "Movie Tickets", amount: 32.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 3)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Restaurant", amount: 85.75, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 4)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Uber Ride", amount: 18.50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 5)), paymentMethod: .digitalWallet),
+        Expense(userId: "preview-user", name: "Clothing", amount: 99.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 6)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Doctor Visit", amount: 75.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 7)), paymentMethod: .creditCard),
+        Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 8)), paymentMethod: .bankTransfer)
     ]
     
     ScrollView {

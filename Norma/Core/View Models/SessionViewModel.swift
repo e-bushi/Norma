@@ -44,24 +44,29 @@ class SessionViewModel: ObservableObject {
     // MARK: - Authentication Methods
     
     func checkAuthenticationState() async {
+        print("🔍 [DEBUG] SessionViewModel.checkAuthenticationState called")
         isLoadingAuth = true
         
         do {
             // Use DataManager to check authentication state
+            print("🔄 [DEBUG] SessionViewModel: About to get current user profile...")
             let profile = try await dataManager.getCurrentUserProfile()
             
             if let profile = profile {
+                print("✅ [DEBUG] SessionViewModel: Profile found: \(profile)")
                 await handleAuthenticationSuccess(user: profile)
             } else {
+                print("❌ [DEBUG] SessionViewModel: No profile found")
                 await handleNoAuthentication()
             }
             
         } catch {
-            print("Auth check failed: \(error.localizedDescription)")
+            print("❌ [DEBUG] SessionViewModel: Auth check failed: \(error.localizedDescription)")
             await handleNoAuthentication()
         }
         
         isLoadingAuth = false
+        print("🔄 [DEBUG] SessionViewModel.checkAuthenticationState completed")
     }
     
     func handleAuthenticationSuccess(user: Profile? = nil) async {

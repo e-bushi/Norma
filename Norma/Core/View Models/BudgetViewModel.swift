@@ -227,8 +227,10 @@ class BudgetViewModel: ObservableObject {
     private func getExpensesForBudget(_ budget: Budget, in dateRange: DateInterval) -> [Expense] {
         guard let expenseViewModel = expenseViewModel else { return [] }
         
-        var expenses = expenseViewModel.expenses.filter {
-            dateRange.contains($0.date)
+        let dateFormatter = ISO8601DateFormatter()
+        var expenses = expenseViewModel.expenses.filter { expense in
+            guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
+            return dateRange.contains(expenseDate)
         }
         
         // Filter by category if specified

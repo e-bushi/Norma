@@ -35,13 +35,30 @@ struct BillHomeView: View {
         return billViewModel.activeBills.isEmpty && profileIncomeAmount > 0
     }
     
+    private var currentSpentAmount: Double {
+        // Calculate total spent: all active bill amounts + non-bill expenses
+        // This prevents double counting - we count bill amounts, not the bill payment expenses
+        let allExpenses = expenseViewModel.expenses
+        
+        // Get the bill amounts for all active bills (regardless of payment status)
+        let activeBillsAmount = billViewModel.activeBills
+            .filter { $0.isActive ?? true } // Include bills where isActive is true or nil (default to active)
+            .reduce(0) { $0 + $1.amount }
+        
+        // Get expenses that are NOT linked to bills (billId is nil)
+        let nonBillExpenses = allExpenses.filter { $0.billId == nil }
+        let nonBillExpensesAmount = nonBillExpenses.reduce(0) { $0 + $1.amount }
+        
+        return activeBillsAmount + nonBillExpensesAmount
+    }
+    
     var body: some View {
         NavigationStack {
             ScrollView {
                 
                 ExpenseTrackerChartView(
                     billAmount: billViewModel.totalMonthlyBills,
-                    currentExpenseAmount: expenseViewModel.totalExpenses,
+                    currentExpenseAmount: currentSpentAmount,
                     incomeAmount: profileIncomeAmount,
                     month: currentMonth,
                     isOnboardingMode: shouldShowOnboardingMode,
@@ -56,11 +73,23 @@ struct BillHomeView: View {
             }
             .navigationTitle(Text("Home"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if !billViewModel.activeBills.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            showNormaChat = true
+                        }) {
+                            Image(systemName: "plus")
+                        }
+                    }
+                }
+            }
             .refreshable {
                 await refreshData()
             }
-            .onAppear {
-                Task {
+            .task {
+                // Only load if bills are empty (not already loaded by RootView)
+                if billViewModel.bills.isEmpty {
                     await loadInitialData()
                 }
             }

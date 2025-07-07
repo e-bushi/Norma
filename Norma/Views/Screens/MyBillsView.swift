@@ -1,6 +1,6 @@
 //
 //  MyBillsView.swift
-//  Collector
+//  Norma
 //
 //  Created by Claude on 5/9/25.
 //
@@ -8,55 +8,10 @@
 import SwiftUI
 
 struct MyBillsView: View {
-    // Sample data for testing
-    private let sampleUserId = "sample-user-123"
-    @State private var bills: [Bill] = []
-    
-    init() {
-        let userId = sampleUserId
-        _bills = State(initialValue: [
-            Bill(
-                userId: userId,
-                name: "Electricity Bill",
-                dueDate: Date(),
-                amount: 87.50,
-                status: .paid,
-                frequency: .monthly
-            ),
-            Bill(
-                userId: userId,
-                name: "Internet Service",
-                dueDate: Date().addingTimeInterval(-86400 * 5),
-                amount: 65.99,
-                status: .overdue,
-                frequency: .monthly
-            ),
-            Bill(
-                userId: userId,
-                name: "Rent Payment",
-                dueDate: Date().addingTimeInterval(86400 * 3),
-                amount: 1200.00,
-                status: .scheduled,
-                frequency: .monthly
-            ),
-            Bill(
-                userId: userId,
-                name: "Car Insurance",
-                dueDate: Date().addingTimeInterval(86400 * 30),
-                amount: 420.00,
-                status: .scheduled,
-                frequency: .quarterly
-            ),
-            Bill(
-                userId: userId,
-                name: "Property Tax",
-                dueDate: Date().addingTimeInterval(86400 * 60),
-                amount: 2500.00,
-                status: .scheduled,
-                frequency: .yearly
-            )
-        ])
-    }
+    // Environment objects
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var dataManager: DataManager
     
     // Filter options for the list
     @State private var selectedFilter: BillFilter = .all
@@ -67,6 +22,9 @@ struct MyBillsView: View {
     
     // Animation state
     @State private var headerAppeared = false
+    
+    // Sheet presentation
+    @State private var showNormaChatView = false
     
     var body: some View {
         NavigationStack {
@@ -80,7 +38,7 @@ struct MyBillsView: View {
                     
                     // Bill list view component
                     BillListView(
-                        bills: bills,
+                        bills: billViewModel.activeBills,
                         selectedFilter: $selectedFilter,
                         selectedDate: $selectedDate,
                         showAllDates: $showAllDates
@@ -92,7 +50,7 @@ struct MyBillsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // Add new bill action
+                        showNormaChatView = true
                     }) {
                         Image(systemName: "plus")
                     }
@@ -105,6 +63,14 @@ struct MyBillsView: View {
                         headerAppeared = true
                     }
                 }
+                
+                // Load bills if not already loaded
+                Task {
+                    await billViewModel.refreshBills()
+                }
+            }
+            .sheet(isPresented: $showNormaChatView) {
+                NormaChatView(context: .bills)
             }
         }
     }
@@ -113,5 +79,12 @@ struct MyBillsView: View {
 
 
 #Preview {
-    MyBillsView()
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    
+    return MyBillsView()
+        .environmentObject(dataManager)
+        .environmentObject(sessionViewModel)
+        .environmentObject(billViewModel)
 }

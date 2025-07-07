@@ -48,7 +48,7 @@ struct ExpenseCalendarView: View {
                         Text("Month Total")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalExpensesThisMonth))")
+                        Text("$\(String(format: "%.2f", totalExpensesThisMonth))")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -215,7 +215,7 @@ struct DayCell: View {
             
             // Expense indicator
             if expenseCount > 0 {
-                Text("$\(Int(expenseTotal))")
+                Text("$\(String(format: "%.2f", expenseTotal))")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(.purple.opacity(0.8))
             } else {

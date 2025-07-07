@@ -96,16 +96,22 @@ class BillViewModel: ObservableObject {
         amount: Double,
         dueDate: Date,
         frequency: BillFrequency,
+        status: BillStatus = .scheduled,
         categoryId: String? = nil,
         merchant: String? = nil,
         isAutoPayEnabled: Bool = false,
         reminderDays: Int? = nil,
         notes: String? = nil
-    ) async {
+    ) async -> Bill? {
+        print("🔍 [DEBUG] BillViewModel.addBill called with name: \(name), amount: \(amount)")
+        
         guard let userId = sessionViewModel.currentUser?.userId else {
+            print("❌ [DEBUG] BillViewModel.addBill: No user ID found")
             showError("No user found")
-            return
+            return nil
         }
+        
+        print("✅ [DEBUG] BillViewModel.addBill: User ID found: \(userId)")
         
         isLoading = true
         clearError()
@@ -115,7 +121,7 @@ class BillViewModel: ObservableObject {
             name: name,
             dueDate: dueDate,
             amount: amount,
-            status: .active,
+            status: status,
             frequency: frequency,
             categoryId: categoryId,
             merchant: merchant,
@@ -124,14 +130,26 @@ class BillViewModel: ObservableObject {
             notes: notes
         )
         
+        print("🔄 [DEBUG] BillViewModel.addBill: About to call dataManager.addBill...")
+        print("🔄 [DEBUG] BillViewModel.addBill: Bill object: \(newBill)")
+        
         do {
             try await dataManager.addBill(newBill)
+            print("✅ [DEBUG] BillViewModel.addBill: dataManager.addBill completed successfully")
             loadBills()
+            print("✅ [DEBUG] BillViewModel.addBill: loadBills completed")
+            
+            // Find and return the created bill
+            let createdBill = bills.first { $0.name == name && $0.amount == amount && $0.userId == userId }
+            isLoading = false
+            print("🔄 [DEBUG] BillViewModel.addBill: Method completed, returning bill with ID: \(createdBill?.id ?? "nil")")
+            return createdBill
         } catch {
+            print("❌ [DEBUG] BillViewModel.addBill: dataManager.addBill failed with error: \(error)")
             showError("Failed to add bill: \(error.localizedDescription)")
+            isLoading = false
+            return nil
         }
-        
-        isLoading = false
     }
     
     func updateBill(_ bill: Bill) async {
@@ -230,6 +248,27 @@ class BillViewModel: ObservableObject {
         overdueBills.reduce(0) { $0 + $1.amount }
     }
     
+    /// Calculate paid bills this month based on expense payments
+    func paidBillsThisMonth(expenses: [Expense]) -> Double {
+        return bills
+            .filter { bill in
+                // Use calculated status based on expense payments
+                bill.calculateStatus(from: expenses) == .paid
+            }
+            .filter { bill in
+                // Only include bills due this month
+                Calendar.current.isDate(bill.dueDate, equalTo: Date(), toGranularity: .month)
+            }
+            .reduce(0) { $0 + $1.amount }
+    }
+    
+    /// Get bills with their calculated status based on expenses
+    func getBillsWithCalculatedStatus(expenses: [Expense]) -> [(bill: Bill, status: BillStatus)] {
+        return bills.map { bill in
+            (bill: bill, status: bill.calculateStatus(from: expenses))
+        }
+    }
+    
     // MARK: - Helper Methods
     
     func getDueDateStatus(for bill: Bill) -> (text: String, color: Color) {
@@ -251,7 +290,7 @@ class BillViewModel: ObservableObject {
             } else {
                 return ("Due in \(daysUntilDue) days", .secondary)
             }
-        case .active:
+        case .scheduled:
             if daysUntilDue < 0 {
                 return ("Overdue by \(abs(daysUntilDue)) days", .red)
             } else if daysUntilDue == 0 {
