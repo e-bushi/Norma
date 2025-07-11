@@ -21,6 +21,8 @@ struct ChartLabelView: View {
     @State private var dotAppeared = false
     @State private var labelAppeared = false
     @State private var displayValue = ""
+    @State private var valueScale: CGFloat = 0.3
+    @State private var valueOpacity: Double = 0
     
     enum SlideDirection {
         case left, right
@@ -54,11 +56,11 @@ struct ChartLabelView: View {
                         .foregroundColor(color.opacity(0.8))
                         .tracking(0.5)
                     
-                    CasinoText(
-                        value: displayValue,
-                        font: .system(size: 18, weight: .bold),
-                        color: color
-                    )
+                    Text(displayValue)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(color)
+                        .scaleEffect(valueScale)
+                        .opacity(valueOpacity)
                 }
             }
             .padding(.horizontal, 16)
@@ -83,6 +85,8 @@ struct ChartLabelView: View {
                 dotAppeared = false
                 labelAppeared = false
                 displayValue = formatAsZero(basedOn: value)
+                valueScale = 0.3
+                valueOpacity = 0
             }
         }
         .onChange(of: value) { _, newValue in
@@ -116,6 +120,12 @@ struct ChartLabelView: View {
             // Start counting animation after label appears
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 displayValue = value
+                
+                // Animate the value with a soft smooth bounce
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0)) {
+                    valueScale = 1.0
+                    valueOpacity = 1.0
+                }
             }
         }
     }

@@ -94,7 +94,7 @@ struct NormaSystemPrompts {
         
         When using the create_bill tool:
         - name: Use the exact name they provided (e.g., "Rent", "Electric Bill")
-        - amount: Use the numeric amount only (e.g., if they say "$1200" use 1200)
+        - amount: Use the numeric amount as a decimal number (e.g., if they say "$1200" use 1200.00, if they say "$14" use 14.00)
         - due_date: Convert to YYYY-MM-DD format. CRITICAL: For recurring bills, calculate the next upcoming occurrence of that day of the month. Examples:
           * "1st of every month" → Find the next 1st. If today is July 31st, the next 1st is August 1st (2025-08-01)
           * "15th" → Find the next 15th. If today is July 31st, the next 15th is August 15th (2025-08-15)
@@ -142,7 +142,7 @@ struct NormaSystemPrompts {
         
         When using the create_expense tool:
         - name: Use the exact description they provided (e.g., "Lunch at Subway", "Gas for car")
-        - amount: Use the numeric amount only (e.g., if they say "$25.50" use 25.50)
+        - amount: Use the numeric amount as a decimal number (e.g., if they say "$25.50" use 25.50, if they say "$10" use 10.00)
         - expense_date: Convert to ISO8601 format with local timezone. Examples:
           * "today" → \(currentDate)
           * "yesterday" → Calculate yesterday's date in ISO8601 format

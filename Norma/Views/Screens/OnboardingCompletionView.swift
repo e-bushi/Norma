@@ -212,10 +212,19 @@ struct OnboardingCompletionView: View {
             Task {
                 try? await Task.sleep(nanoseconds: 4_500_000_000) // 4.5 seconds
                 await MainActor.run {
+                    print("🎯 [DEBUG] OnboardingCompletionView - Setting completion flags")
+                    print("🎯 [DEBUG] Before - hasCompletedOnboarding: \(sessionViewModel.hasCompletedOnboarding)")
+                    print("🎯 [DEBUG] Before - hasCompletedInitialSetup: \(sessionViewModel.hasCompletedInitialSetup)")
+                    
                     // Mark both onboarding and initial setup as complete - data is already saved
                     sessionViewModel.hasCompletedOnboarding = true
                     sessionViewModel.hasCompletedInitialSetup = true
                     sessionViewModel.shouldShowOnboarding = false
+                    
+                    print("🎯 [DEBUG] After - hasCompletedOnboarding: \(sessionViewModel.hasCompletedOnboarding)")
+                    print("🎯 [DEBUG] After - hasCompletedInitialSetup: \(sessionViewModel.hasCompletedInitialSetup)")
+                    print("🎯 [DEBUG] After - isAuthenticated: \(sessionViewModel.isAuthenticated)")
+                    print("🎯 [DEBUG] After - shouldShowMainApp: \(sessionViewModel.shouldShowMainApp)")
                 }
             }
         }

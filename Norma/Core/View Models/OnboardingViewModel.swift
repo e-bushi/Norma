@@ -116,6 +116,9 @@ class OnboardingViewModel: ObservableObject {
         
         _ = try await supabaseService.verifyOTP(email: email, code: code)
         
+        // Notify SessionViewModel of successful authentication
+        await sessionViewModel.handleAuthenticationSuccess()
+        
         isVerified = true
         isLoading = false
         // Don't update currentStep here - let the view handle navigation after transition

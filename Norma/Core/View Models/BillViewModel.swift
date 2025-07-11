@@ -180,12 +180,12 @@ class BillViewModel: ObservableObject {
         isLoading = false
     }
     
-    func markBillAsPaid(_ bill: Bill) async {
+    func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async {
         isLoading = true
         clearError()
         
         do {
-            try await dataManager.markBillAsPaid(bill)
+            try await dataManager.markBillAsPaid(bill, paymentMethod: paymentMethod, notes: notes)
             loadBills()
         } catch {
             showError("Failed to mark bill as paid: \(error.localizedDescription)")

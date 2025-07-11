@@ -200,33 +200,6 @@ struct BillDisclosureView: View {
                                             .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                                     )
                             )
-                            
-                            // Add bill button
-                            Button(action: {
-                                showNormaChat = true
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.blue)
-                                    
-                                    Text("Add your first bill")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.blue)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue.opacity(0.05))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .padding(.horizontal, 20)
                         }
                         .padding(.vertical, 40)
                         .padding(.horizontal, 20)

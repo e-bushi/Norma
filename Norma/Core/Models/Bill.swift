@@ -10,15 +10,15 @@ import Foundation
 struct Bill: Identifiable, Codable {
     var id: String?
     let userId: String
-    let name: String
+    var name: String
     var dueDate: Date
-    let amount: Double
+    var amount: Double
     var status: BillStatus
-    let frequency: BillFrequency
-    let categoryId: String?
-    let merchant: String?
-    let isAutoPayEnabled: Bool
-    let reminderDays: Int?
+    var frequency: BillFrequency
+    var categoryId: String?
+    var merchant: String?
+    var isAutoPayEnabled: Bool
+    var reminderDays: Int?
     var isActive: Bool?
     var createdAt: String?
     var updatedAt: String?
@@ -158,7 +158,7 @@ enum BillStatus: String, Codable {
 }
 
 // Bill frequency enum
-enum BillFrequency: String, Codable {
+enum BillFrequency: String, Codable, CaseIterable {
     case monthly = "Monthly"
     case quarterly = "Quarterly"
     case yearly = "Yearly"

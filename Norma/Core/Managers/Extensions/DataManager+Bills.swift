@@ -160,13 +160,52 @@ extension DataManager {
             .min { $0.dueDate < $1.dueDate }
     }
     
-    func markBillAsPaid(_ bill: Bill) async throws {
+    func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async throws {
+        // First, create an expense record for this payment
+        if let billId = bill.id {
+            // Convert bill frequency to expense frequency
+            let expenseFrequency: ExpenseFrequency = {
+                switch bill.frequency {
+                case .monthly: return .monthly
+                case .quarterly: return .quarterly  
+                case .yearly: return .annually
+                }
+            }()
+            
+            // Format today's date as ISO8601 string for expense_date in local timezone
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.timeZone = TimeZone.current
+            let todayString = dateFormatter.string(from: Date())
+            
+            let expense = Expense(
+                id: nil,
+                userId: bill.userId,
+                name: bill.name,
+                amount: bill.amount,
+                expenseDate: todayString,
+                categoryId: bill.categoryId,
+                billId: billId,
+                paymentMethod: paymentMethod,
+                isRecurring: true,
+                recurringFrequency: expenseFrequency,
+                merchant: bill.merchant ?? bill.name,
+                location: nil,
+                tags: ["Bill Payment"],
+                createdAt: nil,
+                updatedAt: nil,
+                notes: notes ?? "Bill payment for \(bill.name)",
+                attachmentUrls: []
+            )
+            
+            try await addExpense(expense)
+        }
+        
+        // Then update the bill status and due date
         var updatedBill = bill
         updatedBill.status = .paid
         
-        // For recurring bills, calculate next due date and mark as active
+        // For recurring bills, calculate next due date but keep status as paid
         updatedBill.dueDate = calculateNextDueDate(for: bill)
-        updatedBill.status = .scheduled
         
         try await updateBill(updatedBill)
     }

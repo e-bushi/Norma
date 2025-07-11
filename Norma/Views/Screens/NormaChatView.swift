@@ -480,7 +480,7 @@ struct NormaChatView: View {
                     ),
                     "amount": AnthropicToolProperty(
                         type: "number",
-                        description: "Monthly amount of the bill"
+                        description: "Monthly amount of the bill as a decimal number (e.g., 14.00, 99.99)"
                     ),
                     "due_date": AnthropicToolProperty(
                         type: "string",
@@ -513,7 +513,7 @@ struct NormaChatView: View {
                     ),
                     "amount": AnthropicToolProperty(
                         type: "number",
-                        description: "Amount spent on this expense"
+                        description: "Amount spent on this expense as a decimal number (e.g., 25.50, 100.00)"
                     ),
                     "expense_date": AnthropicToolProperty(
                         type: "string",
@@ -567,12 +567,22 @@ struct NormaChatView: View {
         print("✅ [DEBUG] User ID found: \(userId)")
         
         guard let name = input["name"] as? String,
-              let amount = input["amount"] as? Double,
               let dueDateString = input["due_date"] as? String,
               let frequencyString = input["frequency"] as? String,
               let statusString = input["status"] as? String else {
             print("❌ [DEBUG] Missing required information in input")
             return "Error: Missing required information (name, amount, due_date, frequency, or status)"
+        }
+        
+        // Handle amount as either Int or Double
+        let amount: Double
+        if let doubleAmount = input["amount"] as? Double {
+            amount = doubleAmount
+        } else if let intAmount = input["amount"] as? Int {
+            amount = Double(intAmount)
+        } else {
+            print("❌ [DEBUG] Invalid amount type")
+            return "Error: Invalid amount format"
         }
         
         print("✅ [DEBUG] All required parameters found - name: \(name), amount: \(amount), due_date: \(dueDateString), frequency: \(frequencyString), status: \(statusString)")
@@ -700,11 +710,21 @@ struct NormaChatView: View {
         print("✅ [DEBUG] User ID found: \(userId)")
         
         guard let name = input["name"] as? String,
-              let amount = input["amount"] as? Double,
               let expenseDateString = input["expense_date"] as? String,
               let paymentMethodString = input["payment_method"] as? String else {
             print("❌ [DEBUG] Missing required information in input")
             return "Error: Missing required information (name, amount, expense_date, or payment_method)"
+        }
+        
+        // Handle amount as either Int or Double
+        let amount: Double
+        if let doubleAmount = input["amount"] as? Double {
+            amount = doubleAmount
+        } else if let intAmount = input["amount"] as? Int {
+            amount = Double(intAmount)
+        } else {
+            print("❌ [DEBUG] Invalid amount type")
+            return "Error: Invalid amount format"
         }
         
         print("✅ [DEBUG] All required parameters found - name: \(name), amount: \(amount), expense_date: \(expenseDateString), payment_method: \(paymentMethodString)")

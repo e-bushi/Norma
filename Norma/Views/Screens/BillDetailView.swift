@@ -15,7 +15,11 @@ struct BillDetailView: View {
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @Environment(\.dismiss) private var dismiss
     
-    @State private var showMarkAsPaidSheet = false
+    @State private var showEditBillSheet = false
+    @State private var isMarkingAsPaid = false
+    @State private var showPaymentSuccess = false
+    @State private var showPaymentError = false
+    @State private var paymentErrorMessage = ""
     
     // Calculate bill status and payment info
     private var calculatedStatus: BillStatus {
@@ -56,9 +60,19 @@ struct BillDetailView: View {
                 .padding()
             }
         }
-        .sheet(isPresented: $showMarkAsPaidSheet) {
-            // TODO: Create MarkBillAsPaidView
-            Text("Mark as Paid Sheet")
+        .sheet(isPresented: $showEditBillSheet) {
+            EditBillView(bill: bill)
+                .environmentObject(billViewModel)
+        }
+        .alert("Payment Successful", isPresented: $showPaymentSuccess) {
+            Button("OK") { }
+        } message: {
+            Text("Bill has been marked as paid and will recur next period.")
+        }
+        .alert("Payment Failed", isPresented: $showPaymentError) {
+            Button("OK") { }
+        } message: {
+            Text(paymentErrorMessage)
         }
     }
     
@@ -269,17 +283,24 @@ struct BillDetailView: View {
         VStack(spacing: 12) {
             if !isFullyPaid {
                 Button(action: {
-                    showMarkAsPaidSheet = true
+                    Task {
+                        await markBillAsPaid()
+                    }
                 }) {
                     HStack(spacing: 8) {
-                        Image(systemName: "creditcard.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white)
+                        if isMarkingAsPaid {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "creditcard.fill")
+                                .font(.system(size: 16))
+                        }
                         
-                        Text("Mark as Paid")
+                        Text(isMarkingAsPaid ? "Processing..." : "Mark as Paid")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
                     }
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
@@ -295,12 +316,14 @@ struct BillDetailView: View {
                                 )
                             )
                     )
+                    .opacity(isMarkingAsPaid ? 0.8 : 1.0)
                 }
+                .disabled(isMarkingAsPaid)
                 .buttonStyle(PlainButtonStyle())
             }
             
             Button(action: {
-                // TODO: Edit bill functionality
+                showEditBillSheet = true
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
@@ -409,6 +432,28 @@ struct BillDetailView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .none
         return formatter.string(from: date)
+    }
+    
+    private func markBillAsPaid() async {
+        isMarkingAsPaid = true
+        
+        // Add a small delay for better UX
+        try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+        
+        await billViewModel.markBillAsPaid(bill, paymentMethod: .debitCard)
+        
+        isMarkingAsPaid = false
+        
+        if billViewModel.errorMessage == nil {
+            showPaymentSuccess = true
+            // Optionally dismiss after showing success
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                dismiss()
+            }
+        } else {
+            paymentErrorMessage = billViewModel.errorMessage ?? "Failed to mark bill as paid"
+            showPaymentError = true
+        }
     }
 }
 
