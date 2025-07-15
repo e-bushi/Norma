@@ -27,6 +27,9 @@ class BillViewModel: ObservableObject {
     @Published var selectedStatus: BillStatus?
     @Published var selectedBill: Bill?
     
+    // Task Management
+    private var refreshTask: Task<Void, Never>?
+    
     // Statistics
     @Published var totalMonthlyBills: Double = 0
     @Published var nextBillDue: Bill?
@@ -74,6 +77,18 @@ class BillViewModel: ObservableObject {
     }
     
     func refreshBills() async {
+        // Cancel any existing refresh task
+        refreshTask?.cancel()
+        
+        // Create new refresh task
+        refreshTask = Task {
+            await performRefresh()
+        }
+        
+        await refreshTask?.value
+    }
+    
+    private func performRefresh() async {
         guard let userId = sessionViewModel.currentUser?.userId else { return }
         
         isLoading = true
@@ -83,7 +98,9 @@ class BillViewModel: ObservableObject {
             try await dataManager.fetchBills(userId: userId)
             loadBills()
         } catch {
-            showError(error.localizedDescription)
+            if !Task.isCancelled {
+                showError(error.localizedDescription)
+            }
         }
         
         isLoading = false

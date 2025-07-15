@@ -14,10 +14,16 @@ struct BillCardView: View {
     let amount: Double
     let status: BillStatus
     let frequency: BillFrequency
+    var calculatedStatus: BillStatus? = nil
+    
+    // Use calculated status if provided, otherwise use the stored status
+    private var displayStatus: BillStatus {
+        calculatedStatus ?? status
+    }
     
     // Icon based on bill status
     private var statusIcon: String {
-        switch status {
+        switch displayStatus {
         case .paid: return "checkmark.circle.fill"
         case .overdue: return "exclamationmark.circle.fill"
         case .scheduled: return "calendar.circle.fill"
@@ -54,8 +60,8 @@ struct BillCardView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text("$\(amount, specifier: "%.2f")")
                     .font(.headline)
-                    .foregroundColor(status == .overdue ? .red : .primary)
-                Text(status.rawValue)
+                    .foregroundColor(displayStatus == .overdue ? .red : .primary)
+                Text(displayStatus.rawValue)
                     .font(.caption)
                     .foregroundColor(statusColor)
             }
@@ -70,7 +76,7 @@ struct BillCardView: View {
     }
     
     private var statusColor: Color {
-        switch status {
+        switch displayStatus {
         case .paid:
             return .green
         case .overdue:

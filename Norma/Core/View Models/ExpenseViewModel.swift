@@ -31,6 +31,9 @@ class ExpenseViewModel: ObservableObject {
     @Published var selectedExpense: Expense?
     @Published var showAddExpense = false
     
+    // Task Management
+    private var refreshTask: Task<Void, Never>?
+    
     // Statistics
     @Published var totalExpenses: Double = 0
     @Published var monthlyAverage: Double = 0
@@ -85,6 +88,18 @@ class ExpenseViewModel: ObservableObject {
     }
     
     func refreshExpenses() async {
+        // Cancel any existing refresh task
+        refreshTask?.cancel()
+        
+        // Create new refresh task
+        refreshTask = Task {
+            await performRefresh()
+        }
+        
+        await refreshTask?.value
+    }
+    
+    private func performRefresh() async {
         guard let userId = sessionViewModel.currentUser?.userId else { return }
         
         isLoading = true
@@ -94,7 +109,9 @@ class ExpenseViewModel: ObservableObject {
             try await dataManager.fetchExpenses(userId: userId)
             loadExpenses()
         } catch {
-            showError(error.localizedDescription)
+            if !Task.isCancelled {
+                showError(error.localizedDescription)
+            }
         }
         
         isLoading = false

@@ -26,6 +26,9 @@ class IncomeViewModel: ObservableObject {
     @Published var showAddIncome = false
     @Published var selectedIncome: Income?
     
+    // Task Management
+    private var refreshTask: Task<Void, Never>?
+    
     // Filtering
     @Published var selectedSource: IncomeSource?
     @Published var selectedDateRange: DateInterval?
@@ -86,6 +89,18 @@ class IncomeViewModel: ObservableObject {
     }
     
     func refreshIncomes() async {
+        // Cancel any existing refresh task
+        refreshTask?.cancel()
+        
+        // Create new refresh task
+        refreshTask = Task {
+            await performRefresh()
+        }
+        
+        await refreshTask?.value
+    }
+    
+    private func performRefresh() async {
         guard let userId = sessionViewModel.currentUser?.userId else { return }
         
         isLoading = true
@@ -95,7 +110,9 @@ class IncomeViewModel: ObservableObject {
             try await dataManager.fetchIncomes(userId: userId)
             loadIncomes()
         } catch {
-            showError(error.localizedDescription)
+            if !Task.isCancelled {
+                showError(error.localizedDescription)
+            }
         }
         
         isLoading = false

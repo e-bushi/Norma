@@ -12,6 +12,7 @@ struct ExpenseDisclosureView: View {
     let expenses: [Expense]
     let category: ExpenseCategory?
     @State private var showingAllExpenses = false
+    @State private var selectedExpense: Expense? = nil
     
     private let maxExpensesToShow = 5
     
@@ -200,9 +201,17 @@ struct ExpenseDisclosureView: View {
                     } else {
                         // Expense items
                         ForEach(displayedExpenses) { expense in
-                            ExpenseRowView(expense: expense)
+                            Button(action: {
+                                selectedExpense = expense
+                            }) {
+                                ExpenseRowView(expense: expense)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                             
-                            
+                            if expense.id != displayedExpenses.last?.id {
+                                Divider()
+                                    .padding(.horizontal, 20)
+                            }
                         }
                         
                         // See all button
@@ -235,28 +244,18 @@ struct ExpenseDisclosureView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             .sheet(isPresented: $showingAllExpenses) {
-                                NavigationStack {
-                                    List(filteredExpenses) { expense in
-                                        ExpenseRowView(expense: expense)
-                                            .listRowSeparator(.hidden)
-                                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                    }
-                                    .listStyle(.plain)
-                                    .navigationTitle(title)
-                                    .toolbar {
-                                        ToolbarItem(placement: .navigationBarTrailing) {
-                                            Button("Done") {
-                                                showingAllExpenses = false
-                                            }
-                                        }
-                                    }
-                                }
+                                MyExpensesView()
                             }
                         }
                     }
                 }
                 .padding(.vertical, 8)
             }
+        }
+        .sheet(item: $selectedExpense) { expense in
+            ExpenseDetailView(expense: expense)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

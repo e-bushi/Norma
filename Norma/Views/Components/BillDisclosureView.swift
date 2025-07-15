@@ -259,7 +259,7 @@ struct BillRowView: View {
     let bill: Bill
     
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @State private var showBillDetail = false
+    @State private var selectedBill: Bill? = nil
     
     // Calculate the actual status based on expenses
     private var calculatedStatus: BillStatus {
@@ -309,7 +309,7 @@ struct BillRowView: View {
     
     var body: some View {
         Button(action: {
-            showBillDetail = true
+            selectedBill = bill
         }) {
             HStack(spacing: 16) {
                 // Status icon
@@ -345,7 +345,7 @@ struct BillRowView: View {
             .padding(.vertical, 12)
         }
         .buttonStyle(PlainButtonStyle())
-        .sheet(isPresented: $showBillDetail) {
+        .sheet(item: $selectedBill) { bill in
             BillDetailView(bill: bill, expenses: expenseViewModel.expenses)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

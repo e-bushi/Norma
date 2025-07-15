@@ -16,6 +16,7 @@ struct BillHomeView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @State private var showMyBills: Bool = false
     @State private var showNormaChat: Bool = false
+    @State private var refreshTask: Task<Void, Never>?
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -85,7 +86,7 @@ struct BillHomeView: View {
                 }
             }
             .refreshable {
-                await refreshData()
+                await performRefresh()
             }
             .task {
                 // Only load if bills are empty (not already loaded by RootView)
@@ -96,20 +97,35 @@ struct BillHomeView: View {
             .sheet(isPresented: $showNormaChat) {
                 NormaChatView(context: .bills)
             }
+            .onDisappear {
+                refreshTask?.cancel()
+            }
         }
     }
     
     // MARK: - Data Loading
     
     private func loadInitialData() async {
-        await billViewModel.refreshBills()
         await expenseViewModel.refreshExpenses()
+        await billViewModel.refreshBills()
         await incomeViewModel.refreshIncomes()
     }
     
+    private func performRefresh() async {
+        // Cancel any existing refresh task
+        refreshTask?.cancel()
+        
+        // Create new refresh task
+        refreshTask = Task {
+            await refreshData()
+        }
+        
+        await refreshTask?.value
+    }
+    
     private func refreshData() async {
-        await billViewModel.refreshBills()
         await expenseViewModel.refreshExpenses()
+        await billViewModel.refreshBills()
         await incomeViewModel.refreshIncomes()
     }
     

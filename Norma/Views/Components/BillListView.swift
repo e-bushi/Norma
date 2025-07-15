@@ -22,9 +22,16 @@ struct BillListView: View {
     @Binding var selectedDate: Date
     @Binding var showAllDates: Bool
     
+    // Environment objects
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    
     // Animation state
     @Namespace private var animation
     @State private var appearAnimation = false
+    @State private var animationTrigger = UUID()
+    
+    // Sheet state
+    @State private var selectedBill: Bill? = nil
     
     // Computed properties for filtered bills
     private var filteredBills: [Bill] {
@@ -32,11 +39,11 @@ struct BillListView: View {
         case .all:
             return bills
         case .paid:
-            return bills.filter { $0.status == .paid }
+            return bills.filter { $0.calculateStatus(from: expenseViewModel.expenses) == .paid }
         case .scheduled:
-            return bills.filter { $0.status == .scheduled }
+            return bills.filter { $0.calculateStatus(from: expenseViewModel.expenses) == .scheduled }
         case .overdue:
-            return bills.filter { $0.status == .overdue }
+            return bills.filter { $0.calculateStatus(from: expenseViewModel.expenses) == .overdue }
         }
     }
     
@@ -69,17 +76,7 @@ struct BillListView: View {
                 .animation(.spring(response: 0.3), value: appearAnimation)
             }
             .onChange(of: selectedFilter) {
-                // Create a smooth transition effect
-                withAnimation(.easeOut(duration: 0.2)) {
-                    appearAnimation = false
-                }
-                
-                // Use a slightly longer delay for more visual separation between states
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        appearAnimation = true
-                    }
-                }
+                triggerAnimation()
             }
             
             // Bills content
@@ -98,10 +95,15 @@ struct BillListView: View {
             }
         }
         .onChange(of: selectedDate) {
-            refreshAnimation()
+            triggerAnimation()
         }
         .onChange(of: showAllDates) {
-            refreshAnimation()
+            triggerAnimation()
+        }
+        .sheet(item: $selectedBill) { bill in
+            BillDetailView(bill: bill, expenses: expenseViewModel.expenses)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
     
@@ -137,14 +139,15 @@ struct BillListView: View {
         LazyVStack(spacing: 16) {
             ForEach(Array(filteredAndDateFilteredBills.enumerated()), id: \.element.id) { index, bill in
                 Button(action: {
-                    // Handle bill tap action - show bill details, etc.
+                    selectedBill = bill
                 }) {
                     BillCardView(
                         name: bill.name,
                         date: bill.dueDate,
                         amount: bill.amount,
                         status: bill.status,
-                        frequency: bill.frequency
+                        frequency: bill.frequency,
+                        calculatedStatus: bill.calculateStatus(from: expenseViewModel.expenses)
                     )
                 }
                 .padding(.horizontal)
@@ -163,39 +166,25 @@ struct BillListView: View {
                     .delay(0.08 + Double(index) * 0.06),
                     value: appearAnimation
                 )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .leading).combined(with: .opacity),
-                    removal: .scale(scale: 0.95).combined(with: .opacity)
-                ))
-                .id("\(bill.id)-\(selectedFilter)-\(selectedDate)-\(showAllDates)")
                 .buttonStyle(TapToBounceStyle())
+                .id("\(bill.id)-\(animationTrigger)")
             }
         }
         .padding(.vertical)
     }
     
-    // Helper method to refresh animation state
-    private func refreshAnimation() {
-        withAnimation {
-            appearAnimation = false
-        }
+    // Helper method to trigger a fresh animation
+    private func triggerAnimation() {
+        // Reset animation state
+        appearAnimation = false
+        animationTrigger = UUID()
         
-        // Delay the animation slightly
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            withAnimation {
+        // Small delay to ensure the state reset is processed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                 appearAnimation = true
             }
         }
-    }
-}
-
-// Custom button style that adds a bounce animation when tapped
-struct TapToBounceStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -248,8 +237,13 @@ struct BillListView_Previews: PreviewProvider {
             }
         }
         
+        let dataManager = DataManager()
+        let sessionViewModel = SessionViewModel(dataManager: dataManager)
+        let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+        
         return NavigationStack {
             PreviewWrapper()
+                .environmentObject(expenseViewModel)
         }
     }
 }

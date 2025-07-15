@@ -207,6 +207,34 @@ struct DayCell: View {
     let expenseCount: Int
     let expenseTotal: Double
     
+    // Format expense amount based on digit count
+    private var formattedExpenseAmount: String {
+        if expenseTotal < 100 {
+            // Two digits or less: show full amount with decimals
+            return "$\(String(format: "%.2f", expenseTotal))"
+        } else if expenseTotal < 1000 {
+            // Three digits: remove decimals, add + if there were decimals
+            let hasDecimals = expenseTotal.truncatingRemainder(dividingBy: 1) > 0
+            return "$\(Int(expenseTotal))" + (hasDecimals ? "+" : "")
+        } else if expenseTotal < 10000 {
+            // Four digits: show as K with one decimal
+            return "$\(String(format: "%.1f", expenseTotal / 1000))K"
+        } else if expenseTotal < 100000 {
+            // Five digits: show as K with no decimals
+            return "$\(Int(expenseTotal / 1000))K"
+        } else if expenseTotal < 1000000 {
+            // Six digits: show as K with no decimals
+            return "$\(Int(expenseTotal / 1000))K"
+        } else {
+            // Million or more: show as M with appropriate decimals
+            if expenseTotal < 10000000 {
+                return "$\(String(format: "%.1f", expenseTotal / 1000000))M"
+            } else {
+                return "$\(Int(expenseTotal / 1000000))M"
+            }
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 4) {
             Text("\(Calendar.current.component(.day, from: date))")
@@ -215,7 +243,7 @@ struct DayCell: View {
             
             // Expense indicator
             if expenseCount > 0 {
-                Text("$\(String(format: "%.2f", expenseTotal))")
+                Text(formattedExpenseAmount)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(.purple.opacity(0.8))
             } else {
@@ -272,20 +300,25 @@ extension Date {
     let currentDate = Date()
     let calendar = Calendar.current
     
-    // Create sample expense data for preview
+    // Create sample expense data for preview with various amount ranges
     var expensesPerDay: [Date: [Double]] = [:]
     
-    // Add expenses for today
-    expensesPerDay[currentDate.startOfDay] = [25.0, 10.0]
+    // Add expenses for today - two digits
+    expensesPerDay[currentDate.startOfDay] = [25.50, 10.75]
     
-    // Add expenses for tomorrow
+    // Add expenses for tomorrow - three digits
     if let tomorrow = calendar.date(byAdding: .day, value: 1, to: currentDate) {
-        expensesPerDay[tomorrow.startOfDay] = [15.0]
+        expensesPerDay[tomorrow.startOfDay] = [245.99, 100.00]
     }
     
-    // Add expenses for a week ago
+    // Add expenses for a week ago - four digits
     if let lastWeek = calendar.date(byAdding: .day, value: -7, to: currentDate) {
-        expensesPerDay[lastWeek.startOfDay] = [55.0, 22.0, 13.0, 9.0]
+        expensesPerDay[lastWeek.startOfDay] = [2500.00, 750.50]
+    }
+    
+    // Add expense for two weeks ago - five digits
+    if let twoWeeks = calendar.date(byAdding: .day, value: -14, to: currentDate) {
+        expensesPerDay[twoWeeks.startOfDay] = [15000.00, 5000.00]
     }
     
     return VStack {
