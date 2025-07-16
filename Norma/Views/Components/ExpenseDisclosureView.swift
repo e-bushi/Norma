@@ -13,6 +13,7 @@ struct ExpenseDisclosureView: View {
     let category: ExpenseCategory?
     @State private var showingAllExpenses = false
     @State private var selectedExpense: Expense? = nil
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     private let maxExpensesToShow = 5
     
@@ -61,7 +62,7 @@ struct ExpenseDisclosureView: View {
                         Text("Total Spent")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(String(format: "%.2f", totalExpenseAmount))")
+                        Text(profileViewModel.formatCurrency(totalExpenseAmount))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -262,6 +263,7 @@ struct ExpenseDisclosureView: View {
 
 struct ExpenseRowView: View {
     let expense: Expense
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     private var expenseCategory: ExpenseCategory {
         // TODO: Map category from Expense.categoryId to ExpenseCategory
@@ -306,7 +308,7 @@ struct ExpenseRowView: View {
             Spacer()
             
             // Amount
-            Text("$\(String(format: "%.2f", expense.amount))")
+            Text(profileViewModel.formatCurrency(expense.amount))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.primary)
         }

@@ -17,6 +17,7 @@ struct ChartLabelView: View {
     let dotSize: CGFloat
     let appeared: Bool
     let slideDirection: SlideDirection
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var dotAppeared = false
     @State private var labelAppeared = false
@@ -131,16 +132,8 @@ struct ChartLabelView: View {
     }
     
     private func formatAsZero(basedOn originalValue: String) -> String {
-        // Keep the same format as the original value but with zeros
-        if originalValue.hasPrefix("$") {
-            if originalValue.contains(",") {
-                // Format like "$1,000" -> "$0"
-                return "$0"
-            } else {
-                return "$0"
-            }
-        }
-        return "0"
+        // Return formatted zero using the current currency
+        return profileViewModel.formatCurrency(0)
     }
 }
 

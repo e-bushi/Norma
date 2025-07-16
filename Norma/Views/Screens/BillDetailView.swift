@@ -13,6 +13,7 @@ struct BillDetailView: View {
     
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showEditBillSheet = false
@@ -101,7 +102,7 @@ struct BillDetailView: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("$\(String(format: "%.2f", bill.amount))")
+                    Text(profileViewModel.formatCurrency(bill.amount))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                     
@@ -235,7 +236,7 @@ struct BillDetailView: View {
                         Spacer()
                         
                         // Amount
-                        Text("$\(String(format: "%.2f", expense.amount))")
+                        Text(profileViewModel.formatCurrency(expense.amount))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.green)
                     }

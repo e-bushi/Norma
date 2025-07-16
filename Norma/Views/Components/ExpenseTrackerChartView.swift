@@ -7,6 +7,7 @@ struct ExpenseTrackerChartView: View {
     let month: String
     let isOnboardingMode: Bool
     @Binding var showNormaChat: Bool
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var chartAppeared = false
     @State private var dotsAppeared = false

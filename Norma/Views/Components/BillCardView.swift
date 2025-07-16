@@ -16,6 +16,8 @@ struct BillCardView: View {
     let frequency: BillFrequency
     var calculatedStatus: BillStatus? = nil
     
+    @EnvironmentObject var profileViewModel: ProfileViewModel
+    
     // Use calculated status if provided, otherwise use the stored status
     private var displayStatus: BillStatus {
         calculatedStatus ?? status
@@ -58,7 +60,7 @@ struct BillCardView: View {
             
             // Amount Section
             VStack(alignment: .trailing, spacing: 4) {
-                Text("$\(amount, specifier: "%.2f")")
+                Text(profileViewModel.formatCurrency(amount))
                     .font(.headline)
                     .foregroundColor(displayStatus == .overdue ? .red : .primary)
                 Text(displayStatus.rawValue)

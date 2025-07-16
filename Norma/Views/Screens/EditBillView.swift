@@ -11,6 +11,7 @@ struct EditBillView: View {
     let bill: Bill
     
     @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     @Environment(\.dismiss) private var dismiss
     
     // Form fields
@@ -93,7 +94,7 @@ struct EditBillView: View {
                 
                 VStack(alignment: .trailing, spacing: 2) {
                     HStack {
-                        Text("$")
+                        Text(profileViewModel.currencyInfo?.symbol ?? "$")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.primary)
                         TextField("0.00", text: $amount)

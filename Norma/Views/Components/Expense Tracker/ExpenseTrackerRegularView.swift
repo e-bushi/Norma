@@ -12,6 +12,7 @@ struct ExpenseTrackerRegularView: View {
     let currentExpenseAmount: Double
     let incomeAmount: Double
     let month: String
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     // Animation states
     let chartAppeared: Bool
@@ -76,7 +77,7 @@ struct ExpenseTrackerRegularView: View {
                         Text("Remaining")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(String(format: "%.2f", max(0, incomeAmount - currentExpenseAmount)))")
+                        Text(profileViewModel.formatCurrency(max(0, incomeAmount - currentExpenseAmount)))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -88,7 +89,7 @@ struct ExpenseTrackerRegularView: View {
                         Text("Daily Budget")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(String(format: "%.2f", (incomeAmount - billAmount) / 30))")
+                        Text(profileViewModel.formatCurrency((incomeAmount - billAmount) / 30))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -174,7 +175,7 @@ struct ExpenseTrackerRegularView: View {
                     // Income indicator
                     ChartLabelView(
                         title: "INCOME",
-                        value: "$\(String(format: "%.2f", incomeAmount))",
+                        value: profileViewModel.formatCurrencyTruncated(incomeAmount),
                         color: .green,
                         icon: "arrow.down.circle.fill",
                         xPosition: centerX,
@@ -187,7 +188,7 @@ struct ExpenseTrackerRegularView: View {
                     // Bills indicator
                     ChartLabelView(
                         title: "BILLS",
-                        value: "$\(String(format: "%.2f", billAmount))",
+                        value: profileViewModel.formatCurrencyTruncated(billAmount),
                         color: .red,
                         icon: "calendar.badge.minus",
                         xPosition: centerX,
@@ -200,7 +201,7 @@ struct ExpenseTrackerRegularView: View {
                     // Current expense indicator (animated position)
                     ChartLabelView(
                         title: "CURRENT",
-                        value: "$\(String(format: "%.2f", currentExpenseAmount))",
+                        value: profileViewModel.formatCurrencyTruncated(currentExpenseAmount),
                         color: .purple,
                         icon: "creditcard.fill",
                         xPosition: centerX,
@@ -260,15 +261,15 @@ struct ExpenseTrackerRegularView: View {
             // Animated explanation content
             if showDescription {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Your income ($\(String(format: "%.2f", incomeAmount))) starts at the top.")
+                    Text("Your income (\(profileViewModel.formatCurrency(incomeAmount))) starts at the top.")
                         .font(.system(size: 12))
                         .foregroundColor(.primary.opacity(0.8))
                     
-                    Text("Your bills ($\(String(format: "%.2f", billAmount))) are fixed costs at the bottom.")
+                    Text("Your bills (\(profileViewModel.formatCurrency(billAmount))) are fixed costs at the bottom.")
                         .font(.system(size: 12))
                         .foregroundColor(.primary.opacity(0.8))
                     
-                    Text("The purple dot shows your total spending ($\(String(format: "%.2f", currentExpenseAmount))) for the current month and combines both Bills (even if you haven't paid them yet) and random expenses.")
+                    Text("The purple dot shows your total spending (\(profileViewModel.formatCurrency(currentExpenseAmount))) for the current month and combines both Bills (even if you haven't paid them yet) and random expenses.")
                         .font(.system(size: 12))
                         .foregroundColor(.primary.opacity(0.8))
                     
@@ -277,7 +278,7 @@ struct ExpenseTrackerRegularView: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.primary)
                         
-                        Text("$\(String(format: "%.2f", max(0, incomeAmount - currentExpenseAmount)))")
+                        Text(profileViewModel.formatCurrency(max(0, incomeAmount - currentExpenseAmount)))
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(currentExpenseAmount > incomeAmount ? .red : .green)
                         

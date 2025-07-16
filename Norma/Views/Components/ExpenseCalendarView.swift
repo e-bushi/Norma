@@ -11,6 +11,7 @@ import Foundation
 struct ExpenseCalendarView: View {
     @State private var selectedDate: Date = Date()
     @State private var currentMonth: Date = Date()
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -48,7 +49,7 @@ struct ExpenseCalendarView: View {
                         Text("Month Total")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(String(format: "%.2f", totalExpensesThisMonth))")
+                        Text(profileViewModel.formatCurrency(totalExpensesThisMonth))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -206,33 +207,11 @@ struct DayCell: View {
     let isCurrentMonth: Bool
     let expenseCount: Int
     let expenseTotal: Double
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     // Format expense amount based on digit count
     private var formattedExpenseAmount: String {
-        if expenseTotal < 100 {
-            // Two digits or less: show full amount with decimals
-            return "$\(String(format: "%.2f", expenseTotal))"
-        } else if expenseTotal < 1000 {
-            // Three digits: remove decimals, add + if there were decimals
-            let hasDecimals = expenseTotal.truncatingRemainder(dividingBy: 1) > 0
-            return "$\(Int(expenseTotal))" + (hasDecimals ? "+" : "")
-        } else if expenseTotal < 10000 {
-            // Four digits: show as K with one decimal
-            return "$\(String(format: "%.1f", expenseTotal / 1000))K"
-        } else if expenseTotal < 100000 {
-            // Five digits: show as K with no decimals
-            return "$\(Int(expenseTotal / 1000))K"
-        } else if expenseTotal < 1000000 {
-            // Six digits: show as K with no decimals
-            return "$\(Int(expenseTotal / 1000))K"
-        } else {
-            // Million or more: show as M with appropriate decimals
-            if expenseTotal < 10000000 {
-                return "$\(String(format: "%.1f", expenseTotal / 1000000))M"
-            } else {
-                return "$\(Int(expenseTotal / 1000000))M"
-            }
-        }
+        return profileViewModel.formatCurrencyTruncated(expenseTotal)
     }
     
     var body: some View {

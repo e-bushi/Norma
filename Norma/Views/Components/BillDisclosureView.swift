@@ -17,6 +17,7 @@ struct BillDisclosureView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     
     private let maxBillsToShow = 5
     
@@ -66,7 +67,7 @@ struct BillDisclosureView: View {
                         Text("Total Due")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalUpcomingAmount))")
+                        Text(profileViewModel.formatCurrency(totalUpcomingAmount))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -78,7 +79,7 @@ struct BillDisclosureView: View {
                         Text("Paid So Far")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalPaidAmount))")
+                        Text(profileViewModel.formatCurrency(totalPaidAmount))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.green)
                     }
@@ -259,6 +260,7 @@ struct BillRowView: View {
     let bill: Bill
     
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     @State private var selectedBill: Bill? = nil
     
     // Calculate the actual status based on expenses
@@ -337,7 +339,7 @@ struct BillRowView: View {
                 Spacer()
                 
                 // Amount
-                Text("$\(String(format: "%.2f", bill.amount))")
+                Text(profileViewModel.formatCurrency(bill.amount))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(bill.status == .overdue ? .red : .primary)
             }

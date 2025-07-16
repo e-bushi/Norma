@@ -10,6 +10,7 @@ import SwiftUI
 struct ExpenseTrackerOnboardingView: View {
     let incomeAmount: Double
     @Binding var showNormaChat: Bool
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var headerAppeared = false
     @State private var cardAppeared = false
@@ -92,7 +93,7 @@ struct ExpenseTrackerOnboardingView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.secondary)
                             
-                            Text("$\(Int(incomeAmount))")
+                            Text(profileViewModel.formatCurrency(incomeAmount))
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundColor(.green)
                                 .multilineTextAlignment(.center)

@@ -17,6 +17,7 @@ class ProfileViewModel: ObservableObject {
     @Published var profile: Profile?
     @Published var financialHealthInsights: [FinancialHealthInsight] = []
     @Published var moneyPersonality: MoneyPersonality?
+    @Published var currencyInfo: (name: String, code: String, symbol: String)?
     
     // UI State
     @Published var isLoading = false
@@ -85,6 +86,7 @@ class ProfileViewModel: ObservableObject {
                    let userProfile = profiles.first(where: { $0.userId == userId }) {
                     self?.profile = userProfile
                     self?.editableProfile = userProfile
+                    self?.updateCurrencyInfo()
                 }
             }
             .store(in: &cancellables)
@@ -124,6 +126,7 @@ class ProfileViewModel: ObservableObject {
                     profile = defaultProfile
                     editableProfile = defaultProfile
                 }
+                updateCurrencyInfo()
                 await loadFinancialHealthData()
             } catch {
                 await MainActor.run {
@@ -159,6 +162,7 @@ class ProfileViewModel: ObservableObject {
             editableProfile = updatedProfile
             hasUnsavedChanges = false
             isEditingProfile = false
+            updateCurrencyInfo()
         } catch {
             showError("Failed to update profile: \(error.localizedDescription)")
         }
@@ -532,6 +536,64 @@ class ProfileViewModel: ObservableObject {
         case 60...79: return .good
         case 40...59: return .fair
         default: return .poor
+        }
+    }
+    
+    // MARK: - Currency Management
+    
+    private func updateCurrencyInfo() {
+        guard let profile = profile else { return }
+        currencyInfo = CurrencyData.getCurrencyTuple(for: profile.settings.currency)
+    }
+    
+    func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        
+        if let currencyInfo = currencyInfo {
+            formatter.currencyCode = currencyInfo.code
+            formatter.currencySymbol = currencyInfo.symbol
+            return formatter.string(from: NSNumber(value: amount)) ?? "\(currencyInfo.symbol)\(amount)"
+        } else {
+            // Fallback if currencyInfo is not yet loaded
+            return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
+        }
+    }
+    
+    func formatCurrencyTruncated(_ amount: Double) -> String {
+        let symbol = currencyInfo?.symbol ?? "$"
+        
+        if amount < 100 {
+            // Two digits or less: show full amount with decimals
+            return "\(symbol)\(String(format: "%.2f", amount))"
+        } else if amount < 1000 {
+            // Three digits: remove decimals, add + if there were decimals
+            let hasDecimals = amount.truncatingRemainder(dividingBy: 1) > 0
+            return "\(symbol)\(Int(amount))" + (hasDecimals ? "+" : "")
+        } else if amount < 10000 {
+            // Four digits: show as K with one decimal
+            return "\(symbol)\(String(format: "%.1f", amount / 1000))K"
+        } else if amount < 100000 {
+            // Five digits: show as K with no decimals
+            return "\(symbol)\(Int(amount / 1000))K"
+        } else if amount < 1000000 {
+            // Six digits: show as K with no decimals
+            return "\(symbol)\(Int(amount / 1000))K"
+        } else {
+            // Million or more: show as M with appropriate decimals
+            if amount < 10000000 {
+                return "\(symbol)\(String(format: "%.1f", amount / 1000000))M"
+            } else {
+                return "\(symbol)\(Int(amount / 1000000))M"
+            }
+        }
+    }
+    
+    func updateCurrency(_ newCurrencyCode: String) {
+        guard var currentProfile = profile else { return }
+        currentProfile.settings.currency = newCurrencyCode
+        Task {
+            await updateProfile(currentProfile)
         }
     }
     

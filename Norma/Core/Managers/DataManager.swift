@@ -72,6 +72,10 @@ class DataManager: ObservableObject {
             if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
                 print("✅ [DEBUG] DataManager: Existing profile found: \(existingProfile)")
                 currentProfile = existingProfile
+                // Also add to profiles array if not already there
+                if !profiles.contains(where: { $0.userId == existingProfile.userId }) {
+                    profiles.append(existingProfile)
+                }
                 return existingProfile
             } else {
                 print("❌ [DEBUG] DataManager: No existing profile found, creating fallback profile")
@@ -83,6 +87,10 @@ class DataManager: ObservableObject {
                 )
                 print("✅ [DEBUG] DataManager: Created fallback profile: \(profile)")
                 currentProfile = profile
+                // Also add to profiles array
+                if !profiles.contains(where: { $0.userId == profile.userId }) {
+                    profiles.append(profile)
+                }
                 return profile
             }
         }

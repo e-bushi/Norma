@@ -16,7 +16,7 @@ struct BudgetExpensePicker: View {
         
         var icon: String {
             switch self {
-            case .budget: return "chart.pie.fill"
+            case .budget: return "target"
             case .expenses: return "creditcard.fill"
             }
         }

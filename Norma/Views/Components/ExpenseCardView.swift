@@ -47,6 +47,7 @@ struct ExpenseCardView: View {
     let date: Date
     let amount: Double
     let category: ExpenseCategory
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     var body: some View {
         HStack {
@@ -77,7 +78,7 @@ struct ExpenseCardView: View {
             
             // Amount Section
             VStack(alignment: .trailing, spacing: 4) {
-                Text("-$\(amount, specifier: "%.2f")")
+                Text("-\(profileViewModel.formatCurrency(amount))")
                     .font(.headline)
                     .foregroundColor(.red)
                     

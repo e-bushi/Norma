@@ -12,6 +12,7 @@ struct ExpenseDetailView: View {
     
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showEditExpenseSheet = false
@@ -166,7 +167,7 @@ struct ExpenseDetailView: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("$\(expense.amount, specifier: "%.2f")")
+                    Text(profileViewModel.formatCurrency(expense.amount))
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
                     

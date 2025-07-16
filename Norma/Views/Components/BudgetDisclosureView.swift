@@ -11,6 +11,7 @@ struct BudgetDisclosureView: View {
     @State private var categoryBudgets: [ExpenseCategory: Double] = [:]
     @State private var showingAllCategories = false
     let isOnboardingMode: Bool
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     let expenses: [Expense]
     let month: String
@@ -80,7 +81,7 @@ struct BudgetDisclosureView: View {
                         Text("Total Budget")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalBudget))")
+                        Text(profileViewModel.formatCurrency(totalBudget))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -92,7 +93,7 @@ struct BudgetDisclosureView: View {
                         Text("Spent")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(totalSpent))")
+                        Text(profileViewModel.formatCurrency(totalSpent))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(totalSpent > totalBudget ? .red : .primary)
                     }
@@ -104,7 +105,7 @@ struct BudgetDisclosureView: View {
                         Text("Remaining")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
-                        Text("$\(Int(max(0, totalBudget - totalSpent)))")
+                        Text(profileViewModel.formatCurrency(max(0, totalBudget - totalSpent)))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(totalSpent > totalBudget ? .red : .green)
                     }
@@ -382,6 +383,7 @@ struct BudgetCategoryRow: View {
     let budgetAmount: Double
     let spentAmount: Double
     let onBudgetChanged: (Double) -> Void
+    @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var isEditingBudget = false
     @State private var tempBudgetText: String = ""
@@ -428,7 +430,7 @@ struct BudgetCategoryRow: View {
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 4) {
-                        Text("$\(Int(spentAmount))")
+                        Text(profileViewModel.formatCurrency(spentAmount))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(isOverBudget ? .red : .primary)
                         
@@ -446,7 +448,7 @@ struct BudgetCategoryRow: View {
                                     saveBudget()
                                 }
                         } else {
-                            Text("$\(Int(budgetAmount))")
+                            Text(profileViewModel.formatCurrency(budgetAmount))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.blue)
                                 .onTapGesture {
@@ -466,11 +468,11 @@ struct BudgetCategoryRow: View {
                         .foregroundColor(statusColor)
                     
                     if !isOverBudget {
-                        Text("$\(Int(budgetAmount - spentAmount)) left")
+                        Text("\(profileViewModel.formatCurrency(budgetAmount - spentAmount)) left")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     } else {
-                        Text("$\(Int(spentAmount - budgetAmount)) over")
+                        Text("\(profileViewModel.formatCurrency(spentAmount - budgetAmount)) over")
                             .font(.system(size: 11))
                             .foregroundColor(.red)
                     }
