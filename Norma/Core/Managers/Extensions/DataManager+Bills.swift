@@ -7,10 +7,11 @@
 
 import Foundation
 import SwiftData
+import CryptoKit
 
 extension DataManager {
     
-    // MARK: - Bill Methods
+    // MARK: - Bill Methods (Legacy - Non-encrypted)
     
     func fetchBills(userId: String) async throws {
         do {
@@ -183,7 +184,6 @@ extension DataManager {
                 name: bill.name,
                 amount: bill.amount,
                 expenseDate: todayString,
-                categoryId: bill.categoryId,
                 billId: billId,
                 paymentMethod: paymentMethod,
                 isRecurring: true,
@@ -346,5 +346,162 @@ extension DataManager {
         } catch {
             print("Failed to delete cached bill: \(error)")
         }
+    }
+    
+    // MARK: - Bill Methods (Encryption Support)
+    
+    /// Fetch bills with decryption support
+    func fetchBillsWithEncryption(userId: String) async throws {
+        do {
+            let hasEncryption = await hasEncryptionEnabled()
+            
+            if hasEncryption {
+                let masterKey = getCurrentMasterKey()
+                let encryptableBills = try await supabaseService.fetchEncryptableBills(userId: userId)
+                
+                // Convert to regular bills, decrypting if necessary
+                let decryptedBills = encryptableBills.compactMap { encryptable in
+                    encryptable.toBill(using: masterKey)
+                }
+                
+                bills = decryptedBills
+                
+                // Cache bills in SwiftData
+                await cacheBills(decryptedBills)
+                
+                print("Fetched and decrypted \(decryptedBills.count) bills from server")
+            } else {
+                // Use legacy path
+                try await fetchBills(userId: userId)
+            }
+        } catch {
+            // If fetch fails (offline), load from cache
+            print("Failed to fetch bills from server: \(error). Loading from cache...")
+            loadCachedBills()
+            
+            // If we have cached data, don't throw the error
+            if !bills.isEmpty {
+                print("Loaded \(bills.count) bills from cache")
+            } else {
+                // Re-throw if we have no cached data
+                throw error
+            }
+        }
+    }
+    
+    /// Create bill with encryption support if enabled
+    func addBillWithEncryption(_ bill: Bill) async throws {
+        print("🔍 [DEBUG] DataManager.addBillWithEncryption called with bill: \(bill)")
+        
+        let hasEncryption = await hasEncryptionEnabled()
+        
+        if hasEncryption, let masterKey = getCurrentMasterKey() {
+            // Create bill with temporary ID for offline usage
+            var billToAdd = bill
+            if billToAdd.id == nil {
+                billToAdd.id = UUID().uuidString
+            }
+            
+            // Add to local state first
+            bills.append(billToAdd)
+            
+            // Cache locally
+            await cacheBills([billToAdd])
+            
+            do {
+                // Create encrypted version
+                guard let encryptableBill = billToAdd.toEncryptable(encrypt: true, using: masterKey) else {
+                    throw EncryptionError.encryptionFailed
+                }
+                
+                let createdEncryptable = try await supabaseService.createEncryptableBill(encryptableBill)
+                
+                // Convert back to regular bill for display
+                guard let displayBill = createdEncryptable.toBill(using: masterKey) else {
+                    throw EncryptionError.decryptionFailed
+                }
+                
+                // Update the local bill with the server version
+                if let index = bills.firstIndex(where: { $0.id == billToAdd.id }) {
+                    bills[index] = displayBill
+                }
+                
+                // Update cache with server version
+                await updateCachedBill(displayBill)
+                
+                print("✅ [DEBUG] Created encrypted bill successfully")
+            } catch {
+                print("⚠️ [DEBUG] Failed to sync encrypted bill (offline mode): \(error)")
+                hasUnsyncedChanges = true
+            }
+        } else {
+            // Use legacy non-encrypted path
+            try await addBill(bill)
+        }
+    }
+    
+    /// Update bill with encryption support
+    func updateBillWithEncryption(_ bill: Bill) async throws {
+        let hasEncryption = await hasEncryptionEnabled()
+        
+        if hasEncryption, let masterKey = getCurrentMasterKey() {
+            // Create encrypted version
+            guard let encryptableBill = bill.toEncryptable(encrypt: true, using: masterKey) else {
+                throw EncryptionError.encryptionFailed
+            }
+            
+            let updatedEncryptable = try await supabaseService.updateEncryptableBill(encryptableBill)
+            
+            // Convert back to regular bill for display
+            guard let displayBill = updatedEncryptable.toBill(using: masterKey) else {
+                throw EncryptionError.decryptionFailed
+            }
+            
+            if let index = bills.firstIndex(where: { $0.id == bill.id }) {
+                bills[index] = displayBill
+                hasUnsyncedChanges = true
+            }
+            
+            // Update cache
+            await updateCachedBill(displayBill)
+            
+            print("Updated encrypted bill: \(bill.name)")
+        } else {
+            // Use legacy path
+            try await updateBill(bill)
+        }
+    }
+    
+    /// Migrate existing bills to encrypted format
+    func migrateBillsToEncryption() async throws {
+        guard let userId = currentProfile?.userId,
+              let masterKey = getCurrentMasterKey() else {
+            throw EncryptionError.noEncryptionKeys
+        }
+        
+        // Fetch all unencrypted bills
+        let allBills = bills
+        var migratedCount = 0
+        
+        for bill in allBills {
+            // Skip if already encrypted (would need to track this)
+            if let encryptableBill = bill.toEncryptable(encrypt: true, using: masterKey) {
+                do {
+                    try await supabaseService.updateBillEncryption(
+                        billId: bill.id ?? "",
+                        encryptedName: encryptableBill.encryptedName ?? "",
+                        encryptedAmount: encryptableBill.encryptedAmount ?? ""
+                    )
+                    migratedCount += 1
+                } catch {
+                    print("Failed to migrate bill \(bill.id ?? ""): \(error)")
+                }
+            }
+        }
+        
+        print("Migrated \(migratedCount) bills to encrypted format")
+        
+        // Refresh to get encrypted versions
+        try await fetchBillsWithEncryption(userId: userId)
     }
 }

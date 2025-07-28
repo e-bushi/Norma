@@ -17,6 +17,8 @@ struct ChartLabelView: View {
     let dotSize: CGFloat
     let appeared: Bool
     let slideDirection: SlideDirection
+    let animateFromBottom: Bool
+    let chartHeight: CGFloat
     @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var dotAppeared = false
@@ -24,15 +26,55 @@ struct ChartLabelView: View {
     @State private var displayValue = ""
     @State private var valueScale: CGFloat = 0.3
     @State private var valueOpacity: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var pulseOpacity: Double = 0.8
+    @State private var shouldBlur: Bool = false
+    @State private var animatedYPosition: CGFloat = 0
     
     enum SlideDirection {
         case left, right
+    }
+    
+    // Default initializer to make the new parameters optional
+    init(
+        title: String,
+        value: String,
+        color: Color,
+        icon: String,
+        xPosition: CGFloat,
+        yPosition: CGFloat,
+        dotSize: CGFloat,
+        appeared: Bool,
+        slideDirection: SlideDirection,
+        animateFromBottom: Bool = false,
+        chartHeight: CGFloat = 400
+    ) {
+        self.title = title
+        self.value = value
+        self.color = color
+        self.icon = icon
+        self.xPosition = xPosition
+        self.yPosition = yPosition
+        self.dotSize = dotSize
+        self.appeared = appeared
+        self.slideDirection = slideDirection
+        self.animateFromBottom = animateFromBottom
+        self.chartHeight = chartHeight
     }
     
     var body: some View {
         ZStack {
             // Dot indicator
             ZStack {
+                // Pulsing ring for CURRENT label only
+                if title == "CURRENT" && dotAppeared {
+                    Circle()
+                        .stroke(color, lineWidth: 2)
+                        .frame(width: dotSize, height: dotSize)
+                        .scaleEffect(pulseScale)
+                        .opacity(pulseOpacity)
+                }
+                
                 Circle()
                     .fill(Color(UIColor.systemBackground))
                     .frame(width: dotSize + 8, height: dotSize + 8)
@@ -43,7 +85,7 @@ struct ChartLabelView: View {
             }
             .scaleEffect(dotAppeared ? 1.0 : 0.0)
             .opacity(dotAppeared ? 1 : 0)
-            .position(x: xPosition, y: yPosition)
+            .position(x: xPosition, y: animatedYPosition)
             
             // Label
             HStack(spacing: 12) {
@@ -57,16 +99,31 @@ struct ChartLabelView: View {
                         .foregroundColor(color.opacity(0.8))
                         .tracking(0.5)
                     
-                    Text(displayValue)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(color)
-                        .scaleEffect(valueScale)
-                        .opacity(valueOpacity)
+                    ZStack {
+                        // Hidden text to maintain consistent size using final value
+                        Text(value)
+                            .font(.system(size: 18, weight: .bold))
+                            .opacity(0)
+                        
+                        // Also reserve space for the formatted zero to ensure it's at least that wide
+                        Text(formatAsZero(basedOn: value))
+                            .font(.system(size: 18, weight: .bold))
+                            .opacity(0)
+                        
+                        // Visible animated text
+                        Text(displayValue)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(color)
+                            .scaleEffect(valueScale)
+                            .opacity(valueOpacity)
+                    }
                 }
             }
+            .fluidBlur(isActive: shouldBlur)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
+                // Base background
                 RoundedRectangle(cornerRadius: 12)
                     .fill(color.opacity(0.08))
                     .overlay(
@@ -76,7 +133,7 @@ struct ChartLabelView: View {
             )
             .opacity(labelAppeared ? 1 : 0)
             .offset(x: labelAppeared ? 0 : (slideDirection == .left ? -30 : 30))
-            .position(x: slideDirection == .left ? 80 : 240, y: yPosition)
+            .position(x: slideDirection == .left ? 80 : 240, y: animatedYPosition)
         }
         .onChange(of: appeared) { _, newValue in
             if newValue {
@@ -88,6 +145,10 @@ struct ChartLabelView: View {
                 displayValue = formatAsZero(basedOn: value)
                 valueScale = 0.3
                 valueOpacity = 0
+                pulseScale = 1.0
+                pulseOpacity = 0.8
+                shouldBlur = false
+                animatedYPosition = animateFromBottom ? (chartHeight - 40) : yPosition
             }
         }
         .onChange(of: value) { _, newValue in
@@ -100,6 +161,17 @@ struct ChartLabelView: View {
             // Initialize with zero in the same format as the target value
             displayValue = formatAsZero(basedOn: value)
             
+            // Reset all animation states to starting positions
+            dotAppeared = false
+            labelAppeared = false
+            valueScale = 0.3
+            valueOpacity = 0
+            pulseScale = 1.0
+            pulseOpacity = 0.8
+            shouldBlur = false
+            animatedYPosition = animateFromBottom ? (chartHeight - 40) : yPosition
+            
+            // Always run the full appearance animation on every appearance
             if appeared {
                 animateAppearance()
             }
@@ -107,19 +179,30 @@ struct ChartLabelView: View {
     }
     
     private func animateAppearance() {
+        // Start blur animation immediately (like original timing)
+        shouldBlur = true
+        
+        // Animate position from bottom to final position (for CURRENT label)
+        if animateFromBottom {
+            withAnimation(.easeInOut(duration: 1.0)) {
+                animatedYPosition = yPosition
+            }
+        }
+        
         // Animate dot with smooth bounce
         withAnimation(.spring(response: 0.6, dampingFraction: 0.5)) {
             dotAppeared = true
         }
         
-        // Animate label with staggered delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        // Animate label with longer delay to sync with position animation
+        let labelDelay = animateFromBottom ? 0.8 : 0.3
+        DispatchQueue.main.asyncAfter(deadline: .now() + labelDelay) {
             withAnimation(.easeOut(duration: 0.4)) {
                 labelAppeared = true
             }
             
             // Start counting animation after label appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 displayValue = value
                 
                 // Animate the value with a soft smooth bounce
@@ -127,9 +210,22 @@ struct ChartLabelView: View {
                     valueScale = 1.0
                     valueOpacity = 1.0
                 }
+                
+                // Start pulsating animation for CURRENT label
+                if title == "CURRENT" {
+                    startPulsingAnimation()
+                }
             }
         }
     }
+    
+    private func startPulsingAnimation() {
+        withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+            pulseScale = 2.5
+            pulseOpacity = 0.0
+        }
+    }
+    
     
     private func formatAsZero(basedOn originalValue: String) -> String {
         // Return formatted zero using the current currency
@@ -172,4 +268,10 @@ struct ChartLabelView: View {
     }
     
     return ChartLabelPreview()
+        .preferredColorScheme(.light)
+        .environmentObject({
+            let dataManager = DataManager()
+            let sessionViewModel = SessionViewModel(dataManager: dataManager)
+            return ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+        }())
 }

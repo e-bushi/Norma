@@ -10,7 +10,7 @@ import Supabase
 
 extension SupabaseService {
     
-    // MARK: - Bills Methods
+    // MARK: - Bills Methods (Legacy - Non-encrypted)
     
     /// Fetch all bills for a user
     func fetchBills(userId: String) async throws -> [Bill] {
@@ -87,5 +87,66 @@ extension SupabaseService {
             .value
         
         return response
+    }
+    
+    // MARK: - Bills Methods (Encryption Support)
+    
+    /// Fetch bills with encryption support
+    func fetchEncryptableBills(userId: String) async throws -> [EncryptableBill] {
+        let response = try await from("bills")
+            .select()
+            .eq("user_id", value: userId)
+            .order("due_date", ascending: true)
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode([EncryptableBill].self, from: response.data)
+    }
+    
+    /// Create bill with encryption support
+    func createEncryptableBill(_ bill: EncryptableBill) async throws -> EncryptableBill {
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(bill)
+        
+        let response = try await from("bills")
+            .insert(data)
+            .select()
+            .single()
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(EncryptableBill.self, from: response.data)
+    }
+    
+    /// Update bill with encryption support
+    func updateEncryptableBill(_ bill: EncryptableBill) async throws -> EncryptableBill {
+        guard let id = bill.id else {
+            throw NSError(domain: "SupabaseService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Bill ID is required for update"])
+        }
+        
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(bill)
+        
+        let response = try await from("bills")
+            .update(data)
+            .eq("id", value: id)
+            .select()
+            .single()
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(EncryptableBill.self, from: response.data)
+    }
+    
+    /// Update bill encryption during migration
+    func updateBillEncryption(billId: String, encryptedName: String, encryptedAmount: String) async throws {
+        _ = try await from("bills")
+            .update([
+                "encrypted_name": AnyJSON.string(encryptedName),
+                "encrypted_amount": AnyJSON.string(encryptedAmount),
+                "is_encrypted": AnyJSON.bool(true)
+            ])
+            .eq("id", value: billId)
+            .execute()
     }
 }

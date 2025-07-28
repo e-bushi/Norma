@@ -13,11 +13,13 @@ struct ExpenseDetailView: View {
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var dataManager: DataManager
+    @EnvironmentObject private var budgetViewModel: BudgetViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showEditExpenseSheet = false
     @State private var showDeleteConfirmation = false
-    @State private var showDuplicateSuccess = false
+    @State private var showLinkToBudgetSheet = false
     @State private var showLinkToBillSheet = false
     
     private var expenseDate: Date {
@@ -29,6 +31,11 @@ struct ExpenseDetailView: View {
     private var linkedBill: Bill? {
         guard let billId = expense.billId else { return nil }
         return billViewModel.bills.first { $0.id == billId }
+    }
+    
+    private var linkedBudget: Budget? {
+        guard let budgetId = expense.budgetId else { return nil }
+        return dataManager.budgets.first { $0.id == budgetId }
     }
     
     private var paymentMethodIcon: String {
@@ -76,6 +83,11 @@ struct ExpenseDetailView: View {
                     
                     // Payment information
                     paymentInfoView
+                    
+                    // Linked budget information
+                    if linkedBudget != nil {
+                        linkedBudgetView
+                    }
                     
                     // Linked bill information
                     if linkedBill != nil {
@@ -125,6 +137,12 @@ struct ExpenseDetailView: View {
                 .environmentObject(expenseViewModel)
                 .environmentObject(billViewModel)
         }
+        .sheet(isPresented: $showLinkToBudgetSheet) {
+            LinkToBudgetView(expense: expense)
+                .environmentObject(expenseViewModel)
+                .environmentObject(dataManager)
+                .environmentObject(budgetViewModel)
+        }
         .sheet(isPresented: $showLinkToBillSheet) {
             LinkToBillView(expense: expense)
                 .environmentObject(expenseViewModel)
@@ -139,11 +157,6 @@ struct ExpenseDetailView: View {
             }
         } message: {
             Text("Are you sure you want to delete this expense? This action cannot be undone.")
-        }
-        .alert("Expense Duplicated", isPresented: $showDuplicateSuccess) {
-            Button("OK") { }
-        } message: {
-            Text("A copy of this expense has been created.")
         }
     }
     
@@ -257,6 +270,39 @@ struct ExpenseDetailView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(.systemGray6))
             )
+        }
+    }
+    
+    @ViewBuilder
+    private var linkedBudgetView: some View {
+        if let budget = linkedBudget {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Linked to Budget")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(budget.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        Text("Budget: \(profileViewModel.formatCurrency(budget.amount))")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "target")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.green.opacity(0.1))
+                )
+            }
         }
     }
     
@@ -385,24 +431,24 @@ struct ExpenseDetailView: View {
         VStack(spacing: 12) {
             // Primary actions
             HStack(spacing: 12) {
-                Button(action: {
-                    Task {
-                        await duplicateExpense()
+                if expense.budgetId == nil {
+                    Button(action: {
+                        showLinkToBudgetSheet = true
+                    }) {
+                        VStack(spacing: 6) {
+                            Image(systemName: "target")
+                                .font(.system(size: 20))
+                            Text("Link to Budget")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.green.opacity(0.1))
+                        )
+                        .foregroundColor(.green)
                     }
-                }) {
-                    VStack(spacing: 6) {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 20))
-                        Text("Duplicate")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.blue.opacity(0.1))
-                    )
-                    .foregroundColor(.blue)
                 }
                 
                 if expense.billId == nil {
@@ -453,31 +499,6 @@ struct ExpenseDetailView: View {
         dismiss()
     }
     
-    private func duplicateExpense() async {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let todayString = dateFormatter.string(from: Date())
-        
-        let success = await expenseViewModel.addExpense(
-            name: expense.name,
-            amount: expense.amount,
-            expenseDate: todayString,
-            categoryId: expense.categoryId,
-            billId: expense.billId,
-            paymentMethod: expense.paymentMethod,
-            isRecurring: expense.isRecurring,
-            recurringFrequency: expense.recurringFrequency,
-            merchant: expense.merchant,
-            location: expense.location,
-            tags: expense.tags,
-            notes: expense.notes,
-            attachmentUrls: expense.attachmentUrls
-        )
-        
-        if success {
-            showDuplicateSuccess = true
-        }
-    }
 }
 
 // Simple flow layout for tags
@@ -560,31 +581,7 @@ struct EditExpenseView: View {
     }
 }
 
-// Placeholder for LinkToBillView
-struct LinkToBillView: View {
-    let expense: Expense
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack {
-                Text("Link to Bill")
-                    .font(.title)
-                Text("Select a bill to link this expense to")
-                    .foregroundColor(.secondary)
-            }
-            .navigationTitle("Link to Bill")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
+
 
 #Preview {
     let dateFormatter = DateFormatter()
@@ -614,5 +611,8 @@ struct LinkToBillView: View {
     return ExpenseDetailView(expense: sampleExpense)
         .environmentObject(expenseViewModel)
         .environmentObject(billViewModel)
+        .environmentObject(dataManager)
+        .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }
 

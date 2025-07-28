@@ -28,6 +28,10 @@ class SessionViewModel: ObservableObject {
     @Published var showError = false
     @Published var errorMessage = ""
     
+    // Encryption Migration State
+    @Published var shouldShowEncryptionMigration = false
+    @Published var hasCheckedEncryptionStatus = false
+    
     // MARK: - Services
     private let dataManager: DataManager
     
@@ -81,6 +85,9 @@ class SessionViewModel: ObservableObject {
         
         // Check if user has completed initial setup
         await checkInitialSetupStatus()
+        
+        // Check encryption status for migration popup
+        await checkEncryptionMigrationStatus()
     }
     
     func handleNoAuthentication() async {
@@ -89,6 +96,10 @@ class SessionViewModel: ObservableObject {
         shouldShowOnboarding = true
         hasCompletedOnboarding = false
         hasCompletedInitialSetup = false
+        
+        // Reset encryption migration state
+        shouldShowEncryptionMigration = false
+        hasCheckedEncryptionStatus = false
     }
     
     func logout() async {
@@ -127,6 +138,9 @@ class SessionViewModel: ObservableObject {
     func checkInitialSetupStatus() async {
         guard let user = currentUser else { return }
         
+        // Ensure default categories are created for authenticated users
+        await ensureDefaultCategoriesExist()
+        
         // Check if user has completed initial financial setup
         // Check if they have essential onboarding data (income, currency, etc.)
         if user.settings.monthlyIncome > 0 && !user.settings.primaryGoal.isEmpty {
@@ -138,9 +152,105 @@ class SessionViewModel: ObservableObject {
         }
     }
     
+    func ensureDefaultCategoriesExist() async {
+        guard let userId = currentUser?.userId else { return }
+        
+        do {
+            // First, try to fetch existing categories
+            try await dataManager.fetchCategories(userId: userId)
+            
+            // Clean up any duplicate categories
+            try await dataManager.removeDuplicateCategories()
+            
+            // Check if we have any system categories (default categories)
+            let systemCategories = dataManager.getSystemCategories()
+            
+            if systemCategories.isEmpty {
+                print("📝 Creating default categories for user: \(userId)")
+                try await dataManager.createDefaultCategories(for: userId)
+                print("✅ Default categories created successfully")
+            } else {
+                print("✅ Default categories already exist (\(systemCategories.count) found)")
+            }
+            
+        } catch {
+            print("❌ Failed to ensure default categories exist: \(error.localizedDescription)")
+            // Don't throw the error - we want the app to continue working even if category setup fails
+        }
+    }
+    
     func completeOnboarding() {
         hasCompletedOnboarding = true
         shouldShowOnboarding = false
+    }
+    
+    // MARK: - Encryption Migration Methods
+    
+    func checkEncryptionMigrationStatus() async {
+        guard let userId = currentUser?.userId,
+              !hasCheckedEncryptionStatus else { return }
+        
+        hasCheckedEncryptionStatus = true
+        
+        do {
+            // First, clean up any duplicate encryption keys
+            try await dataManager.supabaseService.cleanupDuplicateEncryptionKeys(userId: userId)
+            
+            let hasEncryption = await dataManager.hasEncryptionEnabled()
+            
+            // Show migration popup only if user doesn't have encryption enabled
+            if !hasEncryption {
+                shouldShowEncryptionMigration = true
+            }
+        } catch {
+            print("Failed to check encryption status: \(error.localizedDescription)")
+        }
+    }
+    
+    func dismissEncryptionMigration() {
+        shouldShowEncryptionMigration = false
+    }
+    
+    func startEncryptionMigration(password: String) async throws {
+        print("🔐 Starting encryption migration with verified password...")
+        
+        do {
+            // Step 1: Setup encryption for the user with verified password
+            print("📍 [DEBUG] SessionViewModel: Step 1 - Setting up encryption...")
+            let recoveryPhrase = try await dataManager.setupEncryption(password: password)
+            print("✅ Encryption setup complete. Recovery phrase generated.")
+            
+            // Step 2: Store recovery phrase securely for Settings access
+            print("📍 [DEBUG] SessionViewModel: Step 2 - Storing recovery phrase...")
+            guard let userId = currentUser?.userId else {
+                throw NSError(domain: "SessionError", code: 1, userInfo: [NSLocalizedDescriptionKey: "User ID not available"])
+            }
+            
+            let userKeyManager = UserKeyManager(supabaseService: dataManager.supabaseService)
+            userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
+            print("✅ Recovery phrase stored securely.")
+            
+            // Step 3: Migrate all existing data to encrypted format
+            print("📍 [DEBUG] SessionViewModel: Step 3 - Migrating data...")
+            try await dataManager.migrateAllDataToEncryption()
+            print("✅ Data migration complete.")
+            
+            // Step 4: Mark encryption as enabled (prevent future popups)
+            hasCheckedEncryptionStatus = true
+            
+            print("🎉 Encryption migration completed successfully!")
+            
+        } catch {
+            print("❌ Encryption migration failed: \(error)")
+            print("❌ Error description: \(error.localizedDescription)")
+            if let nsError = error as NSError? {
+                print("❌ Error domain: \(nsError.domain)")
+                print("❌ Error code: \(nsError.code)")
+                print("❌ Error userInfo: \(nsError.userInfo)")
+            }
+            // The popup will handle displaying the error
+            throw error
+        }
     }
     
     func completeInitialSetup(with data: UserOnboardingData) async {

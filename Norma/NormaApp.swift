@@ -16,7 +16,7 @@ struct NormaApp: App {
     
     init() {
         do {
-            self.modelContainer = try ModelContainer(for: CachedBill.self)
+            self.modelContainer = try ModelContainer(for: CachedBill.self, CachedExpense.self, CachedBudget.self, CachedCategory.self)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

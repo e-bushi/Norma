@@ -40,6 +40,7 @@ struct IncomeAndExpenseView: View {
     
     // Sheet presentation
     @State private var showNormaChatView = false
+    @State private var selectedCategoryForBudget: Category?
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -80,7 +81,6 @@ struct IncomeAndExpenseView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    
                     ExpenseCalendarView(expensesPerDay: expensesPerDay)
                     .padding(.horizontal)
                     
@@ -93,11 +93,14 @@ struct IncomeAndExpenseView: View {
                     Group {
                         switch selectedView {
                         case .budget:
-                            BudgetDisclosureView(expenses: expenseViewModel.expenses, month: currentMonth)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)
-                                ))
+                            BudgetDisclosureView(expenses: expenseViewModel.expenses, month: currentMonth) { category in
+                                selectedCategoryForBudget = category
+                            }
+                            .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
                         case .expenses:
                             ExpenseDisclosureView(expenses: expenseViewModel.expenses, category: nil)
                                 .transition(.asymmetric(
@@ -111,9 +114,29 @@ struct IncomeAndExpenseView: View {
                 }
                 .padding(.vertical)
             }
+            .scrollIndicators(.hidden)
             .navigationTitle("Expenses")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        // Create a placeholder category to trigger the sheet
+                        selectedCategoryForBudget = Category(
+                            userId: "placeholder",
+                            name: "Select Category",
+                            type: .expense,
+                            icon: "questionmark.circle",
+                            colorHex: "#808080",
+                            parentCategoryId: nil,
+                            isSystem: false,
+                            isActive: true,
+                            sortOrder: 0
+                        )
+                    }) {
+                        Image(systemName: "target")
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         showNormaChatView = true
@@ -126,10 +149,21 @@ struct IncomeAndExpenseView: View {
                 Task {
                     await expenseViewModel.refreshExpenses()
                     await incomeViewModel.refreshIncomes()
+                    // Fetch budgets
+                    if let userId = sessionViewModel.currentUser?.userId {
+                        try? await dataManager.fetchBudgets(userId: userId)
+                    }
                 }
             }
             .sheet(isPresented: $showNormaChatView) {
                 NormaChatView(context: .expenses)
+            }
+            .sheet(item: $selectedCategoryForBudget) { category in
+                CreateBudgetView(preselectedCategory: category)
+                    .environmentObject(dataManager)
+                    .environmentObject(sessionViewModel)
+                    .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+                    .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
             }
         }
     }
@@ -147,4 +181,5 @@ struct IncomeAndExpenseView: View {
         .environmentObject(sessionViewModel)
         .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }

@@ -677,7 +677,6 @@ struct NormaChatView: View {
                 name: name,
                 amount: amount,
                 expenseDate: todayString,
-                categoryId: nil,
                 billId: billId,
                 paymentMethod: .debitCard,
                 isRecurring: true, // Bill payments are recurring
@@ -779,7 +778,6 @@ struct NormaChatView: View {
             name: name,
             amount: amount,
             expenseDate: expenseDateString,
-            categoryId: nil,
             billId: nil,
             paymentMethod: paymentMethod,
             isRecurring: false,

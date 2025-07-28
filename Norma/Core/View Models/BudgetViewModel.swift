@@ -28,7 +28,6 @@ class BudgetViewModel: ObservableObject {
     @Published var showError = false
     @Published var errorMessage = ""
     @Published var showAddBudget = false
-    @Published var selectedPeriod: BudgetPeriod = .monthly
     
     // Statistics
     @Published var totalBudgeted: Double = 0
@@ -111,7 +110,6 @@ class BudgetViewModel: ObservableObject {
     func addBudget(
         name: String,
         amount: Double,
-        period: BudgetPeriod,
         categoryId: String? = nil,
         startDate: Date = Date(),
         endDate: Date? = nil,
@@ -130,7 +128,6 @@ class BudgetViewModel: ObservableObject {
             userId: userId,
             name: name,
             amount: amount,
-            period: period,
             categoryId: categoryId,
             startDate: startDate,
             endDate: endDate,
@@ -228,51 +225,17 @@ class BudgetViewModel: ObservableObject {
         guard let expenseViewModel = expenseViewModel else { return [] }
         
         let dateFormatter = ISO8601DateFormatter()
-        var expenses = expenseViewModel.expenses.filter { expense in
+        let expenses = expenseViewModel.expenses.filter { expense in
             guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
             return dateRange.contains(expenseDate)
-        }
-        
-        // Filter by category if specified
-        if let categoryId = budget.categoryId {
-            expenses = expenses.filter { $0.categoryId == categoryId }
         }
         
         return expenses
     }
     
     private func getDateRange(for budget: Budget, currentDate: Date) -> DateInterval {
-        let calendar = Calendar.current
-        
-        switch budget.period {
-        case .weekly:
-            let start = calendar.dateInterval(of: .weekOfYear, for: currentDate)?.start ?? currentDate
-            let end = calendar.date(byAdding: .weekOfYear, value: 1, to: start)!
-            return DateInterval(start: start, end: end)
-            
-        case .biWeekly:
-            let start = calendar.dateInterval(of: .weekOfYear, for: currentDate)?.start ?? currentDate
-            let end = calendar.date(byAdding: .weekOfYear, value: 2, to: start)!
-            return DateInterval(start: start, end: end)
-            
-        case .monthly:
-            let start = calendar.dateInterval(of: .month, for: currentDate)?.start ?? currentDate
-            let end = calendar.date(byAdding: .month, value: 1, to: start)!
-            return DateInterval(start: start, end: end)
-            
-        case .quarterly:
-            let start = calendar.dateInterval(of: .quarter, for: currentDate)?.start ?? currentDate
-            let end = calendar.date(byAdding: .month, value: 3, to: start)!
-            return DateInterval(start: start, end: end)
-            
-        case .annually:
-            let start = calendar.dateInterval(of: .year, for: currentDate)?.start ?? currentDate
-            let end = calendar.date(byAdding: .year, value: 1, to: start)!
-            return DateInterval(start: start, end: end)
-            
-        case .custom:
-            return DateInterval(start: budget.startDate, end: budget.endDate ?? currentDate)
-        }
+        // Simply use the budget's start and end dates
+        return DateInterval(start: budget.startDate, end: budget.endDate ?? currentDate)
     }
     
     // MARK: - Statistics

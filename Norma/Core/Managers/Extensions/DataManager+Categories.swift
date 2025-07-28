@@ -6,51 +6,104 @@
 //
 
 import Foundation
+import SwiftData
 
 extension DataManager {
     
     // MARK: - Category Methods
     
     func fetchCategories(userId: String) async throws {
-        // let fetchedCategories = try await supabaseService.fetchCategories(userId: userId)
-        // categories = fetchedCategories
-        
-        print("Fetching categories for user: \(userId)")
+        do {
+            // Try to fetch from Supabase first
+            let fetchedCategories = try await supabaseService.fetchCategories(userId: userId)
+            categories = fetchedCategories
+            
+            // Cache categories in SwiftData
+            await cacheCategories(fetchedCategories)
+            
+            print("Fetched \(fetchedCategories.count) categories from server")
+        } catch {
+            // If fetch fails (offline), load from cache
+            print("Failed to fetch categories from server: \(error). Loading from cache...")
+            loadCachedCategories()
+            
+            // If we have cached data, don't throw the error
+            if !categories.isEmpty {
+                print("Loaded \(categories.count) categories from cache")
+            } else {
+                // Re-throw if we have no cached data
+                throw error
+            }
+        }
     }
     
     func addCategory(_ category: Category) async throws {
-        categories.append(category)
-        hasUnsyncedChanges = true
+        // Create category with temporary ID for offline usage
+        var categoryToAdd = category
+        if categoryToAdd.id == nil {
+            categoryToAdd.id = UUID().uuidString
+        }
         
-        // try await supabaseService.createCategory(category)
+        // Always add to local state first (offline-first approach)
+        categories.append(categoryToAdd)
+        
+        // Cache the category locally
+        await cacheCategories([categoryToAdd])
+        
+        // Try to sync to Supabase (but don't fail if offline)
+        do {
+            let createdCategory = try await supabaseService.createCategory(categoryToAdd)
+            
+            // Update the local category with the server ID if different
+            if let index = categories.firstIndex(where: { $0.id == categoryToAdd.id }) {
+                categories[index] = createdCategory
+            }
+            
+            // Update cache with server version
+            await updateCachedCategory(createdCategory)
+            
+        } catch {
+            print("Supabase sync failed (offline mode): \(error)")
+            // Mark as needing sync later
+            hasUnsyncedChanges = true
+        }
         
         print("Added category: \(category.name)")
     }
     
     func updateCategory(_ category: Category) async throws {
+        let updatedCategory = try await supabaseService.updateCategory(category)
+        
         if let index = categories.firstIndex(where: { $0.id == category.id }) {
-            categories[index] = category
+            categories[index] = updatedCategory
             hasUnsyncedChanges = true
         }
         
-        // try await supabaseService.updateCategory(category)
+        // Update cache
+        await updateCachedCategory(updatedCategory)
         
         print("Updated category: \(category.name)")
     }
     
     func deleteCategory(_ category: Category) async throws {
         // Check if category is in use
-        let isInUse = expenses.contains { $0.categoryId == category.id } ||
+        let isInUse = expenses.contains { $0.budgetId == category.id } ||
                      budgets.contains { $0.categoryId == category.id }
         
         guard !isInUse else {
             throw CategoryError.categoryInUse
         }
         
+        guard let categoryId = category.id else {
+            throw NSError(domain: "DataManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Category ID is required for deletion"])
+        }
+        
+        try await supabaseService.deleteCategory(categoryId)
         categories.removeAll { $0.id == category.id }
         hasUnsyncedChanges = true
         
-        // try await supabaseService.deleteCategory(category.id)
+        // Remove from cache
+        await deleteCachedCategory(categoryId)
         
         print("Deleted category: \(category.name)")
     }
@@ -88,8 +141,8 @@ extension DataManager {
         
         // Count expense usage
         for expense in expenses {
-            if let categoryId = expense.categoryId {
-                categoryUsage[categoryId, default: 0] += 1
+            if let budgetId = expense.budgetId {
+                categoryUsage[budgetId, default: 0] += 1
             }
         }
         
@@ -107,11 +160,12 @@ extension DataManager {
         let defaultCategories = [
             Category(
                 userId: userId,
-                name: "Food & Dining",
+                name: "Housing",
                 type: .expense,
-                icon: "fork.knife",
+                icon: "house.fill",
                 colorHex: "#FF6B6B",
-                isSystem: true
+                isSystem: true,
+                sortOrder: 1
             ),
             Category(
                 userId: userId,
@@ -119,31 +173,26 @@ extension DataManager {
                 type: .expense,
                 icon: "car.fill",
                 colorHex: "#4ECDC4",
-                isSystem: true
+                isSystem: true,
+                sortOrder: 2
             ),
             Category(
                 userId: userId,
-                name: "Shopping",
+                name: "Food",
                 type: .expense,
-                icon: "bag.fill",
-                colorHex: "#45B7D1",
-                isSystem: true
+                icon: "fork.knife",
+                colorHex: "#FF5722",
+                isSystem: true,
+                sortOrder: 3
             ),
             Category(
                 userId: userId,
-                name: "Entertainment",
+                name: "Utilities",
                 type: .expense,
-                icon: "tv.fill",
-                colorHex: "#96CEB4",
-                isSystem: true
-            ),
-            Category(
-                userId: userId,
-                name: "Bills & Utilities",
-                type: .expense,
-                icon: "doc.text.fill",
+                icon: "bolt.fill",
                 colorHex: "#FECA57",
-                isSystem: true
+                isSystem: true,
+                sortOrder: 4
             ),
             Category(
                 userId: userId,
@@ -151,36 +200,249 @@ extension DataManager {
                 type: .expense,
                 icon: "heart.fill",
                 colorHex: "#FF9FF3",
-                isSystem: true
+                isSystem: true,
+                sortOrder: 5
             ),
             Category(
                 userId: userId,
-                name: "Salary",
-                type: .income,
-                icon: "briefcase.fill",
+                name: "Shopping",
+                type: .expense,
+                icon: "bag.fill",
+                colorHex: "#45B7D1",
+                isSystem: true,
+                sortOrder: 6
+            ),
+            Category(
+                userId: userId,
+                name: "Entertainment",
+                type: .expense,
+                icon: "tv.fill",
+                colorHex: "#96CEB4",
+                isSystem: true,
+                sortOrder: 7
+            ),
+            Category(
+                userId: userId,
+                name: "Education",
+                type: .expense,
+                icon: "book.fill",
+                colorHex: "#3F51B5",
+                isSystem: true,
+                sortOrder: 8
+            ),
+            Category(
+                userId: userId,
+                name: "Financial",
+                type: .expense,
+                icon: "banknote.fill",
                 colorHex: "#54A0FF",
-                isSystem: true
+                isSystem: true,
+                sortOrder: 9
             ),
             Category(
                 userId: userId,
-                name: "Freelance",
-                type: .income,
-                icon: "laptopcomputer",
-                colorHex: "#48DBFB",
-                isSystem: true
+                name: "Self Care",
+                type: .expense,
+                icon: "sparkles",
+                colorHex: "#E91E63",
+                isSystem: true,
+                sortOrder: 10
             ),
             Category(
                 userId: userId,
-                name: "Investments",
-                type: .income,
-                icon: "chart.line.uptrend.xyaxis",
-                colorHex: "#0ABDE3",
-                isSystem: true
+                name: "Travel",
+                type: .expense,
+                icon: "airplane",
+                colorHex: "#9C27B0",
+                isSystem: true,
+                sortOrder: 11
+            ),
+            Category(
+                userId: userId,
+                name: "Miscellaneous",
+                type: .expense,
+                icon: "questionmark.circle.fill",
+                colorHex: "#607D8B",
+                isSystem: true,
+                sortOrder: 12
             )
         ]
         
+        // Get existing category names to avoid duplicates
+        let existingCategoryNames = categories
+            .filter { $0.type == .expense && $0.isSystem }
+            .map { $0.name.lowercased() }
+        
+        var categoriesAdded = 0
+        
         for category in defaultCategories {
-            try await addCategory(category)
+            // Only add if a category with this name doesn't already exist
+            if !existingCategoryNames.contains(category.name.lowercased()) {
+                try await addCategory(category)
+                categoriesAdded += 1
+            }
+        }
+        
+        print("✅ Created \(categoriesAdded) new default categories (skipped \(defaultCategories.count - categoriesAdded) existing)")
+    }
+    
+    func removeDuplicateCategories() async throws {
+        // Group categories by name and type
+        var categoryGroups: [String: [Category]] = [:]
+        
+        for category in categories {
+            let key = "\(category.name.lowercased())_\(category.type.rawValue)"
+            if categoryGroups[key] == nil {
+                categoryGroups[key] = []
+            }
+            categoryGroups[key]?.append(category)
+        }
+        
+        var duplicatesRemoved = 0
+        
+        // For each group, keep only the first (oldest) and remove the rest
+        for (_, group) in categoryGroups where group.count > 1 {
+            // Sort by creation date or ID to keep the oldest
+            let sortedGroup = group.sorted { cat1, cat2 in
+                // If both have IDs, compare them (older IDs are usually smaller)
+                if let id1 = cat1.id, let id2 = cat2.id {
+                    return id1 < id2
+                }
+                // If one has no ID, it's newer (offline created)
+                return cat1.id != nil
+            }
+            
+            // Keep the first one, remove the rest
+            for i in 1..<sortedGroup.count {
+                let duplicateCategory = sortedGroup[i]
+                
+                // Check if this category is being used
+                let isInUse = expenses.contains { $0.budgetId == duplicateCategory.id } ||
+                             budgets.contains { $0.categoryId == duplicateCategory.id }
+                
+                if !isInUse {
+                    // Safe to remove this duplicate
+                    if let id = duplicateCategory.id {
+                        try await deleteCategory(duplicateCategory)
+                        duplicatesRemoved += 1
+                    }
+                }
+            }
+        }
+        
+        if duplicatesRemoved > 0 {
+            print("🧹 Removed \(duplicatesRemoved) duplicate categories")
+        }
+    }
+    
+    // MARK: - SwiftData Caching
+    
+    func loadCachedCategories() {
+        guard let modelContext = modelContext,
+              let userId = currentProfile?.userId else { return }
+        
+        do {
+            let descriptor = FetchDescriptor<CachedCategory>(
+                predicate: #Predicate { cachedCategory in
+                    cachedCategory.userId == userId
+                }
+            )
+            
+            let cachedCategories = try modelContext.fetch(descriptor)
+            
+            // Convert cached categories to regular categories and update the published property
+            self.categories = cachedCategories.map { $0.toCategory() }
+            
+            print("Loaded \(cachedCategories.count) cached categories")
+        } catch {
+            print("Failed to load cached categories: \(error)")
+        }
+    }
+    
+    private func cacheCategories(_ categoriesToCache: [Category]) async {
+        guard let modelContext = modelContext else { return }
+        
+        do {
+            // First, clear existing cached categories for this user
+            if let userId = currentProfile?.userId {
+                let descriptor = FetchDescriptor<CachedCategory>(
+                    predicate: #Predicate { cachedCategory in
+                        cachedCategory.userId == userId
+                    }
+                )
+                
+                let existingCached = try modelContext.fetch(descriptor)
+                for cached in existingCached {
+                    modelContext.delete(cached)
+                }
+            }
+            
+            // Then insert new cached categories
+            for category in categoriesToCache {
+                let cachedCategory = CachedCategory(from: category)
+                modelContext.insert(cachedCategory)
+            }
+            
+            try modelContext.save()
+            print("Successfully cached \(categoriesToCache.count) categories")
+        } catch {
+            print("Failed to cache categories: \(error)")
+        }
+    }
+    
+    private func updateCachedCategory(_ category: Category) async {
+        guard let modelContext = modelContext,
+              let categoryId = category.id else { return }
+        
+        do {
+            let descriptor = FetchDescriptor<CachedCategory>(
+                predicate: #Predicate { cachedCategory in
+                    cachedCategory.id == categoryId
+                }
+            )
+            
+            if let existingCached = try modelContext.fetch(descriptor).first {
+                // Update existing cached category
+                existingCached.name = category.name
+                existingCached.type = category.type.rawValue
+                existingCached.icon = category.icon
+                existingCached.colorHex = category.colorHex
+                existingCached.parentCategoryId = category.parentCategoryId
+                existingCached.isSystem = category.isSystem
+                existingCached.isActive = category.isActive
+                existingCached.sortOrder = category.sortOrder
+                existingCached.updatedAt = Date()
+                existingCached.lastSyncedAt = Date()
+            } else {
+                // Create new cached category if not found
+                let cachedCategory = CachedCategory(from: category)
+                modelContext.insert(cachedCategory)
+            }
+            
+            try modelContext.save()
+            print("Updated cached category: \(category.name)")
+        } catch {
+            print("Failed to update cached category: \(error)")
+        }
+    }
+    
+    private func deleteCachedCategory(_ categoryId: String) async {
+        guard let modelContext = modelContext else { return }
+        
+        do {
+            let descriptor = FetchDescriptor<CachedCategory>(
+                predicate: #Predicate { cachedCategory in
+                    cachedCategory.id == categoryId
+                }
+            )
+            
+            if let cachedCategory = try modelContext.fetch(descriptor).first {
+                modelContext.delete(cachedCategory)
+                try modelContext.save()
+                print("Deleted cached category with id: \(categoryId)")
+            }
+        } catch {
+            print("Failed to delete cached category: \(error)")
         }
     }
 }

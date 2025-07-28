@@ -32,6 +32,7 @@ class OnboardingViewModel: ObservableObject {
     
     // Authentication State
     @Published var email: String?
+    private var temporaryPassword: String? // Store password temporarily for encryption setup
     
     // Collected Data
     @Published var collectedData = UserOnboardingData()
@@ -82,8 +83,9 @@ class OnboardingViewModel: ObservableObject {
             lastName: lastName
         )
         
-        // Store email and name for later use
+        // Store email, password, and name for later use
         self.email = email
+        self.temporaryPassword = password // Store password for encryption setup
         collectedData.name = fullName
         
         isLoading = false
@@ -118,6 +120,29 @@ class OnboardingViewModel: ObservableObject {
         
         // Notify SessionViewModel of successful authentication
         await sessionViewModel.handleAuthenticationSuccess()
+        
+        // Automatically set up encryption for new users
+        if let password = temporaryPassword {
+            do {
+                print("🔐 Setting up encryption for new user...")
+                let recoveryPhrase = try await sessionViewModel.dataManager.setupEncryption(password: password)
+                
+                // Store recovery phrase securely
+                if let userId = sessionViewModel.currentUser?.userId {
+                    let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.dataManager.supabaseService)
+                    userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
+                    print("✅ Encryption setup complete for new user")
+                }
+                
+                // Clear temporary password for security
+                temporaryPassword = nil
+                
+            } catch {
+                print("❌ Failed to setup encryption for new user: \(error)")
+                // Don't block the onboarding flow - user can continue without encryption
+                temporaryPassword = nil
+            }
+        }
         
         isVerified = true
         isLoading = false
@@ -213,6 +238,10 @@ class OnboardingViewModel: ObservableObject {
         clearError()
         isLoading = false
         collectedData = UserOnboardingData()
+        
+        // Clear sensitive data
+        email = nil
+        temporaryPassword = nil
     }
     
     private func addUserMessage(_ text: String) {

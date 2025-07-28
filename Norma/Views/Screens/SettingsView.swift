@@ -11,6 +11,14 @@ struct SettingsView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @State private var showLogoutAlert = false
+    @State private var showRecoveryPhrase = false
+    @State private var showSecurityOptions = false
+    
+    private var hasEncryptionEnabled: Bool {
+        guard let userId = sessionViewModel.currentUser?.userId else { return false }
+        let userKeyManager = UserKeyManager(supabaseService: dataManager.supabaseService)
+        return userKeyManager.hasStoredRecoveryPhrase(for: userId)
+    }
     
     var body: some View {
         NavigationView {
@@ -57,14 +65,55 @@ struct SettingsView: View {
                             .font(.caption)
                     }
                     
-                    HStack {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(.red)
-                        Text("Privacy & Security")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                }
+                
+                // Security Section
+                Section("Security") {
+                    if hasEncryptionEnabled {
+                        HStack {
+                            Image(systemName: "checkmark.shield.fill")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading) {
+                                Text("Encryption Enabled")
+                                    .font(.headline)
+                                Text("Your data is protected")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                        .padding(.vertical, 2)
+                        
+                        Button(action: {
+                            showRecoveryPhrase = true
+                        }) {
+                            HStack {
+                                Image(systemName: "key.fill")
+                                    .foregroundColor(.blue)
+                                Text("View Recovery Phrase")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                    } else {
+                        HStack {
+                            Image(systemName: "exclamationmark.shield.fill")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading) {
+                                Text("Encryption Disabled")
+                                    .font(.headline)
+                                Text("Enable encryption to protect your data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 2)
                     }
                 }
                 
@@ -146,6 +195,9 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .sheet(isPresented: $showRecoveryPhrase) {
+                RecoveryPhraseView(userId: sessionViewModel.currentUser?.userId ?? "")
             }
         }
     }

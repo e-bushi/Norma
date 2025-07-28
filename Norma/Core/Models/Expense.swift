@@ -13,7 +13,7 @@ struct Expense: Identifiable, Codable {
     let name: String
     let amount: Double
     let expenseDate: String
-    let categoryId: String?
+    let budgetId: String?
     let billId: String?
     let paymentMethod: PaymentMethod
     let isRecurring: Bool
@@ -32,7 +32,7 @@ struct Expense: Identifiable, Codable {
         case name
         case amount
         case expenseDate = "expense_date"
-        case categoryId = "category_id"
+        case budgetId = "budget_id"
         case billId = "bill_id"
         case paymentMethod = "payment_method"
         case isRecurring = "is_recurring"
@@ -52,7 +52,7 @@ struct Expense: Identifiable, Codable {
         name: String,
         amount: Double,
         expenseDate: String,
-        categoryId: String? = nil,
+        budgetId: String? = nil,
         billId: String? = nil,
         paymentMethod: PaymentMethod,
         isRecurring: Bool = false,
@@ -70,7 +70,7 @@ struct Expense: Identifiable, Codable {
         self.name = name
         self.amount = amount
         self.expenseDate = expenseDate
-        self.categoryId = categoryId
+        self.budgetId = budgetId
         self.billId = billId
         self.paymentMethod = paymentMethod
         self.isRecurring = isRecurring

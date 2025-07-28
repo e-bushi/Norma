@@ -42,6 +42,23 @@ struct RootView: View {
                     .environmentObject(dataManager)
             }
         }
+        .overlay(
+            // Encryption migration popup
+            Group {
+                if sessionViewModel.shouldShowEncryptionMigration {
+                    EncryptionMigrationPopup(
+                        isPresented: $sessionViewModel.shouldShowEncryptionMigration,
+                        onMigrate: { password in
+                            try await sessionViewModel.startEncryptionMigration(password: password)
+                        },
+                        onDismiss: {
+                            sessionViewModel.dismissEncryptionMigration()
+                        },
+                        userEmail: sessionViewModel.currentUser?.email ?? ""
+                    )
+                }
+            }
+        )
         .onAppear {
             // Set the model context on DataManager
             print("🔍 [DEBUG] RootView.onAppear: Setting model context on DataManager")

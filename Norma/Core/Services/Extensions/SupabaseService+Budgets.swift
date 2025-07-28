@@ -10,7 +10,7 @@ import Supabase
 
 extension SupabaseService {
     
-    // MARK: - Budgets Methods
+    // MARK: - Budgets Methods (Legacy - Non-encrypted)
     
     /// Fetch all budgets for a user
     func fetchBudgets(userId: String) async throws -> [Budget] {
@@ -83,16 +83,75 @@ extension SupabaseService {
         return response
     }
     
-    /// Fetch budgets by period
-    func fetchBudgets(userId: String, period: BudgetPeriod) async throws -> [Budget] {
-        let response: [Budget] = try await from("budgets")
+    // MARK: - Budgets Methods (Encryption Support)
+    
+    /// Fetch budgets with encryption support
+    func fetchEncryptableBudgets(userId: String) async throws -> [EncryptableBudget] {
+        let response = try await from("budgets")
             .select()
             .eq("user_id", value: userId)
-            .eq("period", value: period.rawValue)
             .order("created_at", ascending: false)
             .execute()
-            .value
         
-        return response
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode([EncryptableBudget].self, from: response.data)
+        } catch {
+            print("❌ Failed to decode EncryptableBudget. Raw response: \(String(data: response.data, encoding: .utf8) ?? "nil")")
+            print("❌ Decode error: \(error)")
+            
+            // If there are no budgets, return empty array
+            if let jsonString = String(data: response.data, encoding: .utf8), jsonString == "[]" {
+                return []
+            }
+            
+            throw error
+        }
+    }
+    
+    /// Create budget with encryption support
+    func createEncryptableBudget(_ budget: EncryptableBudget) async throws -> EncryptableBudget {
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(budget)
+        
+        let response = try await from("budgets")
+            .insert(data)
+            .select()
+            .single()
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(EncryptableBudget.self, from: response.data)
+    }
+    
+    /// Update budget with encryption support
+    func updateEncryptableBudget(_ budget: EncryptableBudget) async throws -> EncryptableBudget {
+        guard let id = budget.id else {
+            throw NSError(domain: "SupabaseService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Budget ID is required for update"])
+        }
+        
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(budget)
+        
+        let response = try await from("budgets")
+            .update(data)
+            .eq("id", value: id)
+            .select()
+            .single()
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(EncryptableBudget.self, from: response.data)
+    }
+    
+    /// Update budget encryption during migration
+    func updateBudgetEncryption(budgetId: String, encryptedName: String) async throws {
+        _ = try await from("budgets")
+            .update([
+                "encrypted_name": AnyJSON.string(encryptedName),
+                "is_encrypted": AnyJSON.bool(true)
+            ])
+            .eq("id", value: budgetId)
+            .execute()
     }
 }

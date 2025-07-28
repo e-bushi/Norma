@@ -123,7 +123,7 @@ class ExpenseViewModel: ObservableObject {
         name: String,
         amount: Double,
         expenseDate: String,
-        categoryId: String? = nil,
+        budgetId: String? = nil,
         billId: String? = nil,
         paymentMethod: PaymentMethod,
         isRecurring: Bool = false,
@@ -149,7 +149,7 @@ class ExpenseViewModel: ObservableObject {
             name: name,
             amount: amount,
             expenseDate: expenseDate,
-            categoryId: categoryId,
+            budgetId: budgetId,
             billId: billId,
             paymentMethod: paymentMethod,
             isRecurring: isRecurring,
@@ -206,9 +206,9 @@ class ExpenseViewModel: ObservableObject {
     
     // MARK: - Quick Expense
     
-    func addQuickExpense(amount: Double, categoryId: String) async -> Bool {
-        guard let category = dataManager.categories.first(where: { $0.id == categoryId }) else {
-            showError("Invalid category")
+    func addQuickExpense(amount: Double, budgetId: String) async -> Bool {
+        guard let budget = dataManager.budgets.first(where: { $0.id == budgetId }) else {
+            showError("Invalid budget")
             return false
         }
         
@@ -218,10 +218,10 @@ class ExpenseViewModel: ObservableObject {
         let todayString = dateFormatter.string(from: Date())
         
         return await addExpense(
-            name: category.name,
+            name: budget.name,
             amount: amount,
             expenseDate: todayString,
-            categoryId: categoryId,
+            budgetId: budgetId,
             paymentMethod: .debitCard
         )
     }

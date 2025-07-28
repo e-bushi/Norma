@@ -56,6 +56,10 @@ class DataManager: ObservableObject {
         print("✅ [DEBUG] DataManager.setModelContext: loadCachedBills completed")
         loadCachedExpenses()
         print("✅ [DEBUG] DataManager.setModelContext: loadCachedExpenses completed")
+        loadCachedBudgets()
+        print("✅ [DEBUG] DataManager.setModelContext: loadCachedBudgets completed")
+        loadCachedCategories()
+        print("✅ [DEBUG] DataManager.setModelContext: loadCachedCategories completed")
     }
     
     // MARK: - User Profile Methods
@@ -69,7 +73,7 @@ class DataManager: ObservableObject {
             
             // Fetch existing profile from database
             print("🔄 [DEBUG] DataManager: About to fetch profile from database...")
-            if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
+            if let existingProfile = try await fetchUserProfileWithEncryption(userId: supabaseUser.id.uuidString) {
                 print("✅ [DEBUG] DataManager: Existing profile found: \(existingProfile)")
                 currentProfile = existingProfile
                 // Also add to profiles array if not already there
@@ -121,7 +125,7 @@ class DataManager: ObservableObject {
         hasUnsyncedChanges = true
         
         // Sync to remote
-        let updatedProfile = try await supabaseService.updateProfile(profile)
+        let updatedProfile = try await updateUserProfileWithEncryption(profile)
         currentProfile = updatedProfile
         
         print("Updated user profile")
@@ -129,7 +133,7 @@ class DataManager: ObservableObject {
     
     func createUserProfile(_ profile: Profile) async throws {
         // Create profile in remote database
-        let createdProfile = try await supabaseService.createProfile(profile)
+        let createdProfile = try await createUserProfileWithEncryption(profile)
         
         // Update local state with the created profile (includes ID from database)
         currentProfile = createdProfile
@@ -146,13 +150,15 @@ class DataManager: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
-        // Fetch all data concurrently
+        // Fetch all data concurrently (with encryption support)
         try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { try await self.fetchExpenses(userId: userId) }
+            group.addTask { try await self.fetchExpensesWithEncryption(userId: userId) }
+            group.addTask { try await self.fetchBudgetsWithEncryption(userId: userId) }
+            group.addTask { try await self.fetchBillsWithEncryption(userId: userId) }
+            
+            // These don't need encryption yet
             group.addTask { try await self.fetchIncomes(userId: userId) }
-            group.addTask { try await self.fetchBudgets(userId: userId) }
             group.addTask { try await self.fetchCategories(userId: userId) }
-            group.addTask { try await self.fetchBills(userId: userId) }
             group.addTask { try await self.fetchPsychologyData(userId: userId) }
             
             // Wait for all tasks to complete

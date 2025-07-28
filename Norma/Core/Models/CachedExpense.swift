@@ -15,7 +15,7 @@ final class CachedExpense {
     var name: String
     var amount: Double
     var expenseDate: String
-    var categoryId: String?
+    var budgetId: String?
     var billId: String?
     var paymentMethod: String
     var isRecurring: Bool
@@ -38,7 +38,7 @@ final class CachedExpense {
         name: String,
         amount: Double,
         expenseDate: String,
-        categoryId: String? = nil,
+        budgetId: String? = nil,
         billId: String? = nil,
         paymentMethod: String,
         isRecurring: Bool = false,
@@ -57,7 +57,7 @@ final class CachedExpense {
         self.name = name
         self.amount = amount
         self.expenseDate = expenseDate
-        self.categoryId = categoryId
+        self.budgetId = budgetId
         self.billId = billId
         self.paymentMethod = paymentMethod
         self.isRecurring = isRecurring
@@ -83,7 +83,7 @@ final class CachedExpense {
             name: expense.name,
             amount: expense.amount,
             expenseDate: expense.expenseDate,
-            categoryId: expense.categoryId,
+            budgetId: expense.budgetId,
             billId: expense.billId,
             paymentMethod: expense.paymentMethod.rawValue,
             isRecurring: expense.isRecurring,
@@ -109,7 +109,7 @@ final class CachedExpense {
             name: name,
             amount: amount,
             expenseDate: expenseDate,
-            categoryId: categoryId,
+            budgetId: budgetId,
             billId: billId,
             paymentMethod: PaymentMethod(rawValue: paymentMethod) ?? .cash,
             isRecurring: isRecurring,

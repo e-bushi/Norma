@@ -11,8 +11,8 @@ struct BudgetExpensePicker: View {
     @Binding var selection: ViewType
     
     enum ViewType: String, CaseIterable {
-        case budget = "Budget"
         case expenses = "Expenses"
+        case budget = "Budget"
         
         var icon: String {
             switch self {

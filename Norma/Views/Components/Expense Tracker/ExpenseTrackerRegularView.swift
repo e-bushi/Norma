@@ -182,7 +182,7 @@ struct ExpenseTrackerRegularView: View {
                         yPosition: 40,
                         dotSize: dotSize,
                         appeared: incomeLabelAppeared,
-                        slideDirection: .left
+                        slideDirection: .left,
                     )
                     
                     // Bills indicator
@@ -195,7 +195,7 @@ struct ExpenseTrackerRegularView: View {
                         yPosition: lineHeight - 40,
                         dotSize: dotSize,
                         appeared: billsLabelAppeared,
-                        slideDirection: .left
+                        slideDirection: .left,
                     )
                     
                     // Current expense indicator (animated position)
@@ -208,7 +208,9 @@ struct ExpenseTrackerRegularView: View {
                         yPosition: expensePosition,
                         dotSize: dotSize,
                         appeared: currentLabelAppeared,
-                        slideDirection: .right
+                        slideDirection: .right,
+                        animateFromBottom: true,
+                        chartHeight: lineHeight,
                     )
                     .animation(.spring(response: 0.8, dampingFraction: 0.7), value: currentExpenseAmount)
                 }
