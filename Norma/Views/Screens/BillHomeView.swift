@@ -17,6 +17,8 @@ struct BillHomeView: View {
     @State private var showMyBills: Bool = false
     @State private var showNormaChat: Bool = false
     @State private var refreshTask: Task<Void, Never>?
+    @State private var showBillVerificationPopup = false
+    @State private var showBillReviewSheet = false
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -97,8 +99,41 @@ struct BillHomeView: View {
             .sheet(isPresented: $showNormaChat) {
                 NormaChatView(context: .bills)
             }
+            .sheet(isPresented: $showBillReviewSheet) {
+                BillReviewSelectionView(verificationService: billViewModel.verificationService) {
+                    showBillReviewSheet = false
+                }
+            }
+            .overlay {
+                if showBillVerificationPopup {
+                    InformationalPopup(
+                        isPresented: $showBillVerificationPopup,
+                        config: .billPeriodVerification(
+                            billCount: billViewModel.verificationService.billsToVerify.count,
+                            onConfirmAll: {},
+                            onReviewBills: {}
+                        ),
+                        onPrimaryAction: {
+                            Task {
+                                await billViewModel.verificationService.confirmAllBills()
+                                showBillVerificationPopup = false
+                            }
+                        },
+                        onSecondaryAction: {
+                            showBillVerificationPopup = false
+                            showBillReviewSheet = true
+                        },
+                        onDismiss: {
+                            showBillVerificationPopup = false
+                        }
+                    )
+                }
+            }
             .onDisappear {
                 refreshTask?.cancel()
+            }
+            .onReceive(billViewModel.verificationService.$showVerificationPrompt) { showPrompt in
+                showBillVerificationPopup = showPrompt
             }
         }
     }

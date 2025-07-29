@@ -17,12 +17,13 @@ struct Bill: Identifiable, Codable {
     var frequency: BillFrequency
     var categoryId: String?
     var merchant: String?
-    var isAutoPayEnabled: Bool
+    var isReminderOn: Bool
     var reminderDays: Int?
     var isActive: Bool?
     var createdAt: String?
     var updatedAt: String?
     var notes: String?
+    var verificationDate: String?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -34,12 +35,13 @@ struct Bill: Identifiable, Codable {
         case frequency
         case categoryId = "category_id"
         case merchant
-        case isAutoPayEnabled = "is_auto_pay_enabled"
+        case isReminderOn = "is_reminder_on"
         case reminderDays = "reminder_days"
         case isActive = "is_active"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case notes
+        case verificationDate = "verification_date"
     }
     
     // Custom decoding to handle date formats from Supabase
@@ -54,12 +56,13 @@ struct Bill: Identifiable, Codable {
         frequency = try container.decode(BillFrequency.self, forKey: .frequency)
         categoryId = try container.decodeIfPresent(String.self, forKey: .categoryId)
         merchant = try container.decodeIfPresent(String.self, forKey: .merchant)
-        isAutoPayEnabled = try container.decode(Bool.self, forKey: .isAutoPayEnabled)
+        isReminderOn = try container.decode(Bool.self, forKey: .isReminderOn)
         reminderDays = try container.decodeIfPresent(Int.self, forKey: .reminderDays)
         isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        verificationDate = try container.decodeIfPresent(String.self, forKey: .verificationDate)
         
         // Handle date decoding with multiple formats
         let dueDateString = try container.decode(String.self, forKey: .dueDate)
@@ -100,12 +103,13 @@ struct Bill: Identifiable, Codable {
         try container.encode(frequency, forKey: .frequency)
         try container.encodeIfPresent(categoryId, forKey: .categoryId)
         try container.encodeIfPresent(merchant, forKey: .merchant)
-        try container.encode(isAutoPayEnabled, forKey: .isAutoPayEnabled)
+        try container.encode(isReminderOn, forKey: .isReminderOn)
         try container.encodeIfPresent(reminderDays, forKey: .reminderDays)
         try container.encodeIfPresent(isActive, forKey: .isActive)
         try container.encodeIfPresent(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
         
         // Encode date as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
@@ -125,12 +129,13 @@ struct Bill: Identifiable, Codable {
         frequency: BillFrequency,
         categoryId: String? = nil,
         merchant: String? = nil,
-        isAutoPayEnabled: Bool = false,
+        isReminderOn: Bool = false,
         reminderDays: Int? = nil,
         isActive: Bool? = nil,
         createdAt: String? = nil,
         updatedAt: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        verificationDate: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -141,12 +146,13 @@ struct Bill: Identifiable, Codable {
         self.frequency = frequency
         self.categoryId = categoryId
         self.merchant = merchant
-        self.isAutoPayEnabled = isAutoPayEnabled
+        self.isReminderOn = isReminderOn
         self.reminderDays = reminderDays
         self.isActive = isActive
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.notes = notes
+        self.verificationDate = verificationDate
     }
 }
 

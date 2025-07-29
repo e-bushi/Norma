@@ -19,11 +19,12 @@ final class CachedBill {
     var frequency: String
     var categoryId: String?
     var merchant: String?
-    var isAutoPayEnabled: Bool
+    var isReminderOn: Bool = false
     var reminderDays: Int?
     var createdAt: Date
     var updatedAt: Date
     var notes: String?
+    var verificationDate: String?
     
     // Sync metadata
     var lastSyncedAt: Date
@@ -39,11 +40,12 @@ final class CachedBill {
         frequency: String,
         categoryId: String? = nil,
         merchant: String? = nil,
-        isAutoPayEnabled: Bool = false,
+        isReminderOn: Bool = false,
         reminderDays: Int? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         notes: String? = nil,
+        verificationDate: String? = nil,
         lastSyncedAt: Date = Date()
     ) {
         self.id = id
@@ -55,11 +57,12 @@ final class CachedBill {
         self.frequency = frequency
         self.categoryId = categoryId
         self.merchant = merchant
-        self.isAutoPayEnabled = isAutoPayEnabled
+        self.isReminderOn = isReminderOn
         self.reminderDays = reminderDays
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.notes = notes
+        self.verificationDate = verificationDate
         self.lastSyncedAt = lastSyncedAt
     }
     
@@ -78,11 +81,12 @@ final class CachedBill {
             frequency: bill.frequency.rawValue,
             categoryId: bill.categoryId,
             merchant: bill.merchant,
-            isAutoPayEnabled: bill.isAutoPayEnabled,
+            isReminderOn: bill.isReminderOn,
             reminderDays: bill.reminderDays,
             createdAt: createdDate,
             updatedAt: updatedDate,
             notes: bill.notes,
+            verificationDate: bill.verificationDate,
             lastSyncedAt: Date()
         )
     }
@@ -101,11 +105,12 @@ final class CachedBill {
             frequency: BillFrequency(rawValue: frequency) ?? .monthly,
             categoryId: categoryId,
             merchant: merchant,
-            isAutoPayEnabled: isAutoPayEnabled,
+            isReminderOn: isReminderOn,
             reminderDays: reminderDays,
             createdAt: formatter.string(from: createdAt),
             updatedAt: formatter.string(from: updatedAt),
-            notes: notes
+            notes: notes,
+            verificationDate: verificationDate
         )
     }
 }

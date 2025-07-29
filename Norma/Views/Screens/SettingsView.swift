@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
+    @StateObject private var notificationService = NotificationService.shared
     @State private var showLogoutAlert = false
     @State private var showRecoveryPhrase = false
     @State private var showSecurityOptions = false
@@ -45,14 +46,36 @@ struct SettingsView: View {
                 
                 // App Settings Section
                 Section("App Settings") {
-                    HStack {
-                        Image(systemName: "bell.fill")
-                            .foregroundColor(.orange)
-                        Text("Notifications")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                    // Notifications row - different behavior based on permission status
+                    if notificationService.isNotificationsEnabled {
+                        NavigationLink(destination: UpcomingNotificationsView()) {
+                            HStack {
+                                Image(systemName: "bell.fill")
+                                    .foregroundColor(.orange)
+                                Text("Notifications")
+                                Spacer()
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                            }
+                        }
+                    } else {
+                        Button(action: {
+                            Task {
+                                await requestNotificationPermission()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "bell.slash.fill")
+                                    .foregroundColor(.red)
+                                Text("Enable Notifications")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                        }
                     }
                     
                     HStack {
@@ -199,6 +222,16 @@ struct SettingsView: View {
             .sheet(isPresented: $showRecoveryPhrase) {
                 RecoveryPhraseView(userId: sessionViewModel.currentUser?.userId ?? "")
             }
+        }
+    }
+    
+    private func requestNotificationPermission() async {
+        let granted = await notificationService.requestNotificationPermission()
+        print("🔔 Notification permission granted: \(granted)")
+        
+        if !granted {
+            // If permission was denied, we could show an alert directing them to Settings
+            // But the NotificationService already handles this via the permission status
         }
     }
 }

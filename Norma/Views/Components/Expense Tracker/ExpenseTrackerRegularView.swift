@@ -13,6 +13,7 @@ struct ExpenseTrackerRegularView: View {
     let incomeAmount: Double
     let month: String
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @State private var showingIncomeDetail = false
     
     // Animation states
     let chartAppeared: Bool
@@ -183,6 +184,9 @@ struct ExpenseTrackerRegularView: View {
                         dotSize: dotSize,
                         appeared: incomeLabelAppeared,
                         slideDirection: .left,
+                        onTap: {
+                            showingIncomeDetail = true
+                        }
                     )
                     
                     // Bills indicator
@@ -309,6 +313,10 @@ struct ExpenseTrackerRegularView: View {
         }
         .onAppear {
             animateElements()
+        }
+        .sheet(isPresented: $showingIncomeDetail) {
+            IncomeDetailView()
+                .environmentObject(profileViewModel)
         }
         .onChange(of: dotsAppeared) { _, newValue in
             if newValue {

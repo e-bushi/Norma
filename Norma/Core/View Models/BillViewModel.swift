@@ -39,12 +39,14 @@ class BillViewModel: ObservableObject {
     
     private let dataManager: DataManager
     private let sessionViewModel: SessionViewModel
+    @Published var verificationService: BillPeriodVerificationService
     
     // MARK: - Initialization
     
     init(dataManager: DataManager, sessionViewModel: SessionViewModel) {
         self.dataManager = dataManager
         self.sessionViewModel = sessionViewModel
+        self.verificationService = BillPeriodVerificationService(dataManager: dataManager)
         
         setupObservers()
         loadBills()
@@ -74,6 +76,15 @@ class BillViewModel: ObservableObject {
         billsDueSoon = dataManager.getBillsDueSoon()
         totalMonthlyBills = dataManager.getTotalMonthlyBills()
         nextBillDue = dataManager.getNextBillDue()
+        
+        // Check for bill verification after loading
+        checkForBillVerification()
+    }
+    
+    private func checkForBillVerification() {
+        // Get expenses from dataManager to check for verification
+        let expenses = dataManager.expenses
+        verificationService.checkForNewPeriod(bills: bills, expenses: expenses)
     }
     
     func refreshBills() async {
@@ -116,7 +127,7 @@ class BillViewModel: ObservableObject {
         status: BillStatus = .scheduled,
         categoryId: String? = nil,
         merchant: String? = nil,
-        isAutoPayEnabled: Bool = false,
+        isReminderOn: Bool = false,
         reminderDays: Int? = nil,
         notes: String? = nil
     ) async -> Bill? {
@@ -142,7 +153,7 @@ class BillViewModel: ObservableObject {
             frequency: frequency,
             categoryId: categoryId,
             merchant: merchant,
-            isAutoPayEnabled: isAutoPayEnabled,
+            isReminderOn: isReminderOn,
             reminderDays: reminderDays ?? sessionViewModel.currentUser?.settings.billReminderDays,
             notes: notes
         )

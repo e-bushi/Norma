@@ -211,6 +211,14 @@ class SessionViewModel: ObservableObject {
         shouldShowEncryptionMigration = false
     }
     
+    func setupEncryptionForNewUser(password: String) async throws -> String {
+        return try await dataManager.setupEncryption(password: password)
+    }
+    
+    var supabaseService: SupabaseService {
+        return dataManager.supabaseService
+    }
+    
     func startEncryptionMigration(password: String) async throws {
         print("🔐 Starting encryption migration with verified password...")
         

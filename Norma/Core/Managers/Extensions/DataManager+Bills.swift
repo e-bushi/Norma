@@ -208,6 +208,12 @@ extension DataManager {
         updatedBill.dueDate = calculateNextDueDate(for: bill)
         
         try await updateBill(updatedBill)
+        
+        // If bill has reminders enabled, reschedule notifications for the next period
+        if updatedBill.isReminderOn {
+            let notificationService = NotificationService.shared
+            await notificationService.scheduleBillReminders(for: updatedBill)
+        }
     }
     
     private func calculateNextDueDate(for bill: Bill) -> Date {
@@ -310,7 +316,7 @@ extension DataManager {
                 existingCached.frequency = bill.frequency.rawValue
                 existingCached.categoryId = bill.categoryId
                 existingCached.merchant = bill.merchant
-                existingCached.isAutoPayEnabled = bill.isAutoPayEnabled
+                existingCached.isReminderOn = bill.isReminderOn
                 existingCached.reminderDays = bill.reminderDays
                 existingCached.notes = bill.notes
                 existingCached.updatedAt = Date()

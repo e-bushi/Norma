@@ -19,6 +19,7 @@ struct ChartLabelView: View {
     let slideDirection: SlideDirection
     let animateFromBottom: Bool
     let chartHeight: CGFloat
+    let onTap: (() -> Void)?
     @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var dotAppeared = false
@@ -47,7 +48,8 @@ struct ChartLabelView: View {
         appeared: Bool,
         slideDirection: SlideDirection,
         animateFromBottom: Bool = false,
-        chartHeight: CGFloat = 400
+        chartHeight: CGFloat = 400,
+        onTap: (() -> Void)? = nil
     ) {
         self.title = title
         self.value = value
@@ -60,6 +62,53 @@ struct ChartLabelView: View {
         self.slideDirection = slideDirection
         self.animateFromBottom = animateFromBottom
         self.chartHeight = chartHeight
+        self.onTap = onTap
+    }
+    
+    private var labelContent: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(color.opacity(0.8))
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(color.opacity(0.8))
+                    .tracking(0.5)
+                
+                ZStack {
+                    // Hidden text to maintain consistent size using final value
+                    Text(value)
+                        .font(.system(size: 18, weight: .bold))
+                        .opacity(0)
+                    
+                    // Also reserve space for the formatted zero to ensure it's at least that wide
+                    Text(formatAsZero(basedOn: value))
+                        .font(.system(size: 18, weight: .bold))
+                        .opacity(0)
+                    
+                    // Visible animated text
+                    Text(displayValue)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(color)
+                        .scaleEffect(valueScale)
+                        .opacity(valueOpacity)
+                }
+            }
+        }
+        .fluidBlur(isActive: shouldBlur)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            // Base background
+            RoundedRectangle(cornerRadius: 12)
+                .fill(color.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(color.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
     
     var body: some View {
@@ -88,49 +137,16 @@ struct ChartLabelView: View {
             .position(x: xPosition, y: animatedYPosition)
             
             // Label
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(color.opacity(0.8))
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(color.opacity(0.8))
-                        .tracking(0.5)
-                    
-                    ZStack {
-                        // Hidden text to maintain consistent size using final value
-                        Text(value)
-                            .font(.system(size: 18, weight: .bold))
-                            .opacity(0)
-                        
-                        // Also reserve space for the formatted zero to ensure it's at least that wide
-                        Text(formatAsZero(basedOn: value))
-                            .font(.system(size: 18, weight: .bold))
-                            .opacity(0)
-                        
-                        // Visible animated text
-                        Text(displayValue)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(color)
-                            .scaleEffect(valueScale)
-                            .opacity(valueOpacity)
+            Group {
+                if let onTap = onTap {
+                    Button(action: onTap) {
+                        labelContent
                     }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    labelContent
                 }
             }
-            .fluidBlur(isActive: shouldBlur)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                // Base background
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(color.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(color.opacity(0.2), lineWidth: 1)
-                    )
-            )
             .opacity(labelAppeared ? 1 : 0)
             .offset(x: labelAppeared ? 0 : (slideDirection == .left ? -30 : 30))
             .position(x: slideDirection == .left ? 80 : 240, y: animatedYPosition)

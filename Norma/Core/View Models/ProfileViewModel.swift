@@ -597,6 +597,14 @@ class ProfileViewModel: ObservableObject {
         }
     }
     
+    func updateMonthlyIncome(_ newIncome: Double) {
+        guard var currentProfile = profile else { return }
+        currentProfile.settings.monthlyIncome = newIncome
+        Task {
+            await updateProfile(currentProfile)
+        }
+    }
+    
     // MARK: - Error Handling
     
     private func clearError() {

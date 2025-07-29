@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct BillDetailView: View {
     let bill: Bill
@@ -21,6 +22,14 @@ struct BillDetailView: View {
     @State private var showPaymentSuccess = false
     @State private var showPaymentError = false
     @State private var paymentErrorMessage = ""
+    @State private var showNotificationAlert = false
+    @State private var isReminderOn: Bool
+    
+    init(bill: Bill, expenses: [Expense]) {
+        self.bill = bill
+        self.expenses = expenses
+        self._isReminderOn = State(initialValue: bill.isReminderOn)
+    }
     
     // Calculate bill status and payment info
     private var calculatedStatus: BillStatus {
@@ -74,6 +83,16 @@ struct BillDetailView: View {
             Button("OK") { }
         } message: {
             Text(paymentErrorMessage)
+        }
+        .alert("Enable Notifications", isPresented: $showNotificationAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("To receive bill reminders, please enable notifications for Norma in Settings.")
         }
     }
     
@@ -161,9 +180,15 @@ struct BillDetailView: View {
                         DetailRow(label: "Reminder", value: "\(reminderDays) days before")
                     }
                     
-                    if bill.isAutoPayEnabled {
-                        DetailRow(label: "Auto Pay", value: "Enabled")
-                    }
+                    // Reminder toggle section
+                    ReminderToggleRow(
+                        isReminderOn: isReminderOn,
+                        onToggle: { isOn in
+                            Task {
+                                await toggleReminder(isOn)
+                            }
+                        }
+                    )
                     
                     if let notes = bill.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -454,6 +479,43 @@ struct BillDetailView: View {
         } else {
             paymentErrorMessage = billViewModel.errorMessage ?? "Failed to mark bill as paid"
             showPaymentError = true
+        }
+    }
+    
+    private func toggleReminder(_ isOn: Bool) async {
+        let notificationService = NotificationService.shared
+        
+        // If user is trying to turn ON reminders, check if notifications are enabled
+        if isOn {
+            // Check current notification permission status synchronously
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let isEnabled = settings.authorizationStatus == .authorized
+            
+            if !isEnabled {
+                // Show alert to enable notifications
+                await MainActor.run {
+                    showNotificationAlert = true
+                }
+                return
+            }
+        }
+        
+        // Update the state variable first for immediate UI feedback
+        await MainActor.run {
+            isReminderOn = isOn
+        }
+        
+        // Proceed with updating the bill
+        var updatedBill = bill
+        updatedBill.isReminderOn = isOn
+        
+        await billViewModel.updateBill(updatedBill)
+        
+        // Schedule or cancel notifications based on toggle
+        if isOn {
+            await notificationService.scheduleBillReminders(for: updatedBill)
+        } else {
+            await notificationService.cancelNotifications(for: updatedBill)
         }
     }
 }

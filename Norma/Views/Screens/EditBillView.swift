@@ -22,7 +22,7 @@ struct EditBillView: View {
     @State private var merchant: String = ""
     @State private var reminderDays: String = ""
     @State private var notes: String = ""
-    @State private var isAutoPayEnabled: Bool = false
+    @State private var isReminderOn: Bool = false
     
     @State private var isProcessing = false
     @State private var showError = false
@@ -227,15 +227,15 @@ struct EditBillView: View {
                 Divider()
                     .padding(.horizontal, 24)
                 
-                // Auto Pay
+                // Reminders
                 HStack {
-                    Text("Auto Pay")
+                    Text("Reminders")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
-                    Toggle("", isOn: $isAutoPayEnabled)
+                    Toggle("", isOn: $isReminderOn)
                         .labelsHidden()
                 }
                 .padding(.horizontal, 24)
@@ -373,7 +373,7 @@ struct EditBillView: View {
         merchant = bill.merchant ?? ""
         reminderDays = bill.reminderDays != nil ? String(bill.reminderDays!) : ""
         notes = bill.notes ?? ""
-        isAutoPayEnabled = bill.isAutoPayEnabled
+        isReminderOn = bill.isReminderOn
     }
     
     private func updateBill() async {
@@ -399,7 +399,7 @@ struct EditBillView: View {
         updatedBill.merchant = merchant.isEmpty ? nil : merchant
         updatedBill.reminderDays = reminderDaysValue
         updatedBill.notes = notes.isEmpty ? nil : notes
-        updatedBill.isAutoPayEnabled = isAutoPayEnabled
+        updatedBill.isReminderOn = isReminderOn
         
         await billViewModel.updateBill(updatedBill)
         

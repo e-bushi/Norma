@@ -836,6 +836,47 @@ extension PopupConfig {
             allowDismissOnTap: false
         )
     }
+    
+    static func billPeriodVerification(
+        billCount: Int,
+        onConfirmAll: @escaping () -> Void,
+        onReviewBills: @escaping () -> Void
+    ) -> PopupConfig {
+        PopupConfig(
+            title: "New Billing Period",
+            subtitle: "A new billing period has started. Will the bills you have carry over to this month?",
+            category: "Bill Verification",
+            icon: PopupIcon(
+                systemName: "calendar.badge.exclamationmark",
+                color: .blue,
+                backgroundColors: [Color.blue.opacity(0.2), Color.cyan.opacity(0.1)]
+            ),
+            features: [
+                PopupFeature(
+                    icon: "doc.text.fill",
+                    title: "\(billCount) Bills to Review",
+                    description: "Bills marked as paid that may need status updates",
+                    iconColor: .blue
+                ),
+                PopupFeature(
+                    icon: "checkmark.circle.fill",
+                    title: "Quick Confirmation",
+                    description: "Confirm all bills carry over or review individually",
+                    iconColor: .green
+                )
+            ],
+            primaryAction: PopupAction(
+                title: "Yes",
+                icon: "checkmark.circle.fill",
+                style: .primary
+            ),
+            secondaryAction: PopupAction(
+                title: "Review Bills",
+                style: .secondary
+            ),
+            allowDismissOnTap: false
+        )
+    }
 }
 
 // MARK: - Preview

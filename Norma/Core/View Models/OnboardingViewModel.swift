@@ -125,11 +125,11 @@ class OnboardingViewModel: ObservableObject {
         if let password = temporaryPassword {
             do {
                 print("🔐 Setting up encryption for new user...")
-                let recoveryPhrase = try await sessionViewModel.dataManager.setupEncryption(password: password)
+                let recoveryPhrase = try await sessionViewModel.setupEncryptionForNewUser(password: password)
                 
                 // Store recovery phrase securely
                 if let userId = sessionViewModel.currentUser?.userId {
-                    let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.dataManager.supabaseService)
+                    let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
                     userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
                     print("✅ Encryption setup complete for new user")
                 }
