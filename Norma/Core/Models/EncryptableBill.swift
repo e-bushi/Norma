@@ -24,6 +24,7 @@ struct EncryptableBill: Identifiable, Codable {
     
     // Other fields (remain unencrypted)
     var dueDate: Date
+    var nextDueDate: Date?
     var status: BillStatus
     var frequency: BillFrequency
     var categoryId: String?
@@ -45,6 +46,7 @@ struct EncryptableBill: Identifiable, Codable {
         case encryptedAmount = "encrypted_amount"
         case isEncrypted = "is_encrypted"
         case dueDate = "due_date"
+        case nextDueDate = "next_due_date"
         case status
         case frequency
         case categoryId = "category_id"
@@ -106,6 +108,28 @@ struct EncryptableBill: Identifiable, Codable {
                                                       debugDescription: "Invalid date format: \(dueDateString)")
             }
         }
+        
+        // Handle nextDueDate decoding (optional field)
+        if let nextDueDateString = try container.decodeIfPresent(String.self, forKey: .nextDueDate) {
+            // Try ISO8601 with time component first
+            let isoFormatter = ISO8601DateFormatter()
+            if let date = isoFormatter.date(from: nextDueDateString) {
+                // Convert to local date at midnight to avoid timezone issues
+                let calendar = Calendar.current
+                let components = calendar.dateComponents([.year, .month, .day], from: date)
+                self.nextDueDate = calendar.date(from: components) ?? date
+            } else {
+                // Fallback to YYYY-MM-DD format
+                let dateFormatter = DateFormatter()
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.timeZone = TimeZone.current
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                
+                self.nextDueDate = dateFormatter.date(from: nextDueDateString)
+            }
+        } else {
+            self.nextDueDate = nil
+        }
     }
     
     // Custom encoding to ensure dates are sent in YYYY-MM-DD format
@@ -131,12 +155,17 @@ struct EncryptableBill: Identifiable, Codable {
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
         
-        // Encode date as YYYY-MM-DD string
+        // Encode dates as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
         let dueDateString = dateFormatter.string(from: dueDate)
         try container.encode(dueDateString, forKey: .dueDate)
+        
+        if let nextDueDate = nextDueDate {
+            let nextDueDateString = dateFormatter.string(from: nextDueDate)
+            try container.encode(nextDueDateString, forKey: .nextDueDate)
+        }
     }
     
     // Convert to regular Bill for display (decrypting if necessary)
@@ -166,6 +195,7 @@ struct EncryptableBill: Identifiable, Codable {
             userId: userId,
             name: displayName,
             dueDate: dueDate,
+            nextDueDate: nextDueDate,
             amount: displayAmount,
             status: status,
             frequency: frequency,
@@ -201,6 +231,7 @@ extension Bill {
                 encryptedAmount: encryptedAmount,
                 isEncrypted: true,
                 dueDate: dueDate,
+                nextDueDate: nextDueDate,
                 status: status,
                 frequency: frequency,
                 categoryId: categoryId,
@@ -224,6 +255,7 @@ extension Bill {
                 encryptedAmount: nil,
                 isEncrypted: false,
                 dueDate: dueDate,
+                nextDueDate: nextDueDate,
                 status: status,
                 frequency: frequency,
                 categoryId: categoryId,
@@ -251,6 +283,7 @@ extension EncryptableBill {
         encryptedAmount: String? = nil,
         isEncrypted: Bool = false,
         dueDate: Date,
+        nextDueDate: Date? = nil,
         status: BillStatus,
         frequency: BillFrequency,
         categoryId: String? = nil,
@@ -271,6 +304,7 @@ extension EncryptableBill {
         self.encryptedAmount = encryptedAmount
         self.isEncrypted = isEncrypted
         self.dueDate = dueDate
+        self.nextDueDate = nextDueDate
         self.status = status
         self.frequency = frequency
         self.categoryId = categoryId

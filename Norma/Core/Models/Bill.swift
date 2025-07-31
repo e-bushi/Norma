@@ -12,6 +12,7 @@ struct Bill: Identifiable, Codable {
     let userId: String
     var name: String
     var dueDate: Date
+    var nextDueDate: Date?
     var amount: Double
     var status: BillStatus
     var frequency: BillFrequency
@@ -30,6 +31,7 @@ struct Bill: Identifiable, Codable {
         case userId = "user_id"
         case name
         case dueDate = "due_date"
+        case nextDueDate = "next_due_date"
         case amount
         case status
         case frequency
@@ -89,6 +91,28 @@ struct Bill: Identifiable, Codable {
                                                       debugDescription: "Invalid date format: \(dueDateString)")
             }
         }
+        
+        // Handle nextDueDate decoding (optional field)
+        if let nextDueDateString = try container.decodeIfPresent(String.self, forKey: .nextDueDate) {
+            // Try ISO8601 with time component first
+            let isoFormatter = ISO8601DateFormatter()
+            if let date = isoFormatter.date(from: nextDueDateString) {
+                // Convert to local date at midnight to avoid timezone issues
+                let calendar = Calendar.current
+                let components = calendar.dateComponents([.year, .month, .day], from: date)
+                self.nextDueDate = calendar.date(from: components) ?? date
+            } else {
+                // Fallback to YYYY-MM-DD format
+                let dateFormatter = DateFormatter()
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.timeZone = TimeZone.current
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                
+                self.nextDueDate = dateFormatter.date(from: nextDueDateString)
+            }
+        } else {
+            self.nextDueDate = nil
+        }
     }
     
     // Custom encoding to ensure dates are sent in YYYY-MM-DD format
@@ -111,12 +135,18 @@ struct Bill: Identifiable, Codable {
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
         
-        // Encode date as YYYY-MM-DD string
+        // Encode dates as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
         let dueDateString = dateFormatter.string(from: dueDate)
         try container.encode(dueDateString, forKey: .dueDate)
+        
+        if let nextDueDate = nextDueDate {
+            let nextDueDateString = dateFormatter.string(from: nextDueDate)
+            try container.encode(nextDueDateString, forKey: .nextDueDate)
+        }
     }
     
     init(
@@ -124,6 +154,7 @@ struct Bill: Identifiable, Codable {
         userId: String,
         name: String,
         dueDate: Date,
+        nextDueDate: Date? = nil,
         amount: Double,
         status: BillStatus,
         frequency: BillFrequency,
@@ -141,6 +172,7 @@ struct Bill: Identifiable, Codable {
         self.userId = userId
         self.name = name
         self.dueDate = dueDate
+        self.nextDueDate = nextDueDate
         self.amount = amount
         self.status = status
         self.frequency = frequency

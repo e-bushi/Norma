@@ -69,6 +69,9 @@ class BillViewModel: ObservableObject {
     // MARK: - Data Loading
     
     func loadBills() {
+        // Update overdue status for bills past their due date
+        updateOverdueBills()
+        
         bills = dataManager.bills
         activeBills = dataManager.getActiveBills()
         upcomingBills = dataManager.getUpcomingBills()
@@ -79,6 +82,33 @@ class BillViewModel: ObservableObject {
         
         // Check for bill verification after loading
         checkForBillVerification()
+    }
+    
+    private func updateOverdueBills() {
+        let today = Date()
+        let billsNeedingUpdate = dataManager.bills.filter { bill in
+            // Only update bills that are scheduled but past their due date
+            bill.status == .scheduled && bill.dueDate < today
+        }
+        
+        // Update each overdue bill
+        for bill in billsNeedingUpdate {
+            Task {
+                var updatedBill = bill
+                updatedBill.status = .overdue
+                
+                // Update verification date to track when status was changed
+                let dateFormatter = ISO8601DateFormatter()
+                dateFormatter.timeZone = TimeZone.current
+                updatedBill.verificationDate = dateFormatter.string(from: today)
+                
+                do {
+                    try await dataManager.updateBillWithEncryption(updatedBill)
+                } catch {
+                    print("Failed to update overdue status for bill \(bill.name): \(error)")
+                }
+            }
+        }
     }
     
     private func checkForBillVerification() {
@@ -144,6 +174,11 @@ class BillViewModel: ObservableObject {
         isLoading = true
         clearError()
         
+        // Format current date for verification_date
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current
+        let todayString = dateFormatter.string(from: Date())
+        
         let newBill = Bill(
             userId: userId,
             name: name,
@@ -155,14 +190,15 @@ class BillViewModel: ObservableObject {
             merchant: merchant,
             isReminderOn: isReminderOn,
             reminderDays: reminderDays ?? sessionViewModel.currentUser?.settings.billReminderDays,
-            notes: notes
+            notes: notes,
+            verificationDate: todayString
         )
         
         print("🔄 [DEBUG] BillViewModel.addBill: About to call dataManager.addBill...")
         print("🔄 [DEBUG] BillViewModel.addBill: Bill object: \(newBill)")
         
         do {
-            try await dataManager.addBill(newBill)
+            try await dataManager.addBillWithEncryption(newBill)
             print("✅ [DEBUG] BillViewModel.addBill: dataManager.addBill completed successfully")
             loadBills()
             print("✅ [DEBUG] BillViewModel.addBill: loadBills completed")
@@ -185,7 +221,7 @@ class BillViewModel: ObservableObject {
         clearError()
         
         do {
-            try await dataManager.updateBill(bill)
+            try await dataManager.updateBillWithEncryption(bill)
             loadBills()
         } catch {
             showError("Failed to update bill: \(error.localizedDescription)")
@@ -220,6 +256,74 @@ class BillViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    func markBillAsUnpaid(_ bill: Bill) async {
+        isLoading = true
+        clearError()
+        
+        do {
+            // Create date formatter with correct timezone
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.timeZone = TimeZone.current
+            
+            // Determine the appropriate status based on current date
+            let status: BillStatus = Date() > bill.dueDate ? .overdue : .scheduled
+            
+            // Calculate next due date (one period ahead of current due date)
+            let nextDueDate = calculateNextDueDateFrom(bill.dueDate, frequency: bill.frequency)
+            
+            // Create updated bill keeping original dueDate
+            let updatedBill = Bill(
+                id: bill.id,
+                userId: bill.userId,
+                name: bill.name,
+                dueDate: bill.dueDate,  // Keep the original due date
+                nextDueDate: nextDueDate,  // Set next due date one period ahead
+                amount: bill.amount,
+                status: status,  // Set to scheduled or overdue based on current date
+                frequency: bill.frequency,
+                categoryId: bill.categoryId,
+                merchant: bill.merchant,
+                isReminderOn: bill.isReminderOn,
+                reminderDays: bill.reminderDays,
+                isActive: bill.isActive,
+                createdAt: bill.createdAt,
+                updatedAt: dateFormatter.string(from: Date()),
+                notes: bill.notes,
+                verificationDate: bill.verificationDate
+            )
+            
+            try await dataManager.updateBillWithEncryption(updatedBill)
+            
+            // Delete the associated expense payment if any
+            let expenses = dataManager.expenses.filter { $0.billId == bill.id }
+            for expense in expenses {
+                // Only delete expenses that are bill payments (have a billId)
+                if expense.billId == bill.id {
+                    try await dataManager.deleteExpense(expense)
+                }
+            }
+            
+            loadBills()
+        } catch {
+            showError("Failed to mark bill as unpaid: \(error.localizedDescription)")
+        }
+        
+        isLoading = false
+    }
+    
+    private func calculateNextDueDateFrom(_ date: Date, frequency: BillFrequency) -> Date {
+        let calendar = Calendar.current
+        
+        switch frequency {
+        case .monthly:
+            return calendar.date(byAdding: .month, value: 1, to: date) ?? date
+        case .quarterly:
+            return calendar.date(byAdding: .month, value: 3, to: date) ?? date
+        case .yearly:
+            return calendar.date(byAdding: .year, value: 1, to: date) ?? date
+        }
     }
     
     // MARK: - Filtering and Searching

@@ -21,9 +21,9 @@ struct BillDetailView: View {
     @State private var isMarkingAsPaid = false
     @State private var showPaymentSuccess = false
     @State private var showPaymentError = false
-    @State private var paymentErrorMessage = ""
     @State private var showNotificationAlert = false
     @State private var isReminderOn: Bool
+    @State private var isMarkingAsUnpaid = false
     
     init(bill: Bill, expenses: [Expense]) {
         self.bill = bill
@@ -73,16 +73,6 @@ struct BillDetailView: View {
         .sheet(isPresented: $showEditBillSheet) {
             EditBillView(bill: bill)
                 .environmentObject(billViewModel)
-        }
-        .alert("Payment Successful", isPresented: $showPaymentSuccess) {
-            Button("OK") { }
-        } message: {
-            Text("Bill has been marked as paid and will recur next period.")
-        }
-        .alert("Payment Failed", isPresented: $showPaymentError) {
-            Button("OK") { }
-        } message: {
-            Text(paymentErrorMessage)
         }
         .alert("Enable Notifications", isPresented: $showNotificationAlert) {
             Button("Cancel", role: .cancel) { }
@@ -318,12 +308,20 @@ struct BillDetailView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
+                        } else if showPaymentSuccess {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
+                        } else if showPaymentError {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
                         } else {
                             Image(systemName: "creditcard.fill")
                                 .font(.system(size: 16))
                         }
                         
-                        Text(isMarkingAsPaid ? "Processing..." : "Mark as Paid")
+                        Text(getPaymentButtonText())
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -333,18 +331,64 @@ struct BillDetailView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.blue,
-                                        Color.blue.opacity(0.8)
-                                    ]),
+                                    gradient: Gradient(colors: getPaymentButtonColors()),
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
                     )
                     .opacity(isMarkingAsPaid ? 0.8 : 1.0)
+                    .scaleEffect(showPaymentSuccess || showPaymentError ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: showPaymentSuccess)
+                    .animation(.easeInOut(duration: 0.2), value: showPaymentError)
                 }
                 .disabled(isMarkingAsPaid)
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                // Show Mark as Unpaid button when bill is paid
+                Button(action: {
+                    Task {
+                        await markBillAsUnpaid()
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        if isMarkingAsUnpaid {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .orange))
+                                .scaleEffect(0.8)
+                        } else if showPaymentSuccess {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.orange)
+                        } else if showPaymentError {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.orange)
+                        } else {
+                            Image(systemName: "arrow.uturn.backward.circle.fill")
+                                .font(.system(size: 16))
+                        }
+                        
+                        Text(getUnpaidButtonText())
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.orange.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                    .opacity(isMarkingAsUnpaid ? 0.8 : 1.0)
+                    .scaleEffect(showPaymentSuccess || showPaymentError ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: showPaymentSuccess)
+                    .animation(.easeInOut(duration: 0.2), value: showPaymentError)
+                }
+                .disabled(isMarkingAsUnpaid)
                 .buttonStyle(PlainButtonStyle())
             }
             
@@ -443,6 +487,40 @@ struct BillDetailView: View {
     
     // MARK: - Helper Methods
     
+    private func getPaymentButtonText() -> String {
+        if isMarkingAsPaid {
+            return "Processing..."
+        } else if showPaymentSuccess {
+            return "Success!"
+        } else if showPaymentError {
+            return "Failed"
+        } else {
+            return "Mark as Paid"
+        }
+    }
+    
+    private func getPaymentButtonColors() -> [Color] {
+        if showPaymentSuccess {
+            return [Color.green, Color.green.opacity(0.8)]
+        } else if showPaymentError {
+            return [Color.red, Color.red.opacity(0.8)]
+        } else {
+            return [Color.blue, Color.blue.opacity(0.8)]
+        }
+    }
+    
+    private func getUnpaidButtonText() -> String {
+        if isMarkingAsUnpaid {
+            return "Processing..."
+        } else if showPaymentSuccess {
+            return "Success!"
+        } else if showPaymentError {
+            return "Failed"
+        } else {
+            return "Mark as Unpaid"
+        }
+    }
+    
     private func formatDueDate() -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -470,15 +548,43 @@ struct BillDetailView: View {
         
         isMarkingAsPaid = false
         
-        if billViewModel.errorMessage == nil {
+        if !billViewModel.showError {
             showPaymentSuccess = true
-            // Optionally dismiss after showing success
+            // Auto-hide success state after 2 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                dismiss()
+                showPaymentSuccess = false
             }
         } else {
-            paymentErrorMessage = billViewModel.errorMessage ?? "Failed to mark bill as paid"
             showPaymentError = true
+            // Auto-hide error state after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showPaymentError = false
+            }
+        }
+    }
+    
+    private func markBillAsUnpaid() async {
+        isMarkingAsUnpaid = true
+        
+        // Add a small delay for better UX
+        try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+        
+        await billViewModel.markBillAsUnpaid(bill)
+        
+        isMarkingAsUnpaid = false
+        
+        if !billViewModel.showError {
+            showPaymentSuccess = true
+            // Auto-hide success state after 2 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                showPaymentSuccess = false
+            }
+        } else {
+            showPaymentError = true
+            // Auto-hide error state after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showPaymentError = false
+            }
         }
     }
     

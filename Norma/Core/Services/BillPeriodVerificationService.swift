@@ -38,9 +38,6 @@ class BillPeriodVerificationService: ObservableObject {
     
     private func findBillsNeedingVerification(bills: [Bill], expenses: [Expense], currentDate: Date) -> [Bill] {
         return bills.filter { bill in
-            // Only check bills with status = .paid
-            guard bill.status == .paid else { return false }
-            
             // Check if we're in a new period since last verification
             let isInNewPeriod = isInNewBillingPeriod(bill: bill, currentDate: currentDate)
             
@@ -62,9 +59,28 @@ class BillPeriodVerificationService: ObservableObject {
     
     private func isInNewBillingPeriod(bill: Bill, currentDate: Date) -> Bool {
         // If no verification date, assume we need to verify
-        guard let verificationDateString = bill.verificationDate,
-              let verificationDate = ISO8601DateFormatter().date(from: verificationDateString) else {
+        guard let verificationDateString = bill.verificationDate else {
             return true
+        }
+        
+        // Parse verification date - try multiple formats
+        var verificationDate: Date?
+        
+        // Try ISO8601 with time first
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.timeZone = TimeZone.current
+        verificationDate = iso8601Formatter.date(from: verificationDateString)
+        
+        // If that fails, try simple date format (YYYY-MM-DD)
+        if verificationDate == nil {
+            let simpleDateFormatter = DateFormatter()
+            simpleDateFormatter.dateFormat = "yyyy-MM-dd"
+            simpleDateFormatter.timeZone = TimeZone.current
+            verificationDate = simpleDateFormatter.date(from: verificationDateString)
+        }
+        
+        guard let parsedVerificationDate = verificationDate else {
+            return true // If can't parse, assume needs verification
         }
         
         let billDueDate = bill.dueDate
@@ -74,8 +90,8 @@ class BillPeriodVerificationService: ObservableObject {
             // Check if we're in a different month than the verification date
             let currentMonth = calendar.component(.month, from: currentDate)
             let currentYear = calendar.component(.year, from: currentDate)
-            let verificationMonth = calendar.component(.month, from: verificationDate)
-            let verificationYear = calendar.component(.year, from: verificationDate)
+            let verificationMonth = calendar.component(.month, from: parsedVerificationDate)
+            let verificationYear = calendar.component(.year, from: parsedVerificationDate)
             
             return currentMonth != verificationMonth || currentYear != verificationYear
             
@@ -83,15 +99,15 @@ class BillPeriodVerificationService: ObservableObject {
             // Check if we're in a different quarter than the verification date
             let currentQuarter = calendar.component(.quarter, from: currentDate)
             let currentYear = calendar.component(.year, from: currentDate)
-            let verificationQuarter = calendar.component(.quarter, from: verificationDate)
-            let verificationYear = calendar.component(.year, from: verificationDate)
+            let verificationQuarter = calendar.component(.quarter, from: parsedVerificationDate)
+            let verificationYear = calendar.component(.year, from: parsedVerificationDate)
             
             return currentQuarter != verificationQuarter || currentYear != verificationYear
             
         case .yearly:
             // Check if we're in a different year than the verification date
             let currentYear = calendar.component(.year, from: currentDate)
-            let verificationYear = calendar.component(.year, from: verificationDate)
+            let verificationYear = calendar.component(.year, from: parsedVerificationDate)
             
             return currentYear != verificationYear
         }
@@ -107,8 +123,11 @@ class BillPeriodVerificationService: ObservableObject {
         let periodRange = getCurrentPeriodRange(for: bill, date: currentDate)
         
         // Check if any expense falls within the current period
+        let expenseDateFormatter = ISO8601DateFormatter()
+        expenseDateFormatter.timeZone = TimeZone.current
+        
         return billExpenses.contains { expense in
-            if let expenseDate = ISO8601DateFormatter().date(from: expense.expenseDate) {
+            if let expenseDate = expenseDateFormatter.date(from: expense.expenseDate) {
                 return expenseDate >= periodRange.start && expenseDate <= periodRange.end
             }
             return false
@@ -151,12 +170,18 @@ class BillPeriodVerificationService: ObservableObject {
         dateFormatter.timeZone = TimeZone.current
         let todayString = dateFormatter.string(from: Date())
         
-        // Reset all bills to scheduled status and update verification date
+        // Reset all bills to scheduled status and update dates for new period
         for bill in billsToVerify {
             var updatedBill = bill
             updatedBill.status = .scheduled
             updatedBill.verificationDate = todayString
-            try? await dataManager.updateBill(updatedBill)
+            
+            // Update dates for the new billing period
+            let newDates = calculateNewPeriodDates(for: bill)
+            updatedBill.dueDate = newDates.dueDate
+            updatedBill.nextDueDate = newDates.nextDueDate
+            
+            try? await dataManager.updateBillWithEncryption(updatedBill)
         }
         
         // Clear the verification state
@@ -168,13 +193,19 @@ class BillPeriodVerificationService: ObservableObject {
         dateFormatter.timeZone = TimeZone.current
         let todayString = dateFormatter.string(from: Date())
         
-        // Update selected bills to scheduled status
+        // Update selected bills to scheduled status and dates for new period
         for bill in billsToVerify {
             if let billId = bill.id, selectedBillIds.contains(billId) {
                 var updatedBill = bill
                 updatedBill.status = .scheduled
                 updatedBill.verificationDate = todayString
-                try? await dataManager.updateBill(updatedBill)
+                
+                // Update dates for the new billing period
+                let newDates = calculateNewPeriodDates(for: bill)
+                updatedBill.dueDate = newDates.dueDate
+                updatedBill.nextDueDate = newDates.nextDueDate
+                
+                try? await dataManager.updateBillWithEncryption(updatedBill)
             } else {
                 // Remove unselected bills
                 try? await dataManager.deleteBill(bill)
@@ -192,6 +223,33 @@ class BillPeriodVerificationService: ObservableObject {
     }
     
     // MARK: - Helper Methods
+    
+    private func calculateNewPeriodDates(for bill: Bill) -> (dueDate: Date, nextDueDate: Date) {
+        // Use nextDueDate as the new dueDate if it exists, otherwise calculate from current dueDate
+        let newDueDate: Date
+        if let existingNextDueDate = bill.nextDueDate {
+            newDueDate = existingNextDueDate
+        } else {
+            // Fallback: calculate next period from current due date
+            newDueDate = calculateNextDueDateFromCurrent(bill.dueDate, frequency: bill.frequency)
+        }
+        
+        // Calculate the next due date after the new due date
+        let nextDueDate = calculateNextDueDateFromCurrent(newDueDate, frequency: bill.frequency)
+        
+        return (dueDate: newDueDate, nextDueDate: nextDueDate)
+    }
+    
+    private func calculateNextDueDateFromCurrent(_ date: Date, frequency: BillFrequency) -> Date {
+        switch frequency {
+        case .monthly:
+            return calendar.date(byAdding: .month, value: 1, to: date) ?? date
+        case .quarterly:
+            return calendar.date(byAdding: .month, value: 3, to: date) ?? date
+        case .yearly:
+            return calendar.date(byAdding: .year, value: 1, to: date) ?? date
+        }
+    }
     
     func getBillPeriodDescription(for bill: Bill) -> String {
         switch bill.frequency {

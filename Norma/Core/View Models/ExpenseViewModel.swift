@@ -164,7 +164,8 @@ class ExpenseViewModel: ObservableObject {
         )
         
         do {
-            try await dataManager.addExpense(newExpense)
+            print("🔍 [DEBUG] ExpenseViewModel.addExpense calling addExpenseWithEncryption")
+            try await dataManager.addExpenseWithEncryption(newExpense)
             loadExpenses()
             showAddExpense = false
             isLoading = false

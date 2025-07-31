@@ -90,29 +90,32 @@ extension SupabaseService {
     
     /// Fetch expenses with encryption support
     func fetchEncryptableExpenses(userId: String) async throws -> [EncryptableExpense] {
-        let response = try await from("expenses")
+        let response: [EncryptableExpense] = try await from("expenses")
             .select()
             .eq("user_id", value: userId)
             .order("expense_date", ascending: false)
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode([EncryptableExpense].self, from: response.data)
+        return response
     }
     
     /// Create expense with encryption support
     func createEncryptableExpense(_ expense: EncryptableExpense) async throws -> EncryptableExpense {
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(expense)
+        print("🔍 [DEBUG] SupabaseService.createEncryptableExpense called")
+        print("🔍 [DEBUG] Expense to create: \(expense)")
         
-        let response = try await from("expenses")
-            .insert(data)
+        print("🔍 [DEBUG] About to execute Supabase insert query (using object directly)")
+        
+        let response: EncryptableExpense = try await from("expenses")
+            .insert(expense)
             .select()
             .single()
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode(EncryptableExpense.self, from: response.data)
+        print("🔍 [DEBUG] Supabase insert successful, returning response")
+        return response
     }
     
     /// Update expense with encryption support
@@ -121,18 +124,15 @@ extension SupabaseService {
             throw NSError(domain: "SupabaseService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Expense ID is required for update"])
         }
         
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(expense)
-        
-        let response = try await from("expenses")
-            .update(data)
+        let response: EncryptableExpense = try await from("expenses")
+            .update(expense)
             .eq("id", value: id)
             .select()
             .single()
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode(EncryptableExpense.self, from: response.data)
+        return response
     }
     
     /// Update expense encryption during migration

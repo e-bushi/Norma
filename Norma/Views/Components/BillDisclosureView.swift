@@ -22,8 +22,27 @@ struct BillDisclosureView: View {
     private let maxBillsToShow = 5
     
     private var upcomingBills: [Bill] {
-        // Show all bills, including paid ones
-        bills.sorted { $0.dueDate < $1.dueDate }
+        // Show all bills, sorted by status priority: overdue → scheduled → paid
+        bills.sorted { bill1, bill2 in
+            let status1Priority = statusPriority(for: bill1.status)
+            let status2Priority = statusPriority(for: bill2.status)
+            
+            // First sort by status priority
+            if status1Priority != status2Priority {
+                return status1Priority < status2Priority
+            }
+            
+            // If same status, sort by due date
+            return bill1.dueDate < bill2.dueDate
+        }
+    }
+    
+    private func statusPriority(for status: BillStatus) -> Int {
+        switch status {
+        case .overdue: return 0    // Highest priority (show first)
+        case .scheduled: return 1  // Medium priority
+        case .paid: return 2       // Lowest priority (show last)
+        }
     }
     
     private var displayedBills: [Bill] {
@@ -255,106 +274,6 @@ struct BillDisclosureView: View {
         }
     }
 }
-
-struct BillRowView: View {
-    let bill: Bill
-    
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var profileViewModel: ProfileViewModel
-    @State private var selectedBill: Bill? = nil
-    
-    // Calculate the actual status based on expenses
-    private var calculatedStatus: BillStatus {
-        bill.calculateStatus(from: expenseViewModel.expenses)
-    }
-    
-    private var statusIcon: String {
-        switch calculatedStatus {
-        case .paid: return "checkmark.circle.fill"
-        case .overdue: return "exclamationmark.circle.fill"
-        case .scheduled: return "calendar.circle.fill"
-        }
-    }
-    
-    private var statusColor: Color {
-        switch calculatedStatus {
-        case .paid: return .green
-        case .overdue: return .red
-        case .scheduled: return .blue
-        }
-    }
-    
-    private var nextDueDate: Date {
-        // Just return the actual due date - no need to calculate next period
-        return bill.dueDate
-    }
-    
-    private var dueDateText: String {
-        let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
-        
-        if calculatedStatus == .paid {
-            // Show when it's due next
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            return "Paid ✓ • Next: \(formatter.string(from: bill.dueDate))"
-        } else if days == 0 {
-            return "Due today"
-        } else if days == 1 {
-            return "Due tomorrow"
-        } else if days < 0 {
-            return "\(abs(days)) days overdue"
-        } else {
-            return "Due in \(days) days"
-        }
-    }
-    
-    var body: some View {
-        Button(action: {
-            selectedBill = bill
-        }) {
-            HStack(spacing: 16) {
-                // Status icon
-                ZStack {
-                    Circle()
-                        .fill(statusColor.opacity(0.1))
-                        .frame(width: 40, height: 40)
-                    
-                    Image(systemName: statusIcon)
-                        .font(.system(size: 18))
-                        .foregroundColor(statusColor)
-                }
-                
-                // Bill info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(bill.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
-                    
-                    Text(dueDateText)
-                        .font(.system(size: 12))
-                        .foregroundColor(bill.status == .overdue ? .red : .secondary)
-                }
-                
-                Spacer()
-                
-                // Amount
-                Text(profileViewModel.formatCurrency(bill.amount))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(bill.status == .overdue ? .red : .primary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .sheet(item: $selectedBill) { bill in
-            BillDetailView(bill: bill, expenses: expenseViewModel.expenses)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-    }
-}
-
 
 #Preview {
     // Sample data for preview

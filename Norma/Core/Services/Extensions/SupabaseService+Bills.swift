@@ -93,29 +93,26 @@ extension SupabaseService {
     
     /// Fetch bills with encryption support
     func fetchEncryptableBills(userId: String) async throws -> [EncryptableBill] {
-        let response = try await from("bills")
+        let response: [EncryptableBill] = try await from("bills")
             .select()
             .eq("user_id", value: userId)
             .order("due_date", ascending: true)
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode([EncryptableBill].self, from: response.data)
+        return response
     }
     
     /// Create bill with encryption support
     func createEncryptableBill(_ bill: EncryptableBill) async throws -> EncryptableBill {
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(bill)
-        
-        let response = try await from("bills")
-            .insert(data)
+        let response: EncryptableBill = try await from("bills")
+            .insert(bill)
             .select()
             .single()
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode(EncryptableBill.self, from: response.data)
+        return response
     }
     
     /// Update bill with encryption support
@@ -124,18 +121,19 @@ extension SupabaseService {
             throw NSError(domain: "SupabaseService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Bill ID is required for update"])
         }
         
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(bill)
+        print("🔍 [DEBUG] updateEncryptableBill - Bill to update: \(bill)")
+        print("🔍 [DEBUG] updateEncryptableBill - Bill nextDueDate: \(bill.nextDueDate ?? Date())")
         
-        let response = try await from("bills")
-            .update(data)
+        let response: EncryptableBill = try await from("bills")
+            .update(bill)
             .eq("id", value: id)
             .select()
             .single()
             .execute()
+            .value
         
-        let decoder = JSONDecoder()
-        return try decoder.decode(EncryptableBill.self, from: response.data)
+        print("🔍 [DEBUG] updateEncryptableBill - Response nextDueDate: \(response.nextDueDate ?? Date())")
+        return response
     }
     
     /// Update bill encryption during migration

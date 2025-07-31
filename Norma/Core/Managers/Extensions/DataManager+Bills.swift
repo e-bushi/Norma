@@ -197,17 +197,23 @@ extension DataManager {
                 attachmentUrls: []
             )
             
-            try await addExpense(expense)
+            try await addExpenseWithEncryption(expense)
         }
         
-        // Then update the bill status and due date
+        // Then update the bill status and set next due date
         var updatedBill = bill
         updatedBill.status = .paid
         
-        // For recurring bills, calculate next due date but keep status as paid
-        updatedBill.dueDate = calculateNextDueDate(for: bill)
+        // For recurring bills, calculate next due date and store it in nextDueDate field
+        // Keep the original dueDate as the current period due date
+        let calculatedNextDueDate = calculateNextDueDate(for: bill)
+        updatedBill.nextDueDate = calculatedNextDueDate
         
-        try await updateBill(updatedBill)
+        print("🔍 [DEBUG] markBillAsPaid - Original due date: \(bill.dueDate)")
+        print("🔍 [DEBUG] markBillAsPaid - Calculated next due date: \(calculatedNextDueDate)")
+        print("🔍 [DEBUG] markBillAsPaid - Updated bill next due date: \(updatedBill.nextDueDate ?? Date())")
+        
+        try await updateBillWithEncryption(updatedBill)
         
         // If bill has reminders enabled, reschedule notifications for the next period
         if updatedBill.isReminderOn {
@@ -404,9 +410,6 @@ extension DataManager {
         if hasEncryption, let masterKey = getCurrentMasterKey() {
             // Create bill with temporary ID for offline usage
             var billToAdd = bill
-            if billToAdd.id == nil {
-                billToAdd.id = UUID().uuidString
-            }
             
             // Add to local state first
             bills.append(billToAdd)
@@ -451,10 +454,14 @@ extension DataManager {
         let hasEncryption = await hasEncryptionEnabled()
         
         if hasEncryption, let masterKey = getCurrentMasterKey() {
+            print("🔍 [DEBUG] updateBillWithEncryption - Bill before conversion: nextDueDate = \(bill.nextDueDate ?? Date())")
+            
             // Create encrypted version
             guard let encryptableBill = bill.toEncryptable(encrypt: true, using: masterKey) else {
                 throw EncryptionError.encryptionFailed
             }
+            
+            print("🔍 [DEBUG] updateBillWithEncryption - EncryptableBill nextDueDate = \(encryptableBill.nextDueDate ?? Date())")
             
             let updatedEncryptable = try await supabaseService.updateEncryptableBill(encryptableBill)
             

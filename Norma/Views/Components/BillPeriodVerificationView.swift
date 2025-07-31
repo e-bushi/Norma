@@ -213,7 +213,7 @@ struct BillReviewSelectionView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(verificationService.billsToVerify, id: \.id) { bill in
-                            BillSelectionRow(
+                            BillToggleRow(
                                 bill: bill,
                                 isSelected: selectedBillIds.contains(bill.id ?? ""),
                                 onToggle: { isSelected in
@@ -297,7 +297,7 @@ struct BillReviewSelectionView: View {
     }
 }
 
-struct BillSelectionRow: View {
+struct BillToggleRow: View {
     let bill: Bill
     let isSelected: Bool
     let onToggle: (Bool) -> Void

@@ -13,44 +13,106 @@ class AnthropicService {
     private let apiKey = "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"
     private let baseURL = "https://api.anthropic.com/v1/messages"
     
+    // Model cascade in order of preference
+    private let modelCascade = [
+        "claude-sonnet-4-20250514",
+        "claude-3-7-sonnet-20250219", 
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-haiku-20240307"
+    ]
+    
     private init() {}
+    
+    // MARK: - Model Cascading Helper
+    
+    private func sendRequestWithModelCascade<T>(
+        messages: [AnthropicMessage],
+        systemPrompt: String,
+        tools: [AnthropicTool]? = nil,
+        toolChoice: AnthropicToolChoice? = nil,
+        maxTokens: Int = 1000,
+        responseHandler: (Data) throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        
+        for model in modelCascade {
+            do {
+                print("🔄 Trying model: \(model)")
+                
+                var request = URLRequest(url: URL(string: baseURL)!)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+                
+                let requestBody = AnthropicRequest(
+                    model: model,
+                    maxTokens: maxTokens,
+                    system: systemPrompt,
+                    messages: messages,
+                    tools: tools,
+                    toolChoice: toolChoice
+                )
+                
+                request.httpBody = try JSONEncoder().encode(requestBody)
+                
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw AnthropicError.networkError
+                }
+                
+                if httpResponse.statusCode == 200 {
+                    print("✅ Successfully used model: \(model)")
+                    return try responseHandler(data)
+                } else if httpResponse.statusCode == 529 {
+                    // Overloaded - try next model
+                    print("⚠️ Model \(model) is overloaded, trying next model...")
+                    if let errorData = try? JSONDecoder().decode(AnthropicErrorResponse.self, from: data) {
+                        lastError = AnthropicError.apiError(errorData.error.message)
+                    } else {
+                        lastError = AnthropicError.unknownError(httpResponse.statusCode)
+                    }
+                    continue
+                } else {
+                    // Other errors - still try next model but save error
+                    if let errorData = try? JSONDecoder().decode(AnthropicErrorResponse.self, from: data) {
+                        lastError = AnthropicError.apiError(errorData.error.message)
+                    } else {
+                        lastError = AnthropicError.unknownError(httpResponse.statusCode)
+                    }
+                    
+                    // For non-overload errors, we might still want to try the next model
+                    if httpResponse.statusCode == 400 || httpResponse.statusCode == 401 {
+                        // Auth or bad request - likely won't work with other models either
+                        throw lastError!
+                    }
+                    continue
+                }
+            } catch {
+                lastError = error
+                print("❌ Failed with model \(model): \(error)")
+                continue
+            }
+        }
+        
+        // If we get here, all models failed
+        throw lastError ?? AnthropicError.unknownError(0)
+    }
     
     func sendMessage(
         messages: [AnthropicMessage],
         systemPrompt: String,
         maxTokens: Int = 1000
     ) async throws -> String {
-        var request = URLRequest(url: URL(string: baseURL)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        let requestBody = AnthropicRequest(
-            model: "claude-3-7-sonnet-20250219",
-            maxTokens: maxTokens,
-            system: systemPrompt,
+        return try await sendRequestWithModelCascade(
             messages: messages,
-            tools: nil,
-            toolChoice: nil
-        )
-        
-        request.httpBody = try JSONEncoder().encode(requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AnthropicError.networkError
-        }
-        
-        if httpResponse.statusCode == 200 {
+            systemPrompt: systemPrompt,
+            maxTokens: maxTokens
+        ) { data in
             let anthropicResponse = try JSONDecoder().decode(AnthropicResponse.self, from: data)
             return anthropicResponse.content.first?.text ?? ""
-        } else {
-            if let errorData = try? JSONDecoder().decode(AnthropicErrorResponse.self, from: data) {
-                throw AnthropicError.apiError(errorData.error.message)
-            }
-            throw AnthropicError.unknownError(httpResponse.statusCode)
         }
     }
     
@@ -61,30 +123,13 @@ class AnthropicService {
         toolChoice: AnthropicToolChoice? = nil,
         maxTokens: Int = 1000
     ) async throws -> AnthropicMessageContent {
-        var request = URLRequest(url: URL(string: baseURL)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        let requestBody = AnthropicRequest(
-            model: "claude-3-7-sonnet-20250219",
-            maxTokens: maxTokens,
-            system: systemPrompt,
+        return try await sendRequestWithModelCascade(
             messages: messages,
+            systemPrompt: systemPrompt,
             tools: tools,
-            toolChoice: toolChoice
-        )
-        
-        request.httpBody = try JSONEncoder().encode(requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AnthropicError.networkError
-        }
-        
-        if httpResponse.statusCode == 200 {
+            toolChoice: toolChoice,
+            maxTokens: maxTokens
+        ) { data in
             let anthropicResponse = try JSONDecoder().decode(AnthropicResponse.self, from: data)
             
             // Look for tool use in the content array
@@ -106,11 +151,6 @@ class AnthropicService {
             }
             
             return .text("")
-        } else {
-            if let errorData = try? JSONDecoder().decode(AnthropicErrorResponse.self, from: data) {
-                throw AnthropicError.apiError(errorData.error.message)
-            }
-            throw AnthropicError.unknownError(httpResponse.statusCode)
         }
     }
     

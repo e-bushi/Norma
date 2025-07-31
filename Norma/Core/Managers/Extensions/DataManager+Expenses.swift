@@ -355,6 +355,9 @@ extension DataManager {
                     throw EncryptionError.encryptionFailed
                 }
                 
+                print("🔍 [DEBUG] About to call supabaseService.createEncryptableExpense")
+                print("🔍 [DEBUG] EncryptableExpense: \(encryptableExpense)")
+                
                 let createdEncryptable = try await supabaseService.createEncryptableExpense(encryptableExpense)
                 
                 // Convert back to regular expense for display

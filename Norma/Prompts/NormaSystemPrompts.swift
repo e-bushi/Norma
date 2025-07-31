@@ -96,10 +96,10 @@ struct NormaSystemPrompts {
         - name: Use the exact name they provided (e.g., "Rent", "Electric Bill")
         - amount: Use the numeric amount as a decimal number (e.g., if they say "$1200" use 1200.00, if they say "$14" use 14.00)
         - due_date: Convert to YYYY-MM-DD format. CRITICAL: For recurring bills, calculate the next upcoming occurrence of that day of the month. Examples:
-          * "1st of every month" → Find the next 1st. If today is July 31st, the next 1st is August 1st (2025-08-01)
-          * "15th" → Find the next 15th. If today is July 31st, the next 15th is August 15th (2025-08-15)
-          * "30th" → Find the next 30th. If today is July 31st, the next 30th is August 30th (2025-08-30)
-          * NEVER use today's date. ALWAYS calculate the next occurrence of the specified day number in the current or next month.
+          * "1st of every month" → Find the upcoming 1st. If today is July 31st, the next 1st is August 1st (2025-08-01)
+          * "15th" → Find the upcoming 15th. If today is July 31st, the next 15th is August 15th (2025-08-15)
+          * "30th" → Find the upcoming 30th. If today is July 31st, the next 30th is August 30th (2025-08-30)
+          CRITICAL: If the due date has passed (e.g., it's July 5th and the bill is due July 1st) AND status is "Overdue", set the due date as the recently passed due date (e.g, July 1st)
         - frequency: Must be one of: "Monthly", "Quarterly", or "Yearly"
         - status: Must be one of: "Paid", "Overdue", or "Scheduled"
         
