@@ -39,17 +39,45 @@ struct BillHomeView: View {
     }
     
     private var currentSpentAmount: Double {
-        // Calculate total spent: all active bill amounts + non-bill expenses
+        // Calculate total spent: all active bill amounts + non-bill expenses for current month
         // This prevents double counting - we count bill amounts, not the bill payment expenses
-        let allExpenses = expenseViewModel.expenses
+        
+        // Get current month and year
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.component(.month, from: now)
+        let currentYear = calendar.component(.year, from: now)
+        
+        // Filter expenses for current month only
+        let currentMonthExpenses = expenseViewModel.expenses.filter { expense in
+            // Parse the expense date string (assuming ISO format)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            // Try with fractional seconds first, then without
+            if let date = formatter.date(from: expense.expenseDate) {
+                let expenseMonth = calendar.component(.month, from: date)
+                let expenseYear = calendar.component(.year, from: date)
+                return expenseMonth == currentMonth && expenseYear == currentYear
+            } else {
+                // Try without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: expense.expenseDate) {
+                    let expenseMonth = calendar.component(.month, from: date)
+                    let expenseYear = calendar.component(.year, from: date)
+                    return expenseMonth == currentMonth && expenseYear == currentYear
+                }
+            }
+            return false
+        }
         
         // Get the bill amounts for all active bills (regardless of payment status)
         let activeBillsAmount = billViewModel.activeBills
             .filter { $0.isActive ?? true } // Include bills where isActive is true or nil (default to active)
             .reduce(0) { $0 + $1.amount }
         
-        // Get expenses that are NOT linked to bills (billId is nil)
-        let nonBillExpenses = allExpenses.filter { $0.billId == nil }
+        // Get expenses that are NOT linked to bills (billId is nil) for current month
+        let nonBillExpenses = currentMonthExpenses.filter { $0.billId == nil }
         let nonBillExpensesAmount = nonBillExpenses.reduce(0) { $0 + $1.amount }
         
         return activeBillsAmount + nonBillExpensesAmount

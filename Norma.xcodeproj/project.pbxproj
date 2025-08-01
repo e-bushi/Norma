@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F64F88152E3BECD3002D2FC5 /* RevenueCat */; };
 		F6938D312E0B2B6100C98852 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F6938D302E0B2B6100C98852 /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */,
 				F6938D312E0B2B6100C98852 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,6 +120,7 @@
 			name = Norma;
 			packageProductDependencies = (
 				F6938D302E0B2B6100C98852 /* Supabase */,
+				F64F88152E3BECD3002D2FC5 /* RevenueCat */,
 			);
 			productName = Norma;
 			productReference = F6638D402DCD6C3F009D95C3 /* Norma.app */;
@@ -203,6 +206,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F6638D412DCD6C3F009D95C3 /* Products */;
@@ -405,7 +409,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = K62Y623GK6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -439,7 +443,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = K62Y623GK6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -581,6 +585,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.33.1;
+			};
+		};
 		F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift.git";
@@ -592,6 +604,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F64F88152E3BECD3002D2FC5 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
+		};
 		F6938D302E0B2B6100C98852 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */;

@@ -166,8 +166,13 @@ struct ExpenseCalendarView: View {
         // Get the number of days in the month
         let daysInMonth = calendar.range(of: .day, in: .month, for: currentMonth)!.count
         
-        // Calculate the number of trailing empty cells (to complete the 7x5 grid = 35 cells)
-        let trailingEmptyCells = 35 - daysInMonth - leadingEmptyCells
+        // Calculate total cells needed (always a multiple of 7 for complete rows)
+        let totalCellsNeeded = leadingEmptyCells + daysInMonth
+        let rows = (totalCellsNeeded + 6) / 7  // Round up to complete weeks
+        let totalCells = rows * 7
+        
+        // Calculate the number of trailing empty cells
+        let trailingEmptyCells = totalCells - daysInMonth - leadingEmptyCells
         
         var dates: [Date?] = []
         
