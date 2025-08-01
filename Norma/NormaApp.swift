@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import RevenueCat
 
 @main
 struct NormaApp: App {
@@ -17,6 +18,8 @@ struct NormaApp: App {
     init() {
         do {
             self.modelContainer = try ModelContainer(for: CachedBill.self, CachedExpense.self, CachedBudget.self, CachedCategory.self)
+            Purchases.logLevel = .debug
+            Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf", appUserID: nil)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

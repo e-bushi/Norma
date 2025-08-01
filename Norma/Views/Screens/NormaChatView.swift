@@ -55,6 +55,7 @@ struct NormaChatView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // Chat state
     @State private var messages: [ChatMessage] = []
@@ -73,10 +74,14 @@ struct NormaChatView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header with context-specific branding
-                headerView
+        // Check subscription status first - allow access during trial or with Pro subscription
+        if !subscriptionManager.canAccessFinancialMind {
+            PaywallView()
+        } else {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    // Header with context-specific branding
+                    headerView
                     .padding(.bottom, 8)
                 
                 Divider()
@@ -108,9 +113,10 @@ struct NormaChatView: View {
             } message: {
                 Text(errorMessage)
             }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
     
     @ViewBuilder

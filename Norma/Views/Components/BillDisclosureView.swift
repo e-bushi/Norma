@@ -293,6 +293,7 @@ struct BillDisclosureView: View {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     return ScrollView {
         VStack {
@@ -328,4 +329,5 @@ struct BillDisclosureView: View {
         }
     }
     .environmentObject(expenseViewModel)
+    .environmentObject(profileViewModel)
 }
