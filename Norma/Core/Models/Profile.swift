@@ -15,6 +15,7 @@ struct Profile: Identifiable, Codable, Equatable {
     var createdAt: String?
     var updatedAt: String?
     var profileImageUrl: String?
+    var howDidYouHear: String?
     var settings: ProfileSettings
     
     enum CodingKeys: String, CodingKey {
@@ -25,6 +26,7 @@ struct Profile: Identifiable, Codable, Equatable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case profileImageUrl = "profile_image_url"
+        case howDidYouHear = "how_did_you_hear"
         case settings
     }
     
@@ -36,6 +38,7 @@ struct Profile: Identifiable, Codable, Equatable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         profileImageUrl: String? = nil,
+        howDidYouHear: String? = nil,
         settings: ProfileSettings = ProfileSettings()
     ) {
         self.id = id
@@ -45,6 +48,7 @@ struct Profile: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.profileImageUrl = profileImageUrl
+        self.howDidYouHear = howDidYouHear
         self.settings = settings
     }
 }

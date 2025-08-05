@@ -14,7 +14,7 @@ class OnboardingViewModel: ObservableObject {
     // MARK: - Published Properties
     
     // Onboarding Flow State
-    @Published var currentStep: OnboardingStep = .authentication
+    @Published var currentStep: OnboardingStep = .landing
     @Published var showSignUp = false
     @Published var isVerified = false
     
@@ -36,6 +36,7 @@ class OnboardingViewModel: ObservableObject {
     
     // Collected Data
     @Published var collectedData = UserOnboardingData()
+    @Published var howDidYouHear: String?
     
     // MARK: - Dependencies
     private let sessionViewModel: SessionViewModel
@@ -52,7 +53,7 @@ class OnboardingViewModel: ObservableObject {
     
     func startOnboardingFlow() {
         resetOnboardingState()
-        currentStep = .authentication
+        currentStep = .landing
     }
     
     func moveToNextStep() {
@@ -378,6 +379,10 @@ class OnboardingViewModel: ObservableObject {
                 // Update existing profile
                 var updatedProfile = existingProfile
                 updatedProfile.settings = settings
+                // Update howDidYouHear if we have a value and it's not already set
+                if let howDidYouHear = self.howDidYouHear, updatedProfile.howDidYouHear == nil {
+                    updatedProfile.howDidYouHear = howDidYouHear
+                }
                 let savedProfile = try await supabaseService.updateProfile(updatedProfile)
                 
                 // Update SessionViewModel with the new profile data
@@ -390,6 +395,7 @@ class OnboardingViewModel: ObservableObject {
                     userId: supabaseUser.id.uuidString,
                     email: supabaseUser.email ?? "",
                     name: collectedData.name,
+                    howDidYouHear: self.howDidYouHear,
                     settings: settings
                 )
                 let savedProfile = try await supabaseService.createProfile(newProfile)
@@ -410,9 +416,12 @@ class OnboardingViewModel: ObservableObject {
 // MARK: - Supporting Types
 
 enum OnboardingStep: CaseIterable {
+    case landing
     case welcome
     case authentication
     case verification
+    case notifications
+    case howDidYouHear
     case normaChat
     case complete
     
