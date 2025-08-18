@@ -72,6 +72,11 @@ extension AnthropicService {
     
     // MARK: - Input Parsing
     
+    /// Public wrapper for parsing tool input data
+    func parseVoiceToolInput<T: Codable>(_ input: [String: Any], as type: T.Type) throws -> T {
+        return try parseToolInput(input, as: type)
+    }
+    
     private func parseToolInput<T: Codable>(_ input: [String: Any], as type: T.Type) throws -> T {
         if type == UserOnboardingData.self {
             let name = input["name"] as? String ?? ""
@@ -91,9 +96,103 @@ extension AnthropicService {
             return result as! T
         }
         
+        // Handle VoiceExpenseData
+        if type == VoiceExpenseData.self {
+            guard let name = input["name"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let amount = input["amount"] as? Double else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let expenseDate = input["expenseDate"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let paymentMethodString = input["paymentMethod"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            
+            let paymentMethod = PaymentMethod(rawValue: paymentMethodString) ?? .other
+            let merchant = input["merchant"] as? String ?? ""
+            let location = input["location"] as? String ?? ""
+            let tags = input["tags"] as? [String] ?? []
+            let notes = input["notes"] as? String ?? ""
+            
+            let result = VoiceExpenseData(
+                name: name,
+                amount: amount,
+                expenseDate: expenseDate,
+                paymentMethod: paymentMethod,
+                merchant: merchant,
+                location: location,
+                tags: tags,
+                notes: notes
+            )
+            
+            return result as! T
+        }
+        
+        // Handle VoiceBillData
+        if type == VoiceBillData.self {
+            guard let name = input["name"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let amount = input["amount"] as? Double else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let dueDate = input["dueDate"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            guard let frequencyString = input["frequency"] as? String else {
+                throw AnthropicError.dataParsingError
+            }
+            
+            let frequency = BillFrequency(rawValue: frequencyString) ?? .monthly
+            let merchant = input["merchant"] as? String ?? ""
+            let isReminderOn = input["isReminderOn"] as? Bool ?? false
+            let reminderDays = input["reminderDays"] as? Int
+            let notes = input["notes"] as? String ?? ""
+            
+            let result = VoiceBillData(
+                name: name,
+                amount: amount,
+                dueDate: dueDate,
+                frequency: frequency,
+                merchant: merchant,
+                isReminderOn: isReminderOn,
+                reminderDays: reminderDays,
+                notes: notes
+            )
+            
+            return result as! T
+        }
+        
         // Add parsing for other types as needed
         throw AnthropicError.dataParsingError
     }
+}
+
+// MARK: - Voice Agent Data Models
+
+struct VoiceExpenseData: Codable {
+    let name: String
+    let amount: Double
+    let expenseDate: String
+    let paymentMethod: PaymentMethod
+    let merchant: String
+    let location: String
+    let tags: [String]
+    let notes: String
+}
+
+struct VoiceBillData: Codable {
+    let name: String
+    let amount: Double
+    let dueDate: String
+    let frequency: BillFrequency
+    let merchant: String
+    let isReminderOn: Bool
+    let reminderDays: Int?
+    let notes: String
 }
 
 // MARK: - Tool Definitions

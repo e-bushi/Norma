@@ -413,8 +413,11 @@
 				DEVELOPMENT_TEAM = K62Y623GK6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = Norma;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Norma needs access to your microphone to record voice commands for tracking expenses and bills using AI voice assistance.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Norma uses speech recognition to convert your voice commands into text for expense and bill tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -447,8 +450,11 @@
 				DEVELOPMENT_TEAM = K62Y623GK6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = Norma;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Norma needs access to your microphone to record voice commands for tracking expenses and bills using AI voice assistance.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Norma uses speech recognition to convert your voice commands into text for expense and bill tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
