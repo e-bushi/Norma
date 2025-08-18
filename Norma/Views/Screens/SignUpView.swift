@@ -28,6 +28,19 @@ struct SignUpView: View {
     @State private var buttonOpacity = 0.0
     @State private var signInLinkOpacity = 0.0
     
+    // Enhanced animation states
+    @State private var logoScale = 0.8
+    @State private var logoOpacity = 0.0
+    @State private var logoRotation = 0.0
+    @State private var formOffset: CGFloat = 20
+    @State private var buttonScale = 0.95
+    @State private var isTextFieldFocused = false
+    @State private var nameFieldFocused = false
+    @State private var emailFieldFocused = false
+    @State private var passwordFieldFocused = false
+    @State private var confirmPasswordFieldFocused = false
+    @State private var floatingOffset: CGFloat = 0
+    
     // Loading animation states
     @State private var loadingRotation = 0.0
     @State private var loadingScale = 0.8
@@ -38,70 +51,14 @@ struct SignUpView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with back button
-            HStack {
-                Button(action: {
-                    showSignUp = false
-                }) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 20))
-                        .foregroundColor(.primary)
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .opacity(headerOpacity)
-            
-            ScrollView {
-                VStack(spacing: 24) {
+        NavigationStack {
+            VStack(spacing: 0) {
+                VStack(spacing: 20) {
                     Spacer()
-                        .frame(height: 40)
-                    
-                    // Title
-                    VStack(spacing: 8) {
-                        Text("Create account")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Text("Start managing your finances")
-                            .font(.system(size: 17))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.bottom, 40)
-                    .opacity(titleOpacity)
+                        .frame(height: 20)
                     
                     // Form fields container
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
-                        
-                        VStack(spacing: 20) {
+                    VStack(spacing: 16) {
                             // Name field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("FULL NAME")
@@ -109,8 +66,13 @@ struct SignUpView: View {
                                     .foregroundColor(.secondary)
                                     .tracking(1.2)
                                 
-                                TextField("Enter your name", text: $name)
-                                    .textFieldStyle(EnhancedTextFieldStyle())
+                                TextField("Enter your name", text: $name, onEditingChanged: { editing in
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        nameFieldFocused = editing
+                                        isTextFieldFocused = editing || emailFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
+                                    }
+                                })
+                                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: nameFieldFocused))
                                     .textInputAutocapitalization(.words)
                             }
                             
@@ -121,8 +83,13 @@ struct SignUpView: View {
                                     .foregroundColor(.secondary)
                                     .tracking(1.2)
                                 
-                                TextField("Enter your email", text: $email)
-                                    .textFieldStyle(EnhancedTextFieldStyle())
+                                TextField("Enter your email", text: $email, onEditingChanged: { editing in
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        emailFieldFocused = editing
+                                        isTextFieldFocused = editing || nameFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
+                                    }
+                                })
+                                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: emailFieldFocused))
                                     .keyboardType(.emailAddress)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
@@ -137,11 +104,22 @@ struct SignUpView: View {
                                 
                                 HStack {
                                     if showPassword {
-                                        TextField("Create a password", text: $password)
+                                        TextField("Create a password", text: $password, onEditingChanged: { editing in
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                passwordFieldFocused = editing
+                                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || confirmPasswordFieldFocused
+                                            }
+                                        })
                                             .textInputAutocapitalization(.never)
                                             .autocorrectionDisabled()
                                     } else {
                                         SecureField("Create a password", text: $password)
+                                            .onTapGesture {
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                    passwordFieldFocused = true
+                                                    isTextFieldFocused = true
+                                                }
+                                            }
                                     }
                                     
                                     Button(action: {
@@ -152,7 +130,7 @@ struct SignUpView: View {
                                             .font(.system(size: 16))
                                     }
                                 }
-                                .textFieldStyle(EnhancedTextFieldStyle())
+                                .textFieldStyle(EnhancedTextFieldStyle(isFocused: passwordFieldFocused))
                             }
                             
                             // Confirm password field
@@ -164,11 +142,22 @@ struct SignUpView: View {
                                 
                                 HStack {
                                     if showConfirmPassword {
-                                        TextField("Confirm your password", text: $confirmPassword)
+                                        TextField("Confirm your password", text: $confirmPassword, onEditingChanged: { editing in
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                confirmPasswordFieldFocused = editing
+                                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || passwordFieldFocused
+                                            }
+                                        })
                                             .textInputAutocapitalization(.never)
                                             .autocorrectionDisabled()
                                     } else {
                                         SecureField("Confirm your password", text: $confirmPassword)
+                                            .onTapGesture {
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                    confirmPasswordFieldFocused = true
+                                                    isTextFieldFocused = true
+                                                }
+                                            }
                                     }
                                     
                                     Button(action: {
@@ -179,13 +168,42 @@ struct SignUpView: View {
                                             .font(.system(size: 16))
                                     }
                                 }
-                                .textFieldStyle(EnhancedTextFieldStyle())
+                                .textFieldStyle(EnhancedTextFieldStyle(isFocused: confirmPasswordFieldFocused))
                             }
                         }
-                        .padding(24)
-                    }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color(UIColor.systemBackground),
+                                            Color.gray.opacity(0.02)
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.gray.opacity(0.2),
+                                                    Color.gray.opacity(0.05)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
+                        )
                     .padding(.horizontal, 24)
                     .opacity(formOpacity)
+                    .offset(y: formOffset)
+                    .scaleEffect(isTextFieldFocused ? 1.02 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTextFieldFocused)
                     
                     // Terms and conditions
                     HStack(alignment: .top, spacing: 12) {
@@ -194,7 +212,9 @@ struct SignUpView: View {
                         }) {
                             Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 20))
-                                .foregroundColor(agreedToTerms ? .primary : .secondary)
+                                .foregroundColor(agreedToTerms ? .purple : .secondary)
+                                .scaleEffect(agreedToTerms ? 1.1 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: agreedToTerms)
                         }
                         
                         Text("I agree to the Terms of Service and Privacy Policy")
@@ -205,39 +225,56 @@ struct SignUpView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                     .opacity(termsOpacity)
                     
                     Spacer()
-                        .frame(height: 40)
+                        .frame(height: 20)
                     
                     // Sign up button
                     Button(action: {
                         handleSignUp()
                     }) {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Create account")
-                                    .font(.system(size: 16, weight: .semibold))
+                        ZStack {
+                            // Gradient background that animates
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.purple,
+                                            Color.purple.opacity(0.8)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color.purple.opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
+                            
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Create account")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
                             }
+                            .foregroundColor(.white)
                         }
-                        .foregroundColor(Color(UIColor.systemBackground))
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary)
-                                .shadow(color: Color.primary.opacity(0.1), radius: 2, x: 0, y: 1)
-                        )
                     }
                     .disabled(isLoading || !isFormValid)
                     .opacity((isLoading || !isFormValid) ? 0.6 : 1)
                     .padding(.horizontal, 24)
                     .opacity(buttonOpacity)
+                    .scaleEffect(buttonScale)
+                    .onHover { hovering in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            buttonScale = hovering ? 1.02 : 0.95
+                        }
+                    }
                     
                     // Sign in link
                     HStack(spacing: 4) {
@@ -251,16 +288,29 @@ struct SignUpView: View {
                             Text("Sign in")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.primary)
+                                .underline()
                         }
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 16)
                     .opacity(signInLinkOpacity)
                     
                     Spacer()
-                        .frame(height: 40)
                 }
             }
-        }
+            .navigationTitle("Sign Up")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showSignUp = false
+                        onboardingViewModel.currentStep = .landing
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
         .background(Color(UIColor.systemBackground))
         .overlay(
             Group {
@@ -331,25 +381,43 @@ struct SignUpView: View {
                 headerOpacity = 1.0
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(0.2)) {
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.1)) {
+                logoScale = 1.0
+                logoOpacity = 1.0
+            }
+            
+            // Logo rotation animation
+            withAnimation(.easeInOut(duration: 0.8).delay(0.4)) {
+                logoRotation = 360
+            }
+            
+            // Floating animation
+            withAnimation(.easeInOut(duration: 2.0).delay(1.2).repeatForever(autoreverses: true)) {
+                floatingOffset = -10
+            }
+            
+            withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
                 titleOpacity = 1.0
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(0.4)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.5)) {
                 formOpacity = 1.0
+                formOffset = 0
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(0.6)) {
+            withAnimation(.easeOut(duration: 0.6).delay(0.7)) {
                 termsOpacity = 1.0
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(0.8)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.9)) {
                 buttonOpacity = 1.0
+                buttonScale = 1.0
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(1.0)) {
+            withAnimation(.easeOut(duration: 0.6).delay(1.1)) {
                 signInLinkOpacity = 1.0
             }
+        }
         }
     }
     

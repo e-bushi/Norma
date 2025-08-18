@@ -117,6 +117,29 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 - **1,500 Pro Tier users:** $269,820 annual revenue
 - **Total:** ~$749k ARR
 
+### Scale Scenario: 10,000 Customers
+**Revenue Breakdown (70/30 split):**
+- **7,000 Base Tier users:** $671,160 annual revenue
+- **3,000 Premium Tier users:** $539,640 annual revenue
+- **Total Gross ARR:** ~$1.21M
+
+**Net Revenue After Costs:**
+- **Monthly Net Revenue:** $56,190 - $89,690
+- **Annual Net Revenue:** $674k - $1.08M
+- **Gross Margins:** 55-75%
+
+**Operational Requirements:**
+- **Support Staff:** 1-2 dedicated agents (~$10-15k/month)
+- **API Costs:** $7,000-$33,000/month (managed via cascading)
+- **Infrastructure:** ~$1,000/month RevenueCat at this scale
+- **CAC Budget:** $30-50k/month for sustained growth
+
+**Key Success Indicators at 10K Scale:**
+- **MRR:** ~$100,900
+- **Sustainable Churn:** Can support 5-8% monthly churn
+- **CAC Payback:** 2-3 months enables aggressive growth
+- **Team Size:** 5-7 people (product, engineering, support, marketing)
+
 ## Risk Mitigation
 
 ### API Cost Management
@@ -131,17 +154,50 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 
 ## Success Metrics
 
-### Financial KPIs
-- **Monthly Recurring Revenue (MRR)**
-- **Customer Acquisition Cost (CAC)**
-- **Lifetime Value (LTV)**
-- **Churn rate by tier**
+### Growth Metrics
+- **MoM Growth Rate:** Target 10-20% month-over-month revenue growth in early stage
+- **Net Revenue Retention (NRR):** Target >100% (growth from existing customers via upgrades)
+- **Cohort Retention:** Track monthly cohort behavior over 12-month periods
+- **Quick Ratio:** Target >4 ((New MRR + Expansion) / (Churned + Contraction))
+- **Magic Number:** Target >0.75 (Quarter ARR Growth / Previous Quarter Sales & Marketing Spend)
 
-### Product KPIs
-- **API usage patterns**
-- **Feature adoption rates**
-- **Financial Mind engagement**
-- **Upgrade conversion rates**
+### Unit Economics
+- **Customer Acquisition Cost (CAC):** Target $10-15 Base, $18-27 Premium
+- **Lifetime Value (LTV):** Target $200+ Base, $500+ Premium
+- **LTV:CAC Ratio:** Target >3:1 (minimum viable), >5:1 (excellent)
+- **CAC Payback Period:** Target 2-3 months
+- **Gross Margin:** Target 70-80% after all direct costs
+- **Contribution Margin:** Revenue minus variable costs per customer
+
+### Engagement Metrics
+- **Daily Active Users (DAU):** Target 40% of paying subscribers
+- **Monthly Active Users (MAU):** Target 85% of paying subscribers
+- **Time to Value:** Target <5 minutes to first bill logged
+- **Feature Adoption Rate:** 
+  - Bill verification: >80% of Base users
+  - Financial Mind: >60% of Premium users monthly
+- **Session Duration:** Average 3-5 minutes per session
+- **Actions per Session:** 2-3 meaningful actions (add bill, check expense, etc.)
+
+### Financial Health Metrics
+- **Monthly Burn Rate:** Track if pre-profitable
+- **Runway:** Maintain 18+ months
+- **Revenue per Employee:** Target $150k+ ARR per team member
+- **API Cost per Customer:** Target <$1.50 Base, <$5 Premium
+- **Support Cost per Customer:** Target <$0.50/month
+
+### Retention & Churn Metrics
+- **Monthly Churn Rate:** Target <5% Base, <3% Premium
+- **Annual Churn Rate:** Target <40% Base, <30% Premium
+- **Gross Dollar Retention:** Target 85%+ (revenue retained from cohort)
+- **Logo Retention:** Target 90%+ annual (% of customers retained)
+- **Resurrection Rate:** Target 10%+ (churned users who return)
+
+### Conversion Metrics
+- **Trial to Paid Conversion:** Target 25-30%
+- **Base to Premium Upgrade Rate:** Target 15-20% within 6 months
+- **Annual Plan Adoption:** Target 30%+ of customers
+- **Referral Rate:** Target 20%+ of customers refer at least one user
 
 ## Target Customer Avatars
 

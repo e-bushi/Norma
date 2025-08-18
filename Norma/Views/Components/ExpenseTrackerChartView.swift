@@ -7,6 +7,7 @@ struct ExpenseTrackerChartView: View {
     let month: String
     let isOnboardingMode: Bool
     @Binding var showNormaChat: Bool
+    var isScrolling: Bool = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
     
     @State private var chartAppeared = false
@@ -35,6 +36,7 @@ struct ExpenseTrackerChartView: View {
                     currentExpenseAmount: currentExpenseAmount,
                     incomeAmount: incomeAmount,
                     month: month,
+                    isScrolling: isScrolling,
                     chartAppeared: chartAppeared,
                     dotsAppeared: dotsAppeared,
                     insightsAppeared: insightsAppeared

@@ -48,6 +48,36 @@ struct IncomeAndExpenseView: View {
         return formatter.string(from: Date())
     }
     
+    // Computed property to filter expenses for current month
+    private var currentMonthExpenses: [Expense] {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.component(.month, from: now)
+        let currentYear = calendar.component(.year, from: now)
+        
+        return expenseViewModel.expenses.filter { expense in
+            // Parse the expense date string
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            // Try with fractional seconds first, then without
+            if let date = formatter.date(from: expense.expenseDate) {
+                let expenseMonth = calendar.component(.month, from: date)
+                let expenseYear = calendar.component(.year, from: date)
+                return expenseMonth == currentMonth && expenseYear == currentYear
+            } else {
+                // Try without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: expense.expenseDate) {
+                    let expenseMonth = calendar.component(.month, from: date)
+                    let expenseYear = calendar.component(.year, from: date)
+                    return expenseMonth == currentMonth && expenseYear == currentYear
+                }
+            }
+            return false
+        }
+    }
+    
     // Computed property to create expense map for calendar
     private var expensesPerDay: [Date: [Double]] {
         var expenseMap: [Date: [Double]] = [:]
@@ -93,7 +123,7 @@ struct IncomeAndExpenseView: View {
                     Group {
                         switch selectedView {
                         case .budget:
-                            BudgetDisclosureView(expenses: expenseViewModel.expenses, month: currentMonth) { category in
+                            BudgetDisclosureView(expenses: currentMonthExpenses, month: currentMonth) { category in
                                 selectedCategoryForBudget = category
                             }
                             .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
@@ -102,7 +132,7 @@ struct IncomeAndExpenseView: View {
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
                         case .expenses:
-                            ExpenseDisclosureView(expenses: expenseViewModel.expenses, category: nil)
+                            ExpenseDisclosureView(expenses: currentMonthExpenses, category: nil)
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)

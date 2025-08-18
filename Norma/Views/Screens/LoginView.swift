@@ -27,67 +27,26 @@ struct LoginView: View {
     @State private var buttonOpacity = 0.0
     @State private var signUpLinkOpacity = 0.0
     
+    // Enhanced animation states
+    @State private var logoRotation = 0.0
+    @State private var formOffset: CGFloat = 20
+    @State private var buttonScale = 0.95
+    @State private var isTextFieldFocused = false
+    @State private var emailFieldFocused = false
+    @State private var passwordFieldFocused = false
+    @State private var floatingOffset: CGFloat = 0
+    
     // Loading animation states
     @State private var loadingRotation = 0.0
     @State private var loadingScale = 0.8
     @State private var loadingOpacity = 0.0
     
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 24) {
+        NavigationStack {
+            VStack(spacing: 0) {
+                VStack(spacing: 20) {
                     Spacer()
-                        .frame(height: 60)
-                    
-                    // Logo/Icon with enhanced styling
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
-                            .frame(width: 100, height: 100)
-                        
-                        Image(systemName: "chart.pie.fill")
-                            .font(.system(size: 44))
-                            .foregroundColor(.primary)
-                    }
-                    .padding(.bottom, 20)
-                    .scaleEffect(logoScale)
-                    .opacity(logoOpacity)
-                    
-                    // Title
-                    VStack(spacing: 8) {
-                        Text("Welcome back")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Text("Sign in to your account")
-                            .font(.system(size: 17))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.bottom, 40)
-                    .opacity(titleOpacity)
+                        .frame(height: 20)
                     
                     // Error message if needed
                     if showError {
@@ -117,7 +76,70 @@ struct LoginView: View {
                     }
                     
                     // Form fields container
-                    ZStack {
+                    VStack(spacing: 16) {
+                        // Email field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("EMAIL")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .tracking(1.2)
+                            
+                            TextField("Enter your email", text: $email, onEditingChanged: { editing in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    emailFieldFocused = editing
+                                    isTextFieldFocused = editing || passwordFieldFocused
+                                }
+                            })
+                            .textFieldStyle(EnhancedTextFieldStyle(isFocused: emailFieldFocused))
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        }
+                        
+                        // Password field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("PASSWORD")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .tracking(1.2)
+                            
+                            HStack {
+                                if showPassword {
+                                    TextField("Enter your password", text: $password, onEditingChanged: { editing in
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            passwordFieldFocused = editing
+                                            isTextFieldFocused = editing || emailFieldFocused
+                                        }
+                                    })
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                } else {
+                                    SecureField("Enter your password", text: $password, onCommit: {
+                                        if !email.isEmpty && !password.isEmpty {
+                                            handleLogin()
+                                        }
+                                    })
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            passwordFieldFocused = true
+                                            isTextFieldFocused = true
+                                        }
+                                    }
+                                }
+                                
+                                Button(action: {
+                                    showPassword.toggle()
+                                }) {
+                                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 16))
+                                }
+                            }
+                            .textFieldStyle(EnhancedTextFieldStyle(isFocused: passwordFieldFocused))
+                        }
+                    }
+                    .padding(20)
+                    .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
@@ -143,53 +165,12 @@ struct LoginView: View {
                                         lineWidth: 1
                                     )
                             )
-                        
-                        VStack(spacing: 20) {
-                            // Email field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("EMAIL")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                TextField("Enter your email", text: $email)
-                                    .textFieldStyle(EnhancedTextFieldStyle())
-                                    .keyboardType(.emailAddress)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                            }
-                            
-                            // Password field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("PASSWORD")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                HStack {
-                                    if showPassword {
-                                        TextField("Enter your password", text: $password)
-                                            .textInputAutocapitalization(.never)
-                                            .autocorrectionDisabled()
-                                    } else {
-                                        SecureField("Enter your password", text: $password)
-                                    }
-                                    
-                                    Button(action: {
-                                        showPassword.toggle()
-                                    }) {
-                                        Image(systemName: showPassword ? "eye.slash" : "eye")
-                                            .foregroundColor(.secondary)
-                                            .font(.system(size: 16))
-                                    }
-                                }
-                                .textFieldStyle(EnhancedTextFieldStyle())
-                            }
-                        }
-                        .padding(24)
-                    }
+                    )
                     .padding(.horizontal, 24)
                     .opacity(formOpacity)
+                    .offset(y: formOffset)
+                    .scaleEffect(isTextFieldFocused ? 1.02 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTextFieldFocused)
                     
                     // Forgot password
                     HStack {
@@ -200,42 +181,60 @@ struct LoginView: View {
                             Text("Forgot password?")
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
+                                .underline(color: Color.secondary.opacity(0.4))
                         }
                     }
                     .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                     .opacity(formOpacity)
                     
                     Spacer()
-                        .frame(height: 40)
+                        .frame(height: 20)
                     
                     // Sign in button
                     Button(action: {
                         handleLogin()
                     }) {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Sign in")
-                                    .font(.system(size: 16, weight: .semibold))
+                        ZStack {
+                            // Gradient background that animates
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.purple,
+                                            Color.purple.opacity(0.8)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color.purple.opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
+                            
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Sign in")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
                             }
+                            .foregroundColor(.white)
                         }
-                        .foregroundColor(Color(UIColor.systemBackground))
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary)
-                                .shadow(color: Color.primary.opacity(0.1), radius: 2, x: 0, y: 1)
-                        )
                     }
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
                     .opacity((isLoading || email.isEmpty || password.isEmpty) ? 0.6 : 1)
                     .padding(.horizontal, 24)
                     .opacity(buttonOpacity)
+                    .scaleEffect(buttonScale)
+                    .onHover { hovering in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            buttonScale = hovering ? 1.02 : 0.95
+                        }
+                    }
                     
                     // Sign up link
                     HStack(spacing: 4) {
@@ -249,96 +248,107 @@ struct LoginView: View {
                             Text("Sign up")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.primary)
+                                .underline()
                         }
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 16)
                     .opacity(signUpLinkOpacity)
                     
                     Spacer()
-                        .frame(height: 40)
                 }
             }
-        }
-        .background(Color(UIColor.systemBackground))
-        .overlay(
-            Group {
-                if isLoading {
-                    ZStack {
-                        // Background blur
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                            .blur(radius: 5)
-                        
-                        // Loading content
-                        VStack(spacing: 24) {
-                            // Animated circle loader
-                            ZStack {
-                                // Background circle
-                                Circle()
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 4)
-                                    .frame(width: 60, height: 60)
-                                
-                                // Animated progress circle
-                                Circle()
-                                    .trim(from: 0, to: 0.8)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.primary,
-                                                Color.primary.opacity(0.5)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                                    )
-                                    .frame(width: 60, height: 60)
-                                    .rotationEffect(Angle(degrees: loadingRotation))
-                                
-                                // Center icon
-                                Image(systemName: "person.badge.shield.checkmark")
-                                    .font(.system(size: 24, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .scaleEffect(loadingScale)
-                            }
-                            
-                            Text("Signing you in...")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-                        }
-                        .padding(40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color(UIColor.systemBackground))
-                                .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
-                        )
-                        .scaleEffect(loadingScale)
-                        .opacity(loadingOpacity)
+            .navigationTitle("Sign In")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showSignUp = false
+                        onboardingViewModel.currentStep = .landing
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
                     }
                 }
             }
-        )
-        .onAppear {
-            // Trigger animations
-            withAnimation(.easeOut(duration: 0.6)) {
-                logoScale = 1.0
-                logoOpacity = 1.0
-            }
-            
-            withAnimation(.easeOut(duration: 0.6).delay(0.2)) {
-                titleOpacity = 1.0
-            }
-            
-            withAnimation(.easeOut(duration: 0.6).delay(0.4)) {
-                formOpacity = 1.0
-            }
-            
-            withAnimation(.easeOut(duration: 0.6).delay(0.6)) {
-                buttonOpacity = 1.0
-            }
-            
-            withAnimation(.easeOut(duration: 0.6).delay(0.8)) {
-                signUpLinkOpacity = 1.0
+            .background(Color(UIColor.systemBackground))
+            .overlay(
+                Group {
+                    if isLoading {
+                        ZStack {
+                            // Background blur
+                            Color.black.opacity(0.3)
+                                .ignoresSafeArea()
+                                .blur(radius: 5)
+                            
+                            // Loading content
+                            VStack(spacing: 24) {
+                                // Animated circle loader
+                                ZStack {
+                                    // Background circle
+                                    Circle()
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                                        .frame(width: 60, height: 60)
+                                    
+                                    // Animated progress circle
+                                    Circle()
+                                        .trim(from: 0, to: 0.8)
+                                        .stroke(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.primary,
+                                                    Color.primary.opacity(0.5)
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                        )
+                                        .frame(width: 60, height: 60)
+                                        .rotationEffect(Angle(degrees: loadingRotation))
+                                    
+                                    // Center icon
+                                    Image(systemName: "person.badge.shield.checkmark")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .scaleEffect(loadingScale)
+                                }
+                                
+                                Text("Signing you in...")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(40)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color(UIColor.systemBackground))
+                                    .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
+                            )
+                            .scaleEffect(loadingScale)
+                            .opacity(loadingOpacity)
+                        }
+                    }
+                }
+            )
+            .onAppear {
+                // Trigger animations
+                withAnimation(.easeOut(duration: 0.6)) {
+                    titleOpacity = 1.0
+                }
+                
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4)) {
+                    formOpacity = 1.0
+                    formOffset = 0
+                }
+                
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.6)) {
+                    buttonOpacity = 1.0
+                    buttonScale = 1.0
+                }
+                
+                withAnimation(.easeOut(duration: 0.6).delay(0.8)) {
+                    signUpLinkOpacity = 1.0
+                }
             }
         }
     }
@@ -411,19 +421,25 @@ struct LoginView: View {
 
 // Enhanced text field style matching app design
 struct EnhancedTextFieldStyle: TextFieldStyle {
+    var isFocused: Bool = false
+    
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.05))
+                    .fill(Color.gray.opacity(isFocused ? 0.08 : 0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            .stroke(
+                                isFocused ? Color.purple.opacity(0.3) : Color.gray.opacity(0.1),
+                                lineWidth: isFocused ? 1.5 : 1
+                            )
                     )
             )
             .font(.system(size: 16))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
     }
 }
 

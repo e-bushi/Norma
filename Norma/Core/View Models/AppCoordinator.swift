@@ -157,6 +157,16 @@ struct OnboardingCoordinatorView: View {
     var body: some View {
         Group {
             switch onboardingViewModel.currentStep {
+            case .landing:
+                LandingPageView(
+                    showSignUp: $onboardingViewModel.showSignUp,
+                    showSignIn: Binding(
+                        get: { !onboardingViewModel.showSignUp },
+                        set: { onboardingViewModel.showSignUp = !$0 }
+                    )
+                )
+                .environmentObject(onboardingViewModel)
+            
             case .welcome:
                 OnboardingView()
                     .environmentObject(onboardingViewModel)
@@ -185,7 +195,30 @@ struct OnboardingCoordinatorView: View {
                     showVerifyCode: .constant(true)
                 )
                 .environmentObject(onboardingViewModel)
-               
+            
+            case .howDidYouHear:
+                HowDidYouHearView(
+                    onContinue: { option in
+                        // Store the selection
+                        onboardingViewModel.howDidYouHear = option?.id
+                        onboardingViewModel.currentStep = .notifications
+                    },
+                    onSkip: {
+                        onboardingViewModel.currentStep = .notifications
+                    }
+                )
+                .environmentObject(onboardingViewModel)
+            
+            case .notifications:
+                NotificationPermissionView(
+                    onPermissionGranted: {
+                        onboardingViewModel.currentStep = .normaChat
+                    },
+                    onSkip: {
+                        onboardingViewModel.currentStep = .normaChat
+                    }
+                )
+                .environmentObject(onboardingViewModel)
             
             case .normaChat:
                 if onboardingViewModel.showCompletionTransition {

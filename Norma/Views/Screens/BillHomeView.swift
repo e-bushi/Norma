@@ -19,6 +19,8 @@ struct BillHomeView: View {
     @State private var refreshTask: Task<Void, Never>?
     @State private var showBillVerificationPopup = false
     @State private var showBillReviewSheet = false
+    @State private var isScrolling = false
+    @State private var scrollTimer: Timer?
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -39,17 +41,45 @@ struct BillHomeView: View {
     }
     
     private var currentSpentAmount: Double {
-        // Calculate total spent: all active bill amounts + non-bill expenses
+        // Calculate total spent: all active bill amounts + non-bill expenses for current month
         // This prevents double counting - we count bill amounts, not the bill payment expenses
-        let allExpenses = expenseViewModel.expenses
+        
+        // Get current month and year
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.component(.month, from: now)
+        let currentYear = calendar.component(.year, from: now)
+        
+        // Filter expenses for current month only
+        let currentMonthExpenses = expenseViewModel.expenses.filter { expense in
+            // Parse the expense date string (assuming ISO format)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            // Try with fractional seconds first, then without
+            if let date = formatter.date(from: expense.expenseDate) {
+                let expenseMonth = calendar.component(.month, from: date)
+                let expenseYear = calendar.component(.year, from: date)
+                return expenseMonth == currentMonth && expenseYear == currentYear
+            } else {
+                // Try without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: expense.expenseDate) {
+                    let expenseMonth = calendar.component(.month, from: date)
+                    let expenseYear = calendar.component(.year, from: date)
+                    return expenseMonth == currentMonth && expenseYear == currentYear
+                }
+            }
+            return false
+        }
         
         // Get the bill amounts for all active bills (regardless of payment status)
         let activeBillsAmount = billViewModel.activeBills
             .filter { $0.isActive ?? true } // Include bills where isActive is true or nil (default to active)
             .reduce(0) { $0 + $1.amount }
         
-        // Get expenses that are NOT linked to bills (billId is nil)
-        let nonBillExpenses = allExpenses.filter { $0.billId == nil }
+        // Get expenses that are NOT linked to bills (billId is nil) for current month
+        let nonBillExpenses = currentMonthExpenses.filter { $0.billId == nil }
         let nonBillExpensesAmount = nonBillExpenses.reduce(0) { $0 + $1.amount }
         
         return activeBillsAmount + nonBillExpensesAmount
@@ -58,21 +88,42 @@ struct BillHomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                
-                ExpenseTrackerChartView(
+                VStack {
+                    // Hidden view to detect scrolling
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
+                    }
+                    .frame(height: 0)
+                    
+                    ExpenseTrackerChartView(
                     billAmount: billViewModel.totalMonthlyBills,
                     currentExpenseAmount: currentSpentAmount,
                     incomeAmount: profileIncomeAmount,
                     month: currentMonth,
                     isOnboardingMode: shouldShowOnboardingMode,
                     showNormaChat: $showNormaChat
-                )
+                    )
     
                 
-                BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
-                .padding(.vertical)
-                .padding(.horizontal)
-                .padding(.horizontal)
+                    BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
+                    .padding(.vertical)
+                    .padding(.horizontal)
+                    .padding(.horizontal)
+                }
+            }
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { _ in
+                // Scroll detected
+                isScrolling = true
+                
+                // Cancel previous timer
+                scrollTimer?.invalidate()
+                
+                // Set timer to detect when scrolling stops
+                scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                    isScrolling = false
+                }
             }
             .navigationTitle(Text("Home"))
             .navigationBarTitleDisplayMode(.inline)
@@ -203,11 +254,13 @@ struct BillHomeView: View {
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     return BillHomeView()
         .environmentObject(sessionViewModel)
         .environmentObject(billViewModel)
         .environmentObject(expenseViewModel)
         .environmentObject(incomeViewModel)
+        .environmentObject(profileViewModel)
         .preferredColorScheme(.light)
 }

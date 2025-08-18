@@ -12,6 +12,15 @@ struct ExpenseCalendarView: View {
     @State private var selectedDate: Date = Date()
     @State private var currentMonth: Date = Date()
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @EnvironmentObject var sessionViewModel: SessionViewModel
+    @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    
+    // Voice mode states
+    @State private var showVoiceMode = false
+    @State private var voiceAgentViewModel: VoiceAgentViewModel?
+    @State private var lastTapTime: Date = Date()
+    @State private var isPressed = false
     
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -78,6 +87,9 @@ struct ExpenseCalendarView: View {
                 )
             }
             
+            // Voice mode instruction
+            CalendarVoiceModeInstruction()
+            
             // Calendar container
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
@@ -104,6 +116,12 @@ struct ExpenseCalendarView: View {
                                 ),
                                 lineWidth: 1
                             )
+                    )
+                    .animatedBorder(
+                        cornerRadius: 20,
+                        lineWidth: 2,
+                        useRainbow: true,
+                        isVoiceModeActive: showVoiceMode
                     )
                 
                 VStack(spacing: 20) {
@@ -147,6 +165,13 @@ struct ExpenseCalendarView: View {
                 }
                 .padding(.vertical, 20)
             }
+            .expenseCalendarVoiceMode(
+                showVoiceMode: $showVoiceMode,
+                voiceAgentViewModel: $voiceAgentViewModel,
+                lastTapTime: $lastTapTime,
+                isPressed: $isPressed,
+                cornerRadius: 20
+            )
         }
     }
     
@@ -166,8 +191,13 @@ struct ExpenseCalendarView: View {
         // Get the number of days in the month
         let daysInMonth = calendar.range(of: .day, in: .month, for: currentMonth)!.count
         
-        // Calculate the number of trailing empty cells (to complete the 7x5 grid = 35 cells)
-        let trailingEmptyCells = 35 - daysInMonth - leadingEmptyCells
+        // Calculate total cells needed (always a multiple of 7 for complete rows)
+        let totalCellsNeeded = leadingEmptyCells + daysInMonth
+        let rows = (totalCellsNeeded + 6) / 7  // Round up to complete weeks
+        let totalCells = rows * 7
+        
+        // Calculate the number of trailing empty cells
+        let trailingEmptyCells = totalCells - daysInMonth - leadingEmptyCells
         
         var dates: [Date?] = []
         

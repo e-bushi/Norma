@@ -12,7 +12,10 @@ struct ExpenseTrackerRegularView: View {
     let currentExpenseAmount: Double
     let incomeAmount: Double
     let month: String
+    let isScrolling: Bool
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @EnvironmentObject var sessionViewModel: SessionViewModel
+    @EnvironmentObject var billViewModel: BillViewModel
     @State private var showingIncomeDetail = false
     
     // Animation states
@@ -26,6 +29,11 @@ struct ExpenseTrackerRegularView: View {
     @State private var incomeLabelAppeared = false
     @State private var billsLabelAppeared = false
     @State private var currentLabelAppeared = false
+    
+    @State private var showVoiceMode = false
+    @State private var voiceAgentViewModel: VoiceAgentViewModel?
+    @State private var lastTapTime: Date = Date()
+    @State private var isPressed = false
     
     // Chart constants
     private let lineHeight: CGFloat = 400
@@ -61,59 +69,29 @@ struct ExpenseTrackerRegularView: View {
     }
     
     var body: some View {
-        VStack(spacing: 24) {
+        ZStack {
+            VStack(spacing: 24) {
             // Enhanced header with status
-            VStack(spacing: 12) {
-                // Progress badge
-                Text("\(month.uppercased())'S PROGRESS")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                    .opacity(headerAppeared ? 1 : 0)
-                    .offset(y: headerAppeared ? 0 : -10)
-                
-                // Smart insights
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Remaining")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(max(0, incomeAmount - currentExpenseAmount)))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Daily Budget")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency((incomeAmount - billAmount) / 30))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .scaleEffect(insightsAppeared ? 1 : 0.7)
-                .opacity(insightsAppeared ? 1 : 0)
-                .offset(y: insightsAppeared ? 0 : 20)
-            }
+            ExpenseInsightsHeader(
+                month: month,
+                incomeAmount: incomeAmount,
+                currentExpenseAmount: currentExpenseAmount,
+                billAmount: billAmount,
+                headerAppeared: headerAppeared,
+                insightsAppeared: insightsAppeared
+            )
+            
+            // Voice mode instruction
+            VoiceModeInstruction(
+                explanationButtonAppeared: explanationButtonAppeared
+            )
 
             // Main chart
             ZStack {
-                // Elegant background with grid
-                RoundedRectangle(cornerRadius: 20)
+                // Chart content layer
+                ZStack {
+                    // Elegant background with grid
+                    RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
@@ -137,6 +115,12 @@ struct ExpenseTrackerRegularView: View {
                                 ),
                                 lineWidth: 1
                             )
+                    )
+                    .animatedBorder(
+                        cornerRadius: 20,
+                        lineWidth: 2,
+                        useRainbow: true,
+                        isVoiceModeActive: showVoiceMode
                     )
                     .scaleEffect(chartAppeared ? 1 : 0.9)
                     .opacity(chartAppeared ? 1 : 0)
@@ -221,104 +205,137 @@ struct ExpenseTrackerRegularView: View {
                 .frame(width: chartWidth, height: lineHeight)
                 .padding(.vertical, 60)
                 .padding(.horizontal, 20)
+                }
+                
+                // Voice mode overlay
+                if let voiceAgent = voiceAgentViewModel {
+                    VoiceModeOverlay(
+                        isVisible: $showVoiceMode, 
+                        cornerRadius: 20, 
+                        voiceAgentViewModel: voiceAgent
+                    )
+                }
             }
             .padding(.horizontal)
             .padding(.horizontal)
-            
-            // Toggle button for explanation
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showDescription.toggle()
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: showDescription ? "info.circle.fill" : "info.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(.blue)
-                    
-                    Text(showDescription ? "Hide explanation" : "How to read this chart")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.blue)
-                    
-                    Spacer()
-                    
-                    Image(systemName: showDescription ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
-                        )
-                )
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .onTapGesture {
+                // Record tap time for double-tap detection
+                lastTapTime = Date()
+                print("ExpenseTracker: Single tap detected at \(lastTapTime)")
             }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal)
-            .padding(.horizontal)
-            .scaleEffect(explanationButtonAppeared ? 1 : 0.9)
-            .opacity(explanationButtonAppeared ? 1 : 0)
-            .offset(y: explanationButtonAppeared ? 0 : 10)
-            
-            // Animated explanation content
-            if showDescription {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Your income (\(profileViewModel.formatCurrency(incomeAmount))) starts at the top.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary.opacity(0.8))
-                    
-                    Text("Your bills (\(profileViewModel.formatCurrency(billAmount))) are fixed costs at the bottom.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary.opacity(0.8))
-                    
-                    Text("The purple dot shows your total spending (\(profileViewModel.formatCurrency(currentExpenseAmount))) for the current month and combines both Bills (even if you haven't paid them yet) and random expenses.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary.opacity(0.8))
-                    
-                    HStack(spacing: 4) {
-                        Text("You have")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.primary)
+            .onLongPressGesture(minimumDuration: 0.5, maximumDistance: .infinity) {
+                // Long press completed
+                print("ExpenseTracker: Long press completed")
+            } onPressingChanged: { pressing in
+                print("ExpenseTracker: Press changed - pressing: \(pressing)")
+                // Visual feedback during press
+                if pressing {
+                    let timeSinceLastTap = Date().timeIntervalSince(lastTapTime)
+                    print("ExpenseTracker: Press started. Time since last tap: \(timeSinceLastTap) seconds")
+                    if timeSinceLastTap < 0.5 {
+                        print("ExpenseTracker: Double-tap and hold detected! Activating voice mode...")
+                        // This is a double-tap and hold!
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showVoiceMode = true
+                        }
                         
-                        Text(profileViewModel.formatCurrency(max(0, incomeAmount - currentExpenseAmount)))
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(currentExpenseAmount > incomeAmount ? .red : .green)
+                        // Visual press effect
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            isPressed = true
+                        }
                         
-                        Text(currentExpenseAmount > incomeAmount ? "over budget" : "left to spend")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.primary)
+                        // Strong haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                        impactFeedback.impactOccurred()
+                        
+                        // Start voice recording or resume paused conversation
+                        Task {
+                            let userName = sessionViewModel.currentUser?.name
+                            
+                            if let voiceAgent = voiceAgentViewModel {
+                                // Check if there's a paused conversation to resume
+                                if voiceAgent.conversationPaused {
+                                    print("Resuming paused voice conversation...")
+                                    await voiceAgent.resumeConversation()
+                                } else {
+                                    print("Starting new voice interaction...")
+                                    // Request permissions if needed
+                                    if !voiceAgent.hasPermissions {
+                                        print("Requesting permissions...")
+                                        let granted = await voiceAgent.requestPermissions()
+                                        if !granted {
+                                            print("Permissions not granted")
+                                            return
+                                        }
+                                    }
+                                    await voiceAgent.startVoiceInteraction(userName: userName)
+                                }
+                            } else {
+                                print("VoiceAgentViewModel is nil - initializing now")
+                                if let userId = sessionViewModel.currentUser?.userId {
+                                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                                    // Request permissions if needed
+                                    if let voiceAgent = voiceAgentViewModel {
+                                        if !voiceAgent.hasPermissions {
+                                            print("Requesting permissions...")
+                                            let granted = await voiceAgent.requestPermissions()
+                                            if !granted {
+                                                print("Permissions not granted")
+                                                return
+                                            }
+                                        }
+                                        await voiceAgent.startVoiceInteraction(userName: userName)
+                                    }
+                                } else {
+                                    print("No user ID available")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    print("ExpenseTracker: Press ended")
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        isPressed = false
                     }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
-                .padding(.horizontal)
-                .padding(.top, -8)
-                .transition(.asymmetric(
-                    insertion: .push(from: .top).combined(with: .opacity),
-                    removal: .push(from: .bottom).combined(with: .opacity)
-                ))
             }
-        }
-        .onAppear {
-            animateElements()
-        }
-        .sheet(isPresented: $showingIncomeDetail) {
-            IncomeDetailView()
-                .environmentObject(profileViewModel)
-        }
-        .onChange(of: dotsAppeared) { _, newValue in
+            
+            // Chart explanation section
+            ChartExplanation(
+                showDescription: $showDescription,
+                incomeAmount: incomeAmount,
+                billAmount: billAmount,
+                currentExpenseAmount: currentExpenseAmount,
+                explanationButtonAppeared: explanationButtonAppeared
+            )
+            }
+            .onAppear {
+                animateElements()
+                // Initialize voice agent with user ID and BillViewModel
+                if voiceAgentViewModel == nil, let userId = sessionViewModel.currentUser?.userId {
+                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                }
+            }
+            .onChange(of: voiceAgentViewModel?.currentState) { _, newState in
+                // Hide voice mode overlay when session completes or errors, but keep it visible when paused
+                switch newState {
+                case .idle, .error:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showVoiceMode = false
+                    }
+                case .paused, .waitingForResume:
+                    // Keep overlay visible for paused states
+                    break
+                default:
+                    break
+                }
+            }
+            .sheet(isPresented: $showingIncomeDetail) {
+                IncomeDetailView()
+                    .environmentObject(profileViewModel)
+            }
+            .onChange(of: dotsAppeared) { _, newValue in
             if newValue {
                 // Stagger the chart label animations
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
@@ -343,6 +360,7 @@ struct ExpenseTrackerRegularView: View {
                 currentLabelAppeared = false
             }
         }
+        }
     }
     
     private func animateElements() {
@@ -365,13 +383,20 @@ extension Comparable {
 }
 
 #Preview {
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    
     ExpenseTrackerRegularView(
         billAmount: 1500,
         currentExpenseAmount: 2800,
         incomeAmount: 3000,
         month: "December",
-        chartAppeared: true,
+        isScrolling: false, chartAppeared: true,
         dotsAppeared: true,
         insightsAppeared: true
     )
+    .environmentObject(profileViewModel)
+    .environmentObject(sessionViewModel)
+    .preferredColorScheme(.light)
 }
