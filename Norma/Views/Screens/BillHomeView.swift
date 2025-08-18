@@ -19,6 +19,8 @@ struct BillHomeView: View {
     @State private var refreshTask: Task<Void, Never>?
     @State private var showBillVerificationPopup = false
     @State private var showBillReviewSheet = false
+    @State private var isScrolling = false
+    @State private var scrollTimer: Timer?
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -86,21 +88,42 @@ struct BillHomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                
-                ExpenseTrackerChartView(
+                VStack {
+                    // Hidden view to detect scrolling
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
+                    }
+                    .frame(height: 0)
+                    
+                    ExpenseTrackerChartView(
                     billAmount: billViewModel.totalMonthlyBills,
                     currentExpenseAmount: currentSpentAmount,
                     incomeAmount: profileIncomeAmount,
                     month: currentMonth,
                     isOnboardingMode: shouldShowOnboardingMode,
                     showNormaChat: $showNormaChat
-                )
+                    )
     
                 
-                BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
-                .padding(.vertical)
-                .padding(.horizontal)
-                .padding(.horizontal)
+                    BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
+                    .padding(.vertical)
+                    .padding(.horizontal)
+                    .padding(.horizontal)
+                }
+            }
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { _ in
+                // Scroll detected
+                isScrolling = true
+                
+                // Cancel previous timer
+                scrollTimer?.invalidate()
+                
+                // Set timer to detect when scrolling stops
+                scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                    isScrolling = false
+                }
             }
             .navigationTitle(Text("Home"))
             .navigationBarTitleDisplayMode(.inline)
@@ -231,11 +254,13 @@ struct BillHomeView: View {
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     return BillHomeView()
         .environmentObject(sessionViewModel)
         .environmentObject(billViewModel)
         .environmentObject(expenseViewModel)
         .environmentObject(incomeViewModel)
+        .environmentObject(profileViewModel)
         .preferredColorScheme(.light)
 }
