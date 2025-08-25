@@ -16,6 +16,7 @@ struct ExpenseTrackerRegularView: View {
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var incomeViewModel: IncomeViewModel
     @State private var showingIncomeDetail = false
     
     // Animation states
@@ -274,7 +275,12 @@ struct ExpenseTrackerRegularView: View {
                             } else {
                                 print("VoiceAgentViewModel is nil - initializing now")
                                 if let userId = sessionViewModel.currentUser?.userId {
-                                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                                    voiceAgentViewModel = VoiceAgentViewModel(
+                                        userId: userId, 
+                                        billViewModel: billViewModel,
+                                        incomeViewModel: incomeViewModel,
+                                        sessionViewModel: sessionViewModel
+                                    )
                                     // Request permissions if needed
                                     if let voiceAgent = voiceAgentViewModel {
                                         if !voiceAgent.hasPermissions {
@@ -314,7 +320,12 @@ struct ExpenseTrackerRegularView: View {
                 animateElements()
                 // Initialize voice agent with user ID and BillViewModel
                 if voiceAgentViewModel == nil, let userId = sessionViewModel.currentUser?.userId {
-                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                    voiceAgentViewModel = VoiceAgentViewModel(
+                        userId: userId, 
+                        billViewModel: billViewModel,
+                        incomeViewModel: incomeViewModel,
+                        sessionViewModel: sessionViewModel
+                    )
                 }
             }
             .onChange(of: voiceAgentViewModel?.currentState) { _, newState in
