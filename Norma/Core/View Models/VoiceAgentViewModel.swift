@@ -807,14 +807,16 @@ class VoiceAgentViewModel: ObservableObject {
         currentRecordingURL = try await voiceRecordingService.startRecording()
         print("VoiceAgent: Recording started successfully")
         
-        // Voice activity detection with longer duration and threshold
-        let maxRecordingTime: TimeInterval = 5.0  // Max 5 seconds
-        let silenceThreshold: TimeInterval = 3.0   // Stop after 3 seconds of silence
-        let checkInterval: TimeInterval = 0.1      // Check every 100ms
+        // Voice activity detection with speech-aware silence detection
+        let maxRecordingTime: TimeInterval = 10.0  // Max 10 seconds (reasonable upper limit)
+        let silenceAfterSpeechThreshold: TimeInterval = 2.0  // Stop after 2 seconds of silence AFTER speech detected
+        let checkInterval: TimeInterval = 0.05     // Check every 50ms for more responsive detection
         
         var lastSoundTime = Date()
         var elapsedTime: TimeInterval = 0
-        let silenceLevelThreshold: Float = 0.01    // Audio level threshold for silence
+        var speechDetected = false  // Track if we've detected actual speech
+        let silenceLevelThreshold: Float = 0.02    // Slightly higher threshold for better speech detection
+        let speechLevelThreshold: Float = 0.05     // Higher threshold to confirm actual speech (not just noise)
         
         while elapsedTime < maxRecordingTime {
             try await Task.sleep(nanoseconds: UInt64(checkInterval * 1_000_000_000))
@@ -823,16 +825,21 @@ class VoiceAgentViewModel: ObservableObject {
             // Check current audio level
             let currentLevel = voiceRecordingService.recordingLevel
             
-            if currentLevel > silenceLevelThreshold {
-                // Sound detected, update last sound time
+            if currentLevel > speechLevelThreshold {
+                // Strong audio detected - likely speech
+                speechDetected = true
                 lastSoundTime = Date()
-                print("VoiceAgent: Sound detected - level: \(currentLevel)")
-            } else {
-                // Check if we've had enough silence to stop
+                print("VoiceAgent: Speech detected - level: \(currentLevel)")
+            } else if currentLevel > silenceLevelThreshold {
+                // Moderate audio - update last sound time but don't mark as speech yet
+                lastSoundTime = Date()
+            }
+            
+            // Only apply silence timeout AFTER we've detected speech
+            if speechDetected {
                 let silenceDuration = Date().timeIntervalSince(lastSoundTime)
-                if silenceDuration >= silenceThreshold && elapsedTime > 0.5 {
-                    // Stop early due to silence (but record at least 0.5s)
-                    print("VoiceAgent: Stopping early due to silence (\(String(format: "%.1f", elapsedTime))s recorded)")
+                if silenceDuration >= silenceAfterSpeechThreshold {
+                    print("VoiceAgent: Stopping after speech - \(String(format: "%.1f", silenceDuration))s of silence (\(String(format: "%.1f", elapsedTime))s total)")
                     break
                 }
             }

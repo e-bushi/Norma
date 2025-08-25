@@ -25,7 +25,7 @@ extension DataManager {
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch categories from server: \(error). Loading from cache...")
-            loadCachedCategories()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !categories.isEmpty {
@@ -337,28 +337,6 @@ extension DataManager {
     
     // MARK: - SwiftData Caching
     
-    func loadCachedCategories() {
-        guard let modelContext = modelContext,
-              let userId = currentProfile?.userId else { return }
-        
-        do {
-            let descriptor = FetchDescriptor<CachedCategory>(
-                predicate: #Predicate { cachedCategory in
-                    cachedCategory.userId == userId
-                }
-            )
-            
-            let cachedCategories = try modelContext.fetch(descriptor)
-            
-            // Convert cached categories to regular categories and update the published property
-            self.categories = cachedCategories.map { $0.toCategory() }
-            
-            print("Loaded \(cachedCategories.count) cached categories")
-        } catch {
-            print("Failed to load cached categories: \(error)")
-        }
-    }
-    
     private func cacheCategories(_ categoriesToCache: [Category]) async {
         guard let modelContext = modelContext else { return }
         
@@ -443,6 +421,24 @@ extension DataManager {
             }
         } catch {
             print("Failed to delete cached category: \(error)")
+        }
+    }
+    
+    // MARK: - Cache Loading
+    
+    func loadCachedCategories() {
+        guard let userId = currentProfile?.userId else {
+            print("No user profile found for loading cached categories")
+            return
+        }
+        
+        Task {
+            do {
+                try await fetchCategories(userId: userId)
+                print("✅ Categories loaded: \(categories.count) categories")
+            } catch {
+                print("Failed to load cached categories: \(error)")
+            }
         }
     }
 }

@@ -73,6 +73,10 @@ struct RootView: View {
                     await sessionViewModel.fetchUserProfile()
                     // Then fetch financial data
                     try await dataManager.fetchAllFinancialData()
+                    // Force update widget data after loading
+                    await MainActor.run {
+                        dataManager.forceUpdateWidgetData()
+                    }
                 } catch {
                     print("Failed to load financial data: \(error)")
                 }

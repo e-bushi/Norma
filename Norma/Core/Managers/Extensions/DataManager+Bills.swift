@@ -23,10 +23,18 @@ extension DataManager {
             await cacheBills(fetchedBills)
             
             print("Fetched \(fetchedBills.count) bills from server")
+            
+            // Update widget data
+            WidgetDataManager.shared.updateWidgetData(
+                bills: bills,
+                expenses: expenses,
+                monthlyIncome: currentProfile?.settings.monthlyIncome ?? 0,
+                aiInsight: nil
+            )
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch bills from server: \(error). Loading from cache...")
-            loadCachedBills()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !bills.isEmpty {
@@ -237,28 +245,6 @@ extension DataManager {
     
     // MARK: - SwiftData Caching
     
-    func loadCachedBills() {
-        guard let modelContext = modelContext,
-              let userId = currentProfile?.userId else { return }
-        
-        do {
-            let descriptor = FetchDescriptor<CachedBill>(
-                predicate: #Predicate { cachedBill in
-                    cachedBill.userId == userId
-                }
-            )
-            
-            let cachedBills = try modelContext.fetch(descriptor)
-            
-            // Convert cached bills to regular bills and update the published property
-            self.bills = cachedBills.map { $0.toBill() }
-            
-            print("Loaded \(cachedBills.count) cached bills")
-        } catch {
-            print("Failed to load cached bills: \(error)")
-        }
-    }
-    
     private func cacheBills(_ billsToCache: [Bill]) async {
         print("🔍 [DEBUG] DataManager.cacheBills called with \(billsToCache.count) bills")
         
@@ -382,6 +368,13 @@ extension DataManager {
                 await cacheBills(decryptedBills)
                 
                 print("Fetched and decrypted \(decryptedBills.count) bills from server")
+                
+                // Update widget data
+                WidgetDataManager.shared.updateWidgetData(
+                    bills: bills,
+                    expenses: expenses,
+                    aiInsight: nil
+                )
             } else {
                 // Use legacy path
                 try await fetchBills(userId: userId)
@@ -389,7 +382,7 @@ extension DataManager {
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch bills from server: \(error). Loading from cache...")
-            loadCachedBills()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !bills.isEmpty {
@@ -516,5 +509,33 @@ extension DataManager {
         
         // Refresh to get encrypted versions
         try await fetchBillsWithEncryption(userId: userId)
+    }
+    
+    // MARK: - Cache Loading
+    
+    func loadCachedBills() {
+        guard let userId = currentProfile?.userId else {
+            print("No user profile found for loading cached bills")
+            return
+        }
+        
+        Task {
+            do {
+                try await fetchBillsWithEncryption(userId: userId)
+                print("✅ Bills loaded: \(bills.count) bills")
+                
+                // Update widget data after loading bills
+                await MainActor.run {
+                    let expenses = self.expenses
+                    WidgetDataManager.shared.updateWidgetData(
+                        bills: self.bills,
+                        expenses: expenses,
+                        aiInsight: nil
+                    )
+                }
+            } catch {
+                print("Failed to load cached bills: \(error)")
+            }
+        }
     }
 }

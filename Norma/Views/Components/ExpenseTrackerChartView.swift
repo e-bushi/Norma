@@ -44,22 +44,30 @@ struct ExpenseTrackerChartView: View {
             }
         }
         .onAppear {
-            // Only animate if not already appeared
-            if !chartAppeared {
-                withAnimation(.easeOut(duration: 0.8)) {
-                    chartAppeared = true
+            triggerAnimationsIfDataReady()
+        }
+    }
+    
+    private func triggerAnimationsIfDataReady() {
+        // Only animate if not already appeared and we have meaningful data
+        let hasData = incomeAmount > 0 || billAmount > 0 || currentExpenseAmount > 0
+        
+        if !chartAppeared && hasData {
+            // Trigger all animations immediately when data is ready
+            withAnimation(.easeOut(duration: 0.8)) {
+                chartAppeared = true
+            }
+            
+            // Use DispatchQueue for reliable timing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
+                    insightsAppeared = true
                 }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
-                        insightsAppeared = true
-                    }
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        dotsAppeared = true
-                    }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                    dotsAppeared = true
                 }
             }
         }
