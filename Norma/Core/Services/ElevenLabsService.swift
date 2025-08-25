@@ -61,12 +61,15 @@ class ElevenLabsService: ObservableObject {
         
         let requestBody = ElevenLabsRequest(
             text: text,
+            modelId: "eleven_turbo_v2_5", // Turbo model for speed
             voiceSettings: VoiceSettings(
-                stability: stability,
-                similarityBoost: similarityBoost,
-                style: style,
-                useSpeakerBoost: true
-            )
+                stability: 0.75, // Higher for consistent tone
+                similarityBoost: 0.8, // Higher for consistent voice
+                style: 0.0, // Lower for faster processing
+                useSpeakerBoost: false // Disable for speed
+            ),
+            optimizeStreamingLatency: 4, // Max speed optimization
+            outputFormat: "mp3_22050_32" // Lower quality for speed
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)
@@ -178,11 +181,17 @@ class ElevenLabsService: ObservableObject {
 
 struct ElevenLabsRequest: Codable {
     let text: String
+    let modelId: String?
     let voiceSettings: VoiceSettings
+    let optimizeStreamingLatency: Int?
+    let outputFormat: String?
     
     enum CodingKeys: String, CodingKey {
         case text
+        case modelId = "model_id"
         case voiceSettings = "voice_settings"
+        case optimizeStreamingLatency = "optimize_streaming_latency"
+        case outputFormat = "output_format"
     }
 }
 

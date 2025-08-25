@@ -215,33 +215,24 @@ class VoiceAgentViewModel: ObservableObject {
                             break
                         }
                         
-                        // Step 3: Process with AI (conversational)
-                        print("VoiceAgent: Step 3 - Processing with AI...")
+                        // Step 3-5: Process with AI (with streaming fallback)
+                        print("VoiceAgent: Step 3-5 - Processing with AI...")
                         guard !isConversationCancelled else { break }
                         await setState(.processing)
+                        
+                        // Use regular single TTS approach for voice consistency  
                         let aiResponse = try await processUserMessage(transcription)
                         
-                        // Check for cancellation after AI processing
-                        guard !isConversationCancelled else { break }
-                        
-                        // Step 4: Generate speech
-                        print("VoiceAgent: Step 4 - Generating speech...")
                         await setState(.generatingSpeech)
                         let audioData = try await generateSpeech(from: aiResponse)
                         
-                        // Check for cancellation after speech generation
-                        guard !isConversationCancelled else { break }
-                        
-                        // Step 5: Play response
-                        print("VoiceAgent: Step 5 - Playing response...")
                         await setState(.playingResponse)
                         try await playResponse(audioData: audioData)
                         
-                        // Check if conversation should end (tool was used successfully)
-                        if shouldEndAfterToolUse(aiResponse) {
-                            print("VoiceAgent: Tool completed successfully, ending conversation")
-                            conversationActive = false
-                        }
+                        // Check for cancellation after processing
+                        guard !isConversationCancelled else { break }
+                        
+                        // Note: Tool completion detection is handled within streaming method
                         
                         turnCompleted = true
                         
@@ -803,52 +794,44 @@ class VoiceAgentViewModel: ObservableObject {
     // MARK: - Individual Steps
     
     private func startRecording() async throws -> URL {
-        print("VoiceAgent: Starting recording...")
+        print("VoiceAgent: Starting reactive recording...")
+        
+        // Start recording - the service will handle speech detection and auto-completion
         currentRecordingURL = try await voiceRecordingService.startRecording()
         print("VoiceAgent: Recording started successfully")
         
-        // Voice activity detection with speech-aware silence detection
-        let maxRecordingTime: TimeInterval = 10.0  // Max 10 seconds (reasonable upper limit)
-        let silenceAfterSpeechThreshold: TimeInterval = 2.0  // Stop after 2 seconds of silence AFTER speech detected
-        let checkInterval: TimeInterval = 0.05     // Check every 50ms for more responsive detection
-        
-        var lastSoundTime = Date()
-        var elapsedTime: TimeInterval = 0
-        var speechDetected = false  // Track if we've detected actual speech
-        let silenceLevelThreshold: Float = 0.02    // Slightly higher threshold for better speech detection
-        let speechLevelThreshold: Float = 0.05     // Higher threshold to confirm actual speech (not just noise)
-        
-        while elapsedTime < maxRecordingTime {
-            try await Task.sleep(nanoseconds: UInt64(checkInterval * 1_000_000_000))
-            elapsedTime += checkInterval
-            
-            // Check current audio level
-            let currentLevel = voiceRecordingService.recordingLevel
-            
-            if currentLevel > speechLevelThreshold {
-                // Strong audio detected - likely speech
-                speechDetected = true
-                lastSoundTime = Date()
-                print("VoiceAgent: Speech detected - level: \(currentLevel)")
-            } else if currentLevel > silenceLevelThreshold {
-                // Moderate audio - update last sound time but don't mark as speech yet
-                lastSoundTime = Date()
+        // Wait for either recording completion or timeout
+        return try await withTimeout(seconds: 10) { [self] in
+            // Listen for automatic recording completion
+            for await recordingURL in self.voiceRecordingService.recordingCompletionStream.values {
+                print("VoiceAgent: Recording completed reactively at: \(recordingURL)")
+                return recordingURL
             }
             
-            // Only apply silence timeout AFTER we've detected speech
-            if speechDetected {
-                let silenceDuration = Date().timeIntervalSince(lastSoundTime)
-                if silenceDuration >= silenceAfterSpeechThreshold {
-                    print("VoiceAgent: Stopping after speech - \(String(format: "%.1f", silenceDuration))s of silence (\(String(format: "%.1f", elapsedTime))s total)")
-                    break
-                }
-            }
+            // This should never be reached due to timeout, but provide fallback
+            throw VoiceAgentError.recordingFailed
         }
-        
-        print("VoiceAgent: Stopping recording after \(String(format: "%.1f", elapsedTime))s")
-        voiceRecordingService.stopRecording()
-        
-        return currentRecordingURL!
+    }
+    
+    // Helper method to add timeout to async operations
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            // Add the main operation
+            group.addTask {
+                try await operation()
+            }
+            
+            // Add timeout task
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw VoiceAgentError.recordingFailed // Timeout
+            }
+            
+            // Return the first result (either completion or timeout)
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
     
     func stopRecording() {
@@ -1006,8 +989,217 @@ class VoiceAgentViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Streaming Processing (New)
+    
+    private func processUserMessageWithStreaming(_ message: String) async throws {
+        print("VoiceAgent: Processing user message with streaming: '\(message)'")
+        
+        // Add user message to conversation history
+        conversationHistory.append(AnthropicMessage(role: "user", content: .text(message)))
+        
+        // Get tools for bill context
+        let tools = getBillsTools()
+        let systemPrompt = getBillsSystemPrompt()
+        
+        // Start streaming response
+        var completeResponse = ""
+        var currentSentence = ""
+        
+        do {
+            let stream = anthropicService.streamMessageWithTools(
+                messages: conversationHistory,
+                systemPrompt: systemPrompt,
+                tools: tools
+            )
+            
+            for try await chunk in stream {
+                completeResponse += chunk
+                currentSentence += chunk
+                
+                // Check if we have a complete sentence
+                if currentSentence.contains(".") || currentSentence.contains("!") || currentSentence.contains("?") {
+                    print("VoiceAgent: Processing complete sentence: '\(currentSentence)'")
+                    
+                    let sentences = splitIntoSentences(currentSentence)
+                    print("VoiceAgent: Split into \(sentences.count) sentences: \(sentences)")
+                    
+                    for sentence in sentences {
+                        let trimmedSentence = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmedSentence.isEmpty && trimmedSentence.count > 2 { // Avoid very short fragments
+                            print("VoiceAgent: Queueing sentence: '\(trimmedSentence)'")
+                            
+                            // Generate and queue audio for this sentence immediately
+                            Task {
+                                do {
+                                    let audioData = try await generateSpeech(from: trimmedSentence)
+                                    try await audioPlaybackService.queueVoiceResponse(audioData: audioData)
+                                } catch {
+                                    print("Error generating/queueing streaming audio: \(error)")
+                                }
+                            }
+                        }
+                    }
+                    currentSentence = ""
+                }
+            }
+            
+            // Handle any remaining text
+            if !currentSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let audioData = try await generateSpeech(from: currentSentence)
+                try await audioPlaybackService.queueVoiceResponse(audioData: audioData)
+            }
+            
+            // Add complete response to conversation history
+            conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(completeResponse)))
+            
+        } catch {
+            print("Streaming error, falling back to regular processing: \(error)")
+            // Fallback to regular processing
+            let response = try await processUserMessage(message)
+            let audioData = try await generateSpeech(from: response)
+            try await playResponse(audioData: audioData)
+        }
+    }
+    
+    private func splitIntoSentences(_ text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        
+        // Split by sentence-ending punctuation
+        let components = trimmed.components(separatedBy: CharacterSet(charactersIn: ".!?"))
+        var sentences: [String] = []
+        
+        for (index, component) in components.enumerated() {
+            let trimmedComponent = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Skip empty components
+            guard !trimmedComponent.isEmpty else { continue }
+            
+            // For all but the last component, add back punctuation
+            if index < components.count - 1 {
+                sentences.append(trimmedComponent + ".")
+            } else {
+                // For the last component, check if it originally had punctuation
+                if trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?") {
+                    sentences.append(trimmedComponent + ".")
+                } else {
+                    // No punctuation at end, this is likely incomplete - don't add punctuation
+                    sentences.append(trimmedComponent)
+                }
+            }
+        }
+        
+        return sentences.filter { !$0.isEmpty }
+    }
+    
     private func generateSpeech(from text: String) async throws -> Data {
         return try await elevenLabsService.generateSpeech(text: text)
+    }
+    
+    // MARK: - Post-Haiku Sentence Splitting (New Optimized Approach)
+    
+    private func processUserMessageWithPostSplitTTS(_ message: String) async throws {
+        print("VoiceAgent: Processing user message with post-split TTS: '\(message)'")
+        
+        // Add user message to conversation history
+        conversationHistory.append(AnthropicMessage(role: "user", content: .text(message)))
+        
+        // Get tools for bill context
+        let tools = getBillsTools()
+        let systemPrompt = getBillsSystemPrompt()
+        
+        // Get complete response from Claude (fast with Haiku)
+        let response = try await anthropicService.sendMessageWithTools(
+            messages: conversationHistory,
+            systemPrompt: systemPrompt,
+            tools: tools
+        )
+        
+        let responseText: String
+        switch response {
+        case .text(let text):
+            responseText = text
+        case .toolUse(let id, let name, let input):
+            // Handle tool use (simplified for now)
+            let toolResult = await executeToolAndGetResult(toolId: id, name: name, input: input)
+            conversationHistory.append(AnthropicMessage(role: "assistant", content: .toolUse(id: id, name: name, input: input)))
+            conversationHistory.append(AnthropicMessage(role: "user", content: .toolResult(toolUseId: id, content: toolResult)))
+            
+            let finalResponse = try await anthropicService.sendMessageWithTools(
+                messages: conversationHistory,
+                systemPrompt: systemPrompt,
+                tools: tools
+            )
+            
+            if case .text(let text) = finalResponse {
+                responseText = text
+            } else {
+                responseText = "I've completed your request."
+            }
+        case .toolResult:
+            responseText = "Something went wrong with the request."
+        }
+        
+        print("VoiceAgent: Got complete response: '\(responseText)'")
+        
+        // Split into sentences
+        let sentences = splitIntoSentences(responseText).filter { 
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).count >= 5 
+        }
+        
+        guard !sentences.isEmpty else {
+            // Fallback for no sentences
+            let audioData = try await generateSpeech(from: responseText)
+            try await playResponse(audioData: audioData)
+            return
+        }
+        
+        print("VoiceAgent: Split into \(sentences.count) sentences for TTS")
+        
+        // Strategy: First sentence immediate, rest in parallel
+        if sentences.count == 1 {
+            // Only one sentence - simple case
+            let audioData = try await generateSpeech(from: sentences[0])
+            try await audioPlaybackService.queueVoiceResponse(audioData: audioData)
+        } else {
+            // Multiple sentences - hybrid approach
+            print("VoiceAgent: Generating first sentence immediately...")
+            
+            // Generate first sentence immediately (blocking for fastest start)
+            let firstAudio = try await generateSpeech(from: sentences[0])
+            try await audioPlaybackService.queueVoiceResponse(audioData: firstAudio)
+            
+            // Generate remaining sentences in parallel, queue in order
+            if sentences.count > 1 {
+                print("VoiceAgent: Generating remaining \(sentences.count - 1) sentences in parallel...")
+                
+                let remainingSentences = Array(sentences.dropFirst())
+                try await withThrowingTaskGroup(of: (Int, Data).self) { group in
+                    // Start all TTS tasks in parallel
+                    for (index, sentence) in remainingSentences.enumerated() {
+                        group.addTask {
+                            let audio = try await self.generateSpeech(from: sentence)
+                            return (index, audio)
+                        }
+                    }
+                    
+                    // Collect results and sort by index to maintain order
+                    var audioResults: [(Int, Data)] = []
+                    for try await result in group {
+                        audioResults.append(result)
+                    }
+                    
+                    // Sort by index and queue in order
+                    audioResults.sort(by: { $0.0 < $1.0 })
+                    for (_, audioData) in audioResults {
+                        try await self.audioPlaybackService.queueVoiceResponse(audioData: audioData)
+                    }
+                }
+            }
+        }
+        
+        // Add complete response to conversation history
+        conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(responseText)))
     }
     
     private func playResponse(audioData: Data) async throws {
@@ -1063,7 +1255,7 @@ class VoiceAgentViewModel: ObservableObject {
         - Warm, encouraging, and supportive
         - Professional but conversational
         - Use simple, clear language (avoid financial jargon)
-        - Keep responses concise for voice interaction - 1-2 sentences when possible
+        - **CRITICAL: Keep ALL responses to maximum 2 sentences for natural voice conversation**
         - Sound natural and conversational as if speaking aloud
         - You are Norma, the AI assistant for the Norma financial app
         
@@ -1150,6 +1342,7 @@ class VoiceAgentViewModel: ObservableObject {
         - Keep responses concise for voice interaction - 1-2 sentences when possible
         - Sound natural and conversational as if speaking aloud
         - You are Norma, the AI assistant for the Norma financial app
+        - **CRITICAL: Keep ALL responses to maximum 2 sentences for natural voice conversation**
         
         Context: The user activated voice mode from their expenses calendar to add a new expense. You've already greeted them asking what expense they'd like to add.
         

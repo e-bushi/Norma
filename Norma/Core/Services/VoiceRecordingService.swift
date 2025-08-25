@@ -7,6 +7,7 @@
 
 import Foundation
 import AVFoundation
+import Combine
 
 @MainActor
 class VoiceRecordingService: ObservableObject {
@@ -15,16 +16,50 @@ class VoiceRecordingService: ObservableObject {
     @Published var isRecording = false
     @Published var recordingLevel: Float = 0.0
     @Published var hasPermission = false
+    @Published var isSpeechDetected = false
+    
+    // Reactive streams
+    private let audioLevelSubject = PassthroughSubject<Float, Never>()
+    private let speechEventSubject = PassthroughSubject<SpeechEvent, Never>()
+    private let recordingCompletionSubject = PassthroughSubject<URL, Never>()
+    
+    // Public streams
+    lazy var audioLevelStream: AnyPublisher<Float, Never> = audioLevelSubject.eraseToAnyPublisher()
+    lazy var speechEventStream: AnyPublisher<SpeechEvent, Never> = speechEventSubject.eraseToAnyPublisher()
+    lazy var recordingCompletionStream: AnyPublisher<URL, Never> = recordingCompletionSubject.eraseToAnyPublisher()
     
     private var audioRecorder: AVAudioRecorder?
     private var audioSession: AVAudioSession
     private var levelTimer: Timer?
     private var currentRecordingURL: URL?
     private var levelUpdateCount = 0
+    private var cancellables = Set<AnyCancellable>()
+    
+    // Speech detection state
+    private var speechThreshold: Float = 0.05
+    private var silenceThreshold: Float = 0.02
+    private var speechDetected = false
+    private var lastSpeechTime = Date()
+    private var silenceTimeoutDuration: TimeInterval = 0.5
     
     private init() {
         self.audioSession = AVAudioSession.sharedInstance()
+        setupReactiveStreams()
         checkMicrophonePermission()
+    }
+    
+    // MARK: - Reactive Stream Setup
+    
+    private func setupReactiveStreams() {
+        // Setup automatic recording completion based on speech events
+        speechEventStream
+            .filter { $0 == .silenceDetectedAfterSpeech }
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.completeRecordingDueToSilence()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     deinit {
@@ -33,6 +68,7 @@ class VoiceRecordingService: ObservableObject {
         audioRecorder = nil
         levelTimer?.invalidate()
         levelTimer = nil
+        cancellables.removeAll()
         // Deactivate audio session
         try? audioSession.setActive(false)
     }
@@ -126,8 +162,13 @@ class VoiceRecordingService: ObservableObject {
             throw VoiceRecordingError.recordingFailed
         }
         
+        // Reset speech detection state
+        speechDetected = false
+        isSpeechDetected = false
+        lastSpeechTime = Date()
+        
         isRecording = true
-        startLevelMonitoring()
+        startReactiveLevelMonitoring()
         print("VoiceRecording: Recording started successfully")
         
         return audioURL
@@ -164,11 +205,11 @@ class VoiceRecordingService: ObservableObject {
         print("VoiceRecording: Recording stopped successfully")
     }
     
-    // MARK: - Audio Level Monitoring
+    // MARK: - Reactive Audio Level Monitoring
     
-    private func startLevelMonitoring() {
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.updateRecordingLevel()
+    private func startReactiveLevelMonitoring() {
+        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.updateRecordingLevelReactive()
         }
     }
     
@@ -177,7 +218,7 @@ class VoiceRecordingService: ObservableObject {
         levelTimer = nil
     }
     
-    private func updateRecordingLevel() {
+    private func updateRecordingLevelReactive() {
         guard let recorder = audioRecorder else { return }
         
         recorder.updateMeters()
@@ -185,11 +226,55 @@ class VoiceRecordingService: ObservableObject {
         let normalizedLevel = pow(10, averagePower / 20)
         recordingLevel = normalizedLevel
         
-        // Log audio levels periodically (every 10 updates to avoid spam)
+        // Emit audio level to reactive stream
+        audioLevelSubject.send(normalizedLevel)
+        
+        // Perform speech detection
+        detectSpeechEvent(level: normalizedLevel)
+        
+        // Log audio levels periodically (every 20 updates to avoid spam)
         levelUpdateCount += 1
-        if levelUpdateCount % 10 == 0 {
+        if levelUpdateCount % 20 == 0 {
             print("VoiceRecording: Audio level - Power: \(averagePower)dB, Normalized: \(normalizedLevel)")
         }
+    }
+    
+    private func detectSpeechEvent(level: Float) {
+        let currentTime = Date()
+        
+        if level > speechThreshold {
+            // Strong audio detected - likely speech
+            if !speechDetected {
+                speechDetected = true
+                isSpeechDetected = true
+                speechEventSubject.send(.speechStarted)
+                print("VoiceRecording: 🎤 Speech started - level: \(level)")
+            }
+            lastSpeechTime = currentTime
+        } else if level > silenceThreshold {
+            // Moderate audio - update last speech time but don't trigger speech start
+            lastSpeechTime = currentTime
+        }
+        
+        // Check for silence after speech
+        if speechDetected {
+            let silenceDuration = currentTime.timeIntervalSince(lastSpeechTime)
+            if silenceDuration >= silenceTimeoutDuration {
+                print("VoiceRecording: 🔇 Silence detected after speech - \(String(format: "%.1f", silenceDuration))s")
+                speechEventSubject.send(.silenceDetectedAfterSpeech)
+                // Reset for next potential speech
+                speechDetected = false
+                isSpeechDetected = false
+            }
+        }
+    }
+    
+    private func completeRecordingDueToSilence() {
+        guard isRecording, let recordingURL = currentRecordingURL else { return }
+        
+        print("VoiceRecording: Auto-completing recording due to silence detection")
+        stopRecording()
+        recordingCompletionSubject.send(recordingURL)
     }
     
     // MARK: - Utility Methods
@@ -229,6 +314,14 @@ class VoiceRecordingService: ObservableObject {
             return false
         }
     }
+}
+
+// MARK: - Speech Events
+
+enum SpeechEvent: Equatable {
+    case speechStarted
+    case silenceDetectedAfterSpeech
+    case recordingTimeout
 }
 
 // MARK: - Error Types
