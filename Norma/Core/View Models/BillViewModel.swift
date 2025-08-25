@@ -82,6 +82,9 @@ class BillViewModel: ObservableObject {
         
         // Check for bill verification after loading
         checkForBillVerification()
+        
+        // Update widget data
+        updateWidgetData()
     }
     
     private func updateOverdueBills() {
@@ -435,6 +438,28 @@ class BillViewModel: ObservableObject {
                 return ("Due in \(daysUntilDue) days", .secondary)
             }
         }
+    }
+    
+    // MARK: - Widget Integration
+    
+    private func updateWidgetData() {
+        // Get expenses from DataManager if available
+        let expenses = dataManager.expenses
+        let monthlyIncome = dataManager.currentProfile?.settings.monthlyIncome ?? 0
+        
+        // Get currency information
+        let currencyCode = dataManager.currentProfile?.settings.currency ?? "USD"
+        let currencySymbol = CurrencyData.getCurrency(for: currencyCode).symbol
+        
+        // Update widget with current bills and expenses
+        WidgetDataManager.shared.updateWidgetData(
+            bills: bills,
+            expenses: expenses,
+            monthlyIncome: monthlyIncome,
+            currencyCode: currencyCode,
+            currencySymbol: currencySymbol,
+            aiInsight: nil
+        )
     }
     
     // MARK: - Error Handling

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import Combine
 
 @MainActor
@@ -33,6 +34,7 @@ class AppCoordinator: ObservableObject {
         self.sessionViewModel = SessionViewModel(dataManager: dataManager)
         
         setupAppFlow()
+        setupNotificationObservers()
     }
     
     // MARK: - App Flow Methods
@@ -51,6 +53,23 @@ class AppCoordinator: ObservableObject {
             // Observe session changes
             observeSessionChanges()
         }
+    }
+    
+    private func setupNotificationObservers() {
+        // Process pending Siri intents when app becomes active
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.dataManager.processPendingSiriIntents()
+            }
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func updateCurrentView() {

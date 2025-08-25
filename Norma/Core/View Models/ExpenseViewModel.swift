@@ -85,6 +85,9 @@ class ExpenseViewModel: ObservableObject {
         totalExpenses = dataManager.getTotalExpenses(for: selectedDateRange)
         
         updateStatistics()
+        
+        // Update widget data
+        updateWidgetData()
     }
     
     func refreshExpenses() async {
@@ -318,6 +321,29 @@ class ExpenseViewModel: ObservableObject {
             count: count,
             average: average,
             period: period
+        )
+    }
+    
+    // MARK: - Widget Integration
+    
+    private func updateWidgetData() {
+        // Get all expenses and bills from DataManager
+        let allExpenses = dataManager.expenses
+        let bills = dataManager.bills
+        let monthlyIncome = dataManager.currentProfile?.settings.monthlyIncome ?? 0
+        
+        // Get currency information
+        let currencyCode = dataManager.currentProfile?.settings.currency ?? "USD"
+        let currencySymbol = CurrencyData.getCurrency(for: currencyCode).symbol
+        
+        // Update widget with current data
+        WidgetDataManager.shared.updateWidgetData(
+            bills: bills,
+            expenses: allExpenses,
+            monthlyIncome: monthlyIncome,
+            currencyCode: currencyCode,
+            currencySymbol: currencySymbol,
+            aiInsight: nil
         )
     }
     

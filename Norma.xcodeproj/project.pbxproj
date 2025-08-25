@@ -7,11 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F622C2812E550AFB0016EA1B /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F622C2802E550AFB0016EA1B /* WidgetKit.framework */; };
+		F622C2832E550AFB0016EA1B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F622C2822E550AFB0016EA1B /* SwiftUI.framework */; };
+		F622C2942E550AFC0016EA1B /* NormaWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F622C27E2E550AFA0016EA1B /* NormaWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F64F88152E3BECD3002D2FC5 /* RevenueCat */; };
 		F6938D312E0B2B6100C98852 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F6938D302E0B2B6100C98852 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		F622C2922E550AFC0016EA1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F6638D382DCD6C3F009D95C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F622C27D2E550AFA0016EA1B;
+			remoteInfo = NormaWidgetExtension;
+		};
 		F6638D502DCD6C40009D95C3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F6638D382DCD6C3F009D95C3 /* Project object */;
@@ -28,13 +38,49 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		F622C2992E550AFC0016EA1B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F622C2942E550AFC0016EA1B /* NormaWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		F622C27E2E550AFA0016EA1B /* NormaWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NormaWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F622C2802E550AFB0016EA1B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		F622C2822E550AFB0016EA1B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		F634EF1D2E591F1900083590 /* NormaWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NormaWidgetExtension.entitlements; sourceTree = "<group>"; };
 		F6638D402DCD6C3F009D95C3 /* Norma.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Norma.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6638D4F2DCD6C40009D95C3 /* NormaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NormaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6638D592DCD6C40009D95C3 /* NormaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NormaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F622C2952E550AFC0016EA1B /* Exceptions for "NormaWidget" folder in "NormaWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F622C27D2E550AFA0016EA1B /* NormaWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F622C2842E550AFB0016EA1B /* NormaWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F622C2952E550AFC0016EA1B /* Exceptions for "NormaWidget" folder in "NormaWidgetExtension" target */,
+			);
+			path = NormaWidget;
+			sourceTree = "<group>";
+		};
 		F6638D422DCD6C3F009D95C3 /* Norma */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Norma;
@@ -53,6 +99,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		F622C27B2E550AFA0016EA1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F622C2832E550AFB0016EA1B /* SwiftUI.framework in Frameworks */,
+				F622C2812E550AFB0016EA1B /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F6638D3D2DCD6C3F009D95C3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -79,12 +134,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F622C27F2E550AFB0016EA1B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F622C2802E550AFB0016EA1B /* WidgetKit.framework */,
+				F622C2822E550AFB0016EA1B /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F6638D372DCD6C3F009D95C3 = {
 			isa = PBXGroup;
 			children = (
+				F634EF1D2E591F1900083590 /* NormaWidgetExtension.entitlements */,
 				F6638D422DCD6C3F009D95C3 /* Norma */,
 				F6638D522DCD6C40009D95C3 /* NormaTests */,
 				F6638D5C2DCD6C40009D95C3 /* NormaUITests */,
+				F622C2842E550AFB0016EA1B /* NormaWidget */,
+				F622C27F2E550AFB0016EA1B /* Frameworks */,
 				F6638D412DCD6C3F009D95C3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -95,6 +162,7 @@
 				F6638D402DCD6C3F009D95C3 /* Norma.app */,
 				F6638D4F2DCD6C40009D95C3 /* NormaTests.xctest */,
 				F6638D592DCD6C40009D95C3 /* NormaUITests.xctest */,
+				F622C27E2E550AFA0016EA1B /* NormaWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,6 +170,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		F622C27D2E550AFA0016EA1B /* NormaWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F622C2962E550AFC0016EA1B /* Build configuration list for PBXNativeTarget "NormaWidgetExtension" */;
+			buildPhases = (
+				F622C27A2E550AFA0016EA1B /* Sources */,
+				F622C27B2E550AFA0016EA1B /* Frameworks */,
+				F622C27C2E550AFA0016EA1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F622C2842E550AFB0016EA1B /* NormaWidget */,
+			);
+			name = NormaWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = NormaWidgetExtension;
+			productReference = F622C27E2E550AFA0016EA1B /* NormaWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		F6638D3F2DCD6C3F009D95C3 /* Norma */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F6638D632DCD6C40009D95C3 /* Build configuration list for PBXNativeTarget "Norma" */;
@@ -109,10 +199,12 @@
 				F6638D3C2DCD6C3F009D95C3 /* Sources */,
 				F6638D3D2DCD6C3F009D95C3 /* Frameworks */,
 				F6638D3E2DCD6C3F009D95C3 /* Resources */,
+				F622C2992E550AFC0016EA1B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F622C2932E550AFC0016EA1B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F6638D422DCD6C3F009D95C3 /* Norma */,
@@ -182,6 +274,9 @@
 				LastSwiftUpdateCheck = 1630;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
+					F622C27D2E550AFA0016EA1B = {
+						CreatedOnToolsVersion = 16.3;
+					};
 					F6638D3F2DCD6C3F009D95C3 = {
 						CreatedOnToolsVersion = 16.3;
 					};
@@ -216,11 +311,19 @@
 				F6638D3F2DCD6C3F009D95C3 /* Norma */,
 				F6638D4E2DCD6C40009D95C3 /* NormaTests */,
 				F6638D582DCD6C40009D95C3 /* NormaUITests */,
+				F622C27D2E550AFA0016EA1B /* NormaWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		F622C27C2E550AFA0016EA1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F6638D3E2DCD6C3F009D95C3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -245,6 +348,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F622C27A2E550AFA0016EA1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F6638D3C2DCD6C3F009D95C3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -269,6 +379,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F622C2932E550AFC0016EA1B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F622C27D2E550AFA0016EA1B /* NormaWidgetExtension */;
+			targetProxy = F622C2922E550AFC0016EA1B /* PBXContainerItemProxy */;
+		};
 		F6638D512DCD6C40009D95C3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F6638D3F2DCD6C3F009D95C3 /* Norma */;
@@ -282,6 +397,70 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		F622C2972E550AFC0016EA1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NormaWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = K62Y623GK6;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NormaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NormaWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma.NormaWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		F622C2982E550AFC0016EA1B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NormaWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = K62Y623GK6;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NormaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NormaWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma.NormaWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		F6638D612DCD6C40009D95C3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -408,6 +587,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Norma/Norma.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = K62Y623GK6;
@@ -445,6 +625,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Norma/Norma.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = K62Y623GK6;
@@ -552,6 +733,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F622C2962E550AFC0016EA1B /* Build configuration list for PBXNativeTarget "NormaWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F622C2972E550AFC0016EA1B /* Debug */,
+				F622C2982E550AFC0016EA1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F6638D3B2DCD6C3F009D95C3 /* Build configuration list for PBXProject "Norma" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -52,14 +52,19 @@ class DataManager: ObservableObject {
         print("🔍 [DEBUG] DataManager.setModelContext called")
         self.modelContext = context
         print("✅ [DEBUG] DataManager.setModelContext: ModelContext set successfully")
-        loadCachedBills()
-        print("✅ [DEBUG] DataManager.setModelContext: loadCachedBills completed")
-        loadCachedExpenses()
-        print("✅ [DEBUG] DataManager.setModelContext: loadCachedExpenses completed")
-        loadCachedBudgets()
-        print("✅ [DEBUG] DataManager.setModelContext: loadCachedBudgets completed")
-        loadCachedCategories()
-        print("✅ [DEBUG] DataManager.setModelContext: loadCachedCategories completed")
+        // Note: Data loading happens via fetchAllFinancialData() which is called from RootView
+        
+        // Process any pending Siri intents
+        Task {
+            await SharedDataService.shared.processPendingIntents(dataManager: self)
+        }
+    }
+    
+    // MARK: - Siri Integration
+    
+    /// Process pending Siri intents (call this when app becomes active)
+    func processPendingSiriIntents() async {
+        await SharedDataService.shared.processPendingIntents(dataManager: self)
     }
     
     // MARK: - User Profile Methods
@@ -220,6 +225,20 @@ class DataManager: ObservableObject {
     
     var hasPsychologyData: Bool {
         moneyPersonality != nil || financialHealthInsight != nil
+    }
+    
+    // MARK: - Widget Integration
+    
+    func forceUpdateWidgetData() {
+        print("🔄 Forcing widget data update...")
+        let monthlyIncome = currentProfile?.settings.monthlyIncome ?? 0
+        WidgetDataManager.shared.updateWidgetData(
+            bills: bills,
+            expenses: expenses,
+            monthlyIncome: monthlyIncome,
+            aiInsight: nil
+        )
+        print("✅ Widget data updated with \(bills.count) bills, \(expenses.count) expenses, and $\(monthlyIncome) monthly income")
     }
     
     // MARK: - Private Methods

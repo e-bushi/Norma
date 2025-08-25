@@ -13,13 +13,13 @@ class AnthropicService {
     private let apiKey = "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"
     private let baseURL = "https://api.anthropic.com/v1/messages"
     
-    // Model cascade in order of preference
+    // Model cascade in order of preference (optimized for voice speed)
     private let modelCascade = [
-        "claude-sonnet-4-20250514",
-        "claude-3-7-sonnet-20250219", 
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-haiku-20240307"
+        "claude-3-5-haiku-20241022",    // Fastest, great for voice conversations
+        "claude-3-haiku-20240307",      // Fast fallback
+        "claude-3-5-sonnet-20241022",   // Higher quality fallback if needed
+        "claude-3-7-sonnet-20250219",   // Even higher quality
+        "claude-sonnet-4-20250514"      // Highest quality, slowest
     ]
     
     private init() {}
@@ -52,7 +52,8 @@ class AnthropicService {
                     system: systemPrompt,
                     messages: messages,
                     tools: tools,
-                    toolChoice: toolChoice
+                    toolChoice: toolChoice,
+                    stream: nil
                 )
                 
                 request.httpBody = try JSONEncoder().encode(requestBody)
@@ -218,6 +219,170 @@ class AnthropicService {
             return try T.parse(from: input)
         } else {
             throw AnthropicError.dataParsingError
+        }
+    }
+    
+    // MARK: - Streaming Support
+    
+    func streamMessageWithTools(
+        messages: [AnthropicMessage],
+        systemPrompt: String,
+        tools: [AnthropicTool]? = nil,
+        toolChoice: AnthropicToolChoice? = nil,
+        maxTokens: Int = 1000
+    ) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream<String, Error> { continuation in
+            Task {
+                var lastError: Error?
+                
+                for model in modelCascade {
+                    do {
+                        print("🔄 Streaming with model: \(model)")
+                        
+                        var request = URLRequest(url: URL(string: baseURL)!)
+                        request.httpMethod = "POST"
+                        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+                        
+                        let requestBody = AnthropicRequest(
+                            model: model,
+                            maxTokens: maxTokens,
+                            system: systemPrompt,
+                            messages: messages,
+                            tools: tools,
+                            toolChoice: toolChoice,
+                            stream: true  // Enable streaming
+                        )
+                        
+                        request.httpBody = try JSONEncoder().encode(requestBody)
+                        
+                        let (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+                        
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            throw AnthropicError.invalidResponse
+                        }
+                        
+                        if httpResponse.statusCode == 200 {
+                            print("✅ Successfully connected to streaming endpoint with \(model)")
+                            
+                            var buffer = ""
+                            print("🔄 Starting SSE processing...")
+                            
+                            for try await byte in asyncBytes {
+                                let character = String(data: Data([byte]), encoding: .utf8) ?? ""
+                                buffer += character
+                                
+                                print("📥 Buffer length: \(buffer.count), last 50 chars: '\(String(buffer.suffix(50)))'")
+                                
+                                // Process complete SSE events
+                                while let lineEndRange = buffer.range(of: "\n") {
+                                    print("🔍 Processing line, buffer length: \(buffer.count), lineEnd: \(lineEndRange)")
+                                    
+                                    // More defensive bounds checking
+                                    guard buffer.startIndex <= lineEndRange.lowerBound && lineEndRange.lowerBound <= buffer.endIndex else {
+                                        print("❌ Invalid line range bounds")
+                                        buffer = "" // Reset buffer to recover
+                                        break
+                                    }
+                                    
+                                    let line = String(buffer[buffer.startIndex..<lineEndRange.lowerBound])
+                                    print("📝 Extracted line: '\(line)'")
+                                    
+                                    // More defensive removal
+                                    guard buffer.startIndex <= lineEndRange.upperBound && lineEndRange.upperBound <= buffer.endIndex else {
+                                        print("❌ Invalid removal range bounds")
+                                        buffer = "" // Reset buffer to recover
+                                        break
+                                    }
+                                    
+                                    // Use a safer approach to remove the line
+                                    let remainingStart = lineEndRange.upperBound
+                                    if remainingStart < buffer.endIndex {
+                                        buffer = String(buffer[remainingStart...])
+                                    } else {
+                                        buffer = ""
+                                    }
+                                    
+                                    print("🧹 Buffer after removal, length: \(buffer.count)")
+                                    
+                                    if line.hasPrefix("data: ") {
+                                        print("📡 Processing data line")
+                                        
+                                        // Use substring instead of dropFirst for safety
+                                        guard line.count > 6 else {
+                                            print("⚠️ Data line too short, skipping")
+                                            continue
+                                        }
+                                        
+                                        let jsonData = String(line[line.index(line.startIndex, offsetBy: 6)...])
+                                        print("🔧 JSON data: '\(jsonData)'")
+                                        
+                                        if jsonData == "[DONE]" {
+                                            print("✅ Stream completed")
+                                            continuation.finish()
+                                            return
+                                        }
+                                        
+                                        if let data = jsonData.data(using: .utf8) {
+                                            do {
+                                                let streamResponse = try JSONDecoder().decode(AnthropicStreamResponse.self, from: data)
+                                                
+                                                // Handle different stream event types
+                                                switch streamResponse.type {
+                                                case "message_start":
+                                                    print("📡 Stream started")
+                                                case "content_block_start":
+                                                    print("📡 Content block started")
+                                                case "content_block_delta":
+                                                    // This is where the actual text content comes
+                                                    if let textDelta = streamResponse.delta?.text {
+                                                        print("📡 Streaming chunk: '\(textDelta)'")
+                                                        continuation.yield(textDelta)
+                                                    }
+                                                case "content_block_stop":
+                                                    print("📡 Content block ended")
+                                                case "message_delta":
+                                                    print("📡 Message delta")
+                                                case "message_stop":
+                                                    print("📡 Message completed")
+                                                default:
+                                                    print("📡 Unknown event type: \(streamResponse.type)")
+                                                }
+                                                
+                                            } catch {
+                                                print("⚠️ Failed to decode stream response: \(error)")
+                                                print("   Raw JSON: \(jsonData)")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            continuation.finish()
+                            return
+                            
+                        } else if httpResponse.statusCode == 429 {
+                            print("⚠️ Rate limited with \(model), trying next model...")
+                            lastError = AnthropicError.rateLimited
+                            continue
+                        } else {
+                            print("❌ HTTP error \(httpResponse.statusCode) with \(model), trying next model...")
+                            lastError = AnthropicError.invalidResponse
+                            continue
+                        }
+                        
+                    } catch {
+                        print("❌ Error with \(model): \(error), trying next model...")
+                        lastError = error
+                        continue
+                    }
+                }
+                
+                // If we get here, all models failed
+                print("❌ All models failed for streaming request")
+                continuation.finish(throwing: lastError ?? AnthropicError.allModelsFailed)
+            }
         }
     }
 }

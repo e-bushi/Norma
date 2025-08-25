@@ -16,6 +16,7 @@ struct ExpenseTrackerRegularView: View {
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var incomeViewModel: IncomeViewModel
     @State private var showingIncomeDetail = false
     
     // Animation states
@@ -274,7 +275,12 @@ struct ExpenseTrackerRegularView: View {
                             } else {
                                 print("VoiceAgentViewModel is nil - initializing now")
                                 if let userId = sessionViewModel.currentUser?.userId {
-                                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                                    voiceAgentViewModel = VoiceAgentViewModel(
+                                        userId: userId, 
+                                        billViewModel: billViewModel,
+                                        incomeViewModel: incomeViewModel,
+                                        sessionViewModel: sessionViewModel
+                                    )
                                     // Request permissions if needed
                                     if let voiceAgent = voiceAgentViewModel {
                                         if !voiceAgent.hasPermissions {
@@ -314,7 +320,12 @@ struct ExpenseTrackerRegularView: View {
                 animateElements()
                 // Initialize voice agent with user ID and BillViewModel
                 if voiceAgentViewModel == nil, let userId = sessionViewModel.currentUser?.userId {
-                    voiceAgentViewModel = VoiceAgentViewModel(userId: userId, billViewModel: billViewModel)
+                    voiceAgentViewModel = VoiceAgentViewModel(
+                        userId: userId, 
+                        billViewModel: billViewModel,
+                        incomeViewModel: incomeViewModel,
+                        sessionViewModel: sessionViewModel
+                    )
                 }
             }
             .onChange(of: voiceAgentViewModel?.currentState) { _, newState in
@@ -336,30 +347,37 @@ struct ExpenseTrackerRegularView: View {
                     .environmentObject(profileViewModel)
             }
             .onChange(of: dotsAppeared) { _, newValue in
-            if newValue {
-                // Stagger the chart label animations
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                    incomeLabelAppeared = true
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                print("📊 ExpenseTrackerRegularView: dotsAppeared changed to \(newValue)")
+                if newValue {
+                    print("   🎯 Triggering label animations!")
+                    
+                    // Stagger the chart label animations with reliable timing
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        billsLabelAppeared = true
+                        incomeLabelAppeared = true
+                        print("   💰 incomeLabelAppeared = true")
                     }
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        currentLabelAppeared = true
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                            billsLabelAppeared = true
+                            print("   📄 billsLabelAppeared = true")
+                        }
                     }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                            currentLabelAppeared = true
+                            print("   💳 currentLabelAppeared = true")
+                        }
+                    }
+                } else {
+                    // Reset when dotsAppeared becomes false
+                    print("   🔄 Resetting label states")
+                    incomeLabelAppeared = false
+                    billsLabelAppeared = false
+                    currentLabelAppeared = false
                 }
-            } else {
-                // Reset when dotsAppeared becomes false
-                incomeLabelAppeared = false
-                billsLabelAppeared = false
-                currentLabelAppeared = false
             }
-        }
         }
     }
     
