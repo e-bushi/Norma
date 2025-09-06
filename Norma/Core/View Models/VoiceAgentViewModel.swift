@@ -124,7 +124,7 @@ class VoiceAgentViewModel: ObservableObject {
     // MARK: - Main Voice Agent Flow
     
     func startVoiceInteraction(userName: String? = nil) async {
-        print("VoiceAgent: Starting voice interaction...")
+        print("VoiceAgent: Starting unified voice interaction...")
         
         // Cancel any existing conversation
         conversationTask?.cancel()
@@ -141,10 +141,165 @@ class VoiceAgentViewModel: ObservableObject {
         
         // Create a new conversation task
         conversationTask = Task {
-            await runVoiceInteraction(userName: userName)
+            await runUnifiedVoiceInteraction(userName: userName)
         }
         
         await conversationTask?.value
+    }
+    
+    private func runUnifiedVoiceInteraction(userName: String? = nil) async {
+        do {
+            // Step 0: Play initial greeting and add to conversation history
+            print("VoiceAgent: Step 0 - Playing unified greeting...")
+            await setState(.generatingSpeech)
+            let greeting = generateUnifiedGreeting(userName: userName)
+            
+            // Add greeting to conversation history so Claude knows it already greeted the user
+            conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(greeting)))
+            
+            let greetingAudioData = try await generateSpeech(from: greeting)
+            
+            await setState(.playingResponse)
+            try await playResponse(audioData: greetingAudioData)
+            
+            // Continuous conversation loop
+            var conversationActive = true
+            var turnCount = 0
+            let maxTurns = 10 // Safety limit
+            let maxNoAudioRetries = 2 // Maximum attempts when no audio detected
+            
+            while conversationActive && turnCount < maxTurns && !isConversationCancelled {
+                // Check for cancellation
+                if Task.isCancelled || isConversationCancelled {
+                    print("VoiceAgent: Conversation cancelled by user")
+                    break
+                }
+                turnCount += 1
+                print("VoiceAgent: Conversation turn \(turnCount)")
+                
+                var noAudioRetryCount = 0
+                var turnCompleted = false
+                
+                while !turnCompleted && noAudioRetryCount <= maxNoAudioRetries && !isConversationCancelled {
+                    // Check for cancellation before each step
+                    if Task.isCancelled || isConversationCancelled {
+                        print("VoiceAgent: Conversation cancelled - stopping immediately")
+                        turnCompleted = true
+                        conversationActive = false
+                        break
+                    }
+                    
+                    do {
+                        // Step 1: Record audio with retry logic
+                        print("VoiceAgent: Step 1 - Recording audio...")
+                        guard !isConversationCancelled else { break }
+                        await setState(.recording)
+                        let audioURL = try await startRecording()
+                        
+                        // Check for cancellation after recording
+                        guard !isConversationCancelled else { break }
+                        
+                        // Step 2: Transcribe audio
+                        print("VoiceAgent: Step 2 - Transcribing audio...")
+                        await setState(.transcribing)
+                        let transcription = try await transcribeAudio(url: audioURL)
+                        
+                        // Check for cancellation after transcription
+                        guard !isConversationCancelled else { break }
+                        
+                        // Check if transcription is meaningful
+                        if transcription.count < 2 {
+                            print("VoiceAgent: Very short transcription detected, might be just noise")
+                            noAudioRetryCount += 1
+                            if noAudioRetryCount <= maxNoAudioRetries && !isConversationCancelled {
+                                print("VoiceAgent: Retrying... (attempt \(noAudioRetryCount + 1))")
+                                let retryMessage = noAudioRetryCount == 1 ? 
+                                    "I didn't catch that. Could you please repeat?" :
+                                    "I'm still having trouble hearing you. Could you speak a bit louder?"
+                                
+                                let retryAudioData = try await generateSpeech(from: retryMessage)
+                                await setState(.playingResponse)
+                                try await playResponse(audioData: retryAudioData)
+                                continue
+                            }
+                        }
+                        
+                        // Step 3: Process with Claude using unified tools and prompt
+                        print("VoiceAgent: Step 3 - Processing with Claude...")
+                        await setState(.processing)
+                        let (responseText, toolWasUsed) = try await processUnifiedTranscription(transcription)
+                        
+                        // Check for cancellation after processing
+                        guard !isConversationCancelled else { break }
+                        
+                        // Check for conversation end markers
+                        let lowercasedResponse = responseText.lowercased()
+                        if lowercasedResponse.contains("goodbye") || 
+                           lowercasedResponse.contains("take care") ||
+                           lowercasedResponse.contains("have a great") ||
+                           lowercasedResponse.contains("have a good") ||
+                           lowercasedResponse.contains("have a nice") {
+                            conversationActive = false
+                            print("VoiceAgent: Detected conversation ending")
+                        }
+                        
+                        // Step 4: Generate speech from response
+                        print("VoiceAgent: Step 4 - Generating speech...")
+                        guard !isConversationCancelled else { break }
+                        await setState(.generatingSpeech)
+                        let audioData = try await generateSpeech(from: responseText)
+                        
+                        // Step 5: Play response
+                        print("VoiceAgent: Step 5 - Playing response...")
+                        guard !isConversationCancelled else { break }
+                        await setState(.playingResponse)
+                        try await playResponse(audioData: audioData)
+                        
+                        // Turn completed successfully
+                        turnCompleted = true
+                        
+                    } catch {
+                        noAudioRetryCount += 1
+                        print("VoiceAgent: No audio detected (attempt \(noAudioRetryCount))")
+                        
+                        if noAudioRetryCount <= maxNoAudioRetries && !isConversationCancelled {
+                            // Play a retry message
+                            let retryMessage = noAudioRetryCount == 1 ? 
+                                "I didn't hear anything. Please try speaking again." :
+                                "Still no audio detected. Please make sure your microphone is working and try again."
+                            
+                            let retryAudioData = try await generateSpeech(from: retryMessage)
+                            await setState(.playingResponse)
+                            try await playResponse(audioData: retryAudioData)
+                        } else if !isConversationCancelled {
+                            // Max retries reached - pause conversation
+                            await pauseConversation(reason: "No audio detected after multiple attempts")
+                            conversationActive = false
+                            turnCompleted = true
+                        }
+                    } catch {
+                        // Other errors - handle gracefully and end conversation
+                        print("VoiceAgent: Unhandled error in conversation: \(error)")
+                        if !isConversationCancelled {
+                            await setError("Something went wrong: \(error.localizedDescription)")
+                        }
+                        conversationActive = false
+                        turnCompleted = true
+                    }
+                }
+            }
+            
+            print("VoiceAgent: Unified voice interaction completed successfully!")
+            if !isConversationCancelled {
+                await setState(.idle)
+            }
+            
+        } catch {
+            print("VoiceAgent: Error in unified voice interaction: \(error.localizedDescription)")
+            if !isConversationCancelled {
+                await setError(error.localizedDescription)
+            }
+        }
     }
     
     private func runVoiceInteraction(userName: String? = nil) async {
@@ -312,27 +467,9 @@ class VoiceAgentViewModel: ObservableObject {
     }
     
     func startExpenseVoiceInteraction(userName: String? = nil) async {
-        print("VoiceAgent: Starting expense voice interaction...")
-        
-        // Cancel any existing conversation
-        conversationTask?.cancel()
-        
-        guard hasPermissions else {
-            print("VoiceAgent: No permissions - requesting...")
-            await setError("Microphone and speech recognition permissions are required")
-            return
-        }
-        
-        print("VoiceAgent: Permissions confirmed, resetting state...")
-        await resetState()
-        isConversationCancelled = false
-        
-        // Create a new conversation task
-        conversationTask = Task {
-            await runExpenseVoiceInteraction(userName: userName)
-        }
-        
-        await conversationTask?.value
+        print("VoiceAgent: Starting expense voice interaction (redirecting to unified)...")
+        // Redirect to the unified voice interaction
+        await startVoiceInteraction(userName: userName)
     }
     
     private func runExpenseVoiceInteraction(userName: String? = nil) async {
@@ -512,6 +649,11 @@ class VoiceAgentViewModel: ObservableObject {
     private func generateExpenseGreeting(userName: String?) -> String {
         let greeting = userName != nil ? "Hi \(userName!), " : "Hi there, "
         return greeting + "I'm ready to help you add a new expense! What did you spend money on?"
+    }
+    
+    private func generateUnifiedGreeting(userName: String?) -> String {
+        let greeting = userName != nil ? "Hi \(userName!), " : "Hi there, "
+        return greeting + "I'm Norma, your financial assistant. I can help you manage bills, track expenses, or check your income. What would you like to do?"
     }
     
     func stopVoiceInteraction() {
@@ -1239,6 +1381,152 @@ class VoiceAgentViewModel: ObservableObject {
         case expense
         case bill
         case general
+    }
+    
+    // MARK: - Unified Processing
+    
+    private func processUnifiedTranscription(_ transcription: String) async throws -> (String, Bool) {
+        print("VoiceAgent: Processing transcription with unified context: '\(transcription)'")
+        
+        // Add user message to conversation history
+        conversationHistory.append(AnthropicMessage(role: "user", content: .text(transcription)))
+        
+        // Get all tools (both bills and expenses)
+        let tools = getUnifiedTools()
+        let systemPrompt = getUnifiedSystemPrompt()
+        
+        // Get response from Anthropic with conversational context
+        let response = try await anthropicService.sendMessageWithTools(
+            messages: conversationHistory,
+            systemPrompt: systemPrompt,
+            tools: tools
+        )
+        
+        // Handle the response content
+        switch response {
+        case .text(let text):
+            print("VoiceAgent: Got text response: '\(text)'")
+            // Add AI response to conversation history
+            conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(text)))
+            return (text, false)
+            
+        case .toolUse(let toolUseId, let toolName, let toolInput):
+            print("VoiceAgent: Claude wants to use tool: \(toolName)")
+            
+            // Execute the tool and get result
+            let toolResult = await executeToolAndGetResult(toolId: toolUseId, name: toolName, input: toolInput)
+            print("VoiceAgent: Tool result: \(toolResult)")
+            
+            // Add tool use and result to conversation history
+            conversationHistory.append(AnthropicMessage(
+                role: "assistant",
+                content: .toolUse(id: toolUseId, name: toolName, input: toolInput)
+            ))
+            conversationHistory.append(AnthropicMessage(
+                role: "user",
+                content: .toolResult(toolUseId: toolUseId, content: toolResult)
+            ))
+            
+            // Get Claude's response after tool execution
+            let followUpResponse = try await anthropicService.sendMessageWithTools(
+                messages: conversationHistory,
+                systemPrompt: systemPrompt,
+                tools: tools
+            )
+            
+            switch followUpResponse {
+            case .text(let text):
+                print("VoiceAgent: Got follow-up response: '\(text)'")
+                // Add AI response to conversation history
+                conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(text)))
+                return (text, true)
+            case .toolUse:
+                // If Claude wants to use another tool, just return a message
+                return ("I've completed that action for you.", true)
+            case .toolResult:
+                // Unexpected tool result - shouldn't happen here
+                return ("I've processed that information.", true)
+            }
+        case .toolResult:
+            // Unexpected tool result - shouldn't happen here
+            return ("I've processed that information.", false)
+        }
+    }
+    
+    private func getUnifiedTools() -> [AnthropicTool] {
+        // Combine both bill and expense tools
+        var tools = getBillsTools()
+        tools.append(contentsOf: getExpenseTools())
+        return tools
+    }
+    
+    private func getUnifiedSystemPrompt() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "YYYY-MM-dd"
+        let currentDate = formatter.string(from: Date())
+        
+        // Get all data for the system prompt
+        let currentBillsData = getCurrentBillsData()
+        let currentExpensesData = getCurrentExpensesData()
+        let currentIncomeData = getCurrentIncomeData()
+        
+        return """
+        You are Norma, a friendly AI financial assistant in a voice conversation with a user. You help them manage their complete financial life - bills, expenses, and income - through natural voice interaction. This is a voice conversation, so respond conversationally and naturally as if speaking aloud.
+        
+        Today's date is \(currentDate).
+        
+        \(currentBillsData)
+        
+        \(currentExpensesData)
+        
+        \(currentIncomeData)
+        
+        Your personality:
+        - Warm, encouraging, and supportive
+        - Professional but conversational
+        - Use simple, clear language (avoid financial jargon)
+        - **CRITICAL: Keep ALL responses to maximum 2 sentences for natural voice conversation**
+        - Sound natural and conversational as if speaking aloud
+        - You are Norma, the AI assistant for the Norma financial app
+        
+        **CRITICAL VOICE FORMATTING**: When speaking monetary amounts, always write them in full word form for proper text-to-speech pronunciation:
+        - $108.88 → "one hundred and eight dollars and eighty-eight cents"
+        - $50.00 → "fifty dollars" (omit cents when zero)
+        - €75.25 → "seventy-five euros and twenty-five cents"
+        - £12.99 → "twelve pounds and ninety-nine pence"
+        - ¥1000 → "one thousand yen"
+        This applies to ALL currencies and amounts in your responses.
+        
+        CAPABILITIES:
+        1. BILLS MANAGEMENT:
+           - Create, edit, delete recurring bills
+           - Mark bills as paid
+           - Answer questions about upcoming bills and due dates
+           
+        2. EXPENSE TRACKING:
+           - Add new one-time expenses
+           - Answer questions about spending patterns
+           - Provide expense summaries by category
+           
+        3. INCOME MANAGEMENT:
+           - View and edit income sources
+           - Answer questions about total income
+           
+        4. FINANCIAL ANALYSIS:
+           - Analyze spending trends
+           - Compare expenses to income
+           - Provide financial insights
+        
+        **CRITICAL RESPONSE RULES**:
+        - Always confirm successful actions in 1-2 sentences
+        - Use the user's exact words when confirming (e.g., if they say "Netflix", don't change it to "streaming service")
+        - End conversations naturally when the user says goodbye, thanks, or indicates they're done
+        - If unsure about specifics, ask ONE clarifying question
+        - For dates, if the user says "today" use \(currentDate), if they say a day name, calculate the next occurrence
+        - Be conversational - this is a voice interaction, not text
+        
+        Remember: You have access to ALL financial data - bills, expenses, and income. Help the user with any financial task they need.
+        """
     }
     
     // MARK: - Tools and Context Management
