@@ -1454,10 +1454,17 @@ class VoiceAgentViewModel: ObservableObject {
     }
     
     private func getUnifiedTools() -> [AnthropicTool] {
-        // Combine both bill and expense tools
-        var tools = getBillsTools()
-        tools.append(contentsOf: getExpenseTools())
-        return tools
+        // Combine bill and expense tools without duplicates
+        return [
+            getBillCreationTool(),
+            getEditBillTool(),
+            getDeleteBillTool(),
+            getMarkBillPaidTool(),
+            getEditIncomeTool(),
+            getExpenseCreationTool(),
+            getFinancialAnalysisTool(),
+            getEndConversationTool()
+        ]
     }
     
     private func getUnifiedSystemPrompt() -> String {
