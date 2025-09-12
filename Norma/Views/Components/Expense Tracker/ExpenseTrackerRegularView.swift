@@ -327,6 +327,16 @@ struct ExpenseTrackerRegularView: View {
                         sessionViewModel: sessionViewModel
                     )
                 }
+                
+                // IMPORTANT: Check if dotsAppeared is already true on appear
+                // This handles the race condition where dotsAppeared is true before the view appears
+                if dotsAppeared && !incomeLabelAppeared {
+                    print("📊 ExpenseTrackerRegularView: dotsAppeared is already true on appear, triggering labels immediately")
+                    // Small delay to ensure view is properly laid out
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        triggerLabelAnimations()
+                    }
+                }
             }
             .onChange(of: voiceAgentViewModel?.currentState) { _, newState in
                 // Hide voice mode overlay when session completes or errors, but keep it visible when paused
@@ -349,27 +359,7 @@ struct ExpenseTrackerRegularView: View {
             .onChange(of: dotsAppeared) { _, newValue in
                 print("📊 ExpenseTrackerRegularView: dotsAppeared changed to \(newValue)")
                 if newValue {
-                    print("   🎯 Triggering label animations!")
-                    
-                    // Stagger the chart label animations with reliable timing
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        incomeLabelAppeared = true
-                        print("   💰 incomeLabelAppeared = true")
-                    }
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                            billsLabelAppeared = true
-                            print("   📄 billsLabelAppeared = true")
-                        }
-                    }
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                            currentLabelAppeared = true
-                            print("   💳 currentLabelAppeared = true")
-                        }
-                    }
+                    triggerLabelAnimations()
                 } else {
                     // Reset when dotsAppeared becomes false
                     print("   🔄 Resetting label states")
@@ -389,6 +379,30 @@ struct ExpenseTrackerRegularView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                 explanationButtonAppeared = true
+            }
+        }
+    }
+    
+    private func triggerLabelAnimations() {
+        print("   🎯 Triggering label animations!")
+        
+        // Stagger the chart label animations with reliable timing
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            incomeLabelAppeared = true
+            print("   💰 incomeLabelAppeared = true")
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                billsLabelAppeared = true
+                print("   📄 billsLabelAppeared = true")
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                currentLabelAppeared = true
+                print("   💳 currentLabelAppeared = true")
             }
         }
     }

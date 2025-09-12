@@ -45,13 +45,17 @@ struct ExpenseTrackerChartView: View {
             }
         }
         .onAppear {
-            triggerAnimationsIfDataReady()
+            // Always trigger animations on appear with a small delay for layout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                triggerAnimationsIfDataReady()
+            }
             
             // Fallback: Always trigger animations after a delay if they haven't triggered yet
             if !hasTriggeredFallback {
                 hasTriggeredFallback = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     if !chartAppeared {
+                        print("📊 ExpenseTrackerChartView: Fallback trigger for animations")
                         // Force trigger animations even without data
                         withAnimation(.easeOut(duration: 0.8)) {
                             chartAppeared = true
@@ -66,6 +70,7 @@ struct ExpenseTrackerChartView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                                 dotsAppeared = true
+                                print("   🎯 Fallback: dotsAppeared set to true")
                             }
                         }
                     }
