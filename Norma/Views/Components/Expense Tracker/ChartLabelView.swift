@@ -187,9 +187,12 @@ struct ChartLabelView: View {
             shouldBlur = false
             animatedYPosition = animateFromBottom ? (chartHeight - 40) : yPosition
             
-            // Always run the full appearance animation on every appearance
+            // Trigger animation immediately if appeared is true, otherwise wait for it
             if appeared {
-                animateAppearance()
+                // Small delay to ensure view is properly laid out
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    animateAppearance()
+                }
             }
         }
     }

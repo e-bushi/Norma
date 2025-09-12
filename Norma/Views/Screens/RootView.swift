@@ -28,12 +28,6 @@ struct RootView: View {
                     }
                     
                 
-                ProfileView(hasProfileData: dataManager.hasPsychologyData)
-                    .tabItem {
-                        Label("Profile", systemImage: "brain.head.profile")
-                    }
-                    
-                
                 SettingsView()
                     .tabItem {
                         Label("Settings", systemImage: "gear")
