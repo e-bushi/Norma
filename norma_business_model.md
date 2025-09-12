@@ -107,12 +107,31 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 
 ## Revenue Projections
 
-### Conservative Estimates (Year 1)
-- **1,000 Base Tier users:** $95,880 annual revenue
-- **200 Pro Tier users:** $35,976 annual revenue
-- **Total:** ~$132k ARR
+### Initial Milestone: 1,500 Paying MAU
+**Target Timeline: Month 12-18**
 
-### Growth Targets (Year 2)
+**Revenue Breakdown (70/30 split):**
+- **1,050 Base Tier users:** $100,680 annual revenue
+- **450 Premium Tier users:** $80,952 annual revenue
+- **Total Gross ARR:** $181,632
+- **MRR:** $15,136
+
+**Unit Economics at 1,500 MAU:**
+- **Net Revenue (after costs):** $107k-125k annually
+- **Net Margin:** 59-69%
+- **Monthly Profit:** $9,000-10,500
+- **Customer Acquisition Need:** 100-125 new customers/month (10% growth)
+- **CAC Budget Required:** $1,500-2,500/month
+
+**Why This Milestone Matters:**
+- Proves product-market fit
+- Achieves profitability
+- Validates unit economics
+- Creates foundation for scaling to $1M ARR
+
+### Growth Target: Scale Phase
+**Target Timeline: Month 18-24**
+
 - **5,000 Base Tier users:** $479,400 annual revenue  
 - **1,500 Pro Tier users:** $269,820 annual revenue
 - **Total:** ~$749k ARR

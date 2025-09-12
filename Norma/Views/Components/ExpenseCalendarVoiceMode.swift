@@ -16,6 +16,7 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject var incomeViewModel: IncomeViewModel
     
     let cornerRadius: CGFloat
     
@@ -110,7 +111,9 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
                 voiceAgentViewModel = VoiceAgentViewModel(
                     userId: userId,
                     billViewModel: billViewModel,
-                    expenseViewModel: expenseViewModel
+                    expenseViewModel: expenseViewModel,
+                    incomeViewModel: incomeViewModel,
+                    sessionViewModel: sessionViewModel
                 )
                 // Request permissions if needed
                 if let voiceAgent = voiceAgentViewModel {
@@ -136,7 +139,9 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
             voiceAgentViewModel = VoiceAgentViewModel(
                 userId: userId,
                 billViewModel: billViewModel,
-                expenseViewModel: expenseViewModel
+                expenseViewModel: expenseViewModel,
+                incomeViewModel: incomeViewModel,
+                sessionViewModel: sessionViewModel
             )
         }
     }

@@ -26,7 +26,7 @@ extension DataManager {
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch budgets from server: \(error). Loading from cache...")
-            loadCachedBudgets()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !budgets.isEmpty {
@@ -193,28 +193,6 @@ extension DataManager {
     
     // MARK: - SwiftData Caching
     
-    func loadCachedBudgets() {
-        guard let modelContext = modelContext,
-              let userId = currentProfile?.userId else { return }
-        
-        do {
-            let descriptor = FetchDescriptor<CachedBudget>(
-                predicate: #Predicate { cachedBudget in
-                    cachedBudget.userId == userId
-                }
-            )
-            
-            let cachedBudgets = try modelContext.fetch(descriptor)
-            
-            // Convert cached budgets to regular budgets and update the published property
-            self.budgets = cachedBudgets.map { $0.toBudget() }
-            
-            print("Loaded \(cachedBudgets.count) cached budgets")
-        } catch {
-            print("Failed to load cached budgets: \(error)")
-        }
-    }
-    
     private func cacheBudgets(_ budgetsToCache: [Budget]) async {
         guard let modelContext = modelContext else { return }
         
@@ -332,7 +310,7 @@ extension DataManager {
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch budgets from server: \(error). Loading from cache...")
-            loadCachedBudgets()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !budgets.isEmpty {

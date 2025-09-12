@@ -23,10 +23,18 @@ extension DataManager {
             await cacheExpenses(fetchedExpenses)
             
             print("Fetched \(fetchedExpenses.count) expenses from server")
+            
+            // Update widget data
+            WidgetDataManager.shared.updateWidgetData(
+                bills: bills,
+                expenses: expenses,
+                monthlyIncome: currentProfile?.settings.monthlyIncome ?? 0,
+                aiInsight: nil
+            )
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch expenses from server: \(error). Loading from cache...")
-            loadCachedExpenses()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !expenses.isEmpty {
@@ -163,28 +171,6 @@ extension DataManager {
     
     // MARK: - SwiftData Caching
     
-    func loadCachedExpenses() {
-        guard let modelContext = modelContext,
-              let userId = currentProfile?.userId else { return }
-        
-        do {
-            let descriptor = FetchDescriptor<CachedExpense>(
-                predicate: #Predicate { cachedExpense in
-                    cachedExpense.userId == userId
-                }
-            )
-            
-            let cachedExpenses = try modelContext.fetch(descriptor)
-            
-            // Convert cached expenses to regular expenses and update the published property
-            self.expenses = cachedExpenses.map { $0.toExpense() }
-            
-            print("Loaded \(cachedExpenses.count) cached expenses")
-        } catch {
-            print("Failed to load cached expenses: \(error)")
-        }
-    }
-    
     private func cacheExpenses(_ expensesToCache: [Expense]) async {
         print("🔍 [DEBUG] DataManager.cacheExpenses called with \(expensesToCache.count) expenses")
         
@@ -311,6 +297,13 @@ extension DataManager {
                 await cacheExpenses(decryptedExpenses)
                 
                 print("Fetched and decrypted \(decryptedExpenses.count) expenses from server")
+                
+                // Update widget data
+                WidgetDataManager.shared.updateWidgetData(
+                    bills: bills,
+                    expenses: expenses,
+                    aiInsight: nil
+                )
             } else {
                 // Use legacy path
                 try await fetchExpenses(userId: userId)
@@ -318,7 +311,7 @@ extension DataManager {
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch expenses from server: \(error). Loading from cache...")
-            loadCachedExpenses()
+            // Note: SwiftData cache loading handled elsewhere
             
             // If we have cached data, don't throw the error
             if !expenses.isEmpty {
@@ -449,4 +442,30 @@ extension DataManager {
         try await fetchExpensesWithEncryption(userId: userId)
     }
     
+    // MARK: - Cache Loading
+    
+    func loadCachedExpenses() {
+        guard let userId = currentProfile?.userId else {
+            print("No user profile found for loading cached expenses")
+            return
+        }
+        
+        Task {
+            do {
+                try await fetchExpensesWithEncryption(userId: userId)
+                print("✅ Expenses loaded: \(expenses.count) expenses")
+                
+                // Update widget data after loading expenses
+                await MainActor.run {
+                    WidgetDataManager.shared.updateWidgetData(
+                        bills: self.bills,
+                        expenses: self.expenses,
+                        aiInsight: nil
+                    )
+                }
+            } catch {
+                print("Failed to load cached expenses: \(error)")
+            }
+        }
+    }
 }

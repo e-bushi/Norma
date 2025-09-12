@@ -21,6 +21,10 @@ class AudioPlaybackService: NSObject, ObservableObject {
     private var audioSession: AVAudioSession
     private var progressTimer: Timer?
     
+    // Audio queue for streaming playback
+    private var audioQueue: [Data] = []
+    private var isProcessingQueue = false
+    
     override init() {
         self.audioSession = AVAudioSession.sharedInstance()
         super.init()
@@ -290,6 +294,54 @@ extension AudioPlaybackService {
     // Method to play a success sound
     func playSuccessSound() {
         AudioServicesPlaySystemSound(1013) // Voicemail received sound
+    }
+    
+    // MARK: - Streaming Audio Queue Methods
+    
+    func queueVoiceResponse(audioData: Data) async throws {
+        print("AudioPlayback: Queueing audio chunk (\(audioData.count) bytes)")
+        
+        // Add to queue
+        audioQueue.append(audioData)
+        
+        // Start processing queue if not already processing
+        if !isProcessingQueue {
+            await processAudioQueue()
+        }
+    }
+    
+    private func processAudioQueue() async {
+        guard !isProcessingQueue else { return }
+        isProcessingQueue = true
+        
+        print("AudioPlayback: Starting to process audio queue (\(audioQueue.count) items)")
+        
+        while !audioQueue.isEmpty {
+            let audioData = audioQueue.removeFirst()
+            
+            do {
+                print("AudioPlayback: Playing queued audio chunk")
+                try await playAudio(from: audioData)
+                
+                // Wait for current audio to finish before playing next
+                while isPlaying {
+                    try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                }
+                
+            } catch {
+                print("AudioPlayback: Error playing queued audio: \(error)")
+                // Continue processing queue even if one item fails
+            }
+        }
+        
+        isProcessingQueue = false
+        print("AudioPlayback: Finished processing audio queue")
+    }
+    
+    func clearAudioQueue() {
+        print("AudioPlayback: Clearing audio queue")
+        audioQueue.removeAll()
+        isProcessingQueue = false
     }
 }
 

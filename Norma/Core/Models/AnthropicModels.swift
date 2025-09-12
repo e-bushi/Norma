@@ -16,6 +16,7 @@ struct AnthropicRequest: Codable {
     let messages: [AnthropicMessage]
     let tools: [AnthropicTool]?
     let toolChoice: AnthropicToolChoice?
+    let stream: Bool?
     
     enum CodingKeys: String, CodingKey {
         case model
@@ -24,6 +25,7 @@ struct AnthropicRequest: Codable {
         case messages
         case tools
         case toolChoice = "tool_choice"
+        case stream
     }
 }
 
@@ -274,11 +276,60 @@ struct UserOnboardingData: Codable {
 
 // MARK: - Errors
 
+// MARK: - Streaming Response Models
+
+struct AnthropicStreamResponse: Codable {
+    let type: String
+    let message: AnthropicStreamMessage?
+    let index: Int?
+    let delta: AnthropicStreamDelta?
+    let usage: AnthropicStreamUsage?
+    
+    enum CodingKeys: String, CodingKey {
+        case type, message, index, delta, usage
+    }
+}
+
+struct AnthropicStreamMessage: Codable {
+    let id: String?
+    let type: String?
+    let role: String?
+    let content: [AnthropicContent]?
+    let model: String?
+    let usage: AnthropicStreamUsage?
+}
+
+struct AnthropicStreamDelta: Codable {
+    let type: String?
+    let text: String?
+    let stopReason: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case type, text
+        case stopReason = "stop_reason"
+    }
+}
+
+struct AnthropicStreamUsage: Codable {
+    let inputTokens: Int?
+    let outputTokens: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case inputTokens = "input_tokens"
+        case outputTokens = "output_tokens"
+    }
+}
+
+// MARK: - Error Models
+
 enum AnthropicError: LocalizedError {
     case networkError
     case apiError(String)
     case dataParsingError
     case unknownError(Int)
+    case rateLimited
+    case invalidResponse
+    case allModelsFailed
     
     var errorDescription: String? {
         switch self {
@@ -290,6 +341,12 @@ enum AnthropicError: LocalizedError {
             return "Failed to parse response data."
         case .unknownError(let statusCode):
             return "Unknown error occurred. Status code: \(statusCode)"
+        case .rateLimited:
+            return "Rate limited by API."
+        case .invalidResponse:
+            return "Invalid response from API."
+        case .allModelsFailed:
+            return "All models failed to respond."
         }
     }
 }
