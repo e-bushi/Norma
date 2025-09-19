@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var showPaywall = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
+    @State private var showHelpSupport = false
     
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
@@ -293,14 +294,19 @@ struct SettingsView: View {
                 
                 // Support Section
                 Section("Support") {
-                    HStack {
-                        Image(systemName: "questionmark.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("Help & Support")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                    Button(action: {
+                        showHelpSupport = true
+                    }) {
+                        HStack {
+                            Image(systemName: "questionmark.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("Help & Support")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
                     }
                     
                     HStack {
@@ -385,6 +391,12 @@ struct SettingsView: View {
                 WebViewSheet(
                     url: "https://mauldin.xyz/norma/privacy",
                     title: "Privacy Policy"
+                )
+            }
+            .sheet(isPresented: $showHelpSupport) {
+                WebViewSheet(
+                    url: "https://whop.com/norma-ai",
+                    title: "Help & Support"
                 )
             }
         }
