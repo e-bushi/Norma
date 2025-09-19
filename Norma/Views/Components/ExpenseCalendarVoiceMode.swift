@@ -44,8 +44,8 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
                             print("ExpenseCalendar: Double-tap and hold detected!")
                             
                             // Check if user has active subscription or is in trial
-                            if subscriptionManager.isInFreeTrial {
-                                print("ExpenseCalendar: User is in free trial - activating voice mode...")
+                            if subscriptionManager.isInFreeTrial || subscriptionManager.hasActiveSubscription {
+                                print("ExpenseCalendar: User has access (trial or subscription) - activating voice mode...")
                                 // This is a double-tap and hold!
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                     showVoiceMode = true
@@ -65,7 +65,7 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
                                     await startVoiceInteraction()
                                 }
                             } else {
-                                print("ExpenseCalendar: User not in trial - showing paywall")
+                                print("ExpenseCalendar: User has no access (no trial, no subscription) - showing paywall")
                                 // User doesn't have access - show paywall
                                 showPaywall = true
                                 
