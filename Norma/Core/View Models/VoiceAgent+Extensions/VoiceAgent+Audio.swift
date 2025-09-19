@@ -22,7 +22,8 @@ extension VoiceAgentViewModel {
         print("VoiceAgent: Recording started successfully")
         
         // Wait for either recording completion or timeout
-        return try await withTimeout(seconds: 10) { [self] in
+        // Increased timeout from 10 to 15 seconds for initial response
+        return try await withTimeout(seconds: 15) { [self] in
             // Listen for automatic recording completion
             for await recordingURL in self.voiceRecordingService.recordingCompletionStream.values {
                 print("VoiceAgent: Recording completed reactively at: \(recordingURL)")
