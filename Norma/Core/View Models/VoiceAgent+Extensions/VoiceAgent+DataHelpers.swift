@@ -26,16 +26,22 @@ extension VoiceAgentViewModel {
         formatter.dateFormat = "MMM d"
         
         var billsSummary = "CURRENT BILLS THIS MONTH:\n"
-        for bill in bills.prefix(10) { // Limit to avoid too much context
+        // Show up to 20 bills for better visibility, but still maintain reasonable context limits
+        for bill in bills.prefix(20) { 
             let dueDateStr = formatter.string(from: bill.dueDate)
             billsSummary += "• \(bill.name): $\(String(format: "%.2f", bill.amount)) due \(dueDateStr) - \(bill.status.rawValue)\n"
+        }
+        
+        // If there are more bills, indicate this
+        if bills.count > 20 {
+            billsSummary += "• ... and \(bills.count - 20) more bills\n"
         }
         
         let totalOwed = bills.filter { $0.status != .paid }.reduce(0) { $0 + $1.amount }
         let overdueCount = bills.filter { $0.status == .overdue }.count
         let paidCount = bills.filter { $0.status == .paid }.count
         
-        billsSummary += "\nSUMMARY: \(bills.count) total bills, $\(String(format: "%.2f", totalOwed)) still owed"
+        billsSummary += "\nSUMMARY: \(bills.count) total bill\(bills.count == 1 ? "" : "s"), $\(String(format: "%.2f", totalOwed)) still owed"
         if overdueCount > 0 { billsSummary += ", \(overdueCount) overdue" }
         if paidCount > 0 { billsSummary += ", \(paidCount) paid this month" }
         
