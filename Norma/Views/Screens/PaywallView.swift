@@ -217,7 +217,19 @@ struct PaywallView: View {
             if let product = findProduct(for: selectedTier, isMonthly: selectedBilling == .monthly) {
                 print("✅ Found product: \(product.tier.rawValue), isMonthly: \(product.isMonthly)")
                 try await subscriptionManager.purchase(product)
-                dismiss()
+                
+                // Wait a moment for the subscription status to update
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                
+                // Check if the subscription is now active before dismissing
+                if subscriptionManager.hasActiveSubscription {
+                    print("✅ Purchase successful, subscription is active")
+                    dismiss()
+                } else {
+                    print("⚠️ Purchase completed but subscription not yet active, checking status...")
+                    await subscriptionManager.checkSubscriptionStatus()
+                    dismiss()
+                }
             } else {
                 print("❌ Product not found for tier: \(selectedTier.rawValue), isMonthly: \(selectedBilling == .monthly)")
                 print("Available products: \(subscriptionManager.availableProducts.map { "\($0.tier.rawValue)-\($0.isMonthly)" })")
