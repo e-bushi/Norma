@@ -26,15 +26,15 @@ extension VoiceAgentViewModel {
         formatter.dateFormat = "MMM d"
         
         var billsSummary = "CURRENT BILLS THIS MONTH:\n"
-        // Show up to 20 bills for better visibility, but still maintain reasonable context limits
-        for bill in bills.prefix(20) { 
+        // Show up to 35 bills for better visibility, but still maintain reasonable context limits
+        for bill in bills.prefix(35) { 
             let dueDateStr = formatter.string(from: bill.dueDate)
             billsSummary += "• \(bill.name): $\(String(format: "%.2f", bill.amount)) due \(dueDateStr) - \(bill.status.rawValue)\n"
         }
         
         // If there are more bills, indicate this
-        if bills.count > 20 {
-            billsSummary += "• ... and \(bills.count - 20) more bills\n"
+        if bills.count > 35 {
+            billsSummary += "• ... and \(bills.count - 35) more bills\n"
         }
         
         let totalOwed = bills.filter { $0.status != .paid }.reduce(0) { $0 + $1.amount }
