@@ -14,6 +14,8 @@ struct PaywallView: View {
     @State private var selectedTier: SubscriptionTier = .base
     @State private var isPurchasing = false
     @State private var showError = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     enum BillingOption {
         case monthly
@@ -128,10 +130,14 @@ struct PaywallView: View {
                                 .foregroundColor(.secondary)
                             
                             HStack(spacing: 12) {
-                                Link("Terms", destination: URL(string: "https://norma.app/terms")!)
+                                Button("Terms") {
+                                    showTermsOfUse = true
+                                }
                                 Text("•")
                                     .foregroundColor(.secondary)
-                                Link("Privacy", destination: URL(string: "https://norma.app/privacy")!)
+                                Button("Privacy") {
+                                    showPrivacyPolicy = true
+                                }
                             }
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
@@ -166,6 +172,18 @@ struct PaywallView: View {
             Button("OK") { }
         } message: {
             Text(subscriptionManager.purchaseError?.localizedDescription ?? "An error occurred")
+        }
+        .sheet(isPresented: $showTermsOfUse) {
+            WebViewSheet(
+                url: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+                title: "Terms of Use"
+            )
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            WebViewSheet(
+                url: "https://mauldin.xyz/norma/privacy",
+                title: "Privacy Policy"
+            )
         }
         .onAppear {
             print("📱 PaywallView appeared - Loading products...")
