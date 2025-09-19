@@ -14,16 +14,23 @@ extension VoiceAgentViewModel {
     
     // MARK: - Recording
     
-    func startRecording() async throws -> URL {
-        print("VoiceAgent: Starting reactive recording...")
+    func startRecording(timeoutSeconds: TimeInterval = 15) async throws -> URL {
+        print("VoiceAgent: Starting reactive recording with timeout: \(timeoutSeconds)s")
+        
+        // Stop any existing recording first to ensure clean state
+        if voiceRecordingService.isRecording {
+            print("VoiceAgent: Stopping existing recording before starting new one")
+            voiceRecordingService.stopRecording()
+            // Small delay to ensure clean state
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        }
         
         // Start recording - the service will handle speech detection and auto-completion
         currentRecordingURL = try await voiceRecordingService.startRecording()
         print("VoiceAgent: Recording started successfully")
         
         // Wait for either recording completion or timeout
-        // Increased timeout from 10 to 15 seconds for initial response
-        return try await withTimeout(seconds: 15) { [self] in
+        return try await withTimeout(seconds: timeoutSeconds) { [self] in
             // Listen for automatic recording completion
             for await recordingURL in self.voiceRecordingService.recordingCompletionStream.values {
                 print("VoiceAgent: Recording completed reactively at: \(recordingURL)")

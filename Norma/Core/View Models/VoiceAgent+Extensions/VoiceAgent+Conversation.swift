@@ -61,7 +61,9 @@ extension VoiceAgentViewModel {
                         print("VoiceAgent: Step 1 - Recording audio...")
                         guard !isConversationCancelled else { break }
                         await setState(.recording)
-                        let audioURL = try await startRecording()
+                        // Use longer timeout for first turn or after retries, normal timeout otherwise
+                        let timeoutDuration: TimeInterval = (turnCount == 1 || noAudioRetryCount > 0) ? 15 : 10
+                        let audioURL = try await startRecording(timeoutSeconds: timeoutDuration)
                         
                         // Check for cancellation after recording
                         guard !isConversationCancelled else { break }
@@ -208,7 +210,9 @@ extension VoiceAgentViewModel {
                         print("VoiceAgent: Step 1 - Recording audio...")
                         guard !isConversationCancelled else { break }
                         await setState(.recording)
-                        let audioURL = try await startRecording()
+                        // Use longer timeout for first turn or after retries, normal timeout otherwise
+                        let timeoutDuration: TimeInterval = (turnCount == 1 || noAudioRetryCount > 0) ? 15 : 10
+                        let audioURL = try await startRecording(timeoutSeconds: timeoutDuration)
                         
                         // Check for cancellation after recording
                         guard !isConversationCancelled else { break }
@@ -362,7 +366,9 @@ extension VoiceAgentViewModel {
                         print("VoiceAgent: Step 1 - Recording audio...")
                         guard !isConversationCancelled else { break }
                         await setState(.recording)
-                        let audioURL = try await startRecording()
+                        // Use longer timeout for first turn or after retries, normal timeout otherwise
+                        let timeoutDuration: TimeInterval = (turnCount == 1 || noAudioRetryCount > 0) ? 15 : 10
+                        let audioURL = try await startRecording(timeoutSeconds: timeoutDuration)
                         
                         guard !isConversationCancelled else { break }
                         
@@ -560,7 +566,9 @@ extension VoiceAgentViewModel {
                     // Record audio
                     guard !isConversationCancelled else { break }
                     await setState(.recording)
-                    let audioURL = try await startRecording()
+                    // Use appropriate timeout for resumed conversation
+                    let timeoutDuration: TimeInterval = noAudioRetryCount > 0 ? 15 : 10
+                    let audioURL = try await startRecording(timeoutSeconds: timeoutDuration)
                     
                     // Transcribe
                     guard !isConversationCancelled else { break }
