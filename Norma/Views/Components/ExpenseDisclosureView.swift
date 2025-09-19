@@ -11,8 +11,10 @@ import Foundation
 struct ExpenseDisclosureView: View {
     let expenses: [Expense]
     let category: ExpenseCategory?
+    @Binding var showNormaChat: Bool
     @State private var showingAllExpenses = false
     @State private var selectedExpense: Expense? = nil
+    @State private var showCreateExpense = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
     
     private let maxExpensesToShow = 5
@@ -89,6 +91,61 @@ struct ExpenseDisclosureView: View {
                                 .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                         )
                 )
+            }
+            
+            // Add expense buttons
+            HStack(spacing: 12) {
+                // Add manually button
+                Button(action: {
+                    showCreateExpense = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 15))
+                        
+                        Text("Add manually")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.purple)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.purple.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Add with AI button
+                Button(action: {
+                    showNormaChat = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 15))
+                        
+                        Text("Add with AI")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Expenses list container
@@ -258,6 +315,9 @@ struct ExpenseDisclosureView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showCreateExpense) {
+            CreateExpenseView()
+        }
     }
 }
 
@@ -331,14 +391,20 @@ struct ExpenseRowView: View {
         Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 8)), paymentMethod: .bankTransfer)
     ]
     
-    ScrollView {
+    // Create preview view models
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    @State var showNormaChat = false
+    
+    return ScrollView {
         VStack {
             Text("All Expenses")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            ExpenseDisclosureView(expenses: sampleExpenses, category: nil)
+            ExpenseDisclosureView(expenses: sampleExpenses, category: nil, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
             
             Divider().padding()
@@ -348,7 +414,7 @@ struct ExpenseRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            ExpenseDisclosureView(expenses: sampleExpenses, category: nil)
+            ExpenseDisclosureView(expenses: sampleExpenses, category: nil, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
             
             Divider().padding()
@@ -358,8 +424,9 @@ struct ExpenseRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
             
-            ExpenseDisclosureView(expenses: [], category: nil)
+            ExpenseDisclosureView(expenses: [], category: nil, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
         }
     }
+    .environmentObject(profileViewModel)
 }

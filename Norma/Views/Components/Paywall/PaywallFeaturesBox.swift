@@ -22,58 +22,99 @@ struct PaywallFeaturesBox: View {
     }
     
     private static let baseFeatures = [
-        Feature(id: "base-1", icon: "brain", title: "AI Bill & Expense Tracking", description: "Smart categorization and insights"),
-        Feature(id: "base-2", icon: "bell.badge", title: "Smart Notifications", description: "Never miss a payment"),
-        Feature(id: "base-3", icon: "chart.line.uptrend.xyaxis", title: "Basic Analytics", description: "Track spending patterns"),
-        Feature(id: "base-4", icon: "shield.fill", title: "Data Encryption", description: "Your data is secure"),
-        Feature(id: "base-5", icon: "globe", title: "Multi-currency Support", description: "Track expenses in any currency")
+        Feature(id: "base-1", icon: "message.fill", title: "AI Text Assistant", description: "Chat with your financial AI"),
+        Feature(id: "base-2", icon: "brain", title: "Smart Expense Tracking", description: "Automatic categorization"),
+        Feature(id: "base-3", icon: "bell.badge", title: "Bill Reminders", description: "Never miss a payment"),
+        Feature(id: "base-4", icon: "chart.line.uptrend.xyaxis", title: "Spending Analytics", description: "Track your money flow"),
+        Feature(id: "base-5", icon: "shield.fill", title: "Secure & Private", description: "Your data is encrypted")
     ]
     
     private static let proFeatures = [
-        Feature(id: "pro-1", icon: "star.fill", title: "Everything in Basic", description: "All features from the Basic tier"),
-        Feature(id: "pro-2", icon: "sparkles", title: "Financial Mind AI", description: "Personal finance analyst"),
-        Feature(id: "pro-3", icon: "chart.bar.doc.horizontal", title: "Advanced Insights", description: "Deep spending analysis"),
-        Feature(id: "pro-4", icon: "waveform.path.ecg", title: "Cash Flow Predictions", description: "Forecast your finances")
+        Feature(id: "pro-1", icon: "star.fill", title: "Everything in Basic", description: "All Basic features included"),
+        Feature(id: "pro-2", icon: "mic.circle.fill", title: "Voice Agent", description: "Talk to your AI assistant")
+    ]
+    
+    private static let proComingSoonFeatures = [
+        Feature(id: "pro-coming-1", icon: "sparkles", title: "Advanced AI Analysis", description: "Deeper financial insights"),
+        Feature(id: "pro-coming-2", icon: "chart.bar.doc.horizontal", title: "Pro Reports", description: "Detailed spending breakdowns"),
+        Feature(id: "pro-coming-3", icon: "waveform.path.ecg", title: "Cash Flow Predictions", description: "Forecast your finances")
     ]
     
     private var features: [Feature] {
         selectedTier == .base ? Self.baseFeatures : Self.proFeatures
     }
     
+    private var hasComingSoonSection: Bool {
+        selectedTier == .pro
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("\(selectedTier.displayName.uppercased()) FEATURES")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
+            // Main features section
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("\(selectedTier.displayName.uppercased()) FEATURES")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .tracking(1.2)
+                    
+                    Spacer()
+                    
+                    Text("\(features.count) features")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
                 
-                Spacer()
-                
-                Text("\(features.count) features")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
+                VStack(spacing: 16) {
+                    ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
+                        FeatureRowView(feature: (icon: feature.icon, title: feature.title, description: feature.description))
+                            .offset(x: appearAnimation ? 0 : -20)
+                            .scaleEffect(appearAnimation ? 1 : 0.95)
+                            .opacity(appearAnimation ? 1 : 0)
+                            .rotation3DEffect(
+                                .degrees(appearAnimation ? 0 : -5),
+                                axis: (x: 0.0, y: 1.0, z: 0.0)
+                            )
+                            .animation(
+                                .spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0.3)
+                                .delay(0.08 + Double(index) * 0.06),
+                                value: appearAnimation
+                            )
+                            .id("\(feature.id)-\(animationTrigger)")
+                    }
+                }
             }
             
-            VStack(spacing: 16) {
-                ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
-                    FeatureRowView(feature: (icon: feature.icon, title: feature.title, description: feature.description))
-                        // Apply multiple transformations for appearance animation
-                        .offset(x: appearAnimation ? 0 : -20)
-                        .scaleEffect(appearAnimation ? 1 : 0.95)
-                        .opacity(appearAnimation ? 1 : 0)
-                        // Add slight rotation for a more dynamic effect
-                        .rotation3DEffect(
-                            .degrees(appearAnimation ? 0 : -5),
-                            axis: (x: 0.0, y: 1.0, z: 0.0)
-                        )
-                        // Use a spring animation with staggered delay based on index
-                        .animation(
-                            .spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0.3)
-                            .delay(0.08 + Double(index) * 0.06),
-                            value: appearAnimation
-                        )
-                        .id("\(feature.id)-\(animationTrigger)")
+            // Coming Soon section (only for Pro)
+            if hasComingSoonSection {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("COMING SOON")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .tracking(1.2)
+                        
+                        Spacer()
+                    }
+                    
+                    VStack(spacing: 16) {
+                        ForEach(Array(Self.proComingSoonFeatures.enumerated()), id: \.element.id) { index, feature in
+                            FeatureRowView(feature: (icon: feature.icon, title: feature.title, description: feature.description))
+                                .opacity(0.6)  // Slightly faded to indicate coming soon
+                                .offset(x: appearAnimation ? 0 : -20)
+                                .scaleEffect(appearAnimation ? 1 : 0.95)
+                                .rotation3DEffect(
+                                    .degrees(appearAnimation ? 0 : -5),
+                                    axis: (x: 0.0, y: 1.0, z: 0.0)
+                                )
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0.3)
+                                    .delay(0.08 + Double(features.count + index) * 0.06),
+                                    value: appearAnimation
+                                )
+                                .id("\(feature.id)-\(animationTrigger)")
+                        }
+                    }
                 }
             }
         }

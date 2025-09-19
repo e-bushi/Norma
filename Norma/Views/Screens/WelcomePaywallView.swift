@@ -112,7 +112,7 @@ struct WelcomePaywallView: View {
                 onStartTrial()
             } label: {
                 VStack(spacing: 2) {
-                    Text("Start 7-Day Free Trial")
+                    Text("Start 3-Day Free Trial")
                         .font(.system(size: 16, weight: .semibold))
                     
                     Text("Then \(getPriceText())")

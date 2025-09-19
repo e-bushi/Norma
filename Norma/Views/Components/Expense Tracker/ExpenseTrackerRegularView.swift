@@ -35,6 +35,8 @@ struct ExpenseTrackerRegularView: View {
     @State private var voiceAgentViewModel: VoiceAgentViewModel?
     @State private var lastTapTime: Date = Date()
     @State private var isPressed = false
+    @State private var showPaywall = false
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // Chart constants
     private let lineHeight: CGFloat = 400
@@ -235,23 +237,27 @@ struct ExpenseTrackerRegularView: View {
                     let timeSinceLastTap = Date().timeIntervalSince(lastTapTime)
                     print("ExpenseTracker: Press started. Time since last tap: \(timeSinceLastTap) seconds")
                     if timeSinceLastTap < 0.5 {
-                        print("ExpenseTracker: Double-tap and hold detected! Activating voice mode...")
-                        // This is a double-tap and hold!
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showVoiceMode = true
-                        }
+                        print("ExpenseTracker: Double-tap and hold detected!")
                         
-                        // Visual press effect
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            isPressed = true
-                        }
-                        
-                        // Strong haptic feedback
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-                        impactFeedback.impactOccurred()
-                        
-                        // Start voice recording or resume paused conversation
-                        Task {
+                        // Check if user has active subscription or is in trial
+                        if subscriptionManager.isInFreeTrial {
+                            print("ExpenseTracker: User is in free trial - activating voice mode...")
+                            // This is a double-tap and hold!
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showVoiceMode = true
+                            }
+                            
+                            // Visual press effect
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                isPressed = true
+                            }
+                            
+                            // Strong haptic feedback
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                            impactFeedback.impactOccurred()
+                            
+                            // Start voice recording or resume paused conversation
+                            Task {
                             let userName = sessionViewModel.currentUser?.name
                             
                             if let voiceAgent = voiceAgentViewModel {
@@ -297,6 +303,15 @@ struct ExpenseTrackerRegularView: View {
                                     print("No user ID available")
                                 }
                             }
+                        }
+                        } else {
+                            print("ExpenseTracker: User not in trial - showing paywall")
+                            // User doesn't have access - show paywall
+                            showPaywall = true
+                            
+                            // Light haptic feedback for denied access
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
                         }
                     }
                 } else {
@@ -355,6 +370,9 @@ struct ExpenseTrackerRegularView: View {
             .sheet(isPresented: $showingIncomeDetail) {
                 IncomeDetailView()
                     .environmentObject(profileViewModel)
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
             }
             .onChange(of: dotsAppeared) { _, newValue in
                 print("📊 ExpenseTrackerRegularView: dotsAppeared changed to \(newValue)")

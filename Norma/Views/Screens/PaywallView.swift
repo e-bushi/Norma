@@ -11,7 +11,7 @@ import RevenueCat
 struct PaywallView: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTier: SubscriptionTier = .pro
+    @State private var selectedTier: SubscriptionTier = .base
     @State private var isPurchasing = false
     @State private var showError = false
     
@@ -33,6 +33,7 @@ struct PaywallView: View {
                         
                         // Tier Picker
                         TierPicker(selection: $selectedTier)
+                            .padding(.horizontal)
                         
                         // Features
                         PaywallFeaturesBox(selectedTier: selectedTier)
@@ -75,21 +76,41 @@ struct PaywallView: View {
                                 await purchaseSelectedProduct()
                             }
                         } label: {
-                            VStack(spacing: 2) {
-                                Text("Start 7-Day Free Trial")
-                                    .font(.system(size: 16, weight: .semibold))
-                                
-                                Text("Then \(getPriceText())")
-                                    .font(.system(size: 12))
-                                    .opacity(0.9)
+                            if isPurchasing || subscriptionManager.isLoadingProducts {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 54)
+                                    .background(selectedTier.color.opacity(0.7))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            } else {
+                                VStack(spacing: 2) {
+                                    // Show different text if user already used their trial
+                                    if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
+                                        Text("Subscribe Now")
+                                            .font(.system(size: 16, weight: .semibold))
+                                        
+                                        Text(getPriceText())
+                                            .font(.system(size: 12))
+                                            .opacity(0.9)
+                                    } else {
+                                        Text("Start 3-Day Free Trial")
+                                            .font(.system(size: 16, weight: .semibold))
+                                        
+                                        Text("Then \(getPriceText())")
+                                            .font(.system(size: 12))
+                                            .opacity(0.9)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(selectedTier.color)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(selectedTier.color)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
                         }
-                        .disabled(isPurchasing)
+                        .disabled(isPurchasing || subscriptionManager.isLoadingProducts)
                         
                         // Footer Links
                         VStack(spacing: 12) {
@@ -146,6 +167,16 @@ struct PaywallView: View {
         } message: {
             Text(subscriptionManager.purchaseError?.localizedDescription ?? "An error occurred")
         }
+        .onAppear {
+            print("📱 PaywallView appeared - Loading products...")
+            Task {
+                if subscriptionManager.availableProducts.isEmpty {
+                    await subscriptionManager.loadProducts()
+                }
+                await subscriptionManager.checkSubscriptionStatus()
+                print("📱 Products loaded: \(subscriptionManager.availableProducts.count)")
+            }
+        }
     }
     
     private func getPriceText() -> String {
@@ -172,13 +203,27 @@ struct PaywallView: View {
         isPurchasing = true
         defer { isPurchasing = false }
         
+        print("🛒 Purchase button tapped - selectedBilling: \(selectedBilling)")
+        print("🛒 Available products count: \(subscriptionManager.availableProducts.count)")
+        
+        // Check if products are loaded
+        if subscriptionManager.availableProducts.isEmpty {
+            print("❌ No products loaded from RevenueCat yet")
+            await subscriptionManager.loadProducts()
+        }
+        
         do {
             // Find the product based on selected tier and billing
             if let product = findProduct(for: selectedTier, isMonthly: selectedBilling == .monthly) {
+                print("✅ Found product: \(product.tier.rawValue), isMonthly: \(product.isMonthly)")
                 try await subscriptionManager.purchase(product)
                 dismiss()
+            } else {
+                print("❌ Product not found for tier: \(selectedTier.rawValue), isMonthly: \(selectedBilling == .monthly)")
+                print("Available products: \(subscriptionManager.availableProducts.map { "\($0.tier.rawValue)-\($0.isMonthly)" })")
             }
         } catch {
+            print("❌ Purchase error: \(error)")
             showError = true
         }
     }

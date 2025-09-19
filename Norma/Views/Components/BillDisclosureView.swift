@@ -12,6 +12,7 @@ struct BillDisclosureView: View {
     let bills: [Bill]
     @Binding var showNormaChat: Bool
     @State private var showingAllBills = false
+    @State private var showCreateBill = false
     
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -113,6 +114,61 @@ struct BillDisclosureView: View {
                                 .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                         )
                 )
+            }
+            
+            // Add bill buttons
+            HStack(spacing: 12) {
+                // Add manually button
+                Button(action: {
+                    showCreateBill = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 15))
+                        
+                        Text("Add manually")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.blue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.blue.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Add with AI button
+                Button(action: {
+                    showNormaChat = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 15))
+                        
+                        Text("Add with AI")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Bills list container
@@ -271,6 +327,9 @@ struct BillDisclosureView: View {
                 }
                 .padding(.vertical, 8)
             }
+        }
+        .sheet(isPresented: $showCreateBill) {
+            CreateBillView()
         }
     }
 }

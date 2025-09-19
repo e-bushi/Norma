@@ -74,8 +74,8 @@ struct NormaChatView: View {
     }
     
     var body: some View {
-        // Check subscription status first - allow access during trial or with Pro subscription
-        if !subscriptionManager.canAccessFinancialMind {
+        // Check subscription status first - allow access during trial or with active subscription
+        if !subscriptionManager.hasActiveSubscription {
             PaywallView()
         } else {
             NavigationStack {

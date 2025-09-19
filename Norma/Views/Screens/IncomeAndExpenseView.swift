@@ -40,7 +40,7 @@ struct IncomeAndExpenseView: View {
     
     // Sheet presentation
     @State private var showNormaChatView = false
-    @State private var selectedCategoryForBudget: Category?
+    @State private var showCreateExpense = false
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -123,16 +123,14 @@ struct IncomeAndExpenseView: View {
                     Group {
                         switch selectedView {
                         case .budget:
-                            BudgetDisclosureView(expenses: currentMonthExpenses, month: currentMonth) { category in
-                                selectedCategoryForBudget = category
-                            }
+                            BudgetDisclosureView(expenses: currentMonthExpenses, month: currentMonth)
                             .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
                         case .expenses:
-                            ExpenseDisclosureView(expenses: currentMonthExpenses, category: nil)
+                            ExpenseDisclosureView(expenses: currentMonthExpenses, category: nil, showNormaChat: $showNormaChatView)
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
@@ -147,34 +145,6 @@ struct IncomeAndExpenseView: View {
             .scrollIndicators(.hidden)
             .navigationTitle("Expenses")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        // Create a placeholder category to trigger the sheet
-                        selectedCategoryForBudget = Category(
-                            userId: "placeholder",
-                            name: "Select Category",
-                            type: .expense,
-                            icon: "questionmark.circle",
-                            colorHex: "#808080",
-                            parentCategoryId: nil,
-                            isSystem: false,
-                            isActive: true,
-                            sortOrder: 0
-                        )
-                    }) {
-                        Image(systemName: "target")
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showNormaChatView = true
-                    }) {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
             .onAppear {
                 Task {
                     await expenseViewModel.refreshExpenses()
@@ -188,12 +158,8 @@ struct IncomeAndExpenseView: View {
             .sheet(isPresented: $showNormaChatView) {
                 NormaChatView(context: .expenses)
             }
-            .sheet(item: $selectedCategoryForBudget) { category in
-                CreateBudgetView(preselectedCategory: category)
-                    .environmentObject(dataManager)
-                    .environmentObject(sessionViewModel)
-                    .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-                    .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+            .sheet(isPresented: $showCreateExpense) {
+                CreateExpenseView()
             }
         }
     }

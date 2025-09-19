@@ -22,7 +22,7 @@ struct PurchaseButton: View {
                         .scaleEffect(0.8)
                 } else {
                     VStack(spacing: 2) {
-                        Text("Start 7-Day Free Trial")
+                        Text("Start 3-Day Free Trial")
                             .font(.system(size: 16, weight: .semibold))
                         
                         if let product = selectedProduct {

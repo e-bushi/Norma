@@ -17,6 +17,8 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
     @EnvironmentObject var incomeViewModel: IncomeViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var showPaywall = false
     
     let cornerRadius: CGFloat
     
@@ -39,24 +41,37 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
                         let timeSinceLastTap = Date().timeIntervalSince(lastTapTime)
                         print("ExpenseCalendar: Press started. Time since last tap: \(timeSinceLastTap) seconds")
                         if timeSinceLastTap < 0.5 {
-                            print("ExpenseCalendar: Double-tap and hold detected! Activating voice mode...")
-                            // This is a double-tap and hold!
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showVoiceMode = true
-                            }
+                            print("ExpenseCalendar: Double-tap and hold detected!")
                             
-                            // Visual press effect
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                isPressed = true
-                            }
-                            
-                            // Strong haptic feedback
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-                            impactFeedback.impactOccurred()
-                            
-                            // Start voice recording or resume paused conversation
-                            Task {
-                                await startVoiceInteraction()
+                            // Check if user has active subscription or is in trial
+                            if subscriptionManager.isInFreeTrial {
+                                print("ExpenseCalendar: User is in free trial - activating voice mode...")
+                                // This is a double-tap and hold!
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    showVoiceMode = true
+                                }
+                                
+                                // Visual press effect
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                    isPressed = true
+                                }
+                                
+                                // Strong haptic feedback
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                                impactFeedback.impactOccurred()
+                                
+                                // Start voice recording or resume paused conversation
+                                Task {
+                                    await startVoiceInteraction()
+                                }
+                            } else {
+                                print("ExpenseCalendar: User not in trial - showing paywall")
+                                // User doesn't have access - show paywall
+                                showPaywall = true
+                                
+                                // Light haptic feedback for denied access
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
                             }
                         }
                     } else {
@@ -81,6 +96,9 @@ struct ExpenseCalendarVoiceMode: ViewModifier {
         }
         .onChange(of: voiceAgentViewModel?.currentState) { _, newState in
             handleStateChange(newState)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
         }
     }
     

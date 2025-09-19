@@ -21,6 +21,8 @@ struct BillHomeView: View {
     @State private var showBillReviewSheet = false
     @State private var isScrolling = false
     @State private var scrollTimer: Timer?
+    @State private var showAddOptions = false
+    @State private var showCreateBill = false
     
     private var currentMonth: String {
         let formatter = DateFormatter()
@@ -96,6 +98,9 @@ struct BillHomeView: View {
                     }
                     .frame(height: 0)
                     
+                    // Trial status banner
+                    TrialStatusBanner()
+                    
                     ExpenseTrackerChartView(
                     billAmount: billViewModel.totalMonthlyBills,
                     currentExpenseAmount: currentSpentAmount,
@@ -127,17 +132,6 @@ struct BillHomeView: View {
             }
             .navigationTitle(Text("Home"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if !billViewModel.activeBills.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            showNormaChat = true
-                        }) {
-                            Image(systemName: "plus")
-                        }
-                    }
-                }
-            }
             .refreshable {
                 await performRefresh()
             }
@@ -149,6 +143,9 @@ struct BillHomeView: View {
             }
             .sheet(isPresented: $showNormaChat) {
                 NormaChatView(context: .bills)
+            }
+            .sheet(isPresented: $showCreateBill) {
+                CreateBillView()
             }
             .sheet(isPresented: $showBillReviewSheet) {
                 BillReviewSelectionView(verificationService: billViewModel.verificationService) {
