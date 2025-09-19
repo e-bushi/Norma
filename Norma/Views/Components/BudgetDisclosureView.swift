@@ -10,6 +10,7 @@ import SwiftUI
 struct BudgetDisclosureView: View {
     @State private var showingAllCategories = false
     @State private var selectedBudgetForDetail: Budget?
+    @State private var showCreateBudget = false
     let isOnboardingMode: Bool
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var dataManager: DataManager
@@ -73,6 +74,60 @@ struct BudgetDisclosureView: View {
                 totalSpent: totalSpent
             )
             
+            // Add budget buttons
+            HStack(spacing: 12) {
+                // Add manually button
+                Button(action: {
+                    showCreateBudget = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 15))
+                        
+                        Text("Add manually")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.green)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.green.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Coming soon button (disabled)
+                Button(action: {
+                    // No action - coming soon
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 15))
+                        
+                        Text("Coming soon")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.gray.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.05))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(true)
+            }
+            
             // Budget categories container
             budgetContainer
         }
@@ -84,6 +139,13 @@ struct BudgetDisclosureView: View {
                 .environmentObject(profileViewModel)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCreateBudget) {
+            CreateBudgetView()
+                .environmentObject(dataManager)
+                .environmentObject(sessionViewModel)
+                .environmentObject(budgetViewModel)
+                .environmentObject(profileViewModel)
         }
     }
     

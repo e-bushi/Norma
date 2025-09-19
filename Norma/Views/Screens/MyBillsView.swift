@@ -12,6 +12,7 @@ struct MyBillsView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // Filter options for the list
     @State private var selectedFilter: BillFilter = .all

@@ -189,7 +189,7 @@ struct Bill: Identifiable, Codable {
 }
 
 // Bill status enum
-enum BillStatus: String, Codable {
+enum BillStatus: String, Codable, CaseIterable {
     case paid = "Paid"
     case overdue = "Overdue"
     case scheduled = "Scheduled"

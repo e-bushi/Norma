@@ -22,7 +22,7 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 - Fallback: Claude Haiku 3.5 ($0.80/MTok input, $4/MTok output)
 - Automatic fallback during high-demand periods
 
-### Premium Tier: $14.99/month
+### Pro Tier: $14.99/month
 **Target Users:** Power users wanting comprehensive financial insights
 
 **Features:**
@@ -35,7 +35,7 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 - Priority customer support
 
 **AI Model Strategy:** Claude Opus for Financial Mind
-- Premium analysis: Claude Opus ($15/MTok input, $75/MTok output)
+- Pro analysis: Claude Opus ($15/MTok input, $75/MTok output)
 - Rate limited: 5-10 deep analysis sessions per month
 - All other features use Base Tier model cascade
 
@@ -48,7 +48,7 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 - **API costs (heavy user):** -$1.00 to -$3.00
 - **Net Margin:** ~$4.51 to $6.51 (first year), ~$5.31 to $7.31 (after year 1)
 
-### Premium Tier ($14.99/month)
+### Pro Tier ($14.99/month)
 - **Gross Revenue:** $14.99
 - **Apple's 30% cut:** -$4.50 (first year), -$3.00 (after year 1)
 - **RevenueCat 1%:** -$0.15
@@ -76,18 +76,33 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 
 ### Value Propositions
 - **Base Tier:** "Smart bill tracking with AI" - undercuts YNAB while offering AI
-- **Premium Tier:** "Your personal AI financial advisor" - unique market position
+- **Pro Tier:** "Your personal AI financial advisor" - unique market position
 
 ## Growth Strategy
 
 ### Customer Acquisition
 - **7-Day Free Trial:** Full access to Base Tier features
 - **Freemium Alternative:** 10 AI entries/month free tier (if needed for growth)
-- **Annual Discounts:** $79.99/year Base, $149.99/year Premium
+
+### Pricing Options
+
+#### Monthly Pricing
+- **Base Tier:** $7.99/month
+- **Pro Tier:** $14.99/month
+
+#### Annual Pricing (Save 17%)
+- **Base Tier:** $79.99/year (saves $15.89/year)
+- **Pro Tier:** $149.99/year (saves $29.89/year)
+
+**Annual Pricing Benefits:**
+- Improved cash flow from upfront payments
+- Higher customer lifetime value (reduced churn)
+- Lower payment processing costs
+- More predictable revenue forecasting
 
 ### Retention Strategy
-- **Progressive Feature Unlock:** Natural upgrade path from Base to Premium
-- **Financial Mind Preview:** Limited free sessions to drive Premium upgrades
+- **Progressive Feature Unlock:** Natural upgrade path from Base to Pro
+- **Financial Mind Preview:** Limited free sessions to drive Pro upgrades
 - **Data Lock-in:** Comprehensive financial history creates switching costs
 
 ## Revenue Projections
@@ -118,7 +133,7 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 **Target Timeline: Month 18-24**
 
 - **5,000 Base Tier users:** $479,400 annual revenue  
-- **1,500 Premium Tier users:** $269,820 annual revenue
+- **1,500 Pro Tier users:** $269,820 annual revenue
 - **Total:** ~$749k ARR
 
 ### Scale Scenario: 10,000 Customers
@@ -247,7 +262,7 @@ Norma is an AI-powered personal finance app focused on bill management and expen
 - **Core Values:** Data transparency, optimization, cutting-edge technology
 - **Key Motivations:** Maximizing financial efficiency, understanding spending patterns
 
-**Why They Choose Premium Tier:**
+**Why They Choose Pro Tier:**
 - Financial Mind AI provides advanced analysis
 - MCP database integration enables custom queries
 - Willing to pay for sophisticated insights

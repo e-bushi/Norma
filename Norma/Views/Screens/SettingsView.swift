@@ -11,9 +11,11 @@ struct SettingsView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @StateObject private var notificationService = NotificationService.shared
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showLogoutAlert = false
     @State private var showRecoveryPhrase = false
     @State private var showSecurityOptions = false
+    @State private var showPaywall = false
     
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
@@ -41,6 +43,122 @@ struct SettingsView: View {
                             }
                         }
                         .padding(.vertical, 4)
+                    }
+                }
+                
+                // Subscription Section
+                Section("Subscription") {
+                    if subscriptionManager.isInFreeTrial {
+                        // Trial status
+                        HStack {
+                            Image(systemName: "sparkles")
+                                .foregroundColor(.purple)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Free Trial")
+                                    .font(.headline)
+                                if let daysRemaining = subscriptionManager.trialDaysRemaining {
+                                    Text("\(daysRemaining) day\(daysRemaining == 1 ? "" : "s") remaining")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button("View Plans") {
+                                showPaywall = true
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.vertical, 4)
+                    } else if subscriptionManager.hasActiveSubscription {
+                        // Active subscription
+                        HStack {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(.green)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Pro Subscription")
+                                    .font(.headline)
+                                if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
+                                    if subscriptionManager.subscriptionStatus.willRenew {
+                                        Text("Renews \(expirationDate, style: .date)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    } else {
+                                        Text("Expires \(expirationDate, style: .date)")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Manage subscription button
+                        Button(action: {
+                            // Open App Store subscription management
+                            if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                                UIApplication.shared.open(url)
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "creditcard")
+                                    .foregroundColor(.blue)
+                                Text("Manage Subscription")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "arrow.up.forward.square")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                    } else {
+                        // No subscription
+                        HStack {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(.gray)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Limited Access")
+                                    .font(.headline)
+                                Text("Unlock all features with Pro")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("Subscribe") {
+                                showPaywall = true
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Restore purchases option
+                        Button(action: {
+                            Task {
+                                do {
+                                    try await subscriptionManager.restorePurchases()
+                                } catch {
+                                    print("Failed to restore purchases: \(error)")
+                                }
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.clockwise.circle")
+                                    .foregroundColor(.blue)
+                                Text("Restore Purchases")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                        }
                     }
                 }
                 
@@ -221,6 +339,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showRecoveryPhrase) {
                 RecoveryPhraseView(userId: sessionViewModel.currentUser?.userId ?? "")
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
             }
         }
     }
