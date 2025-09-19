@@ -229,12 +229,37 @@ class SubscriptionManager: NSObject, ObservableObject {
             
             if !result.userCancelled {
                 updateSubscriptionStatus(from: result.customerInfo)
+                
+                // Log purchase verification info
+                // RevenueCat handles verification internally, but you can access the info
+                if let transaction = result.transaction {
+                    print("🔐 Purchase verified - Transaction ID: \(transaction.transactionIdentifier)")
+                    print("🔐 Product ID: \(transaction.productIdentifier)")
+                    print("🔐 Purchase Date: \(transaction.purchaseDate)")
+                    
+                    // RevenueCat automatically validates receipts with Apple/Google
+                    // The JWT token you see is RevenueCat's internal verification
+                    // You can trust result.customerInfo as the source of truth
+                    
+                    // Optional: Send purchase event to your backend via Supabase
+                    // This would be for analytics or additional business logic
+                    // await recordPurchaseInBackend(transaction: transaction)
+                }
             }
         } catch {
             purchaseError = error
             throw error
         }
     }
+    
+    // Optional: Record purchase in your Supabase backend for analytics
+    /*
+    private func recordPurchaseInBackend(transaction: StoreTransaction) async {
+        // This would send purchase data to your Supabase backend
+        // for analytics, user history, or business intelligence
+        // The actual subscription validation is handled by RevenueCat
+    }
+    */
     
     func restorePurchases() async throws {
         do {
