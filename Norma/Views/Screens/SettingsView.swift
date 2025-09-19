@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var showRecoveryPhrase = false
     @State private var showSecurityOptions = false
     @State private var showPaywall = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
@@ -312,9 +314,7 @@ struct SettingsView: View {
                     }
                     
                     Button(action: {
-                        if let url = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") {
-                            UIApplication.shared.open(url)
-                        }
+                        showTermsOfUse = true
                     }) {
                         HStack {
                             Image(systemName: "doc.text.fill")
@@ -322,16 +322,14 @@ struct SettingsView: View {
                             Text("Terms of Use")
                                 .foregroundColor(.primary)
                             Spacer()
-                            Image(systemName: "arrow.up.forward.square")
+                            Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
                     }
                     
                     Button(action: {
-                        if let url = URL(string: "https://mauldin.xyz/norma/privacy") {
-                            UIApplication.shared.open(url)
-                        }
+                        showPrivacyPolicy = true
                     }) {
                         HStack {
                             Image(systemName: "lock.shield.fill")
@@ -339,7 +337,7 @@ struct SettingsView: View {
                             Text("Privacy Policy")
                                 .foregroundColor(.primary)
                             Spacer()
-                            Image(systemName: "arrow.up.forward.square")
+                            Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
@@ -376,6 +374,18 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
+            }
+            .sheet(isPresented: $showTermsOfUse) {
+                WebViewSheet(
+                    url: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+                    title: "Terms of Use"
+                )
+            }
+            .sheet(isPresented: $showPrivacyPolicy) {
+                WebViewSheet(
+                    url: "https://mauldin.xyz/norma/privacy",
+                    title: "Privacy Policy"
+                )
             }
         }
     }
