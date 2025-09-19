@@ -309,16 +309,6 @@ struct SettingsView: View {
                         }
                     }
                     
-                    HStack {
-                        Image(systemName: "envelope.fill")
-                            .foregroundColor(.blue)
-                        Text("Contact Us")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                    }
-                    
                     Button(action: {
                         showTermsOfUse = true
                     }) {
