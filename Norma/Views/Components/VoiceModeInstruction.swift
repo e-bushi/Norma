@@ -9,26 +9,30 @@ import SwiftUI
 
 struct VoiceModeInstruction: View {
     let explanationButtonAppeared: Bool
+    let onActivate: () -> Void
     @State private var isDismissed = false
     
     var body: some View {
         if !isDismissed {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.purple.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
-                    )
-                
-                VStack(spacing: 12) {
+            Button(action: {
+                // Activate voice mode
+                onActivate()
+            }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.purple.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                        )
+                    
                     HStack(spacing: 12) {
                         Image(systemName: "mic.circle.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: 24))
                             .foregroundColor(.purple)
                         
-                        Text("Voice Mode")
-                            .font(.system(size: 14, weight: .semibold))
+                        Text("Talk to Norma")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.purple)
                         
                         Spacer()
@@ -42,15 +46,12 @@ struct VoiceModeInstruction: View {
                                 .font(.system(size: 18))
                                 .foregroundColor(.gray.opacity(0.5))
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    
-                    Text("Double tap and hold the chart to activate voice mode. If you want to end the conversation, tap the end button.")
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.leading)
+                    .padding(20)
                 }
-                .padding(20)
             }
+            .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 24)
             .padding(.horizontal )
             .scaleEffect(explanationButtonAppeared ? 1 : 0.9)
@@ -65,5 +66,7 @@ struct VoiceModeInstruction: View {
 }
 
 #Preview {
-    VoiceModeInstruction(explanationButtonAppeared: true)
+    VoiceModeInstruction(explanationButtonAppeared: true) {
+        print("Voice mode activated")
+    }
 }

@@ -15,12 +15,15 @@ struct ExpenseCalendarView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject var incomeViewModel: IncomeViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // Voice mode states
     @State private var showVoiceMode = false
     @State private var voiceAgentViewModel: VoiceAgentViewModel?
     @State private var lastTapTime: Date = Date()
     @State private var isPressed = false
+    @State private var showPaywall = false
     
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -88,7 +91,31 @@ struct ExpenseCalendarView: View {
             }
             
             // Voice mode instruction
-            CalendarVoiceModeInstruction()
+            CalendarVoiceModeInstruction(
+                onActivate: {
+                    // Check if user has active subscription or is in trial
+                    if subscriptionManager.isInFreeTrial || subscriptionManager.hasActiveSubscription {
+                        print("ExpenseCalendar: User has access (trial or subscription) - activating voice mode from button...")
+                        
+                        // Activate voice mode
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showVoiceMode = true
+                        }
+                        
+                        // Strong haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                        impactFeedback.impactOccurred()
+                        
+                        // Start voice recording
+                        Task {
+                            await startVoiceInteraction()
+                        }
+                    } else {
+                        print("ExpenseCalendar: No access to voice mode - show paywall")
+                        showPaywall = true
+                    }
+                }
+            )
             
             // Calendar container
             ZStack {
@@ -173,6 +200,22 @@ struct ExpenseCalendarView: View {
                 cornerRadius: 20
             )
         }
+        .overlay(
+            VoiceModeOverlay(
+                isVisible: $showVoiceMode,
+                cornerRadius: 20,
+                voiceAgentViewModel: voiceAgentViewModel ?? VoiceAgentViewModel(
+                    userId: sessionViewModel.currentUser?.userId ?? "",
+                    billViewModel: billViewModel,
+                    expenseViewModel: expenseViewModel,
+                    incomeViewModel: incomeViewModel,
+                    sessionViewModel: sessionViewModel
+                )
+            )
+        )
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
     }
     
     // Extract all the dates for the current month's calendar view (including leading/trailing days)
@@ -226,6 +269,53 @@ struct ExpenseCalendarView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter
+    }
+    
+    private func startVoiceInteraction() async {
+        let userName = sessionViewModel.currentUser?.name
+        
+        if let voiceAgent = voiceAgentViewModel {
+            // Check if there's a paused conversation to resume
+            if voiceAgent.conversationPaused {
+                print("Resuming paused voice conversation...")
+                await voiceAgent.resumeConversation()
+            } else {
+                print("Starting new voice interaction for expenses...")
+                // Request permissions if needed
+                if !voiceAgent.hasPermissions {
+                    print("Requesting permissions...")
+                    let granted = await voiceAgent.requestPermissions()
+                    if !granted {
+                        print("Permissions not granted")
+                        return
+                    }
+                }
+                await voiceAgent.startExpenseVoiceInteraction(userName: userName)
+            }
+        } else {
+            print("VoiceAgentViewModel is nil - initializing now")
+            if let userId = sessionViewModel.currentUser?.userId {
+                voiceAgentViewModel = VoiceAgentViewModel(
+                    userId: userId,
+                    billViewModel: billViewModel,
+                    expenseViewModel: expenseViewModel,
+                    incomeViewModel: incomeViewModel,
+                    sessionViewModel: sessionViewModel
+                )
+                // Request permissions if needed
+                if let voiceAgent = voiceAgentViewModel {
+                    if !voiceAgent.hasPermissions {
+                        print("Requesting permissions...")
+                        let granted = await voiceAgent.requestPermissions()
+                        if !granted {
+                            print("Permissions not granted")
+                            return
+                        }
+                    }
+                    await voiceAgent.startExpenseVoiceInteraction(userName: userName)
+                }
+            }
+        }
     }
 }
 
