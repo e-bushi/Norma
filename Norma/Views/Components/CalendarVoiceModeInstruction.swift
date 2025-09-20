@@ -23,20 +23,20 @@ struct CalendarVoiceModeInstruction: View {
                 HStack(spacing: 8) {
                     Image(systemName: "mic.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.purple)
                     
                     Text("Talk to Norma")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.purple)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
+                        .fill(Color.purple.opacity(0.05))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                                .stroke(Color.purple.opacity(0.1), lineWidth: 1)
                         )
                 )
             }
