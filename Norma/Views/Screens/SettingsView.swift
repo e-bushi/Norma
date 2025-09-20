@@ -16,6 +16,9 @@ struct SettingsView: View {
     @State private var showRecoveryPhrase = false
     @State private var showSecurityOptions = false
     @State private var showPaywall = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
+    @State private var showHelpSupport = false
     
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
@@ -291,24 +294,49 @@ struct SettingsView: View {
                 
                 // Support Section
                 Section("Support") {
-                    HStack {
-                        Image(systemName: "questionmark.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("Help & Support")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                    Button(action: {
+                        showHelpSupport = true
+                    }) {
+                        HStack {
+                            Image(systemName: "questionmark.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("Help & Support")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
                     }
                     
-                    HStack {
-                        Image(systemName: "envelope.fill")
-                            .foregroundColor(.blue)
-                        Text("Contact Us")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                    Button(action: {
+                        showTermsOfUse = true
+                    }) {
+                        HStack {
+                            Image(systemName: "doc.text.fill")
+                                .foregroundColor(.blue)
+                            Text("Terms of Use")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                    
+                    Button(action: {
+                        showPrivacyPolicy = true
+                    }) {
+                        HStack {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundColor(.blue)
+                            Text("Privacy Policy")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
                     }
                 }
                 
@@ -342,6 +370,24 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
+            }
+            .sheet(isPresented: $showTermsOfUse) {
+                WebViewSheet(
+                    url: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+                    title: "Terms of Use"
+                )
+            }
+            .sheet(isPresented: $showPrivacyPolicy) {
+                WebViewSheet(
+                    url: "https://mauldin.xyz/norma/privacy",
+                    title: "Privacy Policy"
+                )
+            }
+            .sheet(isPresented: $showHelpSupport) {
+                WebViewSheet(
+                    url: "https://whop.com/norma-ai",
+                    title: "Help & Support"
+                )
             }
         }
     }

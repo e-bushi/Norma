@@ -34,14 +34,14 @@ enum NormaChatContext {
         }
     }
     
-    var systemPrompt: String {
+    func systemPrompt(currency: String) -> String {
         switch self {
         case .bills:
-            return NormaSystemPrompts.billCreationPrompt()
+            return NormaSystemPrompts.billCreationPrompt(currency: currency)
         case .expenses:
-            return NormaSystemPrompts.expenseCreationPrompt()
+            return NormaSystemPrompts.expenseCreationPrompt(currency: currency)
         case .profile:
-            return NormaSystemPrompts.generalAssistantPrompt() // TODO: Create profile-specific prompt
+            return NormaSystemPrompts.generalAssistantPrompt(currency: currency)
         }
     }
 }
@@ -384,10 +384,13 @@ struct NormaChatView: View {
             // Get tools for this context
             let tools = getToolsForContext()
             
+            // Get user's currency (default to USD if not set)
+            let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
+            
             // Get response from Norma AI with context-specific tools and prompt
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
-                systemPrompt: context.systemPrompt,
+                systemPrompt: context.systemPrompt(currency: currency),
                 tools: tools
             )
             
@@ -423,7 +426,7 @@ struct NormaChatView: View {
                 // Get Claude's final response after tool execution
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
-                    systemPrompt: context.systemPrompt,
+                    systemPrompt: context.systemPrompt(currency: currency),
                     tools: tools
                 )
                 

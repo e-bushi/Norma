@@ -169,6 +169,22 @@ struct SignUpView: View {
                                     }
                                 }
                                 .textFieldStyle(EnhancedTextFieldStyle(isFocused: confirmPasswordFieldFocused))
+                                
+                                // Password validation indicator
+                                if !confirmPassword.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: password == confirmPassword ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(password == confirmPassword ? .green : .red)
+                                        
+                                        Text(password == confirmPassword ? "Passwords match" : "Passwords do not match")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(password == confirmPassword ? .green : .red)
+                                    }
+                                    .padding(.top, 4)
+                                    .transition(.opacity.combined(with: .scale))
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: password == confirmPassword)
+                                }
                             }
                         }
                         .padding(20)

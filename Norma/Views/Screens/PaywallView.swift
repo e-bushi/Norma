@@ -14,6 +14,8 @@ struct PaywallView: View {
     @State private var selectedTier: SubscriptionTier = .base
     @State private var isPurchasing = false
     @State private var showError = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     enum BillingOption {
         case monthly
@@ -128,10 +130,14 @@ struct PaywallView: View {
                                 .foregroundColor(.secondary)
                             
                             HStack(spacing: 12) {
-                                Link("Terms", destination: URL(string: "https://norma.app/terms")!)
+                                Button("Terms") {
+                                    showTermsOfUse = true
+                                }
                                 Text("•")
                                     .foregroundColor(.secondary)
-                                Link("Privacy", destination: URL(string: "https://norma.app/privacy")!)
+                                Button("Privacy") {
+                                    showPrivacyPolicy = true
+                                }
                             }
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
@@ -166,6 +172,18 @@ struct PaywallView: View {
             Button("OK") { }
         } message: {
             Text(subscriptionManager.purchaseError?.localizedDescription ?? "An error occurred")
+        }
+        .sheet(isPresented: $showTermsOfUse) {
+            WebViewSheet(
+                url: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+                title: "Terms of Use"
+            )
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            WebViewSheet(
+                url: "https://mauldin.xyz/norma/privacy",
+                title: "Privacy Policy"
+            )
         }
         .onAppear {
             print("📱 PaywallView appeared - Loading products...")
@@ -217,7 +235,19 @@ struct PaywallView: View {
             if let product = findProduct(for: selectedTier, isMonthly: selectedBilling == .monthly) {
                 print("✅ Found product: \(product.tier.rawValue), isMonthly: \(product.isMonthly)")
                 try await subscriptionManager.purchase(product)
-                dismiss()
+                
+                // Wait a moment for the subscription status to update
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                
+                // Check if the subscription is now active before dismissing
+                if subscriptionManager.hasActiveSubscription {
+                    print("✅ Purchase successful, subscription is active")
+                    dismiss()
+                } else {
+                    print("⚠️ Purchase completed but subscription not yet active, checking status...")
+                    await subscriptionManager.checkSubscriptionStatus()
+                    dismiss()
+                }
             } else {
                 print("❌ Product not found for tier: \(selectedTier.rawValue), isMonthly: \(selectedBilling == .monthly)")
                 print("Available products: \(subscriptionManager.availableProducts.map { "\($0.tier.rawValue)-\($0.isMonthly)" })")

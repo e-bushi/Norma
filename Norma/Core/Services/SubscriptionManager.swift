@@ -54,6 +54,8 @@ class SubscriptionManager: NSObject, ObservableObject {
     
     private func updateSubscriptionStatus(from customerInfo: CustomerInfo) {
         let activeSubscriptions = customerInfo.activeSubscriptions
+        print("📱 Active subscriptions: \(activeSubscriptions)")
+        print("📱 All entitlements: \(customerInfo.entitlements.all.keys)")
         
         var activeTier: SubscriptionTier?
         var expirationDate: Date?
@@ -61,28 +63,47 @@ class SubscriptionManager: NSObject, ObservableObject {
         var isInTrialPeriod = false
         var isInIntroOfferPeriod = false
         
-        for productId in activeSubscriptions {
-            print("🔍 Checking productId: \(productId)")
-            if productId.contains("base") {
-                activeTier = .base
-            } else if productId.contains("pro") {
+        // First, check if there are any active entitlements at all
+        if let firstActiveEntitlement = customerInfo.entitlements.active.values.first {
+            print("✅ Found active entitlement: \(firstActiveEntitlement.identifier)")
+            
+            // Determine tier from either the product ID or entitlement ID
+            for productId in activeSubscriptions {
+                print("🔍 Checking productId: \(productId)")
+                if productId.contains("base") {
+                    activeTier = .base
+                } else if productId.contains("pro") {
+                    activeTier = .pro
+                } else {
+                    // Default to pro if we have any active subscription
+                    activeTier = .pro
+                }
+            }
+            
+            // If we still don't have a tier, default to pro for any active entitlement
+            if activeTier == nil && !activeSubscriptions.isEmpty {
                 activeTier = .pro
+            }
+            
+            // Use the active entitlement details
+            expirationDate = firstActiveEntitlement.expirationDate
+            willRenew = firstActiveEntitlement.willRenew
+            isInTrialPeriod = firstActiveEntitlement.periodType == .trial
+            isInIntroOfferPeriod = firstActiveEntitlement.periodType == .intro
+            
+            print("✅ Subscription status - tier: \(activeTier?.rawValue ?? "nil"), isActive: true, periodType: \(firstActiveEntitlement.periodType)")
+        } else {
+            print("❌ No active entitlements found")
+            
+            // Still check for active subscriptions without entitlements (edge case)
+            if !activeSubscriptions.isEmpty {
+                print("⚠️ Active subscriptions found without entitlements: \(activeSubscriptions)")
+                activeTier = .pro // Default to pro if there are active subscriptions
             }
         }
         
-        if let tier = activeTier,
-           let entitlement = customerInfo.entitlements[tier.rawValue] {
-            expirationDate = entitlement.expirationDate
-            willRenew = entitlement.willRenew
-            isInTrialPeriod = entitlement.isActiveInCurrentEnvironment && entitlement.periodType == .trial
-            isInIntroOfferPeriod = entitlement.isActiveInCurrentEnvironment && entitlement.periodType == .intro
-            print("✅ Found entitlement - tier: \(tier.rawValue), isActive: \(entitlement.isActiveInCurrentEnvironment), periodType: \(entitlement.periodType), isInTrialPeriod: \(isInTrialPeriod)")
-        } else {
-            print("❌ No matching entitlement found for tier: \(activeTier?.rawValue ?? "nil")")
-        }
-        
         subscriptionStatus = SubscriptionStatus(
-            isActive: activeTier != nil,
+            isActive: activeTier != nil || !customerInfo.entitlements.active.isEmpty,
             tier: activeTier,
             expirationDate: expirationDate,
             willRenew: willRenew,
@@ -208,12 +229,37 @@ class SubscriptionManager: NSObject, ObservableObject {
             
             if !result.userCancelled {
                 updateSubscriptionStatus(from: result.customerInfo)
+                
+                // Log purchase verification info
+                // RevenueCat handles verification internally, but you can access the info
+                if let transaction = result.transaction {
+                    print("🔐 Purchase verified - Transaction ID: \(transaction.transactionIdentifier)")
+                    print("🔐 Product ID: \(transaction.productIdentifier)")
+                    print("🔐 Purchase Date: \(transaction.purchaseDate)")
+                    
+                    // RevenueCat automatically validates receipts with Apple/Google
+                    // The JWT token you see is RevenueCat's internal verification
+                    // You can trust result.customerInfo as the source of truth
+                    
+                    // Optional: Send purchase event to your backend via Supabase
+                    // This would be for analytics or additional business logic
+                    // await recordPurchaseInBackend(transaction: transaction)
+                }
             }
         } catch {
             purchaseError = error
             throw error
         }
     }
+    
+    // Optional: Record purchase in your Supabase backend for analytics
+    /*
+    private func recordPurchaseInBackend(transaction: StoreTransaction) async {
+        // This would send purchase data to your Supabase backend
+        // for analytics, user history, or business intelligence
+        // The actual subscription validation is handled by RevenueCat
+    }
+    */
     
     func restorePurchases() async throws {
         do {

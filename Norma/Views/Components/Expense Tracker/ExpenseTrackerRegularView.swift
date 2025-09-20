@@ -86,7 +86,51 @@ struct ExpenseTrackerRegularView: View {
             
             // Voice mode instruction
             VoiceModeInstruction(
-                explanationButtonAppeared: explanationButtonAppeared
+                explanationButtonAppeared: explanationButtonAppeared,
+                onActivate: {
+                    // Check if user has active subscription or is in trial
+                    if subscriptionManager.isInFreeTrial || subscriptionManager.hasActiveSubscription {
+                        print("ExpenseTracker: User has access (trial or subscription) - activating voice mode from button...")
+                        
+                        // Activate voice mode
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showVoiceMode = true
+                        }
+                        
+                        // Strong haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                        impactFeedback.impactOccurred()
+                        
+                        // Start voice recording or resume paused conversation
+                        Task {
+                            // Initialize voiceAgentViewModel if needed
+                            if voiceAgentViewModel == nil {
+                                if let userId = sessionViewModel.currentUser?.userId {
+                                    voiceAgentViewModel = VoiceAgentViewModel(
+                                        userId: userId,
+                                        billViewModel: billViewModel,
+                                        expenseViewModel: nil,  // ExpenseViewModel not available in this view
+                                        incomeViewModel: incomeViewModel,
+                                        sessionViewModel: sessionViewModel
+                                    )
+                                }
+                            }
+                            
+                            // Start or resume conversation
+                            if let voiceAgent = voiceAgentViewModel {
+                                if voiceAgent.conversationPaused {
+                                    await voiceAgent.resumeConversation()
+                                } else {
+                                    let userName = sessionViewModel.currentUser?.name
+                                    await voiceAgent.startVoiceInteraction(userName: userName)
+                                }
+                            }
+                        }
+                    } else {
+                        print("ExpenseTracker: No access to voice mode - show paywall")
+                        showPaywall = true
+                    }
+                }
             )
 
             // Main chart
@@ -240,8 +284,8 @@ struct ExpenseTrackerRegularView: View {
                         print("ExpenseTracker: Double-tap and hold detected!")
                         
                         // Check if user has active subscription or is in trial
-                        if subscriptionManager.isInFreeTrial {
-                            print("ExpenseTracker: User is in free trial - activating voice mode...")
+                        if subscriptionManager.isInFreeTrial || subscriptionManager.hasActiveSubscription {
+                            print("ExpenseTracker: User has access (trial or subscription) - activating voice mode...")
                             // This is a double-tap and hold!
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 showVoiceMode = true
@@ -305,7 +349,7 @@ struct ExpenseTrackerRegularView: View {
                             }
                         }
                         } else {
-                            print("ExpenseTracker: User not in trial - showing paywall")
+                            print("ExpenseTracker: User has no access (no trial, no subscription) - showing paywall")
                             // User doesn't have access - show paywall
                             showPaywall = true
                             

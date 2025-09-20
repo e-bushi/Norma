@@ -9,7 +9,6 @@ import SwiftUI
 
 // This file demonstrates how to use the reusable InformationalPopup component
 struct PopupExamples: View {
-    @State private var showEncryptionPopup = false
     @State private var showUpdatePopup = false
     @State private var showBackupPopup = false
     @State private var showFeaturePopup = false
@@ -18,11 +17,6 @@ struct PopupExamples: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
-                Button("Show Encryption Migration") {
-                    showEncryptionPopup = true
-                }
-                .buttonStyle(.borderedProminent)
-                
                 Button("Show App Update") {
                     showUpdatePopup = true
                 }
@@ -47,23 +41,6 @@ struct PopupExamples: View {
         }
         .overlay(
             Group {
-                // Encryption Migration Popup
-                if showEncryptionPopup {
-                    EncryptionMigrationPopup(
-                        isPresented: $showEncryptionPopup,
-                        onMigrate: { password in
-                            print("Starting encryption migration with password...")
-                            // Simulate migration for example
-                            try await Task.sleep(nanoseconds: 2_000_000_000)
-                            showEncryptionPopup = false
-                        },
-                        onDismiss: {
-                            showEncryptionPopup = false
-                        },
-                        userEmail: "example@email.com"
-                    )
-                }
-                
                 // App Update Popup
                 if showUpdatePopup {
                     InformationalPopup(

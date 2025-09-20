@@ -40,7 +40,7 @@ class VoiceRecordingService: ObservableObject {
     private var silenceThreshold: Float = 0.02
     private var speechDetected = false
     private var lastSpeechTime = Date()
-    private var silenceTimeoutDuration: TimeInterval = 0.5
+    private var silenceTimeoutDuration: TimeInterval = 2.0  // Increased from 0.5 to 2.0 seconds for more natural pauses
     
     private init() {
         self.audioSession = AVAudioSession.sharedInstance()
@@ -166,6 +166,8 @@ class VoiceRecordingService: ObservableObject {
         speechDetected = false
         isSpeechDetected = false
         lastSpeechTime = Date()
+        // Ensure consistent silence timeout duration for each recording
+        silenceTimeoutDuration = 2.0
         
         isRecording = true
         startReactiveLevelMonitoring()
