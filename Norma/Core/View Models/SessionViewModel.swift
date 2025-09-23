@@ -101,6 +101,12 @@ class SessionViewModel: ObservableObject {
         }
     }
     
+    func deleteAccount() async throws {
+        // Delete all user data and sign out
+        try await dataManager.deleteAccount()
+        await handleNoAuthentication()
+    }
+    
     // MARK: - User Profile Methods
     
     func fetchUserProfile() async {

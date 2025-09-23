@@ -13,12 +13,15 @@ struct SettingsView: View {
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showLogoutAlert = false
+    @State private var showDeleteAccountAlert = false
+    @State private var showDeleteAccountConfirmation = false
     @State private var showRecoveryPhrase = false
     @State private var showSecurityOptions = false
     @State private var showPaywall = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
+    @State private var isDeletingAccount = false
     
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
@@ -352,6 +355,18 @@ struct SettingsView: View {
                                 .foregroundColor(.red)
                         }
                     }
+                    
+                    Button(action: {
+                        showDeleteAccountAlert = true
+                    }) {
+                        HStack {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                            Text("Delete Account")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .disabled(isDeletingAccount)
                 }
             }
             .navigationTitle("Settings")
@@ -364,6 +379,31 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    showDeleteAccountConfirmation = true
+                }
+            } message: {
+                Text("This action cannot be undone. All your data will be permanently deleted.")
+            }
+            .alert("Are you absolutely sure?", isPresented: $showDeleteAccountConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete My Account", role: .destructive) {
+                    Task {
+                        isDeletingAccount = true
+                        do {
+                            try await sessionViewModel.deleteAccount()
+                        } catch {
+                            print("Error deleting account: \(error)")
+                            // You might want to show an error alert here
+                        }
+                        isDeletingAccount = false
+                    }
+                }
+            } message: {
+                Text("This will permanently delete your account and all associated data. This action CANNOT be undone.")
             }
             .sheet(isPresented: $showRecoveryPhrase) {
                 RecoveryPhraseView(userId: sessionViewModel.currentUser?.userId ?? "")
