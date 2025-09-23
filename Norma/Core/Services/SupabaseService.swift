@@ -128,7 +128,7 @@ extension SupabaseService {
         // Delete profile
         _ = try await client.from("profiles")
             .delete()
-            .eq("id", value: userId.uuidString)
+            .eq("user_id", value: userId.uuidString)
             .execute()
         
         // Note: Supabase doesn't allow direct user deletion from client-side

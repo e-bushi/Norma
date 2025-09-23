@@ -130,9 +130,6 @@ class DataManager: ObservableObject {
         
         // Clear all local data
         clearAllData()
-        
-        // Clear any cached data
-        clearCachedData()
     }
     
     func updateUserProfile(_ profile: Profile) async throws {
