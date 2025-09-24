@@ -516,7 +516,19 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 24)
                 
-                // Financial Health Score
+                // Money Score
+                MoneyScoreView(
+                    score: financialHealth.score,
+                    trend: financialHealth.trend == .improving ? .improving : .declining,
+                    billManagementScore: 85,
+                    budgetManagementScore: 72,
+                    savingsRateScore: 68,
+                    stabilityScore: 70
+                )
+                .padding(.horizontal, 24)
+                
+                // Old Money Score implementation (commented out for reference)
+                /*
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
                         .fill(
@@ -547,7 +559,7 @@ struct ProfileView: View {
                     VStack(spacing: 20) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Money Relationship Score")
+                                Text("Money Score")
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.secondary)
                                     .tracking(1.0)
@@ -593,24 +605,328 @@ struct ProfileView: View {
                             }
                         }
                         
-                        // Psychological Barriers
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("KEY PSYCHOLOGICAL BARRIERS")
+                        // Money Score Metrics
+                        VStack(spacing: 12) {
+                            Text("FINANCIAL METRICS")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.secondary)
                                 .tracking(1.0)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             
-                            ForEach(financialHealth.psychologicalBarriers, id: \.self) { barrier in
-                                HStack(spacing: 12) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.orange)
+                            VStack(spacing: 12) {
+                                // Bill Management
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color(UIColor.systemBackground),
+                                                    Color.gray.opacity(0.02)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.gray.opacity(0.15),
+                                                            Color.gray.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
                                     
-                                    Text(barrier)
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.primary)
+                                    HStack {
+                                            // Icon
+                                            Image(systemName: "calendar.badge.checkmark")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.green)
+                                                .frame(width: 32, height: 32)
+                                                .background(Color.green.opacity(0.15))
+                                                .clipShape(Circle())
+                                            
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Bill Management")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("On-time payments & tracking")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("85%")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.green)
+                                                
+                                                Text("Good")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.green)
+                                                    .textCase(.uppercase)
+                                            }
+                                        }
+                                    .padding(16)
+                                }
+                                
+                                // Budget Management
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color(UIColor.systemBackground),
+                                                    Color.gray.opacity(0.02)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.gray.opacity(0.15),
+                                                            Color.gray.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
                                     
-                                    Spacer()
+                                    HStack {
+                                            // Icon
+                                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.blue)
+                                                .frame(width: 32, height: 32)
+                                                .background(Color.blue.opacity(0.15))
+                                                .clipShape(Circle())
+                                            
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Budget Management")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("Staying within income limits")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("72%")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.blue)
+                                                
+                                                Text("Fair")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.blue)
+                                                    .textCase(.uppercase)
+                                            }
+                                        }
+                                    .padding(16)
+                                }
+                                
+                                // Savings Rate
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color(UIColor.systemBackground),
+                                                    Color.gray.opacity(0.02)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.gray.opacity(0.15),
+                                                            Color.gray.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                    
+                                    HStack {
+                                            // Icon
+                                            Image(systemName: "banknote")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.purple)
+                                                .frame(width: 32, height: 32)
+                                                .background(Color.purple.opacity(0.15))
+                                                .clipShape(Circle())
+                                            
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Savings Rate")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("Monthly savings percentage")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("68%")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.purple)
+                                                
+                                                Text("Fair")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.purple)
+                                                    .textCase(.uppercase)
+                                            }
+                                        }
+                                    .padding(16)
+                                }
+                                
+                                // Expense Control
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color(UIColor.systemBackground),
+                                                    Color.gray.opacity(0.02)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.gray.opacity(0.15),
+                                                            Color.gray.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                    
+                                    HStack {
+                                            // Icon
+                                            Image(systemName: "creditcard")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.orange)
+                                                .frame(width: 32, height: 32)
+                                                .background(Color.orange.opacity(0.15))
+                                                .clipShape(Circle())
+                                            
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Expense Control")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("Spending patterns & habits")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("75%")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.orange)
+                                                
+                                                Text("Good")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.orange)
+                                                    .textCase(.uppercase)
+                                            }
+                                        }
+                                    .padding(16)
+                                }
+                                
+                                // Stability
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color(UIColor.systemBackground),
+                                                    Color.gray.opacity(0.02)
+                                                ]),
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.gray.opacity(0.15),
+                                                            Color.gray.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                    
+                                    HStack {
+                                            // Icon
+                                            Image(systemName: "gauge.medium")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.teal)
+                                                .frame(width: 32, height: 32)
+                                                .background(Color.teal.opacity(0.15))
+                                                .clipShape(Circle())
+                                            
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Stability")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("Income to expense ratio")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("70%")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.teal)
+                                                
+                                                Text("Fair")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.teal)
+                                                    .textCase(.uppercase)
+                                            }
+                                        }
+                                    .padding(16)
                                 }
                             }
                         }
@@ -619,6 +935,7 @@ struct ProfileView: View {
                     .padding(24)
                 }
                 .padding(.horizontal, 24)
+                */
                 
                 // Action Button
                 Button(action: {

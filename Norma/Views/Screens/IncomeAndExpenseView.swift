@@ -12,6 +12,7 @@ struct IncomeAndExpenseView: View {
     // View Models from Environment
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var incomeViewModel: IncomeViewModel
+    @EnvironmentObject private var budgetViewModel: BudgetViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     
@@ -124,7 +125,7 @@ struct IncomeAndExpenseView: View {
                         switch selectedView {
                         case .budget:
                             BudgetDisclosureView(expenses: currentMonthExpenses, month: currentMonth)
-                            .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+                            .environmentObject(budgetViewModel)
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
