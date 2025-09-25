@@ -121,6 +121,12 @@ class SubscriptionManager: NSObject, ObservableObject {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
         
+        // Ensure RevenueCat is configured
+        if !Purchases.isConfigured {
+            print("⚠️ RevenueCat not configured, attempting to configure...")
+            Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf")
+        }
+        
         do {
             print("🚀 Loading offerings from RevenueCat...")
             let offerings = try await Purchases.shared.offerings()
@@ -141,52 +147,70 @@ class SubscriptionManager: NSObject, ObservableObject {
             
             var products: [SubscriptionProduct] = []
             
+            // First, let's see ALL available packages in the offering
+            print("📱 All packages in current offering:")
+            for package in currentOffering.availablePackages {
+                print("  - Package ID: \(package.identifier)")
+                print("    Product ID: \(package.storeProduct.productIdentifier)")
+                print("    Price: \(package.storeProduct.localizedPriceString)")
+            }
+            
             // Load both Base and Pro tier products using RevenueCat package identifiers
             for tier in SubscriptionTier.allCases {
-                // Map to RevenueCat package identifiers (simplified naming)
-                let monthlyPackageId = tier == .base ? "base_monthly" : "pro_monthly"
-                let annualPackageId = tier == .base ? "base_yearly" : "pro_yearly"
+                // Try multiple naming conventions
+                let monthlyPackageIds = [
+                    tier == .base ? "base_monthly" : "pro_monthly",
+                    tier == .base ? "$rc_monthly" : "$rc_monthly",
+                    tier.monthlyProductId
+                ]
+                let annualPackageIds = [
+                    tier == .base ? "base_yearly" : "pro_yearly", 
+                    tier == .base ? "$rc_annual" : "$rc_annual",
+                    tier.annualProductId
+                ]
                 
-                print("🔍 Looking for monthly package: \(monthlyPackageId)")
-                if let monthlyPackage = currentOffering.package(identifier: monthlyPackageId) {
-                    products.append(SubscriptionProduct(
-                        tier: tier,
-                        package: monthlyPackage,
-                        isMonthly: true
-                    ))
-                    print("✅ Found monthly package for \(tier.rawValue)")
-                } else {
-                    print("❌ Monthly package not found: \(monthlyPackageId)")
-                    // Fallback: try using product ID
-                    if let monthlyPackage = currentOffering.package(identifier: tier.monthlyProductId) {
-                        products.append(SubscriptionProduct(
-                            tier: tier,
-                            package: monthlyPackage,
-                            isMonthly: true
-                        ))
-                        print("✅ Found monthly package using product ID: \(tier.monthlyProductId)")
+                // Try to find monthly package
+                var foundMonthly = false
+                for packageId in monthlyPackageIds {
+                    if !foundMonthly {
+                        print("🔍 Looking for monthly package: \(packageId)")
+                        if let monthlyPackage = currentOffering.package(identifier: packageId) {
+                            products.append(SubscriptionProduct(
+                                tier: tier,
+                                package: monthlyPackage,
+                                isMonthly: true
+                            ))
+                            print("✅ Found monthly package for \(tier.rawValue) with ID: \(packageId)")
+                            foundMonthly = true
+                            break
+                        }
                     }
                 }
                 
-                print("🔍 Looking for annual package: \(annualPackageId)")
-                if let annualPackage = currentOffering.package(identifier: annualPackageId) {
-                    products.append(SubscriptionProduct(
-                        tier: tier,
-                        package: annualPackage,
-                        isMonthly: false
-                    ))
-                    print("✅ Found annual package for \(tier.rawValue)")
-                } else {
-                    print("❌ Annual package not found: \(annualPackageId)")
-                    // Fallback: try using product ID
-                    if let annualPackage = currentOffering.package(identifier: tier.annualProductId) {
-                        products.append(SubscriptionProduct(
-                            tier: tier,
-                            package: annualPackage,
-                            isMonthly: false
-                        ))
-                        print("✅ Found annual package using product ID: \(tier.annualProductId)")
+                if !foundMonthly {
+                    print("❌ No monthly package found for \(tier.rawValue)")
+                }
+                
+                // Try to find annual package
+                var foundAnnual = false
+                for packageId in annualPackageIds {
+                    if !foundAnnual {
+                        print("🔍 Looking for annual package: \(packageId)")
+                        if let annualPackage = currentOffering.package(identifier: packageId) {
+                            products.append(SubscriptionProduct(
+                                tier: tier,
+                                package: annualPackage,
+                                isMonthly: false
+                            ))
+                            print("✅ Found annual package for \(tier.rawValue) with ID: \(packageId)")
+                            foundAnnual = true
+                            break
+                        }
                     }
+                }
+                
+                if !foundAnnual {
+                    print("❌ No annual package found for \(tier.rawValue)")
                 }
             }
             
@@ -210,6 +234,33 @@ class SubscriptionManager: NSObject, ObservableObject {
                         isMonthly: false
                     ))
                     print("✅ Added $rc_annual package")
+                }
+                
+                // Last resort: try to match by product ID directly
+                if products.isEmpty {
+                    print("⚠️ Still no products, trying to match by Store Product ID...")
+                    for package in currentOffering.availablePackages {
+                        let productId = package.storeProduct.productIdentifier
+                        
+                        // Check if this matches any of our expected product IDs
+                        for tier in SubscriptionTier.allCases {
+                            if productId == tier.monthlyProductId {
+                                products.append(SubscriptionProduct(
+                                    tier: tier,
+                                    package: package,
+                                    isMonthly: true
+                                ))
+                                print("✅ Matched monthly product by Store ID: \(productId) for \(tier.rawValue)")
+                            } else if productId == tier.annualProductId {
+                                products.append(SubscriptionProduct(
+                                    tier: tier,
+                                    package: package,
+                                    isMonthly: false
+                                ))
+                                print("✅ Matched annual product by Store ID: \(productId) for \(tier.rawValue)")
+                            }
+                        }
+                    }
                 }
             }
             

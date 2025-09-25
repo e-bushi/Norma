@@ -78,7 +78,7 @@ struct PaywallView: View {
                                 await purchaseSelectedProduct()
                             }
                         } label: {
-                            if isPurchasing || subscriptionManager.isLoadingProducts {
+                            if isPurchasing {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .frame(maxWidth: .infinity)
@@ -86,6 +86,32 @@ struct PaywallView: View {
                                     .background(selectedTier.color.opacity(0.7))
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
+                            } else if subscriptionManager.isLoadingProducts {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Loading products...")
+                                        .font(.system(size: 14))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(Color.gray.opacity(0.7))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            } else if subscriptionManager.availableProducts.isEmpty {
+                                VStack(spacing: 2) {
+                                    Text("Products unavailable")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Tap to retry")
+                                        .font(.system(size: 12))
+                                        .opacity(0.9)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(Color.orange)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
                             } else {
                                 VStack(spacing: 2) {
                                     // Show different text if user already used their trial
@@ -218,17 +244,24 @@ struct PaywallView: View {
     }
     
     private func purchaseSelectedProduct() async {
-        isPurchasing = true
-        defer { isPurchasing = false }
-        
         print("🛒 Purchase button tapped - selectedBilling: \(selectedBilling)")
         print("🛒 Available products count: \(subscriptionManager.availableProducts.count)")
         
         // Check if products are loaded
         if subscriptionManager.availableProducts.isEmpty {
-            print("❌ No products loaded from RevenueCat yet")
+            print("❌ No products loaded from RevenueCat yet, loading now...")
             await subscriptionManager.loadProducts()
+            
+            // If still empty after loading, show error
+            if subscriptionManager.availableProducts.isEmpty {
+                print("❌ Failed to load products from RevenueCat")
+                showError = true
+                return
+            }
         }
+        
+        isPurchasing = true
+        defer { isPurchasing = false }
         
         do {
             // Find the product based on selected tier and billing
