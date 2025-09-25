@@ -30,14 +30,14 @@ struct PaywallFeaturesBox: View {
     ]
     
     private static let proFeatures = [
-        Feature(id: "pro-1", icon: "star.fill", title: "Everything in Basic", description: "All Basic features included"),
-        Feature(id: "pro-2", icon: "mic.circle.fill", title: "Voice Agent", description: "Talk to your AI assistant")
+        Feature(id: "pro-1", icon: "star.fill", title: "Everything in Basic", description: "All Basic features included")
     ]
     
     private static let proComingSoonFeatures = [
-        Feature(id: "pro-coming-1", icon: "sparkles", title: "Advanced AI Analysis", description: "Deeper financial insights"),
-        Feature(id: "pro-coming-2", icon: "chart.bar.doc.horizontal", title: "Pro Reports", description: "Detailed spending breakdowns"),
-        Feature(id: "pro-coming-3", icon: "waveform.path.ecg", title: "Cash Flow Predictions", description: "Forecast your finances")
+        Feature(id: "pro-coming-1", icon: "mic.circle.fill", title: "Voice Agent", description: "Talk to your AI assistant"),
+        Feature(id: "pro-coming-2", icon: "sparkles", title: "Advanced AI Analysis", description: "Deeper financial insights"),
+        Feature(id: "pro-coming-3", icon: "chart.bar.doc.horizontal", title: "Pro Reports", description: "Detailed spending breakdowns"),
+        Feature(id: "pro-coming-4", icon: "waveform.path.ecg", title: "Cash Flow Predictions", description: "Forecast your finances")
     ]
     
     private var features: [Feature] {

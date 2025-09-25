@@ -59,7 +59,8 @@ struct ExpenseTrackerRegularView: View {
                 insightsAppeared: insightsAppeared
             )
             
-            // Voice mode instruction
+            // Voice mode instruction - Temporarily commented out
+            /*
             VoiceModeInstruction(
                 explanationButtonAppeared: explanationButtonAppeared,
                 onActivate: {
@@ -107,6 +108,7 @@ struct ExpenseTrackerRegularView: View {
                     }
                 }
             )
+            */
 
             // Custom Segmented Control
             MoneyViewPicker(selectedView: $selectedView, chartAppeared: chartAppeared)

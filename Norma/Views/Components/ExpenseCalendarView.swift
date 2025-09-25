@@ -90,7 +90,8 @@ struct ExpenseCalendarView: View {
                 )
             }
             
-            // Voice mode instruction
+            // Voice mode instruction - Temporarily commented out
+            /*
             CalendarVoiceModeInstruction(
                 onActivate: {
                     // Check if user has active subscription or is in trial
@@ -116,6 +117,7 @@ struct ExpenseCalendarView: View {
                     }
                 }
             )
+            */
             
             // Calendar container
             ZStack {

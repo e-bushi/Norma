@@ -25,7 +25,7 @@ struct VoiceModeInstruction: View {
                         .font(.system(size: 14))
                         .foregroundColor(.purple)
                     
-                    Text("Talk to Norma")
+                    Text("Norma Voice Coming Soon")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.purple)
                 }
