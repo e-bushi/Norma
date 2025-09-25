@@ -124,6 +124,14 @@ class DataManager: ObservableObject {
         clearAllData()
     }
     
+    func deleteAccount() async throws {
+        // Delete all user data from Supabase
+        try await supabaseService.deleteAccount()
+        
+        // Clear all local data
+        clearAllData()
+    }
+    
     func updateUserProfile(_ profile: Profile) async throws {
         // Update local state immediately
         currentProfile = profile

@@ -10,6 +10,7 @@ import SwiftUI
 struct TrialStatusBanner: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showPaywall = false
+    @State private var isPressed = false
     
     private enum BannerState {
         case noTrial          // User hasn't started trial
@@ -36,6 +37,7 @@ struct TrialStatusBanner: View {
         // Don't show banner for active subscribers
         if bannerState != .activeSubscription {
             Button {
+                print("🎯 Trial banner tapped - Opening paywall")
                 showPaywall = true
             } label: {
                 HStack(spacing: 16) {
@@ -70,16 +72,22 @@ struct TrialStatusBanner: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
-                .background(backgroundColorForState.opacity(0.05))
+                .background(backgroundColorForState.opacity(isPressed ? 0.15 : 0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(borderColorForState.opacity(0.2), lineWidth: 1)
+                        .stroke(borderColorForState.opacity(isPressed ? 0.4 : 0.2), lineWidth: 1)
                 )
                 .cornerRadius(16)
+                .scaleEffect(isPressed ? 0.98 : 1.0)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.plain)
+            .contentShape(Rectangle()) // Ensure entire area is tappable
+            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isPressed = pressing
+                }
+            }, perform: {})
             .padding(.horizontal, 24)
-            .padding(.horizontal)
             .padding(.bottom, 8)
             .sheet(isPresented: $showPaywall) {
                 PaywallView()

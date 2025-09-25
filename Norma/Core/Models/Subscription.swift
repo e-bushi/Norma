@@ -24,18 +24,18 @@ enum SubscriptionTier: String, CaseIterable {
     var monthlyProductId: String {
         switch self {
         case .base:
-            return "subscription_monthly_1"  // Match RevenueCat/App Store Connect
+            return "basic_monthly_1"  // Matches App Store Connect
         case .pro:
-            return "pro_monthly_1"  // Match App Store Connect
+            return "pro_monthly_1"  // Keep existing Pro ID
         }
     }
     
     var annualProductId: String {
         switch self {
         case .base:
-            return "subscription_yearly_1"  // Match RevenueCat/App Store Connect
+            return "basic_yearly_2"  // Matches App Store Connect
         case .pro:
-            return "pro_yearly_1"  // Match App Store Connect
+            return "pro_yearly_1"  // Keep existing Pro ID
         }
     }
     
