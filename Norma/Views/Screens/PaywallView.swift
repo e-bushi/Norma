@@ -140,6 +140,28 @@ struct PaywallView: View {
                         }
                         .disabled(isPurchasing || subscriptionManager.isLoadingProducts)
                         
+                        // Agreement text and links
+                        VStack(spacing: 4) {
+                            Text("By subscribing you agree to our")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 12) {
+                                Button("Terms of Use") {
+                                    showTermsOfUse = true
+                                }
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Button("Privacy Policy") {
+                                    showPrivacyPolicy = true
+                                }
+                            }
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+                        
                         // Footer Links
                         VStack(spacing: 12) {
                             Button("Restore Purchases") {
@@ -154,19 +176,6 @@ struct PaywallView: View {
                             Text("Cancel anytime in Settings")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 12) {
-                                Button("Terms") {
-                                    showTermsOfUse = true
-                                }
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Button("Privacy") {
-                                    showPrivacyPolicy = true
-                                }
-                            }
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
                         }
                     }
                     .padding(.horizontal)

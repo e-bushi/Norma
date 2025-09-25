@@ -251,6 +251,7 @@ struct BillHomeView: View {
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     return BillHomeView()
@@ -258,6 +259,7 @@ struct BillHomeView: View {
         .environmentObject(billViewModel)
         .environmentObject(expenseViewModel)
         .environmentObject(incomeViewModel)
+        .environmentObject(budgetViewModel)
         .environmentObject(profileViewModel)
         .preferredColorScheme(.light)
 }

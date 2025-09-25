@@ -87,7 +87,7 @@ struct TrialStatusBanner: View {
                     isPressed = pressing
                 }
             }, perform: {})
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 42)
             .padding(.bottom, 8)
             .sheet(isPresented: $showPaywall) {
                 PaywallView()

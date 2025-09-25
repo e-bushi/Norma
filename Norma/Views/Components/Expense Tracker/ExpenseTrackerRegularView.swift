@@ -16,6 +16,7 @@ struct ExpenseTrackerRegularView: View {
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var budgetViewModel: BudgetViewModel
     @EnvironmentObject var incomeViewModel: IncomeViewModel
     @State private var showingIncomeDetail = false
     
@@ -38,38 +39,12 @@ struct ExpenseTrackerRegularView: View {
     @State private var showPaywall = false
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     
-    // Chart constants
-    private let lineHeight: CGFloat = 400
-    private let dotSize: CGFloat = 16
-    private let chartWidth: CGFloat = 320
+    // Segmented control state
+    @State private var selectedView = 0 // 0 for Money Chart, 1 for Money Score
     
-    private var expensePosition: CGFloat {
-        let incomePosition: CGFloat = 40
-        let billsPosition: CGFloat = lineHeight - 40
-        
-        // If no income, place at bills position
-        guard incomeAmount > 0 else { return billsPosition }
-        
-        // If current expense is at or below bills, place at bills position
-        if currentExpenseAmount <= billAmount {
-            return billsPosition
-        }
-        
-        // If current expense exceeds income, place at income position
-        if currentExpenseAmount >= incomeAmount {
-            return incomePosition
-        }
-        
-        // Calculate position between bills and income based on current expense
-        let totalRange = incomeAmount - billAmount
-        let currentRange = currentExpenseAmount - billAmount
-        let progress = currentRange / totalRange
-        
-        // Interpolate between bills position and income position
-        let position = billsPosition - (progress * (billsPosition - incomePosition))
-        
-        return position
-    }
+    // Chart constants (used for layout consistency)
+    private let lineHeight: CGFloat = 400
+    private let chartWidth: CGFloat = 320
     
     var body: some View {
         ZStack {
@@ -84,7 +59,8 @@ struct ExpenseTrackerRegularView: View {
                 insightsAppeared: insightsAppeared
             )
             
-            // Voice mode instruction
+            // Voice mode instruction - Temporarily commented out
+            /*
             VoiceModeInstruction(
                 explanationButtonAppeared: explanationButtonAppeared,
                 onActivate: {
@@ -132,249 +108,71 @@ struct ExpenseTrackerRegularView: View {
                     }
                 }
             )
+            */
 
-            // Main chart
-            ZStack {
-                // Chart content layer
+            // Custom Segmented Control
+            MoneyViewPicker(selectedView: $selectedView, chartAppeared: chartAppeared)
+                    .padding(.horizontal)
+
+            // Content based on selection
+            if selectedView == 0 {
+                // Money Chart
+                MoneyRemainingChartView(
+                    incomeAmount: incomeAmount,
+                    billAmount: billAmount,
+                    currentExpenseAmount: currentExpenseAmount,
+                    chartAppeared: chartAppeared,
+                    incomeLabelAppeared: $incomeLabelAppeared,
+                    billsLabelAppeared: $billsLabelAppeared,
+                    currentLabelAppeared: $currentLabelAppeared,
+                    showDescription: $showDescription,
+                    explanationButtonAppeared: explanationButtonAppeared,
+                    showVoiceMode: $showVoiceMode,
+                    voiceAgentViewModel: $voiceAgentViewModel,
+                    lastTapTime: $lastTapTime,
+                    isPressed: $isPressed,
+                    showPaywall: $showPaywall,
+                    showingIncomeDetail: $showingIncomeDetail
+                )
+                
+                // Chart explanation section (only for Money Chart view)
+                ChartExplanation(
+                    showDescription: $showDescription,
+                    incomeAmount: incomeAmount,
+                    billAmount: billAmount,
+                    currentExpenseAmount: currentExpenseAmount,
+                    explanationButtonAppeared: explanationButtonAppeared
+                )
+            } else {
+                // Money Score View - matching chart container structure exactly
                 ZStack {
-                    // Elegant background with grid
-                    RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(UIColor.systemBackground),
-                                Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.gray.opacity(0.2),
-                                        Color.gray.opacity(0.05)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .animatedBorder(
-                        cornerRadius: 20,
-                        lineWidth: 2,
-                        useRainbow: true,
-                        isVoiceModeActive: showVoiceMode
-                    )
-                    .scaleEffect(chartAppeared ? 1 : 0.9)
-                    .opacity(chartAppeared ? 1 : 0)
-                
-                // Chart content
-                ZStack(alignment: .center) {
-                    let centerX: CGFloat = chartWidth / 2
-                    
-                    // Subtle grid lines
-                    VStack(spacing: lineHeight / 4) {
-                        ForEach(0..<4) { _ in
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.05))
-                                .frame(height: 0.5)
-                        }
-                    }
-                    .frame(width: chartWidth * 0.8)
-                    .opacity(chartAppeared ? 1 : 0)
-                    .scaleEffect(chartAppeared ? 1 : 0.8)
-                    
-                    
-                    // Vertical reference line
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.gray.opacity(0.15),
-                                    Color.gray.opacity(0.05)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 2, height: chartAppeared ? lineHeight : 0)
-                        .position(x: centerX, y: lineHeight / 2)
-                    
-                    // Income indicator
-                    ChartLabelView(
-                        title: "INCOME",
-                        value: profileViewModel.formatCurrencyTruncated(incomeAmount),
-                        color: .green,
-                        icon: "arrow.down.circle.fill",
-                        xPosition: centerX,
-                        yPosition: 40,
-                        dotSize: dotSize,
-                        appeared: incomeLabelAppeared,
-                        slideDirection: .left,
-                        onTap: {
-                            showingIncomeDetail = true
-                        }
-                    )
-                    
-                    // Bills indicator
-                    ChartLabelView(
-                        title: "BILLS",
-                        value: profileViewModel.formatCurrencyTruncated(billAmount),
-                        color: .red,
-                        icon: "calendar.badge.minus",
-                        xPosition: centerX,
-                        yPosition: lineHeight - 40,
-                        dotSize: dotSize,
-                        appeared: billsLabelAppeared,
-                        slideDirection: .left,
-                    )
-                    
-                    // Current expense indicator (animated position)
-                    ChartLabelView(
-                        title: "CURRENT",
-                        value: profileViewModel.formatCurrencyTruncated(currentExpenseAmount),
-                        color: .purple,
-                        icon: "creditcard.fill",
-                        xPosition: centerX,
-                        yPosition: expensePosition,
-                        dotSize: dotSize,
-                        appeared: currentLabelAppeared,
-                        slideDirection: .right,
-                        animateFromBottom: true,
-                        chartHeight: lineHeight,
-                    )
-                    .animation(.spring(response: 0.8, dampingFraction: 0.7), value: currentExpenseAmount)
-                }
-                .frame(width: chartWidth, height: lineHeight)
-                .padding(.vertical, 60)
-                .padding(.horizontal, 20)
-                }
-                
-                // Voice mode overlay
-                if let voiceAgent = voiceAgentViewModel {
-                    VoiceModeOverlay(
-                        isVisible: $showVoiceMode, 
-                        cornerRadius: 20, 
-                        voiceAgentViewModel: voiceAgent
-                    )
-                }
-            }
-            .padding(.horizontal)
-            .padding(.horizontal)
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .onTapGesture {
-                // Record tap time for double-tap detection
-                lastTapTime = Date()
-                print("ExpenseTracker: Single tap detected at \(lastTapTime)")
-            }
-            .onLongPressGesture(minimumDuration: 0.5, maximumDistance: .infinity) {
-                // Long press completed
-                print("ExpenseTracker: Long press completed")
-            } onPressingChanged: { pressing in
-                print("ExpenseTracker: Press changed - pressing: \(pressing)")
-                // Visual feedback during press
-                if pressing {
-                    let timeSinceLastTap = Date().timeIntervalSince(lastTapTime)
-                    print("ExpenseTracker: Press started. Time since last tap: \(timeSinceLastTap) seconds")
-                    if timeSinceLastTap < 0.5 {
-                        print("ExpenseTracker: Double-tap and hold detected!")
+                    // Content layer matching chart structure
+                    ZStack {
+                        // Invisible placeholder to match chart dimensions exactly
+                        Color.clear
+                            .frame(width: chartWidth, height: lineHeight)
+                            .padding(.vertical, 60)
+                            .padding(.horizontal, 20)
                         
-                        // Check if user has active subscription or is in trial
-                        if subscriptionManager.isInFreeTrial || subscriptionManager.hasActiveSubscription {
-                            print("ExpenseTracker: User has access (trial or subscription) - activating voice mode...")
-                            // This is a double-tap and hold!
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showVoiceMode = true
-                            }
-                            
-                            // Visual press effect
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                isPressed = true
-                            }
-                            
-                            // Strong haptic feedback
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-                            impactFeedback.impactOccurred()
-                            
-                            // Start voice recording or resume paused conversation
-                            Task {
-                            let userName = sessionViewModel.currentUser?.name
-                            
-                            if let voiceAgent = voiceAgentViewModel {
-                                // Check if there's a paused conversation to resume
-                                if voiceAgent.conversationPaused {
-                                    print("Resuming paused voice conversation...")
-                                    await voiceAgent.resumeConversation()
-                                } else {
-                                    print("Starting new voice interaction...")
-                                    // Request permissions if needed
-                                    if !voiceAgent.hasPermissions {
-                                        print("Requesting permissions...")
-                                        let granted = await voiceAgent.requestPermissions()
-                                        if !granted {
-                                            print("Permissions not granted")
-                                            return
-                                        }
-                                    }
-                                    await voiceAgent.startVoiceInteraction(userName: userName)
-                                }
-                            } else {
-                                print("VoiceAgentViewModel is nil - initializing now")
-                                if let userId = sessionViewModel.currentUser?.userId {
-                                    voiceAgentViewModel = VoiceAgentViewModel(
-                                        userId: userId, 
-                                        billViewModel: billViewModel,
-                                        incomeViewModel: incomeViewModel,
-                                        sessionViewModel: sessionViewModel
-                                    )
-                                    // Request permissions if needed
-                                    if let voiceAgent = voiceAgentViewModel {
-                                        if !voiceAgent.hasPermissions {
-                                            print("Requesting permissions...")
-                                            let granted = await voiceAgent.requestPermissions()
-                                            if !granted {
-                                                print("Permissions not granted")
-                                                return
-                                            }
-                                        }
-                                        await voiceAgent.startVoiceInteraction(userName: userName)
-                                    }
-                                } else {
-                                    print("No user ID available")
-                                }
-                            }
-                        }
-                        } else {
-                            print("ExpenseTracker: User has no access (no trial, no subscription) - showing paywall")
-                            // User doesn't have access - show paywall
-                            showPaywall = true
-                            
-                            // Light haptic feedback for denied access
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                        }
-                    }
-                } else {
-                    print("ExpenseTracker: Press ended")
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        isPressed = false
+                        // Money Score content overlaid
+                        MoneyScoreView(
+                            score: calculateOverallScore(),
+                            trend: determineScoreTrend(),
+                            billManagementScore: calculateBillManagementScore(),
+                            budgetManagementScore: calculateBudgetManagementScore(),
+                            savingsRateScore: calculateSavingsRateScore(),
+                            // expenseControlScore: calculateExpenseControlScore(),  // Commented out - needs categorization
+                            stabilityScore: calculateStabilityScore()
+                        )
                     }
                 }
+                .padding(.horizontal)
+                .padding(.horizontal)
+                .scaleEffect(chartAppeared ? 1 : 0.9)
+                .opacity(chartAppeared ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: selectedView)
             }
-            
-            // Chart explanation section
-            ChartExplanation(
-                showDescription: $showDescription,
-                incomeAmount: incomeAmount,
-                billAmount: billAmount,
-                currentExpenseAmount: currentExpenseAmount,
-                explanationButtonAppeared: explanationButtonAppeared
-            )
-            }
+        }
             .onAppear {
                 animateElements()
                 // Initialize voice agent with user ID and BillViewModel
@@ -445,6 +243,193 @@ struct ExpenseTrackerRegularView: View {
         }
     }
     
+    // MARK: - Money Score Calculations
+    
+    private func calculateOverallScore() -> Int {
+        // Average of 4 metric scores (Expense Control commented out pending implementation)
+        let total = calculateBillManagementScore() +
+                   calculateBudgetManagementScore() +
+                   calculateSavingsRateScore() +
+                   // calculateExpenseControlScore() + // Commented out - needs expense categorization
+                   calculateStabilityScore()
+        return total / 4
+    }
+    
+    private func calculateBillManagementScore() -> Int {
+        // Score based on bill payment status for current month
+        // Get current month bills only
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.component(.month, from: now)
+        let currentYear = calendar.component(.year, from: now)
+        
+        // Filter for active bills in current month
+        let currentMonthBills = billViewModel.bills.filter { bill in
+            // Skip inactive bills
+            if bill.isActive == false { return false }
+            
+            // Check if bill's due date is in current month
+            let billMonth = calendar.component(.month, from: bill.dueDate)
+            let billYear = calendar.component(.year, from: bill.dueDate)
+            
+            return billMonth == currentMonth && billYear == currentYear
+        }
+        
+        // If no bills this month, return minimal score (not penalizing)
+        guard !currentMonthBills.isEmpty else { return 2 }
+        
+        // Calculate score based on payment status
+        let paidBills = currentMonthBills.filter { $0.status == .paid }.count
+        let overdueBills = currentMonthBills.filter { $0.status == .overdue }.count
+        let totalBills = currentMonthBills.count
+        
+        // Start with percentage of paid bills
+        let paidPercentage = (Double(paidBills) / Double(totalBills)) * 100
+        
+        // Deduct points for overdue bills (10 points per overdue bill)
+        let overdueDeduction = Double(overdueBills) * 10
+        
+        // Calculate final score (minimum 0)
+        let finalScore = max(0, paidPercentage - overdueDeduction)
+        
+        return Int(finalScore)
+    }
+    
+    private func calculateBudgetManagementScore() -> Int {
+        // Use actual budgets if available, otherwise return minimal score
+        let activeBudgets = budgetViewModel.activeBudgets
+        
+        if activeBudgets.isEmpty {
+            // Return 1% to indicate budgets aren't set up without tanking overall score
+            return 1
+        } else {
+            return calculateRealBudgetScore(for: activeBudgets)
+        }
+    }
+    
+    // MARK: - Budget Score Helper Methods
+    
+    private func calculateRealBudgetScore(for budgets: [Budget]) -> Int {
+        // Calculate base score from budgets within limit
+        let budgetsWithinLimit = budgets.filter { $0.currentSpent <= $0.amount }
+        let basePercentage = (Double(budgetsWithinLimit.count) / Double(budgets.count)) * 100
+        
+        // Calculate deductions for over-budget items
+        let totalDeductions = budgets
+            .filter { $0.currentSpent > $0.amount }
+            .reduce(0) { total, budget in
+                total + calculateBudgetOverageDeduction(budget: budget)
+            }
+        
+        // Return final score (minimum 0)
+        return max(0, Int(basePercentage) - totalDeductions)
+    }
+    
+    private func calculateBudgetOverageDeduction(budget: Budget) -> Int {
+        let overagePercentage = ((budget.currentSpent - budget.amount) / budget.amount) * 100
+        
+        switch overagePercentage {
+        case 0...10:
+            return 5
+        case 10...25:
+            return 10
+        case 25...50:
+            return 15
+        default:
+            return 20
+        }
+    }
+    
+    private func calculateSavingsRateScore() -> Int {
+        // Score based on remaining amount vs 20% savings target
+        guard incomeAmount > 0 else { return 0 }
+        
+        // Calculate remaining amount (expenses already include paid bills)
+        // So we use: income - totalExpenses (which includes both paid bills and other expenses)
+        let remainingAmount = incomeAmount - currentExpenseAmount
+        
+        // Target savings is 20% of income
+        let targetSavings = incomeAmount * 0.20
+        
+        // If no target savings (edge case), return 0
+        guard targetSavings > 0 else { return 0 }
+        
+        // Calculate ratio of actual remaining to target savings
+        let savingsRatio = remainingAmount / targetSavings
+        
+        // Score based on how well they meet the 20% target
+        if savingsRatio >= 1.0 {
+            // Meeting or exceeding target = excellent (cap at 100)
+            return min(100, Int(savingsRatio * 100))
+        } else if savingsRatio >= 0.75 {
+            // 75-100% of target = good
+            return 80
+        } else if savingsRatio >= 0.5 {
+            // 50-75% of target = fair
+            return 60
+        } else if savingsRatio >= 0.25 {
+            // 25-50% of target = needs improvement
+            return 40
+        } else if savingsRatio > 0 {
+            // Some savings but less than 25% of target
+            return 20
+        } else {
+            // No remaining money or negative
+            return 0
+        }
+    }
+    
+    // Commented out pending expense categorization implementation
+    /*
+    private func calculateExpenseControlScore() -> Int {
+        // Score based on expense patterns
+        guard incomeAmount > 0 else { return 0 }
+        let expenseRatio = currentExpenseAmount / incomeAmount
+        
+        if expenseRatio <= 0.6 { return 95 }
+        else if expenseRatio <= 0.8 { return 75 }
+        else if expenseRatio <= 1.0 { return 55 }
+        else { return 35 }
+    }
+    */
+    
+    private func calculateStabilityScore() -> Int {
+        // Score based on income to expense ratio for current month
+        guard incomeAmount > 0 else { return 0 }
+        
+        // Calculate ratio: how many times income covers expenses
+        let stabilityRatio = incomeAmount / max(currentExpenseAmount, 1)
+        
+        // Scoring thresholds:
+        if stabilityRatio >= 1.5 {
+            // Saving 33%+ of income (very stable)
+            return 90
+        } else if stabilityRatio >= 1.2 {
+            // Saving 17-33% of income (good stability)
+            return 70
+        } else if stabilityRatio >= 1.0 {
+            // Breaking even to 17% savings (okay)
+            return 50
+        } else {
+            // Expenses exceed income (unstable)
+            return 30
+        }
+    }
+    
+    private func determineScoreTrend() -> MoneyScoreView.TrendDirection {
+        // Determine trend based on financial health
+        guard incomeAmount > 0 else { return .stable }
+        let savingsRate = (incomeAmount - currentExpenseAmount) / incomeAmount
+        
+        if savingsRate >= 0.15 {
+            return .improving
+        } else if savingsRate < 0 {
+            return .declining
+        } else {
+            return .stable
+        }
+    }
+    
     private func triggerLabelAnimations() {
         print("   🎯 Triggering label animations!")
         
@@ -479,6 +464,9 @@ extension Comparable {
 #Preview {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     ExpenseTrackerRegularView(
@@ -492,5 +480,8 @@ extension Comparable {
     )
     .environmentObject(profileViewModel)
     .environmentObject(sessionViewModel)
+    .environmentObject(billViewModel)
+    .environmentObject(budgetViewModel)
+    .environmentObject(incomeViewModel)
     .preferredColorScheme(.light)
 }
