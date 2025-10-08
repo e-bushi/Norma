@@ -352,24 +352,24 @@ struct NormaChatView: View {
     
     private func setupInitialMessage() {
         let welcomeMessage = ChatMessage(
-            text: context.welcomeMessage,
-            isUser: false
+            role: .assistant,
+            content: context.welcomeMessage
         )
         messages = [welcomeMessage]
     }
-    
+
     private func sendMessage() {
         let userMessage = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userMessage.isEmpty else { return }
-        
+
         // Add user message
-        let chatMessage = ChatMessage(text: userMessage, isUser: true)
+        let chatMessage = ChatMessage(role: .user, content: userMessage)
         messages.append(chatMessage)
-        
+
         // Clear input and show loading
         inputText = ""
         isLoading = true
-        
+
         // Process message with AI
         Task {
             await processUserMessage(userMessage)
@@ -399,7 +399,7 @@ struct NormaChatView: View {
             case .text(let text):
                 await MainActor.run {
                     isLoading = false
-                    let aiMessage = ChatMessage(text: text, isUser: false)
+                    let aiMessage = ChatMessage(role: .assistant, content: text)
                     messages.append(aiMessage)
                 }
                 
@@ -432,10 +432,10 @@ struct NormaChatView: View {
                 
                 await MainActor.run {
                     isLoading = false
-                    
+
                     // Handle final response
                     if case .text(let text) = finalResponse {
-                        let aiMessage = ChatMessage(text: text, isUser: false)
+                        let aiMessage = ChatMessage(role: .assistant, content: text)
                         messages.append(aiMessage)
                     }
                 }
@@ -459,8 +459,8 @@ struct NormaChatView: View {
     private func createConversationHistory() -> [AnthropicMessage] {
         return messages.map { chatMessage in
             AnthropicMessage(
-                role: chatMessage.isUser ? "user" : "assistant",
-                content: .text(chatMessage.text)
+                role: chatMessage.role == .user ? "user" : "assistant",
+                content: .text(chatMessage.content)
             )
         }
     }

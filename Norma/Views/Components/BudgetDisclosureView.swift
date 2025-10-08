@@ -12,20 +12,24 @@ struct BudgetDisclosureView: View {
     @State private var selectedBudgetForDetail: Budget?
     @State private var showCreateBudget = false
     let isOnboardingMode: Bool
+    let showMonthSelector: Bool
+    @Binding var selectedMonth: Date
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var budgetViewModel: BudgetViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
-    
+
     let expenses: [Expense]
     let month: String
     let onCategorySelected: ((Category) -> Void)?
-    
-    init(expenses: [Expense], month: String, isOnboardingMode: Bool = false, onCategorySelected: ((Category) -> Void)? = nil) {
+
+    init(expenses: [Expense], month: String, isOnboardingMode: Bool = false, showMonthSelector: Bool = false, selectedMonth: Binding<Date> = .constant(Date()), onCategorySelected: ((Category) -> Void)? = nil) {
         self.expenses = expenses
         self.month = month
         self.isOnboardingMode = isOnboardingMode
+        self.showMonthSelector = showMonthSelector
+        self._selectedMonth = selectedMonth
         self.onCategorySelected = onCategorySelected
     }
     
@@ -67,12 +71,6 @@ struct BudgetDisclosureView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            // Budget Summary Header
-            BudgetSummaryHeader(
-                month: month,
-                totalBudget: totalBudget,
-                totalSpent: totalSpent
-            )
             
             // Add budget buttons
             HStack(spacing: 12) {
@@ -297,6 +295,55 @@ struct BudgetDisclosureView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var monthSelector: some View {
+        HStack(spacing: 16) {
+            Button(action: {
+                withAnimation {
+                    selectedMonth = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(Color(UIColor.systemGray6))
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Text(month)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+
+            Button(action: {
+                withAnimation {
+                    selectedMonth = Calendar.current.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(Color(UIColor.systemGray6))
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(isCurrentMonth)
+            .opacity(isCurrentMonth ? 0.5 : 1.0)
+        }
+    }
+
+    private var isCurrentMonth: Bool {
+        let calendar = Calendar.current
+        return calendar.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
+    }
 }
 
 #Preview {
@@ -308,14 +355,30 @@ struct BudgetDisclosureView: View {
         Expense(userId: "preview-user", name: "Uber", amount: 80, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 4)), paymentMethod: .digitalWallet),
         Expense(userId: "preview-user", name: "Movie", amount: 50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 5)), paymentMethod: .creditCard),
     ]
-    
+
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+
     return ScrollView {
         VStack(spacing: 30) {
             // Onboarding mode (empty state)
             BudgetDisclosureView(expenses: [], month: "December", isOnboardingMode: true)
-            
+                .environmentObject(dataManager)
+                .environmentObject(sessionViewModel)
+                .environmentObject(budgetViewModel)
+                .environmentObject(expenseViewModel)
+                .environmentObject(profileViewModel)
+
             // Regular mode with data
             BudgetDisclosureView(expenses: sampleExpenses, month: "December")
+                .environmentObject(dataManager)
+                .environmentObject(sessionViewModel)
+                .environmentObject(budgetViewModel)
+                .environmentObject(expenseViewModel)
+                .environmentObject(profileViewModel)
         }
         .padding()
     }

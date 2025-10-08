@@ -16,18 +16,26 @@ struct RootView: View {
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
             TabView {
+                MainChatView()
+                    .tabItem {
+                        Label("Chat", systemImage: "message.fill")
+                    }
+
+                MyBudgetView()
+                    .tabItem {
+                        Label("My Budgets", systemImage: "chart.pie.fill")
+                    }
+
                 BillHomeView()
                     .tabItem {
                         Label("My Bills", systemImage: "doc.text.fill")
                     }
-                    
-                
+
                 IncomeAndExpenseView()
                     .tabItem {
                         Label("Expenses", systemImage: "chart.bar.fill")
                     }
-                    
-                
+
                 SettingsView()
                     .tabItem {
                         Label("Settings", systemImage: "gear")
@@ -38,12 +46,10 @@ struct RootView: View {
         }
         .onAppear {
             // Set the model context on DataManager
-            print("🔍 [DEBUG] RootView.onAppear: Setting model context on DataManager")
             dataManager.setModelContext(modelContext)
-            print("✅ [DEBUG] RootView.onAppear: Model context set successfully")
         }
-        .task {
-            // Load user data when main app becomes active
+        .task(id: sessionViewModel.currentUser?.userId) {
+            // Load user data when main app becomes active (only once per user session)
             if let _ = sessionViewModel.currentUser?.userId {
                 do {
                     // Refresh user profile first

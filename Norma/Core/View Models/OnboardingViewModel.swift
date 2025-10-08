@@ -247,13 +247,13 @@ class OnboardingViewModel: ObservableObject {
     
     private func addUserMessage(_ text: String) {
         withAnimation {
-            messages.append(ChatMessage(text: text, isUser: true))
+            messages.append(ChatMessage(role: .user, content: text))
         }
     }
-    
+
     private func addNormaMessage(_ text: String) {
         withAnimation {
-            messages.append(ChatMessage(text: text, isUser: false))
+            messages.append(ChatMessage(role: .assistant, content: text))
         }
     }
     

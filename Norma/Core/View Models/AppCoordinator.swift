@@ -73,16 +73,9 @@ class AppCoordinator: ObservableObject {
     }
     
     private func updateCurrentView() {
-        print("🔄 [DEBUG] AppCoordinator.updateCurrentView called")
-        print("🔄 [DEBUG] isLoadingAuth: \(sessionViewModel.isLoadingAuth)")
-        print("🔄 [DEBUG] shouldShowMainApp: \(sessionViewModel.shouldShowMainApp)")
-        print("🔄 [DEBUG] shouldShowAuthFlow: \(sessionViewModel.shouldShowAuthFlow)")
-        print("🔄 [DEBUG] shouldShowInitialSetup: \(sessionViewModel.shouldShowInitialSetup)")
-        
         if sessionViewModel.isLoadingAuth {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
-            print("🔄 [DEBUG] Setting currentView to .main")
             currentView = .main
         } else if sessionViewModel.shouldShowAuthFlow {
             currentView = .onboarding
@@ -92,8 +85,6 @@ class AppCoordinator: ObservableObject {
             // Default to onboarding if no other condition is met
             currentView = .onboarding
         }
-        
-        print("🔄 [DEBUG] Final currentView: \(currentView)")
     }
     
     private func observeSessionChanges() {

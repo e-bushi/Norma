@@ -49,11 +49,8 @@ class DataManager: ObservableObject {
     
     // Set the model context (called from view)
     func setModelContext(_ context: ModelContext) {
-        print("🔍 [DEBUG] DataManager.setModelContext called")
         self.modelContext = context
-        print("✅ [DEBUG] DataManager.setModelContext: ModelContext set successfully")
-        // Note: Data loading happens via fetchAllFinancialData() which is called from RootView
-        
+
         // Process any pending Siri intents
         Task {
             await SharedDataService.shared.processPendingIntents(dataManager: self)
@@ -70,16 +67,10 @@ class DataManager: ObservableObject {
     // MARK: - User Profile Methods
     
     func getCurrentUserProfile() async throws -> Profile? {
-        print("🔍 [DEBUG] DataManager.getCurrentUserProfile called")
-        
         // Check if we have a current user from Supabase
         if let supabaseUser = supabaseService.currentUser {
-            print("✅ [DEBUG] DataManager: Supabase user found: \(supabaseUser.id.uuidString)")
-            
             // Fetch existing profile from database
-            print("🔄 [DEBUG] DataManager: About to fetch profile from database...")
             if let existingProfile = try await fetchUserProfileWithEncryption(userId: supabaseUser.id.uuidString) {
-                print("✅ [DEBUG] DataManager: Existing profile found: \(existingProfile)")
                 currentProfile = existingProfile
                 // Also add to profiles array if not already there
                 if !profiles.contains(where: { $0.userId == existingProfile.userId }) {
@@ -87,14 +78,12 @@ class DataManager: ObservableObject {
                 }
                 return existingProfile
             } else {
-                print("❌ [DEBUG] DataManager: No existing profile found, creating fallback profile")
                 // Fallback: create basic profile if none exists in database
                 let profile = Profile(
                     userId: supabaseUser.id.uuidString,
                     email: supabaseUser.email ?? "",
                     name: extractNameFromUserMetadata(supabaseUser.userMetadata)
                 )
-                print("✅ [DEBUG] DataManager: Created fallback profile: \(profile)")
                 currentProfile = profile
                 // Also add to profiles array
                 if !profiles.contains(where: { $0.userId == profile.userId }) {
@@ -103,8 +92,7 @@ class DataManager: ObservableObject {
                 return profile
             }
         }
-        
-        print("❌ [DEBUG] DataManager: No Supabase user found")
+
         return nil
     }
     
@@ -171,7 +159,7 @@ class DataManager: ObservableObject {
             
             // These don't need encryption yet
             group.addTask { try await self.fetchIncomes(userId: userId) }
-            group.addTask { try await self.fetchCategories(userId: userId) }
+            group.addTask { try await self.fetchCategories() }
             group.addTask { try await self.fetchPsychologyData(userId: userId) }
             
             // Wait for all tasks to complete

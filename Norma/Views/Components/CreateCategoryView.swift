@@ -425,12 +425,10 @@ struct CreateCategoryView: View {
         Task {
             do {
                 let newCategory = Category(
-                    userId: userId,
                     name: trimmedName,
                     type: selectedType,
                     icon: selectedIcon,
                     colorHex: selectedColor.toHex(),
-                    parentCategoryId: parentCategory?.id,
                     isSystem: false,
                     isActive: true,
                     sortOrder: dataManager.categories.count + 1

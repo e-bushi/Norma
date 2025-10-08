@@ -7,42 +7,21 @@
 
 import SwiftUI
 
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    let text: String
-    let isUser: Bool
-    let timestamp = Date()
-}
-
 struct ChatBubbleView: View {
     let message: ChatMessage
-    
+
+    private var isUser: Bool {
+        message.role == .user
+    }
+
     var body: some View {
         HStack {
-            if message.isUser {
+            if isUser {
                 Spacer()
             }
-            
-            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
-                if !message.isUser {
-                    HStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.primary)
-                                .frame(width: 24, height: 24)
-                            
-                            Text("N")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(UIColor.systemBackground))
-                        }
-                        
-                        Text("Norma")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Text(message.text)
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                Text(message.content)
                     .font(.system(size: 16))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -50,8 +29,8 @@ struct ChatBubbleView: View {
                         RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
-                                    gradient: Gradient(colors: 
-                                        message.isUser ? [
+                                    gradient: Gradient(colors:
+                                        isUser ? [
                                             Color.blue.opacity(0.05),
                                             Color.blue.opacity(0.05)
                                         ] : [
@@ -67,8 +46,8 @@ struct ChatBubbleView: View {
                                 RoundedRectangle(cornerRadius: 20)
                                     .stroke(
                                         LinearGradient(
-                                            gradient: Gradient(colors: 
-                                                message.isUser ? [
+                                            gradient: Gradient(colors:
+                                                isUser ? [
                                                     Color.blue.opacity(0.1),
                                                     Color.blue.opacity(0.1)
                                                 ] : [
@@ -83,11 +62,11 @@ struct ChatBubbleView: View {
                                     )
                             )
                     )
-                    .foregroundColor(message.isUser ? .blue : .primary)
-                    .frame(maxWidth: 280, alignment: message.isUser ? .trailing : .leading)
+                    .foregroundColor(isUser ? .blue : .primary)
+                    .frame(maxWidth: 280, alignment: isUser ? .trailing : .leading)
             }
-            
-            if !message.isUser {
+
+            if !isUser {
                 Spacer()
             }
         }
@@ -96,8 +75,8 @@ struct ChatBubbleView: View {
 
 #Preview {
     VStack(spacing: 16) {
-        ChatBubbleView(message: ChatMessage(text: "Hello! I'm Norma, your AI financial assistant.", isUser: false))
-        ChatBubbleView(message: ChatMessage(text: "Hi Norma! Can you help me with my budget?", isUser: true))
+        ChatBubbleView(message: ChatMessage(role: .assistant, content: "Hello! I'm Norma, your AI financial assistant."))
+        ChatBubbleView(message: ChatMessage(role: .user, content: "Hi Norma! Can you help me with my budget?"))
     }
     .padding()
 }

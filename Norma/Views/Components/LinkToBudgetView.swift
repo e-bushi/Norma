@@ -18,7 +18,7 @@ struct LinkToBudgetView: View {
     @State private var isLoading = false
     
     private var availableBudgets: [Budget] {
-        dataManager.budgets.filter { $0.isActive }
+        budgetViewModel.activeBudgets
     }
     
     var body: some View {

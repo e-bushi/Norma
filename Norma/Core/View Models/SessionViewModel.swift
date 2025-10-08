@@ -45,29 +45,23 @@ class SessionViewModel: ObservableObject {
     // MARK: - Authentication Methods
     
     func checkAuthenticationState() async {
-        print("🔍 [DEBUG] SessionViewModel.checkAuthenticationState called")
         isLoadingAuth = true
-        
+
         do {
             // Use DataManager to check authentication state
-            print("🔄 [DEBUG] SessionViewModel: About to get current user profile...")
             let profile = try await dataManager.getCurrentUserProfile()
-            
+
             if let profile = profile {
-                print("✅ [DEBUG] SessionViewModel: Profile found: \(profile)")
                 await handleAuthenticationSuccess(user: profile)
             } else {
-                print("❌ [DEBUG] SessionViewModel: No profile found")
                 await handleNoAuthentication()
             }
-            
+
         } catch {
-            print("❌ [DEBUG] SessionViewModel: Auth check failed: \(error.localizedDescription)")
             await handleNoAuthentication()
         }
-        
+
         isLoadingAuth = false
-        print("🔄 [DEBUG] SessionViewModel.checkAuthenticationState completed")
     }
     
     func handleAuthenticationSuccess(user: Profile? = nil) async {
@@ -149,26 +143,24 @@ class SessionViewModel: ObservableObject {
     }
     
     func ensureDefaultCategoriesExist() async {
-        guard let userId = currentUser?.userId else { return }
-        
         do {
-            // First, try to fetch existing categories
-            try await dataManager.fetchCategories(userId: userId)
-            
+            // Fetch all categories (shared across all users)
+            try await dataManager.fetchCategories()
+
             // Clean up any duplicate categories
             try await dataManager.removeDuplicateCategories()
-            
+
             // Check if we have any system categories (default categories)
             let systemCategories = dataManager.getSystemCategories()
-            
+
             if systemCategories.isEmpty {
-                print("📝 Creating default categories for user: \(userId)")
-                try await dataManager.createDefaultCategories(for: userId)
+                print("📝 Creating default categories (shared globally)")
+                try await dataManager.createDefaultCategories()
                 print("✅ Default categories created successfully")
             } else {
                 print("✅ Default categories already exist (\(systemCategories.count) found)")
             }
-            
+
         } catch {
             print("❌ Failed to ensure default categories exist: \(error.localizedDescription)")
             // Don't throw the error - we want the app to continue working even if category setup fails

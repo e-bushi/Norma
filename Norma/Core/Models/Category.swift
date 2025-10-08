@@ -10,41 +10,35 @@ import SwiftUI
 
 struct Category: Identifiable, Codable, Hashable {
     var id: String?
-    let userId: String
     let name: String
     let type: CategoryType
     let icon: String
     let colorHex: String
-    let parentCategoryId: String?
     let isSystem: Bool
     let isActive: Bool
     let sortOrder: Int
     var createdAt: String?
     var updatedAt: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
-        case userId = "user_id"
         case name
         case type
         case icon
         case colorHex = "color_hex"
-        case parentCategoryId = "parent_category_id"
         case isSystem = "is_system"
         case isActive = "is_active"
         case sortOrder = "sort_order"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
+
     init(
         id: String? = nil,
-        userId: String,
         name: String,
         type: CategoryType,
         icon: String,
         colorHex: String,
-        parentCategoryId: String? = nil,
         isSystem: Bool = false,
         isActive: Bool = true,
         sortOrder: Int = 0,
@@ -52,12 +46,10 @@ struct Category: Identifiable, Codable, Hashable {
         updatedAt: String? = nil
     ) {
         self.id = id
-        self.userId = userId
         self.name = name
         self.type = type
         self.icon = icon
         self.colorHex = colorHex
-        self.parentCategoryId = parentCategoryId
         self.isSystem = isSystem
         self.isActive = isActive
         self.sortOrder = sortOrder
@@ -72,25 +64,21 @@ struct Category: Identifiable, Codable, Hashable {
     // MARK: - Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
-        hasher.combine(userId)
         hasher.combine(name)
         hasher.combine(type)
         hasher.combine(icon)
         hasher.combine(colorHex)
-        hasher.combine(parentCategoryId)
         hasher.combine(isSystem)
         hasher.combine(isActive)
         hasher.combine(sortOrder)
     }
-    
+
     static func == (lhs: Category, rhs: Category) -> Bool {
         return lhs.id == rhs.id &&
-               lhs.userId == rhs.userId &&
                lhs.name == rhs.name &&
                lhs.type == rhs.type &&
                lhs.icon == rhs.icon &&
                lhs.colorHex == rhs.colorHex &&
-               lhs.parentCategoryId == rhs.parentCategoryId &&
                lhs.isSystem == rhs.isSystem &&
                lhs.isActive == rhs.isActive &&
                lhs.sortOrder == rhs.sortOrder

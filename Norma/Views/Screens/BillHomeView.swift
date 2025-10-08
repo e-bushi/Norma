@@ -135,12 +135,7 @@ struct BillHomeView: View {
             .refreshable {
                 await performRefresh()
             }
-            .task {
-                // Only load if bills are empty (not already loaded by RootView)
-                if billViewModel.bills.isEmpty {
-                    await loadInitialData()
-                }
-            }
+            // Removed .task - data is loaded by RootView
             .sheet(isPresented: $showNormaChat) {
                 NormaChatView(context: .bills)
             }

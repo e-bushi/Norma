@@ -12,21 +12,21 @@ extension DataManager {
     
     // MARK: - Category Methods
     
-    func fetchCategories(userId: String) async throws {
+    func fetchCategories() async throws {
         do {
             // Try to fetch from Supabase first
-            let fetchedCategories = try await supabaseService.fetchCategories(userId: userId)
+            let fetchedCategories = try await supabaseService.fetchCategories()
             categories = fetchedCategories
-            
+
             // Cache categories in SwiftData
             await cacheCategories(fetchedCategories)
-            
+
             print("Fetched \(fetchedCategories.count) categories from server")
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch categories from server: \(error). Loading from cache...")
             // Note: SwiftData cache loading handled elsewhere
-            
+
             // If we have cached data, don't throw the error
             if !categories.isEmpty {
                 print("Loaded \(categories.count) categories from cache")
@@ -156,10 +156,9 @@ extension DataManager {
         }
     }
     
-    func createDefaultCategories(for userId: String) async throws {
+    func createDefaultCategories() async throws {
         let defaultCategories = [
             Category(
-                userId: userId,
                 name: "Housing",
                 type: .expense,
                 icon: "house.fill",
@@ -168,7 +167,6 @@ extension DataManager {
                 sortOrder: 1
             ),
             Category(
-                userId: userId,
                 name: "Transportation",
                 type: .expense,
                 icon: "car.fill",
@@ -177,7 +175,6 @@ extension DataManager {
                 sortOrder: 2
             ),
             Category(
-                userId: userId,
                 name: "Food",
                 type: .expense,
                 icon: "fork.knife",
@@ -186,7 +183,6 @@ extension DataManager {
                 sortOrder: 3
             ),
             Category(
-                userId: userId,
                 name: "Utilities",
                 type: .expense,
                 icon: "bolt.fill",
@@ -195,7 +191,6 @@ extension DataManager {
                 sortOrder: 4
             ),
             Category(
-                userId: userId,
                 name: "Healthcare",
                 type: .expense,
                 icon: "heart.fill",
@@ -204,7 +199,6 @@ extension DataManager {
                 sortOrder: 5
             ),
             Category(
-                userId: userId,
                 name: "Shopping",
                 type: .expense,
                 icon: "bag.fill",
@@ -213,7 +207,6 @@ extension DataManager {
                 sortOrder: 6
             ),
             Category(
-                userId: userId,
                 name: "Entertainment",
                 type: .expense,
                 icon: "tv.fill",
@@ -222,7 +215,6 @@ extension DataManager {
                 sortOrder: 7
             ),
             Category(
-                userId: userId,
                 name: "Education",
                 type: .expense,
                 icon: "book.fill",
@@ -231,7 +223,6 @@ extension DataManager {
                 sortOrder: 8
             ),
             Category(
-                userId: userId,
                 name: "Financial",
                 type: .expense,
                 icon: "banknote.fill",
@@ -240,7 +231,6 @@ extension DataManager {
                 sortOrder: 9
             ),
             Category(
-                userId: userId,
                 name: "Self Care",
                 type: .expense,
                 icon: "sparkles",
@@ -249,7 +239,6 @@ extension DataManager {
                 sortOrder: 10
             ),
             Category(
-                userId: userId,
                 name: "Travel",
                 type: .expense,
                 icon: "airplane",
@@ -258,7 +247,6 @@ extension DataManager {
                 sortOrder: 11
             ),
             Category(
-                userId: userId,
                 name: "Miscellaneous",
                 type: .expense,
                 icon: "questionmark.circle.fill",
@@ -339,28 +327,22 @@ extension DataManager {
     
     private func cacheCategories(_ categoriesToCache: [Category]) async {
         guard let modelContext = modelContext else { return }
-        
+
         do {
-            // First, clear existing cached categories for this user
-            if let userId = currentProfile?.userId {
-                let descriptor = FetchDescriptor<CachedCategory>(
-                    predicate: #Predicate { cachedCategory in
-                        cachedCategory.userId == userId
-                    }
-                )
-                
-                let existingCached = try modelContext.fetch(descriptor)
-                for cached in existingCached {
-                    modelContext.delete(cached)
-                }
+            // First, clear all existing cached categories (shared across all users)
+            let descriptor = FetchDescriptor<CachedCategory>()
+
+            let existingCached = try modelContext.fetch(descriptor)
+            for cached in existingCached {
+                modelContext.delete(cached)
             }
-            
+
             // Then insert new cached categories
             for category in categoriesToCache {
                 let cachedCategory = CachedCategory(from: category)
                 modelContext.insert(cachedCategory)
             }
-            
+
             try modelContext.save()
             print("Successfully cached \(categoriesToCache.count) categories")
         } catch {
@@ -385,7 +367,6 @@ extension DataManager {
                 existingCached.type = category.type.rawValue
                 existingCached.icon = category.icon
                 existingCached.colorHex = category.colorHex
-                existingCached.parentCategoryId = category.parentCategoryId
                 existingCached.isSystem = category.isSystem
                 existingCached.isActive = category.isActive
                 existingCached.sortOrder = category.sortOrder
@@ -425,16 +406,11 @@ extension DataManager {
     }
     
     // MARK: - Cache Loading
-    
+
     func loadCachedCategories() {
-        guard let userId = currentProfile?.userId else {
-            print("No user profile found for loading cached categories")
-            return
-        }
-        
         Task {
             do {
-                try await fetchCategories(userId: userId)
+                try await fetchCategories()
                 print("✅ Categories loaded: \(categories.count) categories")
             } catch {
                 print("Failed to load cached categories: \(error)")

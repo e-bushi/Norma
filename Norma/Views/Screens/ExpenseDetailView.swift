@@ -35,7 +35,7 @@ struct ExpenseDetailView: View {
     
     private var linkedBudget: Budget? {
         guard let budgetId = expense.budgetId else { return nil }
-        return dataManager.budgets.first { $0.id == budgetId }
+        return budgetViewModel.budgets.first { $0.id == budgetId }
     }
     
     private var paymentMethodIcon: String {

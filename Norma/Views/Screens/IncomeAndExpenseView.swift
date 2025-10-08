@@ -146,16 +146,7 @@ struct IncomeAndExpenseView: View {
             .scrollIndicators(.hidden)
             .navigationTitle("Expenses")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                Task {
-                    await expenseViewModel.refreshExpenses()
-                    await incomeViewModel.refreshIncomes()
-                    // Fetch budgets
-                    if let userId = sessionViewModel.currentUser?.userId {
-                        try? await dataManager.fetchBudgets(userId: userId)
-                    }
-                }
-            }
+            // Removed .onAppear - data is loaded by RootView
             .sheet(isPresented: $showNormaChatView) {
                 NormaChatView(context: .expenses)
             }

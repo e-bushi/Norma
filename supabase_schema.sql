@@ -17,17 +17,16 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- Create categories table
 CREATE TABLE IF NOT EXISTS categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('Income', 'Expense', 'Both')),
     icon TEXT NOT NULL,
     color_hex TEXT NOT NULL,
-    parent_category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     is_system BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(name, type)
 );
 
 -- Create bills table
