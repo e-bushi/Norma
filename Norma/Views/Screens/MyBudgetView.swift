@@ -60,15 +60,31 @@ struct MyBudgetView: View {
         // Total available = Income - Bills
         let totalAvailable = monthlyIncome - billViewModel.totalMonthlyBills
 
-        // Get total already budgeted for this month
+        // Get total already budgeted for this month (using monthly allocation for multi-month budgets)
         let calendar = Calendar.current
         let budgetedThisMonth = activeBudgets.filter { budget in
             let monthStart = calendar.startOfMonth(for: budget.startDate) ?? budget.startDate
             return calendar.isDate(monthStart, equalTo: month, toGranularity: .month)
-        }.reduce(0.0) { $0 + $1.amount }
+        }.reduce(0.0) { total, budget in
+            total + monthlyAllocation(for: budget)
+        }
 
         // Available to budget = Total Available - Already Budgeted
         return totalAvailable - budgetedThisMonth
+    }
+
+    // Calculate monthly allocation for a budget
+    private func monthlyAllocation(for budget: Budget) -> Double {
+        guard let endDate = budget.endDate else {
+            // If no end date, treat as single-month budget
+            return budget.amount
+        }
+
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.month], from: budget.startDate, to: endDate)
+        let months = max(1, (components.month ?? 0) + 1) // +1 to include both start and end months
+
+        return budget.amount / Double(months)
     }
 
     var body: some View {
@@ -86,6 +102,7 @@ struct MyBudgetView: View {
                 }
                 .padding()
             }
+            .background(Color("NormaBackground"))
             .navigationTitle("My Budgets")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -128,8 +145,8 @@ struct MyBudgetView: View {
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color.blue.opacity(0.1),
-                                Color.blue.opacity(0.05)
+                                Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
+                                Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.3)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -139,7 +156,7 @@ struct MyBudgetView: View {
 
                 Image(systemName: "target")
                     .font(.system(size: 36))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
             }
 
             // Title and description
@@ -191,12 +208,12 @@ struct MyBudgetView: View {
                 // Timeline dot
                 ZStack {
                     Circle()
-                        .fill(isCurrentMonth ? Color.blue : Color.gray.opacity(0.3))
+                        .fill(isCurrentMonth ? Color(red: 0.50, green: 0.45, blue: 0.65) : Color.gray.opacity(0.3))
                         .frame(width: 12, height: 12)
 
                     if isCurrentMonth {
                         Circle()
-                            .fill(Color.blue.opacity(0.3))
+                            .fill(Color(red: 0.50, green: 0.45, blue: 0.65).opacity(0.3))
                             .frame(width: 24, height: 24)
                     }
                 }
@@ -215,7 +232,7 @@ struct MyBudgetView: View {
                                 .padding(.vertical, 4)
                                 .background(
                                     Capsule()
-                                        .fill(Color.blue)
+                                        .fill(Color(red: 0.50, green: 0.45, blue: 0.65))
                                 )
                         }
                     }
@@ -230,7 +247,7 @@ struct MyBudgetView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "target")
                         .font(.system(size: 32))
-                        .foregroundColor(.blue.opacity(0.6))
+                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65).opacity(0.6))
 
                     Text("No budgets set for this month")
                         .font(.system(size: 15, weight: .medium))
@@ -252,7 +269,9 @@ struct MyBudgetView: View {
                 // Budget summary stats - expandable helper box
                 BudgetSummaryBox(
                     totalAvailable: monthlyIncome - billViewModel.totalMonthlyBills,
-                    budgeted: budgets.reduce(0) { $0 + $1.budget.amount },
+                    budgeted: budgets.reduce(0) { total, item in
+                        total + monthlyAllocation(for: item.budget)
+                    },
                     remaining: getAvailableToBudget(for: month)
                 )
 
@@ -363,12 +382,12 @@ struct MyBudgetView: View {
                                     )
                             } else {
                                 Circle()
-                                    .fill(Color.blue.opacity(0.1))
+                                    .fill(Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5))
                                     .frame(width: 30, height: 30)
                                     .overlay(
                                         Image(systemName: "dollarsign.circle")
                                             .font(.system(size: 14))
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
                                     )
                             }
 
@@ -388,7 +407,7 @@ struct MyBudgetView: View {
                             let remaining = item.budget.amount - item.spent
                             Text(remaining >= 0 ? "\(currencySymbol)\(remaining, specifier: "%.2f") left" : "-\(currencySymbol)\(abs(remaining), specifier: "%.2f") over")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(remaining >= 0 ? (remaining < item.budget.amount * 0.2 ? .orange : .green) : .red)
+                                .foregroundColor(remaining >= 0 ? (remaining < item.budget.amount * 0.2 ? Color(red: 0.70, green: 0.50, blue: 0.45) : Color(red: 0.40, green: 0.60, blue: 0.58)) : .red)
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -423,26 +442,35 @@ struct BudgetSummaryBox: View {
                 HStack(spacing: 8) {
                     Image(systemName: showDetails ? "chart.bar.fill" : "chart.bar")
                         .font(.system(size: 14))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
 
                     Text(showDetails ? "Hide details" : "View budget breakdown")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
 
                     Spacer()
 
                     Image(systemName: showDetails ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
+                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                                .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
                         )
                 )
             }
@@ -468,7 +496,7 @@ struct BudgetSummaryBox: View {
 
                         Text("\(currencySymbol)\(abs(remaining), specifier: "%.0f")")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(remaining >= 0 ? .green : .red)
+                            .foregroundColor(remaining >= 0 ? Color(red: 0.40, green: 0.60, blue: 0.58) : .red)
 
                         Text(remaining >= 0 ? "left to budget" : "over budget")
                             .font(.system(size: 12, weight: .medium))

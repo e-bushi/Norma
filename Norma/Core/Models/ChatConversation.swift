@@ -25,17 +25,19 @@ struct ChatConversation: Codable {
     }
 }
 
-struct ChatMessage: Identifiable, Codable, Hashable {
+struct ChatMessage: Identifiable, Codable {
     let id: String
     let role: MessageRole
     let content: String
     let timestamp: String
+    var uiComponent: UIComponent?
 
-    init(id: String = UUID().uuidString, role: MessageRole, content: String, timestamp: String = ISO8601DateFormatter().string(from: Date())) {
+    init(id: String = UUID().uuidString, role: MessageRole, content: String, timestamp: String = ISO8601DateFormatter().string(from: Date()), uiComponent: UIComponent? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
+        self.uiComponent = uiComponent
     }
 
     enum MessageRole: String, Codable {

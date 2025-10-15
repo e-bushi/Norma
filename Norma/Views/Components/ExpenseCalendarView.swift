@@ -58,7 +58,7 @@ struct ExpenseCalendarView: View {
                 // Summary stats
                 HStack(spacing: 20) {
                     VStack(spacing: 4) {
-                        Text("Month Total")
+                        Text("Monthly Expense Total")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
                         Text(profileViewModel.formatCurrency(totalExpensesThisMonth))
@@ -346,7 +346,7 @@ struct DayCell: View {
             if expenseCount > 0 {
                 Text(formattedExpenseAmount)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.purple.opacity(0.8))
+                    .foregroundColor(Color("NormaPastelPurple").opacity(0.9))
             } else {
                 Text(" ")
                     .font(.system(size: 9))
@@ -358,19 +358,28 @@ struct DayCell: View {
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.1))
-                    
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
+                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.purple.opacity(0.3), lineWidth: 1.5)
+                        .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.4), lineWidth: 1.5)
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.blue.opacity(0.05))
-                    
+                        .fill(Color("NormaPastelPurple").opacity(0.08))
+
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                        .stroke(Color("NormaPastelPurple").opacity(0.25), lineWidth: 1)
                 } else if expenseCount > 0 {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.05))
+                        .fill(Color("NormaPastelPurple").opacity(0.05))
                 }
             }
         )
@@ -379,9 +388,9 @@ struct DayCell: View {
     
     private var cellTextColor: Color {
         if isSelected {
-            return .purple
+            return Color("NormaPastelPurple")
         } else if isToday {
-            return .blue
+            return Color("NormaPastelPurple")
         } else if !isCurrentMonth {
             return .secondary.opacity(0.5)
         } else {

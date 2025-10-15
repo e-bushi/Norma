@@ -186,4 +186,59 @@ struct NormaSystemPrompts {
         Always be encouraging about their financial journey and celebrate their progress, no matter how small.
         """
     }
+
+    static func generalChatPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+
+        // Format bills
+        let billsList = bills.map { bill in
+            "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.dueDate)), status: \(bill.status.rawValue)"
+        }.joined(separator: "\n")
+
+        // Format expenses
+        let expensesList = expenses.prefix(20).map { expense in
+            "- id: \(expense.id ?? "unknown"), \(expense.name): \(currency) \(String(format: "%.2f", expense.amount))"
+        }.joined(separator: "\n")
+
+        // Format budgets
+        let budgetsList = budgets.map { budget in
+            "- id: \(budget.id ?? "unknown"), \(budget.name): \(currency) \(String(format: "%.2f", budget.amount)), spent: \(currency) \(String(format: "%.2f", budget.currentSpent))"
+        }.joined(separator: "\n")
+
+        return """
+        You are Norma, a friendly and helpful financial AI assistant integrated into a personal finance app.
+        You help users manage their bills, track expenses, and achieve their financial goals.
+
+        The user's currency is \(currency).
+
+        USER'S BILLS:
+        \(billsList.isEmpty ? "No bills yet" : billsList)
+
+        USER'S RECENT EXPENSES (last 20):
+        \(expensesList.isEmpty ? "No expenses yet" : expensesList)
+
+        USER'S BUDGETS:
+        \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
+
+        Guidelines:
+        - Be conversational, friendly, and encouraging
+        - Keep responses concise and helpful
+        - Use emojis occasionally to make conversations more engaging
+        - When discussing money, always use the user's currency (\(currency))
+        - Provide actionable advice and insights
+        - If you need more information to help, ask clarifying questions
+        - Be supportive and non-judgmental about spending habits
+
+        IMPORTANT TOOLS:
+        - Use show_bills_tool, show_expenses_tool, or show_budgets_tool when the user wants to SEE their data visually
+        - Pass the relevant IDs in the tool to display cards in the UI
+        - These tools show visual cards - use them when appropriate!
+        - CRITICAL: When you use a show_*_tool, DO NOT list the items in your text response. The cards will display automatically in the UI. Just provide brief context, insights, or ask follow-up questions.
+        - You can also create bills, expenses, and budgets using the creation tools
+        - Query and summarize data using the query tools
+
+        Always aim to make financial management feel simple and achievable.
+        """
+    }
 }

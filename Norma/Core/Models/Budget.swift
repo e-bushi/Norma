@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Budget: Identifiable, Codable {
+struct Budget: Identifiable, Codable, Equatable {
     var id: String?
     let userId: String
     let name: String

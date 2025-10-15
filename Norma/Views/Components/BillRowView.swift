@@ -84,38 +84,35 @@ struct BillRowView: View {
         Button(action: {
             selectedBill = bill
         }) {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // Status icon
-                ZStack {
-                    Circle()
-                        .fill(statusColor.opacity(0.1))
-                        .frame(width: 40, height: 40)
-                    
-                    Image(systemName: statusIcon)
-                        .font(.system(size: 18))
-                        .foregroundColor(statusColor)
-                }
-                
+                Circle()
+                    .fill(statusColor.opacity(0.1))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Image(systemName: statusIcon)
+                            .font(.system(size: 12))
+                            .foregroundColor(statusColor)
+                    )
+
                 // Bill info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(bill.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.primary)
-                    
+
                     Text(dueDateText)
-                        .font(.system(size: 12))
+                        .font(.system(size: 10))
                         .foregroundColor(billStatus == .overdue ? .red : .secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Amount
                 Text(profileViewModel.formatCurrency(bill.amount))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(billStatus == .overdue ? .red : .primary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(item: $selectedBill) { bill in
@@ -172,7 +169,7 @@ struct BillRowView: View {
         BillRowView(bill: overdueBill)
     }
     .padding()
-    .background(Color.gray.opacity(0.1))
+    .background(Color("NormaCard"))
     .environmentObject(expenseViewModel)
     .environmentObject(profileViewModel)
 }

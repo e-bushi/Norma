@@ -89,3 +89,4 @@ struct MyBillsView: View {
         .environmentObject(sessionViewModel)
         .environmentObject(billViewModel)
 }
+

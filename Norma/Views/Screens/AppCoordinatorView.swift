@@ -11,14 +11,20 @@ struct AppCoordinatorView: View {
     @EnvironmentObject var appCoordinator: AppCoordinator
     
     var body: some View {
-        Group {
-            if appCoordinator.isReady {
-                appCoordinator.currentViewContent
-            } else {
-                LoadingView()
+        ZStack {
+            // Base layer background
+            Color("NormaBackground")
+                .ignoresSafeArea()
+
+            Group {
+                if appCoordinator.isReady {
+                    appCoordinator.currentViewContent
+                } else {
+                    LoadingView()
+                }
             }
+            .animation(.easeInOut(duration: 0.3), value: appCoordinator.currentView)
         }
-        .animation(.easeInOut(duration: 0.3), value: appCoordinator.currentView)
     }
 }
 

@@ -50,11 +50,11 @@ struct BudgetDetailView: View {
     
     private var statusColor: Color {
         if percentageUsed < 0.5 {
-            return .green
+            return Color("NormaPastelTeal")
         } else if percentageUsed < 0.8 {
-            return .yellow
+            return Color("NormaPastelBeige")
         } else if percentageUsed < 1.0 {
-            return .orange
+            return Color("NormaPastelCoral")
         } else {
             return .red
         }
@@ -72,6 +72,9 @@ struct BudgetDetailView: View {
             VStack(spacing: 24) {
                     // Header with budget name (centered)
                     headerView
+
+                    // Date metadata
+                    dateMetadataView
 
                     // Combined budget details (progress + end date)
                     budgetDetailsRow
@@ -126,6 +129,104 @@ struct BudgetDetailView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var dateMetadataView: some View {
+        HStack(spacing: 12) {
+            // Start date
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.1))
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 14))
+                        .foregroundColor(.blue)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Start")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Text(budget.startDate, format: .dateTime.month().day().year())
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Arrow separator
+            Image(systemName: "arrow.right")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary.opacity(0.5))
+                .padding(.horizontal, 4)
+
+            // End date
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.1))
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("End")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    if let endDate = budget.endDate {
+                        Text(endDate, format: .dateTime.month().day().year())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } else {
+                        Text("No end date")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.03),
+                            Color.gray.opacity(0.01)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.15),
+                            Color.gray.opacity(0.05)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
     }
 
     @ViewBuilder

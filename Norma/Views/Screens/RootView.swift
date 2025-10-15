@@ -15,34 +15,7 @@ struct RootView: View {
     
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
-            TabView {
-                MainChatView()
-                    .tabItem {
-                        Label("Chat", systemImage: "message.fill")
-                    }
-
-                MyBudgetView()
-                    .tabItem {
-                        Label("My Budgets", systemImage: "chart.pie.fill")
-                    }
-
-                BillHomeView()
-                    .tabItem {
-                        Label("My Bills", systemImage: "doc.text.fill")
-                    }
-
-                IncomeAndExpenseView()
-                    .tabItem {
-                        Label("Expenses", systemImage: "chart.bar.fill")
-                    }
-
-                SettingsView()
-                    .tabItem {
-                        Label("Settings", systemImage: "gear")
-                    }
-                    .environmentObject(sessionViewModel)
-                    .environmentObject(dataManager)
-            }
+            MainChatView()
         }
         .onAppear {
             // Set the model context on DataManager

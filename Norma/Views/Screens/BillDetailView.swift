@@ -56,18 +56,32 @@ struct BillDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Bill details section
-                    billDetailsView
-                    
+                    // Header with centered icon and name
+                    headerView
+
+                    // Bill details card
+                    billDetailsCard
+
                     // Related payments section
                     if !relatedExpenses.isEmpty {
                         relatedPaymentsView
                     }
-                    
+
                     // Action buttons
                     actionButtonsView
                 }
                 .padding()
+            }
+            .scrollIndicators(.hidden)
+            .background(Color("NormaBackground"))
+            .navigationTitle("Bill Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
             }
         }
         .sheet(isPresented: $showEditBillSheet) {
@@ -86,39 +100,68 @@ struct BillDetailView: View {
         }
     }
     
-    
     @ViewBuilder
-    private var billDetailsView: some View {
-        VStack(spacing: 16) {
-            // Header with status badge
-            HStack {
+    private var headerView: some View {
+        VStack(spacing: 12) {
+            // Bill icon
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.15))
+                    .frame(width: 60, height: 60)
+
+                Image(systemName: statusIcon)
+                    .font(.system(size: 26))
+                    .foregroundColor(statusColor)
+            }
+
+            // Bill name and status
+            VStack(spacing: 4) {
+                Text(bill.name)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.primary)
+
+                HStack(spacing: 6) {
+                    Text(calculatedStatus.rawValue)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(statusColor)
+
+                    Text("•")
+                        .foregroundColor(.secondary)
+
+                    Text(bill.frequency.rawValue)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var billDetailsCard: some View {
+        VStack(spacing: 12) {
+            // Amount card
+            HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(bill.name)
-                        .font(.system(size: 16, weight: .bold))
+                    Text("Amount Due")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(profileViewModel.formatCurrency(bill.amount))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
-                    
-                    HStack(spacing: 8) {
-                        Image(systemName: statusIcon)
-                            .font(.system(size: 12))
-                            .foregroundColor(statusColor)
-                        
-                        Text(calculatedStatus.rawValue)
-                            .font(.system(size: 12, weight: .medium))
+                }
+
+                Spacer()
+
+                if !isFullyPaid {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Remaining")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text(profileViewModel.formatCurrency(remainingAmount))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(statusColor)
                     }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(profileViewModel.formatCurrency(bill.amount))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    Text(bill.frequency.rawValue)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .tracking(0.5)
                 }
             }
             .padding(.horizontal, 24)
@@ -150,7 +193,7 @@ struct BillDetailView: View {
                             )
                     )
             )
-            
+
             // Bill details grid
             VStack(spacing: 16) {
                 Text("BILL DETAILS")
@@ -158,28 +201,14 @@ struct BillDetailView: View {
                     .foregroundColor(.secondary)
                     .tracking(1.2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 VStack(spacing: 12) {
                     DetailRow(label: "Due Date", value: formatDueDate())
-                    
+
                     if let merchant = bill.merchant {
                         DetailRow(label: "Merchant", value: merchant)
                     }
-                    
-                    if let reminderDays = bill.reminderDays {
-                        DetailRow(label: "Reminder", value: "\(reminderDays) days before")
-                    }
-                    
-                    // Reminder toggle section
-                    ReminderToggleRow(
-                        isReminderOn: isReminderOn,
-                        onToggle: { isOn in
-                            Task {
-                                await toggleReminder(isOn)
-                            }
-                        }
-                    )
-                    
+
                     if let notes = bill.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Notes")
@@ -230,12 +259,12 @@ struct BillDetailView: View {
                         // Payment icon
                         ZStack {
                             Circle()
-                                .fill(Color.green.opacity(0.1))
+                                .fill(Color("NormaPastelTeal").opacity(0.15))
                                 .frame(width: 36, height: 36)
-                            
+
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(.green)
+                                .foregroundColor(Color("NormaPastelTeal"))
                         }
                         
                         // Payment info
@@ -253,7 +282,7 @@ struct BillDetailView: View {
                         // Amount
                         Text(profileViewModel.formatCurrency(expense.amount))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.green)
+                            .foregroundColor(Color("NormaPastelTeal"))
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -372,15 +401,24 @@ struct BillDetailView: View {
                         Text(getUnpaidButtonText())
                             .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(Color("NormaPastelCoral"))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.orange.opacity(0.1))
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(red: 0.96, green: 0.88, blue: 0.85).opacity(0.5),
+                                        Color(red: 0.98, green: 0.90, blue: 0.87).opacity(0.5)
+                                    ]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                    .stroke(Color(red: 0.88, green: 0.75, blue: 0.70).opacity(0.3), lineWidth: 1)
                             )
                     )
                     .opacity(isMarkingAsUnpaid ? 0.8 : 1.0)
@@ -398,20 +436,29 @@ struct BillDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
                         .font(.system(size: 16))
-                        .foregroundColor(.blue)
-                    
+                        .foregroundColor(Color("NormaPastelPurple"))
+
                     Text("Edit Bill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color("NormaPastelPurple"))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
+                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                                .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
                         )
                 )
             }
@@ -479,9 +526,9 @@ struct BillDetailView: View {
     
     private var statusColor: Color {
         switch calculatedStatus {
-        case .paid: return .green
+        case .paid: return Color("NormaPastelTeal")
         case .overdue: return .red
-        case .scheduled: return .blue
+        case .scheduled: return Color("NormaPastelTeal")
         }
     }
     
@@ -501,11 +548,11 @@ struct BillDetailView: View {
     
     private func getPaymentButtonColors() -> [Color] {
         if showPaymentSuccess {
-            return [Color.green, Color.green.opacity(0.8)]
+            return [Color("NormaPastelTeal"), Color("NormaPastelTeal").opacity(0.8)]
         } else if showPaymentError {
             return [Color.red, Color.red.opacity(0.8)]
         } else {
-            return [Color.blue, Color.blue.opacity(0.8)]
+            return [Color("NormaPastelTeal"), Color("NormaPastelTeal").opacity(0.8)]
         }
     }
     

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ExpenseDetailView: View {
     let expense: Expense
+    var expenseBinding: Binding<Expense>?
     
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -21,6 +22,8 @@ struct ExpenseDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showLinkToBudgetSheet = false
     @State private var showLinkToBillSheet = false
+    @State private var showLinkedBudgetCard = false
+    @State private var showLinkedBillCard = false
     
     private var expenseDate: Date {
         let dateFormatter = DateFormatter()
@@ -28,13 +31,22 @@ struct ExpenseDetailView: View {
         return dateFormatter.date(from: expense.expenseDate) ?? Date()
     }
     
+    // Use binding if provided, otherwise fall back to looking up from view model
+    private var currentExpense: Expense {
+        if let binding = expenseBinding {
+            return binding.wrappedValue
+        }
+        guard let expenseId = expense.id else { return expense }
+        return expenseViewModel.expenses.first { $0.id == expenseId } ?? expense
+    }
+
     private var linkedBill: Bill? {
-        guard let billId = expense.billId else { return nil }
+        guard let billId = currentExpense.billId else { return nil }
         return billViewModel.bills.first { $0.id == billId }
     }
-    
+
     private var linkedBudget: Budget? {
-        guard let budgetId = expense.budgetId else { return nil }
+        guard let budgetId = currentExpense.budgetId else { return nil }
         return budgetViewModel.budgets.first { $0.id == budgetId }
     }
     
@@ -78,42 +90,21 @@ struct ExpenseDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Expense details section
-                    expenseDetailsView
-                    
-                    // Payment information
-                    paymentInfoView
-                    
-                    // Linked budget information
-                    if linkedBudget != nil {
-                        linkedBudgetView
-                    }
-                    
-                    // Linked bill information
-                    if linkedBill != nil {
-                        linkedBillView
-                    }
-                    
-                    // Additional details
-                    if expense.isRecurring || expense.merchant != nil || expense.location != nil {
-                        additionalDetailsView
-                    }
-                    
-                    // Tags
-                    if !expense.tags.isEmpty {
-                        tagsView
-                    }
-                    
-                    // Notes
-                    if let notes = expense.notes, !notes.isEmpty {
-                        notesView(notes: notes)
-                    }
-                    
+                    // Header with centered icon and name
+                    headerView
+
+                    // Expense details card
+                    expenseDetailsCard
+
+                    // Linked items
+                    linkedItemsView
+
                     // Actions
                     actionButtonsView
                 }
                 .padding()
             }
+            .scrollIndicators(.hidden)
             .navigationTitle("Expense Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -122,12 +113,25 @@ struct ExpenseDetailView: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showEditExpenseSheet = true
-                    }) {
-                        Text("Edit")
-                            .fontWeight(.medium)
+            }
+            .onAppear {
+                // Set initial state for linked items
+                showLinkedBudgetCard = linkedBudget != nil
+                showLinkedBillCard = linkedBill != nil
+            }
+            .onChange(of: currentExpense.budgetId) { oldValue, newValue in
+                // Animate when budget gets linked (from nil to having a value)
+                if oldValue == nil && newValue != nil {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        showLinkedBudgetCard = true
+                    }
+                }
+            }
+            .onChange(of: currentExpense.billId) { oldValue, newValue in
+                // Animate when bill gets linked (from nil to having a value)
+                if oldValue == nil && newValue != nil {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        showLinkedBillCard = true
                     }
                 }
             }
@@ -161,317 +165,269 @@ struct ExpenseDetailView: View {
     }
     
     @ViewBuilder
-    private var expenseDetailsView: some View {
-        VStack(spacing: 16) {
-            // Header with amount and name
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(expense.name)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    if let merchant = expense.merchant {
-                        Text(merchant)
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(profileViewModel.formatCurrency(expense.amount))
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: paymentMethodIcon)
-                            .font(.system(size: 12))
-                        Text(expense.paymentMethod.rawValue)
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(paymentMethodColor)
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-            )
-            
-            // Date and recurring info
-            HStack {
-                Label {
-                    Text(expenseDate, format: .dateTime.weekday(.wide).month(.wide).day().year())
-                        .font(.system(size: 14))
-                } icon: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 14))
-                }
-                .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                if expense.isRecurring {
-                    Label {
-                        Text(expense.recurringFrequency?.rawValue ?? "Recurring")
-                            .font(.system(size: 14))
-                    } icon: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 14))
-                    }
-                    .foregroundColor(.purple)
-                }
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-    
-    private var paymentInfoView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Payment Details")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            VStack(spacing: 0) {
-                // Payment method
-                HStack {
-                    Text("Method")
+    private var headerView: some View {
+        VStack(spacing: 12) {
+            // Payment method icon
+            Circle()
+                .fill(paymentMethodColor.opacity(0.1))
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Image(systemName: paymentMethodIcon)
+                        .font(.system(size: 26))
+                        .foregroundColor(paymentMethodColor)
+                )
+
+            // Expense name and amount
+            VStack(spacing: 4) {
+                Text(expense.name)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Text(profileViewModel.formatCurrency(expense.amount))
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.secondary)
+
+                if let merchant = expense.merchant {
+                    Text(merchant)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Image(systemName: paymentMethodIcon)
-                            .font(.system(size: 12))
-                        Text(expense.paymentMethod.rawValue)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(paymentMethodColor)
-                }
-                .padding(.vertical, 12)
-                
-                if let location = expense.location {
-                    Divider()
-                    HStack {
-                        Text("Location")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(location)
-                            .font(.system(size: 14))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .padding(.vertical, 12)
                 }
             }
-            .padding(.horizontal)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var expenseDetailsCard: some View {
+        VStack(spacing: 12) {
+            // Payment method
+            DetailRowView(
+                label: "Payment Method",
+                value: expense.paymentMethod.rawValue,
+                icon: paymentMethodIcon,
+                iconColor: paymentMethodColor
             )
-        }
-    }
-    
-    @ViewBuilder
-    private var linkedBudgetView: some View {
-        if let budget = linkedBudget {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Linked to Budget")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+
+            if !expense.tags.isEmpty {
+                Divider()
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(budget.name)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                        Text("Budget: \(profileViewModel.formatCurrency(budget.amount))")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-                    
+                    Text("Date")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+
                     Spacer()
-                    
-                    Image(systemName: "target")
+
+                    Text(expenseDate, format: .dateTime.month().day().year())
                         .font(.system(size: 14))
-                        .foregroundColor(.green)
+                        .foregroundColor(.primary)
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.green.opacity(0.1))
+            }
+
+            if expense.isRecurring, let frequency = expense.recurringFrequency {
+                Divider()
+                DetailRowView(
+                    label: "Frequency",
+                    value: frequency.rawValue,
+                    icon: "arrow.triangle.2.circlepath",
+                    iconColor: .purple
                 )
             }
-        }
-    }
-    
-    @ViewBuilder
-    private var linkedBillView: some View {
-        if let bill = linkedBill {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Linked to Bill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+
+            if let location = expense.location {
+                Divider()
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(bill.name)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                        Text("Due \(bill.dueDate, format: .dateTime.month().day())")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-                    
+                    Text("Location")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+
                     Spacer()
-                    
-                    Image(systemName: "link")
+
+                    Text(location)
                         .font(.system(size: 14))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.trailing)
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.1))
-                )
             }
-        }
-    }
-    
-    private var additionalDetailsView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Additional Information")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            VStack(spacing: 0) {
-                if let merchant = expense.merchant, expense.location == nil {
-                    HStack {
-                        Text("Merchant")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(merchant)
-                            .font(.system(size: 14))
-                            .foregroundColor(.primary)
-                    }
-                    .padding(.vertical, 12)
-                }
-                
-                if expense.isRecurring, let frequency = expense.recurringFrequency {
-                    if expense.merchant != nil && expense.location == nil {
-                        Divider()
-                    }
-                    HStack {
-                        Text("Frequency")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 12))
-                            Text(frequency.rawValue)
-                                .font(.system(size: 14))
+
+            if !expense.tags.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tags")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    FlowLayout(spacing: 6) {
+                        ForEach(expense.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 11))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.purple.opacity(0.15))
+                                )
+                                .foregroundColor(.purple)
                         }
-                        .foregroundColor(.purple)
                     }
-                    .padding(.vertical, 12)
                 }
-            }
-            .padding(.horizontal)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-            )
-        }
-    }
-    
-    private var tagsView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Tags")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            FlowLayout(spacing: 8) {
-                ForEach(expense.tags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 13))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.purple.opacity(0.15))
-                        )
-                        .foregroundColor(.purple)
-                }
-            }
-        }
-    }
-    
-    private func notesView(notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Notes")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            Text(notes)
-                .font(.system(size: 14))
-                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
+            }
+
+            if let notes = expense.notes, !notes.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Notes")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Text(notes)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.05))
+                .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
+                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                 )
+        )
+    }
+    
+    @ViewBuilder
+    private var linkedItemsView: some View {
+        if linkedBudget != nil || linkedBill != nil {
+            VStack(spacing: 12) {
+                if let budget = linkedBudget, showLinkedBudgetCard {
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(Color.green.opacity(0.1))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Image(systemName: "target")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.green)
+                            )
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Linked to Budget")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text(budget.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+
+                        Spacer()
+
+                        Text(profileViewModel.formatCurrency(budget.amount))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.green)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    .scaleEffect(showLinkedBudgetCard ? 1.0 : 0.8)
+                    .opacity(showLinkedBudgetCard ? 1.0 : 0.0)
+                }
+
+                if let bill = linkedBill, showLinkedBillCard {
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(Color.blue.opacity(0.1))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Image(systemName: "doc.text.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.blue)
+                            )
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Linked to Bill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text(bill.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+
+                        Spacer()
+
+                        Text("Due \(bill.dueDate, format: .dateTime.month().day())")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    .scaleEffect(showLinkedBillCard ? 1.0 : 0.8)
+                    .opacity(showLinkedBillCard ? 1.0 : 0.0)
+                }
+            }
         }
     }
     
     private var actionButtonsView: some View {
         VStack(spacing: 12) {
-            // Primary actions
-            HStack(spacing: 12) {
-                if expense.budgetId == nil {
-                    Button(action: {
-                        showLinkToBudgetSheet = true
-                    }) {
-                        VStack(spacing: 6) {
-                            Image(systemName: "target")
-                                .font(.system(size: 20))
-                            Text("Link to Budget")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 60)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.green.opacity(0.1))
-                        )
-                        .foregroundColor(.green)
+            // Link to Budget button
+            if linkedBudget == nil {
+                Button(action: {
+                    showLinkToBudgetSheet = true
+                }) {
+                    HStack {
+                        Image(systemName: "link")
+                            .font(.system(size: 16))
+                        Text("Link to Budget")
+                            .font(.system(size: 16, weight: .medium))
                     }
-                }
-                
-                if expense.billId == nil {
-                    Button(action: {
-                        showLinkToBillSheet = true
-                    }) {
-                        VStack(spacing: 6) {
-                            Image(systemName: "link")
-                                .font(.system(size: 20))
-                            Text("Link to Bill")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 60)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.purple.opacity(0.1))
-                        )
-                        .foregroundColor(.purple)
-                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.green.opacity(0.1))
+                    )
+                    .foregroundColor(.green)
                 }
             }
-            
+
+            // Link to Bill button
+            if linkedBill == nil {
+                Button(action: {
+                    showLinkToBillSheet = true
+                }) {
+                    HStack {
+                        Image(systemName: "link")
+                            .font(.system(size: 16))
+                        Text("Link to Bill")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.blue.opacity(0.1))
+                    )
+                    .foregroundColor(.blue)
+                }
+            }
+
             // Delete button
             Button(action: {
                 showDeleteConfirmation = true
@@ -499,6 +455,32 @@ struct ExpenseDetailView: View {
         dismiss()
     }
     
+}
+
+// Detail row component
+struct DetailRowView: View {
+    let label: String
+    let value: String
+    let icon: String
+    let iconColor: Color
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(value)
+                    .font(.system(size: 14))
+            }
+            .foregroundColor(iconColor)
+        }
+    }
 }
 
 // Simple flow layout for tags
