@@ -12,11 +12,12 @@ import Combine
 
 @MainActor
 class AppCoordinator: ObservableObject {
-    
+
     // MARK: - Published Properties
-    
+
     @Published var currentView: AppView = .loading
     @Published var isReady = false
+    @Published var mainLayerView: MainLayerViewType = .chat
     
     // MARK: - Core Managers and ViewModels
     
@@ -146,6 +147,7 @@ class AppCoordinator: ObservableObject {
             RootView()
                 .environmentObject(dataManager)
                 .environmentObject(sessionViewModel)
+                .environmentObject(self)
         }
     }
 }
@@ -156,6 +158,11 @@ enum AppView {
     case loading
     case onboarding
     case main
+}
+
+enum MainLayerViewType {
+    case chat
+    case settings
 }
 
 // MARK: - Coordinator Views

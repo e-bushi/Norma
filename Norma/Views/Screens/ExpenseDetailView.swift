@@ -180,16 +180,16 @@ struct ExpenseDetailView: View {
             // Expense name and amount
             VStack(spacing: 4) {
                 Text(expense.name)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.normaTitle(24))
                     .foregroundColor(.primary)
 
                 Text(profileViewModel.formatCurrency(expense.amount))
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundColor(.secondary)
 
                 if let merchant = expense.merchant {
                     Text(merchant)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                 }
             }
@@ -212,13 +212,13 @@ struct ExpenseDetailView: View {
                 Divider()
                 HStack {
                     Text("Date")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     Spacer()
 
                     Text(expenseDate, format: .dateTime.month().day().year())
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                 }
             }
@@ -237,13 +237,13 @@ struct ExpenseDetailView: View {
                 Divider()
                 HStack {
                     Text("Location")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     Spacer()
 
                     Text(location)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.trailing)
                 }
@@ -253,13 +253,13 @@ struct ExpenseDetailView: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Tags")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     FlowLayout(spacing: 6) {
                         ForEach(expense.tags, id: \.self) { tag in
                             Text(tag)
-                                .font(.system(size: 11))
+                                .font(.normaHeadline(11))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
                                 .background(
@@ -277,11 +277,11 @@ struct ExpenseDetailView: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     Text(notes)
-                        .font(.system(size: 13))
+                        .font(.normaHeadline(13))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -316,17 +316,17 @@ struct ExpenseDetailView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Linked to Budget")
-                                .font(.system(size: 10))
+                                .font(.normaHeadline(10))
                                 .foregroundColor(.secondary)
                             Text(budget.name)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.normaHeadline(12))
                                 .foregroundColor(.primary)
                         }
 
                         Spacer()
 
                         Text(profileViewModel.formatCurrency(budget.amount))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundColor(.green)
                     }
                     .padding(16)
@@ -355,17 +355,17 @@ struct ExpenseDetailView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Linked to Bill")
-                                .font(.system(size: 10))
+                                .font(.normaHeadline(10))
                                 .foregroundColor(.secondary)
                             Text(bill.name)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.normaHeadline(12))
                                 .foregroundColor(.primary)
                         }
 
                         Spacer()
 
                         Text("Due \(bill.dueDate, format: .dateTime.month().day())")
-                            .font(.system(size: 10))
+                            .font(.normaHeadline(10))
                             .foregroundColor(.secondary)
                     }
                     .padding(16)
@@ -395,7 +395,7 @@ struct ExpenseDetailView: View {
                         Image(systemName: "link")
                             .font(.system(size: 16))
                         Text("Link to Budget")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.normaHeadline(16))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -416,7 +416,7 @@ struct ExpenseDetailView: View {
                         Image(systemName: "link")
                             .font(.system(size: 16))
                         Text("Link to Bill")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.normaHeadline(16))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -436,7 +436,7 @@ struct ExpenseDetailView: View {
                     Image(systemName: "trash")
                         .font(.system(size: 16))
                     Text("Delete Expense")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.normaHeadline(16))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
@@ -467,7 +467,7 @@ struct DetailRowView: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(.normaHeadline(14))
                 .foregroundColor(.secondary)
 
             Spacer()
@@ -476,7 +476,7 @@ struct DetailRowView: View {
                 Image(systemName: icon)
                     .font(.system(size: 12))
                 Text(value)
-                    .font(.system(size: 14))
+                    .font(.normaHeadline(14))
             }
             .foregroundColor(iconColor)
         }

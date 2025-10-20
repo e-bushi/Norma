@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Binding var isMenuOpen: Bool
+
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @StateObject private var notificationService = NotificationService.shared
@@ -22,7 +24,9 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
-    
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @Environment(\.colorScheme) private var colorScheme
+
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
         let userKeyManager = UserKeyManager(supabaseService: dataManager.supabaseService)
@@ -30,7 +34,7 @@ struct SettingsView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 // User Profile Section
                 Section("Profile") {
@@ -39,19 +43,45 @@ struct SettingsView: View {
                             Image(systemName: "person.circle.fill")
                                 .font(.title2)
                                 .foregroundColor(.blue)
-                            
+
                             VStack(alignment: .leading) {
                                 Text(user.name)
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 Text(user.email)
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                                     .foregroundColor(.secondary)
                             }
                         }
                         .padding(.vertical, 4)
                     }
                 }
-                
+
+                // Appearance Section
+                Section("Appearance") {
+                    ForEach(AppearanceMode.allCases) { mode in
+                        Button(action: {
+                            appearanceMode = mode
+                        }) {
+                            HStack {
+                                Image(systemName: mode.icon)
+                                    .foregroundColor(appearanceMode == mode ? .blue : .secondary)
+
+                                Text(mode.rawValue)
+                                    .font(.normaHeadline(17))
+                                    .foregroundColor(.primary)
+
+                                Spacer()
+
+                                if appearanceMode == mode {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 // Subscription Section
                 Section("Subscription") {
                     if subscriptionManager.isInFreeTrial {
@@ -62,20 +92,20 @@ struct SettingsView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Free Trial")
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 if let daysRemaining = subscriptionManager.trialDaysRemaining {
                                     Text("\(daysRemaining) day\(daysRemaining == 1 ? "" : "s") remaining")
-                                        .font(.caption)
+                                        .font(.normaHeadline(13))
                                         .foregroundColor(.secondary)
                                 }
                             }
-                            
+
                             Spacer()
-                            
+
                             Button("View Plans") {
                                 showPaywall = true
                             }
-                            .font(.caption)
+                            .font(.normaHeadline(13))
                             .buttonStyle(.borderedProminent)
                         }
                         .padding(.vertical, 4)
@@ -87,15 +117,15 @@ struct SettingsView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Pro Subscription")
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
                                     if subscriptionManager.subscriptionStatus.willRenew {
                                         Text("Renews \(expirationDate, style: .date)")
-                                            .font(.caption)
+                                            .font(.normaHeadline(13))
                                             .foregroundColor(.secondary)
                                     } else {
                                         Text("Expires \(expirationDate, style: .date)")
-                                            .font(.caption)
+                                            .font(.normaHeadline(13))
                                             .foregroundColor(.orange)
                                     }
                                 }
@@ -120,7 +150,7 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "arrow.up.forward.square")
                                     .foregroundColor(.secondary)
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                             }
                         }
                     } else {
@@ -131,9 +161,9 @@ struct SettingsView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Limited Access")
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 Text("Unlock all features with Pro")
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                                     .foregroundColor(.secondary)
                             }
                             
@@ -142,7 +172,7 @@ struct SettingsView: View {
                             Button("Subscribe") {
                                 showPaywall = true
                             }
-                            .font(.caption)
+                            .font(.normaHeadline(13))
                             .buttonStyle(.borderedProminent)
                         }
                         .padding(.vertical, 4)
@@ -180,7 +210,7 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                             }
                         }
                     } else {
@@ -197,7 +227,7 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                             }
                         }
                     }
@@ -209,7 +239,7 @@ struct SettingsView: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                             .foregroundColor(.secondary)
-                            .font(.caption)
+                            .font(.normaHeadline(13))
                     }
                     
                 }
@@ -222,9 +252,9 @@ struct SettingsView: View {
                                 .foregroundColor(.green)
                             VStack(alignment: .leading) {
                                 Text("Encryption Enabled")
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 Text("Your data is protected")
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
@@ -244,7 +274,7 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                             }
                         }
                     } else {
@@ -253,9 +283,9 @@ struct SettingsView: View {
                                 .foregroundColor(.orange)
                             VStack(alignment: .leading) {
                                 Text("Encryption Disabled")
-                                    .font(.headline)
+                                    .font(.normaHeadline(17))
                                 Text("Enable encryption to protect your data")
-                                    .font(.caption)
+                                    .font(.normaHeadline(13))
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
@@ -289,7 +319,7 @@ struct SettingsView: View {
                             Text("Last synced")
                             Spacer()
                             Text(lastSync, style: .relative)
-                                .font(.caption)
+                                .font(.normaHeadline(13))
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -308,7 +338,7 @@ struct SettingsView: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
-                                .font(.caption)
+                                .font(.normaHeadline(13))
                         }
                     }
                     
@@ -323,7 +353,7 @@ struct SettingsView: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
-                                .font(.caption)
+                                .font(.normaHeadline(13))
                         }
                     }
                     
@@ -338,7 +368,7 @@ struct SettingsView: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
-                                .font(.caption)
+                                .font(.normaHeadline(13))
                         }
                     }
                 }
@@ -369,7 +399,31 @@ struct SettingsView: View {
                     .disabled(isDeletingAccount)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color("NormaBackground"))
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+            )
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        let impactMedium = UIImpactFeedbackGenerator(style: .medium)
+                        impactMedium.impactOccurred()
+
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            isMenuOpen.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 20))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
             .alert("Sign Out", isPresented: $showLogoutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -430,8 +484,9 @@ struct SettingsView: View {
                 )
             }
         }
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
-    
+
     private func requestNotificationPermission() async {
         let granted = await notificationService.requestNotificationPermission()
         print("🔔 Notification permission granted: \(granted)")
@@ -443,8 +498,34 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Supporting Types
+
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case light = "Light"
+    case dark = "Dark"
+    case system = "System"
+
+    var id: String { rawValue }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return nil
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        case .system: return "circle.lefthalf.filled"
+        }
+    }
+}
+
 #Preview {
-    SettingsView()
+    SettingsView( isMenuOpen: .constant(false))
         .environmentObject(SessionViewModel(dataManager: DataManager()))
         .environmentObject(DataManager())
 }

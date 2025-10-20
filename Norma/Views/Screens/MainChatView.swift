@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct MainChatView: View {
+    @Binding var isMenuOpen: Bool
+
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var budgetViewModel: BudgetViewModel
     @StateObject private var subscriptionManager = SubscriptionManager.shared
-    
+
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
     @State private var isLoading = false
@@ -23,8 +25,6 @@ struct MainChatView: View {
     @State private var scrollViewProxy: ScrollViewProxy?
 
     @State private var showPaywall = false
-    @State private var isMenuOpen = false
-    @State private var dragOffset: CGFloat = 0
 
     private var toolExecutor: ChatToolExecutor {
         ChatToolExecutor(
@@ -35,142 +35,77 @@ struct MainChatView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Menu view (behind)
-            ChatMenuView(isMenuOpen: $isMenuOpen)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack(alignment: .bottom) {
+                // Chat content fills entire space
+                chatContent
+                    .background(Color("NormaBackground").ignoresSafeArea())
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        hideKeyboard()
+                    }
 
-            // Main chat view (on top)
-            NavigationStack {
-                ZStack(alignment: .bottom) {
-                    // Chat content fills entire space
-                    chatContent
-                        .background(Color("NormaBackground").ignoresSafeArea())
+                // Input area overlays at bottom
+                inputArea
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        // Sliding haptic that fades over animation duration
+                        let impactMedium = UIImpactFeedbackGenerator(style: .medium)
+                        impactMedium.impactOccurred()
 
-                    // Input area overlays at bottom
-                    inputArea
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            let impactLight = UIImpactFeedbackGenerator(style: .light)
+                            impactLight.impactOccurred()
+                        }
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            let impactLight = UIImpactFeedbackGenerator(style: .light)
+                            impactLight.impactOccurred()
+                        }
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            let selectionGenerator = UISelectionFeedbackGenerator()
+                            selectionGenerator.selectionChanged()
+                        }
+
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            isMenuOpen.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 20))
+                            .foregroundColor(.primary)
+                    }
                 }
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            // Sliding haptic that fades over animation duration
-                            let impactMedium = UIImpactFeedbackGenerator(style: .medium)
-                            impactMedium.impactOccurred()
 
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                let impactLight = UIImpactFeedbackGenerator(style: .light)
-                                impactLight.impactOccurred()
-                            }
+                ToolbarItem(placement: .principal) {
+                    Text("Norma")
+                        .normaHeadline()
+                }
 
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                let impactLight = UIImpactFeedbackGenerator(style: .light)
-                                impactLight.impactOccurred()
-                            }
-
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                let selectionGenerator = UISelectionFeedbackGenerator()
-                                selectionGenerator.selectionChanged()
-                            }
-
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                isMenuOpen.toggle()
-                            }
-                        } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 20))
-                                .foregroundColor(.primary)
-                        }
-                    }
-
-                    ToolbarItem(placement: .principal) {
-                        Text("Norma")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showPaywall = true
-                        } label: {
-                            Image(systemName: subscriptionManager.hasActiveSubscription ? "checkmark.shield.fill" : "lock.shield")
-                                .font(.system(size: 18))
-                                .foregroundColor(subscriptionManager.hasActiveSubscription ? .green : .orange)
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        Image(systemName: subscriptionManager.hasActiveSubscription ? "checkmark.shield.fill" : "lock.shield")
+                            .font(.system(size: 18))
+                            .foregroundColor(subscriptionManager.hasActiveSubscription ? .green : .orange)
                     }
                 }
             }
-            .offset(x: (isMenuOpen ? UIScreen.main.bounds.width * 0.85 : 0) + dragOffset)
-            .shadow(color: Color.black.opacity(isMenuOpen ? 0.3 : 0), radius: 10)
-            .highPriorityGesture(
-                DragGesture()
-                    .onChanged { value in
-                        // Only track horizontal drags (ignore vertical scrolls)
-                        let horizontalAmount = abs(value.translation.width)
-                        let verticalAmount = abs(value.translation.height)
-
-                        // If drag is primarily horizontal, track it
-                        if horizontalAmount > verticalAmount {
-                            // Limit drag range
-                            if isMenuOpen {
-                                // When open, only allow dragging left (closing)
-                                dragOffset = min(0, value.translation.width)
-                            } else {
-                                // When closed, only allow dragging right (opening)
-                                let maxDrag = UIScreen.main.bounds.width * 0.85
-                                dragOffset = max(0, min(maxDrag, value.translation.width))
-                            }
-                        }
-                    }
-                    .onEnded { value in
-                        let horizontalAmount = abs(value.translation.width)
-                        let verticalAmount = abs(value.translation.height)
-
-                        // Only process if drag was primarily horizontal
-                        if horizontalAmount > verticalAmount {
-                            let threshold = UIScreen.main.bounds.width * 0.3
-                            let velocity = value.predictedEndTranslation.width - value.translation.width
-
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                if isMenuOpen {
-                                    // Decide whether to close
-                                    if dragOffset < -threshold || velocity < -100 {
-                                        isMenuOpen = false
-                                    }
-                                } else {
-                                    // Decide whether to open
-                                    if dragOffset > threshold || velocity > 100 {
-                                        isMenuOpen = true
-                                    }
-                                }
-
-                                // Reset drag offset
-                                dragOffset = 0
-                            }
-                        } else {
-                            // Reset drag offset if it was a vertical scroll
-                            dragOffset = 0
-                        }
-                    }
-            )
-            .onTapGesture {
-                // Tap anywhere on MainChatView to close menu
-                if isMenuOpen {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isMenuOpen = false
-                    }
-                }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
-            }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -203,14 +138,11 @@ struct MainChatView: View {
                         }
                     }
                     .padding()
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 180)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
                 }
             }
             .background(Color("NormaBackground"))
-            .onTapGesture {
-                hideKeyboard()
-            }
             .onChange(of: messages.count) {
                 scrollToBottom(proxy: proxy)
             }
@@ -231,7 +163,7 @@ struct MainChatView: View {
             onSend: sendMessage,
             billsTotal: billViewModel.bills.reduce(0) { $0 + $1.amount },
             budgetCount: budgetViewModel.budgets.count,
-            monthlySpend: billViewModel.bills.reduce(0) { $0 + $1.amount } + expenseViewModel.totalExpenses
+            monthlySpend: expenseViewModel.totalExpenses
         )
     }
     
@@ -382,10 +314,11 @@ struct MainChatView: View {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
 
-    return MainChatView()
+    MainChatView(isMenuOpen: .constant(false))
         .environmentObject(dataManager)
         .environmentObject(sessionViewModel)
         .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .preferredColorScheme(.dark)
 }

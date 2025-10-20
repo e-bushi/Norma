@@ -117,19 +117,19 @@ struct BillDetailView: View {
             // Bill name and status
             VStack(spacing: 4) {
                 Text(bill.name)
-                    .font(.system(size: 24, weight: .bold))
+                    .normaTitle()
                     .foregroundColor(.primary)
 
                 HStack(spacing: 6) {
                     Text(calculatedStatus.rawValue)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(statusColor)
 
                     Text("•")
                         .foregroundColor(.secondary)
 
                     Text(bill.frequency.rawValue)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                 }
             }
@@ -144,10 +144,10 @@ struct BillDetailView: View {
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Amount Due")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.normaHeadline(11))
                         .foregroundColor(.secondary)
                     Text(profileViewModel.formatCurrency(bill.amount))
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
                 }
 
@@ -156,10 +156,10 @@ struct BillDetailView: View {
                 if !isFullyPaid {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text("Remaining")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.normaHeadline(11))
                             .foregroundColor(.secondary)
                         Text(profileViewModel.formatCurrency(remainingAmount))
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(statusColor)
                     }
                 }
@@ -197,7 +197,7 @@ struct BillDetailView: View {
             // Bill details grid
             VStack(spacing: 16) {
                 Text("BILL DETAILS")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.normaHeadline(11))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -212,10 +212,10 @@ struct BillDetailView: View {
                     if let notes = bill.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Notes")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.secondary)
                             Text(notes)
-                                .font(.system(size: 14))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.primary)
                                 .lineLimit(nil)
                         }
@@ -248,7 +248,7 @@ struct BillDetailView: View {
         
         VStack(spacing: 16) {
             Text("RECENT PAYMENTS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -270,18 +270,18 @@ struct BillDetailView: View {
                         // Payment info
                         VStack(alignment: .leading, spacing: 2) {
                             Text(formatPaymentDate(expense.expenseDate))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.primary)
                             Text(expense.paymentMethod.rawValue)
-                                .font(.system(size: 12))
+                                .font(.normaHeadline(12))
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         Spacer()
-                        
+
                         // Amount
                         Text(profileViewModel.formatCurrency(expense.amount))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundColor(Color("NormaPastelTeal"))
                     }
                     .padding(.horizontal, 20)
@@ -351,7 +351,7 @@ struct BillDetailView: View {
                         }
                         
                         Text(getPaymentButtonText())
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.normaHeadline(16))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -399,7 +399,7 @@ struct BillDetailView: View {
                         }
                         
                         Text(getUnpaidButtonText())
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.normaHeadline(16))
                     }
                     .foregroundColor(Color("NormaPastelCoral"))
                     .frame(maxWidth: .infinity)
@@ -439,7 +439,7 @@ struct BillDetailView: View {
                         .foregroundColor(Color("NormaPastelPurple"))
 
                     Text("Edit Bill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.normaHeadline(16))
                         .foregroundColor(Color("NormaPastelPurple"))
                 }
                 .frame(maxWidth: .infinity)
@@ -476,7 +476,7 @@ struct BillDetailView: View {
                         .foregroundColor(.red)
                     
                     Text("Remove Bill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.normaHeadline(16))
                         .foregroundColor(.red)
                 }
                 .frame(maxWidth: .infinity)
@@ -503,11 +503,11 @@ struct BillDetailView: View {
         var body: some View {
             HStack {
                 Text(label)
-                    .font(.system(size: 14))
+                    .font(.normaHeadline(14))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text(value)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.normaHeadline(14))
                     .foregroundColor(.primary)
             }
             .padding(.vertical, 2)

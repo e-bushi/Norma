@@ -118,12 +118,12 @@ struct BudgetDetailView: View {
             // Budget name
             VStack(spacing: 4) {
                 Text(budget.name)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.normaTitle(24))
                     .foregroundColor(.primary)
 
                 if let category = linkedCategory {
                     Text(category.name)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                 }
             }
@@ -148,11 +148,11 @@ struct BudgetDetailView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Start")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.normaHeadline(11))
                         .foregroundColor(.secondary)
 
                     Text(budget.startDate, format: .dateTime.month().day().year())
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.normaHeadline(13))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -180,18 +180,18 @@ struct BudgetDetailView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("End")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.normaHeadline(11))
                         .foregroundColor(.secondary)
 
                     if let endDate = budget.endDate {
                         Text(endDate, format: .dateTime.month().day().year())
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.normaHeadline(13))
                             .foregroundColor(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     } else {
                         Text("No end date")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.normaHeadline(13))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     }
@@ -262,7 +262,7 @@ struct BudgetDetailView: View {
                             .foregroundColor(statusColor)
 
                         Text("\(Int(percentageUsed * 100))%")
-                            .font(.subheadline)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary)
                     }
 
@@ -272,7 +272,7 @@ struct BudgetDetailView: View {
                             Text("•")
                                 .foregroundColor(.secondary)
                             Text("Ends \(endDate, format: .dateTime.month().day())")
-                                .font(.subheadline)
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                         }
@@ -285,11 +285,11 @@ struct BudgetDetailView: View {
             // Amount section
             VStack(alignment: .trailing, spacing: 4) {
                 Text(profileViewModel.formatCurrency(totalSpent))
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
 
                 Text("of \(profileViewModel.formatCurrency(budget.amount))")
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
         }
@@ -338,14 +338,14 @@ struct BudgetDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Linked Expenses")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.normaHeadline(16))
                     .foregroundColor(.primary)
 
                 Spacer()
 
                 if !linkedExpenses.isEmpty {
                     Text("\(linkedExpenses.count)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -363,11 +363,11 @@ struct BudgetDetailView: View {
                         .foregroundColor(.secondary)
 
                     Text("No expenses linked yet")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.normaHeadline(16))
                         .foregroundColor(.primary)
 
                     Text("Use the chat to add expenses to this budget")
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -388,7 +388,7 @@ struct BudgetDetailView: View {
                             // Navigate to full expenses list
                         }) {
                             Text("View all \(linkedExpenses.count) expenses")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.blue)
                                 .padding(.vertical, 8)
                         }
@@ -416,7 +416,7 @@ struct BudgetDetailView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 16))
                 Text("Delete Budget")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.normaHeadline(16))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -471,18 +471,18 @@ struct BudgetExpenseRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(expense.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.normaHeadline(12))
                     .foregroundColor(.primary)
 
                 Text(expenseDate, format: .dateTime.month().day())
-                    .font(.system(size: 10))
+                    .font(.normaHeadline(10))
                     .foregroundColor(.secondary)
             }
 
             Spacer()
 
             Text(profileViewModel.formatCurrency(expense.amount))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
         }
     }

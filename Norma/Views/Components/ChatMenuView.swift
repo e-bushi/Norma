@@ -9,15 +9,10 @@ import SwiftUI
 
 struct ChatMenuView: View {
     @Binding var isMenuOpen: Bool
+    @Binding var mainLayerView: MainLayerViewType
 
     // Sample chat data - limit to 12
-    private let sampleChats = [
-        "Chat One",
-        "Chat Two",
-        "Chat Three",
-        "Chat Four",
-        "Chat Five"
-    ]
+    private let sampleChats: [String] = []
 
     private var displayedChats: [String] {
         Array(sampleChats.prefix(12))
@@ -28,7 +23,7 @@ struct ChatMenuView: View {
             // Header
             HStack {
                 Text("Norma")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.normaTitle(28))
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -38,7 +33,14 @@ struct ChatMenuView: View {
 
             // New Chat button
             VStack(alignment: .leading, spacing: 4) {
-                compactMenuItem(icon: "plus.message", title: "New Chat", action: {})
+                compactMenuItem(icon: "plus.message", title: "New Chat", action: {
+                    // Switch to chat view and slide it back into focus
+                    mainLayerView = .chat
+
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isMenuOpen = false
+                    }
+                })
             }
             .padding(.horizontal, 12)
 
@@ -47,26 +49,56 @@ struct ChatMenuView: View {
                 // Chats container
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Chats")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.normaMicro(11))
                         .foregroundColor(.secondary)
                         .textCase(.uppercase)
                         .tracking(0.5)
                         .padding(.leading, 12)
 
-                    VStack(spacing: 8) {
-                        ForEach(displayedChats, id: \.self) { chat in
-                            compactChatItem(title: chat)
+                    Group {
+                        if displayedChats.isEmpty {
+                            // Empty state
+                            VStack(spacing: 8) {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.secondary.opacity(0.5))
+
+                                Text("No chats yet")
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary)
+
+                                Text("Start a new chat to begin")
+                                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                                    .foregroundColor(.secondary.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                            .padding(.horizontal, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.secondary.opacity(0.03))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(displayedChats, id: \.self) { chat in
+                                    compactChatItem(title: chat)
+                                }
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.secondary.opacity(0.03))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.03))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                            )
-                    )
                 }
                 .frame(maxWidth: UIScreen.main.bounds.width * 0.65, alignment: .leading)
             }
@@ -75,20 +107,72 @@ struct ChatMenuView: View {
             Spacer()
 
             // User profile at bottom
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 36, height: 36)
+            HStack(spacing: 8) {
+                Button {
+                    let impactLight = UIImpactFeedbackGenerator(style: .light)
+                    impactLight.impactOccurred()
 
-                    Text("CM")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                    // Switch to settings view and slide it back into focus
+                    mainLayerView = .settings
+
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isMenuOpen = false
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.secondary.opacity(0.2))
+                                .frame(width: 40, height: 40)
+
+                            Text("CM")
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.primary)
+                        }
+
+                        Text("Chris Mauldin")
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 28)
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 28))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28)
+                            .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                    )
                 }
+                .buttonStyle(PlainButtonStyle())
 
-                Text("Chris Mauldin")
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
+                // Back arrow button
+                Button {
+                    let impactLight = UIImpactFeedbackGenerator(style: .light)
+                    impactLight.impactOccurred()
+
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isMenuOpen = false
+                    }
+                } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.primary)
+                        .rotationEffect(.degrees(180))
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(.clear)
+                                .glassEffect(in: Circle())
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
 
                 Spacer()
             }
@@ -123,7 +207,7 @@ struct ChatMenuView: View {
                     .frame(width: 20)
 
                 Text(title)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -161,7 +245,7 @@ struct ChatMenuView: View {
                     .frame(width: 20)
 
                 Text(title)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)

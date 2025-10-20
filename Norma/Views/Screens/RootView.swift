@@ -11,11 +11,13 @@ import SwiftData
 struct RootView: View {
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var sessionViewModel: SessionViewModel
+    @EnvironmentObject var appCoordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
-    
+
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
-            MainChatView()
+            MainLayerView()
+                .environmentObject(appCoordinator)
         }
         .onAppear {
             // Set the model context on DataManager
