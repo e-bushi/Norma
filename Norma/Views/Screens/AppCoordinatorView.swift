@@ -9,7 +9,8 @@ import SwiftUI
 
 struct AppCoordinatorView: View {
     @EnvironmentObject var appCoordinator: AppCoordinator
-    
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+
     var body: some View {
         ZStack {
             // Base layer background
@@ -25,6 +26,7 @@ struct AppCoordinatorView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: appCoordinator.currentView)
         }
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
 }
 

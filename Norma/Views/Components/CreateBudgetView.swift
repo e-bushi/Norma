@@ -121,25 +121,25 @@ struct CreateBudgetView: View {
                     )
             } else {
                 Circle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(Color("NormaPastelTeal").opacity(0.15))
                     .frame(width: 60, height: 60)
                     .overlay(
                         Image(systemName: "target")
                             .font(.system(size: 26))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color("NormaPastelTeal"))
                     )
             }
 
             // Budget name
             VStack(spacing: 4) {
                 TextField("Budget Name", text: $budgetName)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.normaTitle())
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
 
                 if let category = selectedCategory {
                     Text(category.name)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                 }
             }
@@ -151,11 +151,11 @@ struct CreateBudgetView: View {
     private var budgetAmountCard: some View {
         VStack(spacing: 8) {
             Text("Budget Amount (\(currencySymbol))")
-                .font(.system(size: 12, weight: .medium))
+                .font(.normaHeadline(12))
                 .foregroundColor(.secondary)
 
             TextField("0.00", text: $budgetAmount)
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
@@ -166,7 +166,7 @@ struct CreateBudgetView: View {
                         Button("Done") {
                             isAmountFieldFocused = false
                         }
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.normaHeadline(16))
                     }
                 }
         }
@@ -205,7 +205,7 @@ struct CreateBudgetView: View {
     private var budgetDetailsSection: some View {
         VStack(spacing: 16) {
             Text("BUDGET DETAILS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -234,7 +234,7 @@ struct CreateBudgetView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: category.icon)
                                         .foregroundColor(category.color)
-                                        .font(.system(size: 14))
+                                        .font(.normaHeadline(14))
                                     Text(category.name)
                                         .foregroundColor(.primary)
                                 }
@@ -247,7 +247,7 @@ struct CreateBudgetView: View {
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                     }
                 }
 
@@ -256,11 +256,11 @@ struct CreateBudgetView: View {
                 // Notes input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                         .lineLimit(3...6)
                 }
@@ -283,7 +283,7 @@ struct CreateBudgetView: View {
     private var dateRangeSection: some View {
         VStack(spacing: 16) {
             Text("DATE RANGE")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -326,19 +326,32 @@ struct CreateBudgetView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                 }
-                
+
                 Text("Create Budget")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.normaHeadline(16))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isFormValid ? Color.blue : Color.gray)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: isFormValid ? [
+                                Color("NormaPastelTeal"),
+                                Color("NormaPastelTeal").opacity(0.8)
+                            ] : [
+                                Color.gray,
+                                Color.gray.opacity(0.8)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
         }
         .disabled(!isFormValid || isLoading)
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Actions
@@ -410,16 +423,16 @@ struct DetailRow<Content: View>: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(.normaHeadline(14))
                 .foregroundColor(.secondary)
-            
+
             Spacer()
-            
+
             if let content = content {
                 content()
             } else {
                 Text(value)
-                    .font(.system(size: 14))
+                    .font(.normaHeadline(14))
                     .foregroundColor(.primary)
             }
         }

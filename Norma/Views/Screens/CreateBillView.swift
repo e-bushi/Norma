@@ -98,26 +98,26 @@ struct CreateBillView: View {
         VStack(spacing: 12) {
             // Bill icon
             Circle()
-                .fill(Color.blue.opacity(0.1))
+                .fill(Color("NormaPastelPurple").opacity(0.15))
                 .frame(width: 60, height: 60)
                 .overlay(
                     Image(systemName: "doc.text.fill")
                         .font(.system(size: 26))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color("NormaPastelPurple"))
                 )
 
             // Bill name
             VStack(spacing: 4) {
                 TextField("Bill Name", text: $billName)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.normaTitle())
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
 
                 HStack(spacing: 6) {
                     Image(systemName: frequencyIcon)
-                        .font(.system(size: 12))
+                        .font(.normaHeadline(12))
                     Text(frequency.rawValue)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                 }
                 .foregroundColor(.secondary)
             }
@@ -129,11 +129,11 @@ struct CreateBillView: View {
     private var billAmountCard: some View {
         VStack(spacing: 8) {
             Text("Bill Amount (\(currencySymbol))")
-                .font(.system(size: 12, weight: .medium))
+                .font(.normaHeadline(12))
                 .foregroundColor(.secondary)
 
             TextField("0.00", text: $billAmount)
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
@@ -144,7 +144,7 @@ struct CreateBillView: View {
                         Button("Done") {
                             isAmountFieldFocused = false
                         }
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.normaHeadline(16))
                     }
                 }
         }
@@ -183,7 +183,7 @@ struct CreateBillView: View {
     private var billDetailsSection: some View {
         VStack(spacing: 16) {
             Text("BILL DETAILS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,7 +208,7 @@ struct CreateBillView: View {
                         HStack {
                             HStack(spacing: 6) {
                                 Image(systemName: frequencyIcon)
-                                    .font(.system(size: 14))
+                                    .font(.normaHeadline(14))
                                 Text(frequency.rawValue)
                             }
                             .foregroundColor(.primary)
@@ -217,7 +217,7 @@ struct CreateBillView: View {
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                     }
                 }
 
@@ -226,11 +226,11 @@ struct CreateBillView: View {
                 // Notes input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                         .lineLimit(3...6)
                 }
@@ -253,7 +253,7 @@ struct CreateBillView: View {
     private var dueDateSection: some View {
         VStack(spacing: 16) {
             Text("DUE DATE")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -291,19 +291,32 @@ struct CreateBillView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                 }
-                
+
                 Text("Create Bill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.normaHeadline(16))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isFormValid ? Color.blue : Color.gray)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: isFormValid ? [
+                                Color("NormaPastelPurple"),
+                                Color("NormaPastelPurple").opacity(0.8)
+                            ] : [
+                                Color.gray,
+                                Color.gray.opacity(0.8)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
         }
         .disabled(!isFormValid || isLoading)
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Actions

@@ -105,25 +105,25 @@ struct CreateExpenseView: View {
                     )
             } else {
                 Circle()
-                    .fill(Color.purple.opacity(0.1))
+                    .fill(Color("NormaPastelCoral").opacity(0.15))
                     .frame(width: 60, height: 60)
                     .overlay(
                         Image(systemName: "creditcard.fill")
                             .font(.system(size: 26))
-                            .foregroundColor(.purple)
+                            .foregroundColor(Color("NormaPastelCoral"))
                     )
             }
 
             // Expense name
             VStack(spacing: 4) {
                 TextField("Expense Name", text: $expenseName)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.normaTitle())
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
 
                 if let category = selectedCategory {
                     Text(category.name)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                 }
             }
@@ -135,11 +135,11 @@ struct CreateExpenseView: View {
     private var expenseAmountCard: some View {
         VStack(spacing: 8) {
             Text("Expense Amount (\(currencySymbol))")
-                .font(.system(size: 12, weight: .medium))
+                .font(.normaHeadline(12))
                 .foregroundColor(.secondary)
 
             TextField("0.00", text: $expenseAmount)
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
@@ -150,7 +150,7 @@ struct CreateExpenseView: View {
                         Button("Done") {
                             isAmountFieldFocused = false
                         }
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.normaHeadline(16))
                     }
                 }
         }
@@ -189,7 +189,7 @@ struct CreateExpenseView: View {
     private var expenseDetailsSection: some View {
         VStack(spacing: 16) {
             Text("EXPENSE DETAILS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -215,7 +215,7 @@ struct CreateExpenseView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: category.icon)
                                         .foregroundColor(category.color)
-                                        .font(.system(size: 14))
+                                        .font(.normaHeadline(14))
                                     Text(category.name)
                                         .foregroundColor(.primary)
                                 }
@@ -228,7 +228,7 @@ struct CreateExpenseView: View {
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                     }
                 }
 
@@ -237,11 +237,11 @@ struct CreateExpenseView: View {
                 // Merchant input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Merchant")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     TextField("Store or business name (optional)", text: $merchant)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                 }
 
@@ -250,11 +250,11 @@ struct CreateExpenseView: View {
                 // Notes input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
 
                     TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                         .lineLimit(3...6)
                 }
@@ -276,7 +276,7 @@ struct CreateExpenseView: View {
     private var dateSection: some View {
         VStack(spacing: 16) {
             Text("DATE")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -315,19 +315,32 @@ struct CreateExpenseView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                 }
-                
+
                 Text("Create Expense")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.normaHeadline(16))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isFormValid ? Color.purple : Color.gray)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: isFormValid ? [
+                                Color("NormaPastelCoral"),
+                                Color("NormaPastelCoral").opacity(0.8)
+                            ] : [
+                                Color.gray,
+                                Color.gray.opacity(0.8)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
         }
         .disabled(!isFormValid || isLoading)
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Actions
