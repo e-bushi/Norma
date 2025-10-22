@@ -49,7 +49,7 @@ struct ChatMenuView: View {
                 // Chats container
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Chats")
-                        .font(.normaMicro(11))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
                         .foregroundColor(.secondary)
                         .textCase(.uppercase)
                         .tracking(0.5)

@@ -55,14 +55,14 @@ struct PaywallFeaturesBox: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Text("\(selectedTier.displayName.uppercased()) FEATURES")
-                        .font(.normaLabel(11))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
                         .foregroundColor(.secondary)
                         .tracking(1.2)
 
                     Spacer()
 
                     Text("\(features.count) features")
-                        .font(.normaLabel(11))
+                        .font(.custom(FontFamily.Rubik.regular, size: 11))
                         .foregroundColor(.secondary)
                 }
                 
@@ -91,7 +91,7 @@ struct PaywallFeaturesBox: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("COMING SOON")
-                            .font(.normaLabel(11))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 11))
                             .foregroundColor(.secondary)
                             .tracking(1.2)
 

@@ -55,7 +55,7 @@ struct TierPicker: View {
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
 
                             Text(tier.displayName)
-                                .font(.normaHeadline(17))
+                                .font(.custom(FontFamily.Rubik.medium, size: 17))
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
                         }
                         .frame(maxWidth: .infinity)

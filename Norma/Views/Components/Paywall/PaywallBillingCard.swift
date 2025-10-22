@@ -37,12 +37,12 @@ struct PaywallBillingCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.normaHeadline(17))
+                            .font(.custom(FontFamily.Rubik.medium, size: 17))
                             .foregroundColor(.primary)
 
                         if let badge = badge {
                             Text(badge)
-                                .font(.normaLabel(10))
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 10))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -55,15 +55,15 @@ struct PaywallBillingCard: View {
 
                     HStack(spacing: 4) {
                         Text(price)
-                            .font(.normaFinancial(18))
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(.primary)
 
                         Text("•")
-                            .font(.normaBody(14))
+                            .font(.custom(FontFamily.Rubik.regular, size: 14))
                             .foregroundColor(.secondary)
 
                         Text(subtitle)
-                            .font(.normaBody(14))
+                            .font(.custom(FontFamily.Rubik.regular, size: 14))
                             .foregroundColor(.secondary)
                     }
                 }
