@@ -17,6 +17,7 @@ struct PaywallBillingCard: View {
     let isSelected: Bool
     let selectedTier: SubscriptionTier
     let action: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         Button(action: action) {
@@ -26,40 +27,43 @@ struct PaywallBillingCard: View {
                     Circle()
                         .fill(iconColor.opacity(0.1))
                         .frame(width: 44, height: 44)
-                    
+
                     Image(systemName: icon)
                         .font(.system(size: 18))
                         .foregroundColor(iconColor)
                 }
-                
+
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.normaHeadline(17))
                             .foregroundColor(.primary)
-                        
+
                         if let badge = badge {
                             Text(badge)
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.normaLabel(10))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(Color.green)
-                                .cornerRadius(4)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelPurple"))
+                                )
                         }
                     }
-                    
+
                     HStack(spacing: 4) {
                         Text(price)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.normaFinancial(18))
                             .foregroundColor(.primary)
-                        
+
                         Text("•")
+                            .font(.normaBody(14))
                             .foregroundColor(.secondary)
-                        
+
                         Text(subtitle)
-                            .font(.system(size: 14))
+                            .font(.normaBody(14))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -74,10 +78,13 @@ struct PaywallBillingCard: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 28)
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
+                            gradient: Gradient(colors: colorScheme == .dark ? [
+                                isSelected ? Color(red: 0.180, green: 0.145, blue: 0.118) : Color(red: 0.160, green: 0.128, blue: 0.102),
+                                isSelected ? Color(red: 0.200, green: 0.165, blue: 0.138) : Color(red: 0.180, green: 0.145, blue: 0.118)
+                            ] : [
                                 Color(UIColor.systemBackground),
                                 isSelected ? selectedTier.color.opacity(0.05) : Color.gray.opacity(0.02)
                             ]),
@@ -86,7 +93,7 @@ struct PaywallBillingCard: View {
                         )
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 28)
                             .stroke(
                                 LinearGradient(
                                     gradient: Gradient(colors: [

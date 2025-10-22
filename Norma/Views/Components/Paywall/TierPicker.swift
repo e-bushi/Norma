@@ -9,13 +9,17 @@ import SwiftUI
 
 struct TierPicker: View {
     @Binding var selection: SubscriptionTier
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 28)
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [
+                        gradient: Gradient(colors: colorScheme == .dark ? [
+                            Color(red: 0.160, green: 0.128, blue: 0.102),
+                            Color(red: 0.180, green: 0.145, blue: 0.118)
+                        ] : [
                             Color(UIColor.systemBackground),
                             Color.gray.opacity(0.02)
                         ]),
@@ -24,7 +28,7 @@ struct TierPicker: View {
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 28)
                         .stroke(
                             LinearGradient(
                                 gradient: Gradient(colors: [
@@ -49,9 +53,9 @@ struct TierPicker: View {
                             Image(systemName: tier.icon)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
-                            
+
                             Text(tier.displayName)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.normaBody(14))
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
                         }
                         .frame(maxWidth: .infinity)
@@ -59,10 +63,10 @@ struct TierPicker: View {
                         .background(
                             ZStack {
                                 if selection == tier {
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: 20)
                                         .fill(tier.color.opacity(0.08))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
+                                            RoundedRectangle(cornerRadius: 20)
                                                 .stroke(tier.color.opacity(0.2), lineWidth: 1)
                                         )
                                         .transition(.asymmetric(
@@ -97,9 +101,9 @@ extension SubscriptionTier {
     var color: Color {
         switch self {
         case .base:
-            return .blue
+            return Color("NormaPastelPurple")
         case .pro:
-            return .purple
+            return Color("NormaPastelTeal")
         }
     }
 }

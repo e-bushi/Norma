@@ -14,24 +14,24 @@ struct FeatureRowView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: feature.icon)
                 .font(.system(size: 20))
-                .foregroundColor(.accentColor)
+                .foregroundColor(Color("NormaPastelPurple"))
                 .frame(width: 28, height: 28)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.normaBody(16))
                     .foregroundColor(.primary)
-                
+
                 Text(feature.description)
-                    .font(.system(size: 12))
+                    .font(.normaMicro(14))
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 16))
-                .foregroundColor(.green)
+                .foregroundColor(Color("NormaPastelPurple"))
         }
         .transition(.asymmetric(
             insertion: .move(edge: .trailing).combined(with: .opacity),
