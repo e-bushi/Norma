@@ -34,15 +34,14 @@ enum NormaChatContext {
         }
     }
     
-    func systemPrompt(currency: String) -> String {
-        switch self {
-        case .bills:
-            return NormaSystemPrompts.billCreationPrompt(currency: currency)
-        case .expenses:
-            return NormaSystemPrompts.expenseCreationPrompt(currency: currency)
-        case .profile:
-            return NormaSystemPrompts.generalAssistantPrompt(currency: currency)
-        }
+    func systemPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+        // All contexts now use the same comprehensive prompt
+        return NormaSystemPrompts.generalChatPrompt(
+            currency: currency,
+            bills: bills,
+            expenses: expenses,
+            budgets: budgets
+        )
     }
 }
 
@@ -390,11 +389,16 @@ struct NormaChatView: View {
             
             // Get user's currency (default to USD if not set)
             let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
-            
-            // Get response from Norma AI with context-specific tools and prompt
+
+            // Get response from Norma AI with comprehensive prompt including all user data
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
-                systemPrompt: context.systemPrompt(currency: currency),
+                systemPrompt: context.systemPrompt(
+                    currency: currency,
+                    bills: billViewModel.bills,
+                    expenses: expenseViewModel.expenses,
+                    budgets: [] // No budget support in this view yet
+                ),
                 tools: tools
             )
             
@@ -430,7 +434,12 @@ struct NormaChatView: View {
                 // Get Claude's final response after tool execution
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
-                    systemPrompt: context.systemPrompt(currency: currency),
+                    systemPrompt: context.systemPrompt(
+                        currency: currency,
+                        bills: billViewModel.bills,
+                        expenses: expenseViewModel.expenses,
+                        budgets: []
+                    ),
                     tools: tools
                 )
                 

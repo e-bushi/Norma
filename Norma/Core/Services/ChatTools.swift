@@ -13,6 +13,7 @@ struct ChatToolsProvider {
     static func getAllTools() -> [AnthropicTool] {
         return [
             getBillCreationTool(),
+            getUpdateBillTool(),
             getExpenseCreationTool(),
             getBillQueryTool(),
             getExpenseSummaryTool(),
@@ -27,7 +28,7 @@ struct ChatToolsProvider {
     static func getBillCreationTool() -> AnthropicTool {
         AnthropicTool(
             name: "create_bill",
-            description: "Create a new recurring bill for the user",
+            description: "Create a new recurring bill for the user. Frequency defaults to 'Monthly' and status is automatically determined based on the due date.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
@@ -42,17 +43,46 @@ struct ChatToolsProvider {
                     "due_date": AnthropicToolProperty(
                         type: "string",
                         description: "Due date in YYYY-MM-DD format"
+                    )
+                ],
+                required: ["name", "amount", "due_date"]
+            )
+        )
+    }
+
+    static func getUpdateBillTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "update_bill",
+            description: "Update an existing bill's properties. Use the bill ID from the USER'S BILLS section in the system prompt.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "bill_id": AnthropicToolProperty(
+                        type: "string",
+                        description: "UUID of the bill to update (from the system prompt)"
+                    ),
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "New bill name (optional)"
+                    ),
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "New bill amount (optional)"
+                    ),
+                    "due_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "New due date in YYYY-MM-DD format (optional)"
                     ),
                     "frequency": AnthropicToolProperty(
                         type: "string",
-                        description: "Frequency: 'Monthly', 'Quarterly', or 'Yearly'"
+                        description: "New frequency: 'Monthly', 'Quarterly', or 'Yearly' (optional)"
                     ),
                     "status": AnthropicToolProperty(
                         type: "string",
-                        description: "Status: 'Paid', 'Overdue', or 'Scheduled'"
+                        description: "New status: 'Paid', 'Overdue', or 'Scheduled' (optional)"
                     )
                 ],
-                required: ["name", "amount", "due_date", "frequency", "status"]
+                required: ["bill_id"]
             )
         )
     }

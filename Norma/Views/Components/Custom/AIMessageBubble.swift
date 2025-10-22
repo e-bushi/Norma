@@ -33,6 +33,7 @@ struct AIMessageBubble: View {
 
     @State private var visibleWordCount = 0
     @State private var showCards = false
+    @State private var hasAnimated = false
 
     private var words: [String] {
         // Split by whitespace but preserve the spaces
@@ -52,6 +53,11 @@ struct AIMessageBubble: View {
         return result
     }
 
+    private var displayText: String {
+        // Show the animated portion as it reveals
+        return words.prefix(visibleWordCount).joined()
+    }
+
     init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight) {
         self.content = content
         self.uiComponent = uiComponent
@@ -63,13 +69,20 @@ struct AIMessageBubble: View {
             // Markdown text using native SwiftUI with word-by-word reveal
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(try! AttributedString(markdown: words.prefix(visibleWordCount).joined(), options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                    Text(try! AttributedString(markdown: displayText, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
                         .font(.normaInput(16))
                         .lineSpacing(4)
                         .foregroundColor(Color("NormaText"))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onAppear {
-                            startWordRevealAnimation()
+                            // Only animate once per message
+                            if !hasAnimated {
+                                hasAnimated = true
+                                startWordRevealAnimation()
+                            } else {
+                                // If already animated, show full text immediately
+                                visibleWordCount = words.count
+                            }
                         }
                 }
 

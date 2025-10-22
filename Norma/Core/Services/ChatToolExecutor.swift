@@ -27,6 +27,9 @@ class ChatToolExecutor {
         case "create_bill":
             let result = await executeBillCreation(input: input)
             return (result, nil)
+        case "update_bill":
+            let result = await executeUpdateBill(input: input)
+            return (result, nil)
         case "create_expense":
             let result = await executeExpenseCreation(input: input)
             return (result, nil)
@@ -51,10 +54,8 @@ class ChatToolExecutor {
 
     private func executeBillCreation(input: [String: Any]) async -> String {
         guard let name = input["name"] as? String,
-              let dueDateString = input["due_date"] as? String,
-              let frequencyString = input["frequency"] as? String,
-              let statusString = input["status"] as? String else {
-            return "Error: Missing required information"
+              let dueDateString = input["due_date"] as? String else {
+            return "Error: Missing required information (name and due_date)"
         }
 
         let amount: Double
@@ -69,14 +70,21 @@ class ChatToolExecutor {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         guard let dueDate = dateFormatter.date(from: dueDateString) else {
-            return "Error: Invalid date format"
+            return "Error: Invalid date format. Use YYYY-MM-DD"
         }
 
-        let frequency: BillFrequency = frequencyString.lowercased() == "monthly" ? .monthly :
-                                       frequencyString.lowercased() == "quarterly" ? .quarterly : .yearly
+        // Default to Monthly frequency
+        let frequency: BillFrequency = .monthly
 
-        let status: BillStatus = statusString == "Paid" ? .paid :
-                                 statusString == "Overdue" ? .overdue : .scheduled
+        // Automatically determine status based on due date
+        let status: BillStatus
+        if dueDate < Date() {
+            // Due date is in the past - mark as overdue
+            status = .overdue
+        } else {
+            // Due date is in the future - mark as scheduled
+            status = .scheduled
+        }
 
         await billViewModel.addBill(
             name: name,
@@ -86,7 +94,81 @@ class ChatToolExecutor {
             status: status
         )
 
-        return "Successfully created bill '\(name)' for $\(String(format: "%.2f", amount))"
+        return "Successfully created bill '\(name)' for $\(String(format: "%.2f", amount)). Frequency is set to Monthly and status is \(status == .overdue ? "Overdue" : "Scheduled")."
+    }
+
+    private func executeUpdateBill(input: [String: Any]) async -> String {
+        guard let billIdString = input["bill_id"] as? String else {
+            return "Error: Missing bill ID"
+        }
+
+        // Find the bill
+        guard let existingBill = billViewModel.bills.first(where: { $0.id == billIdString }) else {
+            return "Error: Bill not found"
+        }
+
+        // Update fields if provided
+        let newName = input["name"] as? String ?? existingBill.name
+
+        let newAmount: Double
+        if let doubleAmount = input["amount"] as? Double {
+            newAmount = doubleAmount
+        } else if let intAmount = input["amount"] as? Int {
+            newAmount = Double(intAmount)
+        } else {
+            newAmount = existingBill.amount
+        }
+
+        let newDueDate: Date
+        if let dueDateString = input["due_date"] as? String {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            newDueDate = dateFormatter.date(from: dueDateString) ?? existingBill.dueDate
+        } else {
+            newDueDate = existingBill.dueDate
+        }
+
+        let newFrequency: BillFrequency
+        if let frequencyString = input["frequency"] as? String {
+            newFrequency = frequencyString.lowercased() == "monthly" ? .monthly :
+                          frequencyString.lowercased() == "quarterly" ? .quarterly : .yearly
+        } else {
+            newFrequency = existingBill.frequency
+        }
+
+        let newStatus: BillStatus
+        if let statusString = input["status"] as? String {
+            newStatus = statusString == "Paid" ? .paid :
+                       statusString == "Overdue" ? .overdue : .scheduled
+        } else {
+            newStatus = existingBill.status
+        }
+
+        // Create updated bill object
+        let updatedBill = Bill(
+            id: existingBill.id,
+            userId: existingBill.userId,
+            name: newName,
+            dueDate: newDueDate,
+            nextDueDate: existingBill.nextDueDate,
+            amount: newAmount,
+            status: newStatus,
+            frequency: newFrequency,
+            categoryId: existingBill.categoryId,
+            merchant: existingBill.merchant,
+            isReminderOn: existingBill.isReminderOn,
+            reminderDays: existingBill.reminderDays,
+            isActive: existingBill.isActive,
+            createdAt: existingBill.createdAt,
+            updatedAt: existingBill.updatedAt,
+            notes: existingBill.notes,
+            verificationDate: existingBill.verificationDate
+        )
+
+        // Update the bill
+        await billViewModel.updateBill(updatedBill)
+
+        return "Successfully updated bill '\(newName)'"
     }
 
     private func executeExpenseCreation(input: [String: Any]) async -> String {
