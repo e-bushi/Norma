@@ -13,12 +13,13 @@ struct BillDisclosureView: View {
     @Binding var showNormaChat: Bool
     @State private var showingAllBills = false
     @State private var showCreateBill = false
-    
+
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @Environment(\.colorScheme) var colorScheme
     
     private let maxBillsToShow = 5
     
@@ -59,61 +60,31 @@ struct BillDisclosureView: View {
             bill.calculateStatus(from: expenseViewModel.expenses) == .paid
         }.reduce(0) { $0 + $1.amount }
     }
+
+    private var paidBillsCount: Int {
+        upcomingBills.filter { bill in
+            bill.calculateStatus(from: expenseViewModel.expenses) == .paid
+        }.count
+    }
     
     var body: some View {
         VStack(spacing: 24) {
             // Header section matching ExpenseTrackerChartView style
             VStack(spacing: 12) {
                 Text("BILLS")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.normaFinancial(18))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
-                
-                // Summary stats
-                HStack(spacing: 16) {
-                    VStack(spacing: 4) {
-                        Text("Bill Count")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("\(upcomingBills.count)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Total Due")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalUpcomingAmount))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Paid So Far")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalPaidAmount))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Color("NormaPastelTeal"))
-                    }
+
+                // Summary stats - redesigned with larger numbers
+                VStack(spacing: 8) {
+                    Text("\(paidBillsCount) out of \(upcomingBills.count)")
+                        .font(.normaHeadline(48))
+                        .foregroundColor(.primary)
+                    Text("Bills paid so far")
+                        .font(.normaInput(13))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
             }
             
             // Add bill button
@@ -125,9 +96,9 @@ struct BillDisclosureView: View {
                         .font(.system(size: 15))
 
                     Text("Add Bill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaInput(14))
                 }
-                .foregroundColor(Color("NormaPastelTeal"))
+                .foregroundColor(colorScheme == .dark ? .white : Color(red: 0.40, green: 0.60, blue: 0.58))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
@@ -176,11 +147,11 @@ struct BillDisclosureView: View {
 
                     VStack(spacing: 12) {
                         Text("No bills yet")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.normaFinancial(20))
                             .foregroundColor(.primary)
 
                         Text("Start tracking your monthly bills\nto never miss a payment")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
@@ -194,7 +165,7 @@ struct BillDisclosureView: View {
                                 .foregroundColor(Color("NormaPastelBeige"))
 
                             Text("Track rent, utilities, subscriptions")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
 
@@ -204,7 +175,7 @@ struct BillDisclosureView: View {
                                 .foregroundColor(Color("NormaPastelTeal"))
 
                             Text("Get reminders before due dates")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
 
@@ -214,7 +185,7 @@ struct BillDisclosureView: View {
                                 .foregroundColor(Color("NormaPastelPurple"))
 
                             Text("See your spending patterns")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -285,13 +256,13 @@ struct BillDisclosureView: View {
                         }) {
                             HStack {
                                 Text("See All Bills")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.normaInput(13))
                                     .foregroundColor(Color("NormaPastelTeal"))
 
                                 Spacer()
 
                                 Text("\(upcomingBills.count - maxBillsToShow) more")
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 12, weight: .regular, design: .rounded))
                                     .foregroundColor(.secondary)
 
                                 Image(systemName: "chevron.right")

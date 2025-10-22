@@ -15,6 +15,7 @@ struct BillDueDateCalendarView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    @Environment(\.colorScheme) var colorScheme
 
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -42,43 +43,19 @@ struct BillDueDateCalendarView: View {
             // Header section matching ExpenseCalendarView style
             VStack(spacing: 12) {
                 Text(monthYearFormatter.string(from: currentMonth).uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.normaFinancial(18))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
 
-                // Summary stats
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Monthly Bill Total")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalBillsThisMonth))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-
-                    Divider()
-                        .frame(height: 30)
-
-                    VStack(spacing: 4) {
-                        Text("Due Dates")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("\(daysWithBills)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
+                // Summary stats - redesigned with larger number
+                VStack(spacing: 8) {
+                    Text(profileViewModel.formatCurrency(totalBillsThisMonth))
+                        .font(.normaHeadline(48))
+                        .foregroundColor(.primary)
+                    Text("Total of all bills combined")
+                        .font(.normaInput(13))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
             }
 
             // Calendar container
@@ -86,7 +63,10 @@ struct BillDueDateCalendarView: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
+                            gradient: Gradient(colors: colorScheme == .dark ? [
+                                Color(red: 0.160, green: 0.128, blue: 0.102),
+                                Color(red: 0.180, green: 0.145, blue: 0.118)
+                            ] : [
                                 Color(UIColor.systemBackground),
                                 Color.gray.opacity(0.02)
                             ]),
@@ -114,7 +94,7 @@ struct BillDueDateCalendarView: View {
                     HStack(spacing: 0) {
                         ForEach(days, id: \.self) { day in
                             Text(day)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.normaInput(12))
                                 .frame(maxWidth: .infinity)
                                 .foregroundColor(.secondary)
                         }
@@ -225,17 +205,17 @@ struct BillDayCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 14, weight: isToday ? .semibold : .regular))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundColor(cellTextColor)
 
             // Bill indicator
             if billCount > 0 {
                 Text(formattedBillAmount)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(Color("NormaPastelTeal").opacity(0.9))
+                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                    .foregroundColor(billAmountColor)
             } else {
                 Text(" ")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9, weight: .regular, design: .rounded))
             }
         }
         .frame(height: 45)
@@ -244,19 +224,10 @@ struct BillDayCell: View {
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 0.80, green: 0.90, blue: 0.88).opacity(0.6),
-                                    Color(red: 0.82, green: 0.92, blue: 0.90).opacity(0.5)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color("NormaPastelTeal"))
 
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(red: 0.65, green: 0.80, blue: 0.78).opacity(0.4), lineWidth: 1.5)
+                        .stroke(Color("NormaPastelTeal").opacity(0.6), lineWidth: 1.5)
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color("NormaPastelTeal").opacity(0.08))
@@ -274,13 +245,21 @@ struct BillDayCell: View {
 
     private var cellTextColor: Color {
         if isSelected {
-            return Color("NormaPastelTeal")
+            return .white
         } else if isToday {
             return Color("NormaPastelTeal")
         } else if !isCurrentMonth {
             return .secondary.opacity(0.5)
         } else {
             return .primary
+        }
+    }
+
+    private var billAmountColor: Color {
+        if isSelected {
+            return .white.opacity(0.9)
+        } else {
+            return Color("NormaPastelTeal").opacity(0.9)
         }
     }
 }

@@ -330,19 +330,10 @@ struct SettingsView: View {
                             .padding(.vertical, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
-                                                Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
-                                            ]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
                                     )
                             )
                         }
@@ -364,19 +355,10 @@ struct SettingsView: View {
                             .padding(.vertical, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
-                                                Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
-                                            ]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
                                     )
                             )
                         }
@@ -398,19 +380,10 @@ struct SettingsView: View {
                             .padding(.vertical, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
-                                                Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
-                                            ]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
                                     )
                             )
                         }

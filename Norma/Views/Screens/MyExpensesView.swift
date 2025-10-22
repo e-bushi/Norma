@@ -48,8 +48,14 @@ struct MyExpensesView: View {
                     )
                 }
             }
-            .navigationTitle("My Expenses")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("My Expenses")
+                        .font(.normaTitle(20))
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {

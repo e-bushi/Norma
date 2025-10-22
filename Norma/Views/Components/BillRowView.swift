@@ -29,9 +29,9 @@ struct BillRowView: View {
     
     private var statusColor: Color {
         switch billStatus {
-        case .paid: return .green
-        case .overdue: return .red
-        case .scheduled: return .blue
+        case .paid: return Color("NormaPastelTeal")
+        case .overdue: return Color("NormaPastelCoral")
+        case .scheduled: return Color("NormaPastelPurple")
         }
     }
     
@@ -88,30 +88,30 @@ struct BillRowView: View {
                 // Status icon
                 Circle()
                     .fill(statusColor.opacity(0.1))
-                    .frame(width: 30, height: 30)
+                    .frame(width: 34, height: 34)
                     .overlay(
                         Image(systemName: statusIcon)
-                            .font(.system(size: 12))
+                            .font(.system(size: 14))
                             .foregroundColor(statusColor)
                     )
 
                 // Bill info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(bill.name)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
 
                     Text(dueDateText)
-                        .font(.system(size: 10))
-                        .foregroundColor(billStatus == .overdue ? .red : .secondary)
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundColor(billStatus == .overdue ? Color("NormaPastelCoral") : .secondary)
                 }
 
                 Spacer()
 
                 // Amount
                 Text(profileViewModel.formatCurrency(bill.amount))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(billStatus == .overdue ? .red : .primary)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(billStatus == .overdue ? Color("NormaPastelCoral") : .primary)
             }
         }
         .buttonStyle(PlainButtonStyle())

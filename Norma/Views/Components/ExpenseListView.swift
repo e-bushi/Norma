@@ -123,13 +123,13 @@ struct ExpenseListView: View {
                 .opacity(appearAnimation ? 1 : 0)
             
             Text("No expenses found")
-                .font(.title3)
+                .font(.normaFinancial(20))
                 .foregroundColor(.secondary)
                 .scaleEffect(appearAnimation ? 1 : 0.9)
                 .opacity(appearAnimation ? 1 : 0)
-            
+
             Text(showAllDates ? "Try changing the filter" : "Try selecting a different date")
-                .font(.subheadline)
+                .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .scaleEffect(appearAnimation ? 1 : 0.9)
                 .opacity(appearAnimation ? 1 : 0)
@@ -218,15 +218,15 @@ struct ExpenseRowCard: View {
     private var paymentMethodColor: Color {
         switch expense.paymentMethod {
         case .cash:
-            return .green
+            return Color("NormaPastelTeal")
         case .creditCard, .debitCard:
-            return .blue
+            return Color("NormaPastelPurple")
         case .bankTransfer:
-            return .purple
+            return Color("NormaPastelPurple")
         case .digitalWallet:
-            return .orange
+            return Color("NormaPastelCoral")
         case .check:
-            return .gray
+            return .secondary
         case .other:
             return .secondary
         }
@@ -245,7 +245,7 @@ struct ExpenseRowCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(expense.name)
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
                     HStack(spacing: 8) {
                         Text(expenseDate, format: .dateTime.month().day())
@@ -257,10 +257,10 @@ struct ExpenseRowCard: View {
                         if expense.isRecurring {
                             Text("•")
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.caption)
+                                .font(.system(size: 12))
                         }
                     }
-                    .font(.subheadline)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
                 }
             }
@@ -270,10 +270,10 @@ struct ExpenseRowCard: View {
             // Amount Section
             VStack(alignment: .trailing, spacing: 4) {
                 Text("$\(expense.amount, specifier: "%.2f")")
-                    .font(.headline)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
                 Text(expense.paymentMethod.rawValue)
-                    .font(.caption)
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
                     .foregroundColor(paymentMethodColor)
             }
         }
@@ -282,7 +282,7 @@ struct ExpenseRowCard: View {
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
         )
     }
 }

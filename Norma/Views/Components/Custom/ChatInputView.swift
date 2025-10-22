@@ -68,7 +68,7 @@ struct ChatInputView: View {
                             .padding(.vertical, 7)
                             .background(
                                 Capsule()
-                                    .fill(Color("NormaPastelPurple"))
+                                    .fill(Color("NormaPastelTeal"))
                             )
                             .foregroundColor(.white)
                         }
@@ -76,7 +76,7 @@ struct ChatInputView: View {
                         .opacity(visibleCapsules > 0 ? 1 : 0)
                         .scaleEffect(visibleCapsules > 0 ? 1.0 : 0.3)
                         .offset(x: visibleCapsules > 0 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.9), value: visibleCapsules)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
 
                         // Budgets tag
                         Button {
@@ -96,7 +96,7 @@ struct ChatInputView: View {
                             .padding(.vertical, 7)
                             .background(
                                 Capsule()
-                                    .fill(Color("NormaPastelTeal"))
+                                    .fill(Color("NormaPastelPurple"))
                             )
                             .foregroundColor(.white)
                         }
@@ -104,7 +104,7 @@ struct ChatInputView: View {
                         .opacity(visibleCapsules > 1 ? 1 : 0)
                         .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
                         .offset(x: visibleCapsules > 1 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.05), value: visibleCapsules)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
 
                         Spacer()
                     }
@@ -137,7 +137,7 @@ struct ChatInputView: View {
                         .opacity(visibleCapsules > 2 ? 1 : 0)
                         .scaleEffect(visibleCapsules > 2 ? 1.0 : 0.3)
                         .offset(x: visibleCapsules > 2 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.2), value: visibleCapsules)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: visibleCapsules)
 
                         Spacer()
 
@@ -180,7 +180,7 @@ struct ChatInputView: View {
         .padding(.top, 16)
         .onAppear {
             // Animate capsules appearing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 visibleCapsules = 3
             }
         }

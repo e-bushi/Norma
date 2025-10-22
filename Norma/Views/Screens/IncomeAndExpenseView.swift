@@ -120,8 +120,14 @@ struct IncomeAndExpenseView: View {
             }
             .background(Color("NormaBackground"))
             .scrollIndicators(.hidden)
-            .navigationTitle("Expenses")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Expenses")
+                        .font(.normaTitle(20))
+                }
+            }
             // Removed .onAppear - data is loaded by RootView
             .sheet(isPresented: $showNormaChatView) {
                 NormaChatView(context: .expenses)

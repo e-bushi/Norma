@@ -13,13 +13,13 @@ class AnthropicService {
     private let apiKey = "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"
     private let baseURL = "https://api.anthropic.com/v1/messages"
     
-    // Model cascade in order of preference (optimized for voice speed)
+    // Model cascade in order of preference (optimized for quality and capability)
     private let modelCascade = [
-        "claude-3-5-haiku-20241022",    // Fastest, great for voice conversations
-        "claude-3-haiku-20240307",      // Fast fallback
-        "claude-3-5-sonnet-20241022",   // Higher quality fallback if needed
-        "claude-3-7-sonnet-20250219",   // Even higher quality
-        "claude-sonnet-4-20250514"      // Highest quality, slowest
+        "claude-sonnet-4-20250514",      // Latest and most capable model
+        "claude-3-7-sonnet-20250219",    // High quality fallback
+        "claude-3-5-sonnet-20241022",    // Solid fallback
+        "claude-3-5-haiku-20241022",     // Faster fallback if needed
+        "claude-3-haiku-20240307"        // Last resort
     ]
     
     private init() {}

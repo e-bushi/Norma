@@ -103,8 +103,14 @@ struct MyBudgetView: View {
                 .padding()
             }
             .background(Color("NormaBackground"))
-            .navigationTitle("My Budgets")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("My Budgets")
+                        .font(.normaTitle(20))
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -162,11 +168,11 @@ struct MyBudgetView: View {
             // Title and description
             VStack(spacing: 8) {
                 Text("Ready to set budgets?")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.normaFinancial(20))
                     .foregroundColor(.primary)
 
                 Text("Tap the + button above to create spending limits for different categories")
-                    .font(.system(size: 14))
+                    .font(.normaInput(14))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 250)
@@ -221,12 +227,12 @@ struct MyBudgetView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(month, format: .dateTime.month().year())
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.normaFinancial(22))
                             .foregroundColor(.primary)
 
                         if isCurrentMonth {
                             Text("Current")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.normaInput(14))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -250,11 +256,11 @@ struct MyBudgetView: View {
                         .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65).opacity(0.6))
 
                     Text("No budgets set for this month")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.normaFinancial(15))
                         .foregroundColor(.primary)
 
                     Text("Tap the + button above to create your first budget, or you can tell AI to do it in the chat")
-                        .font(.system(size: 13))
+                        .font(.normaInput(13))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 220)
@@ -263,7 +269,12 @@ struct MyBudgetView: View {
                 .padding(.vertical, 32)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
                 )
             } else if !budgets.isEmpty {
                 // Budget summary stats - expandable helper box
@@ -286,7 +297,7 @@ struct MyBudgetView: View {
                         // Divider with label
                         HStack(spacing: 12) {
                             Text("Multi-Month Budgets")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.normaInput(11))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                                 .padding(.horizontal, 8)
@@ -323,7 +334,7 @@ struct MyBudgetView: View {
                         .frame(width: 12, height: 12)
 
                     Text("No budget history prior to this month.")
-                        .font(.system(size: 13))
+                        .font(.normaInput(13))
                         .foregroundColor(.secondary)
                 }
                 .padding(.top, 24)
@@ -338,29 +349,11 @@ struct MyBudgetView: View {
         ZStack {
             // Container background
             RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color(UIColor.systemBackground),
-                            Color.gray.opacity(0.02)
-                        ]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .fill(.clear)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 20))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.gray.opacity(0.2),
-                                    Color.gray.opacity(0.05)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
                 )
 
             // Budget items (MiniBudgetDisclosureView style)
@@ -373,31 +366,31 @@ struct MyBudgetView: View {
                             // Category icon (or default icon if no category)
                             if let category = item.category {
                                 Circle()
-                                    .fill(category.color.opacity(0.1))
+                                    .fill(category.color)
                                     .frame(width: 30, height: 30)
                                     .overlay(
                                         Image(systemName: category.icon)
                                             .font(.system(size: 14))
-                                            .foregroundColor(category.color)
+                                            .foregroundColor(.white)
                                     )
                             } else {
                                 Circle()
-                                    .fill(Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5))
+                                    .fill(Color(red: 0.50, green: 0.45, blue: 0.65))
                                     .frame(width: 30, height: 30)
                                     .overlay(
                                         Image(systemName: "dollarsign.circle")
                                             .font(.system(size: 14))
-                                            .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
+                                            .foregroundColor(.white)
                                     )
                             }
 
                             // Budget info
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.budget.name)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .foregroundColor(.primary)
                                 Text("\(currencySymbol)\(item.spent, specifier: "%.2f") of \(currencySymbol)\(item.budget.amount, specifier: "%.2f")")
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 12, weight: .regular, design: .rounded))
                                     .foregroundColor(.secondary)
                             }
 
@@ -406,7 +399,7 @@ struct MyBudgetView: View {
                             // Remaining amount
                             let remaining = item.budget.amount - item.spent
                             Text(remaining >= 0 ? "\(currencySymbol)\(remaining, specifier: "%.2f") left" : "-\(currencySymbol)\(abs(remaining), specifier: "%.2f") over")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
                                 .foregroundColor(remaining >= 0 ? (remaining < item.budget.amount * 0.2 ? Color(red: 0.70, green: 0.50, blue: 0.45) : Color(red: 0.40, green: 0.60, blue: 0.58)) : .red)
                         }
                     }
@@ -420,6 +413,7 @@ struct MyBudgetView: View {
 
 struct BudgetSummaryBox: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @Environment(\.colorScheme) var colorScheme
 
     let totalAvailable: Double
     let budgeted: Double
@@ -429,6 +423,10 @@ struct BudgetSummaryBox: View {
     private var currencySymbol: String {
         let currencyCode = sessionViewModel.currentUser?.settings.currency ?? "USD"
         return CurrencyData.getCurrency(for: currencyCode).symbol
+    }
+
+    private var textColor: Color {
+        colorScheme == .dark ? .white : Color(red: 0.50, green: 0.45, blue: 0.65)
     }
 
     var body: some View {
@@ -442,17 +440,17 @@ struct BudgetSummaryBox: View {
                 HStack(spacing: 8) {
                     Image(systemName: showDetails ? "chart.bar.fill" : "chart.bar")
                         .font(.system(size: 14))
-                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
+                        .foregroundColor(textColor)
 
                     Text(showDetails ? "Hide details" : "View budget breakdown")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
+                        .font(.normaInput(13))
+                        .foregroundColor(textColor)
 
                     Spacer()
 
                     Image(systemName: showDetails ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(red: 0.50, green: 0.45, blue: 0.65))
+                        .foregroundColor(textColor)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -479,27 +477,27 @@ struct BudgetSummaryBox: View {
             // Animated details content
             if showDetails {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Based on your income minus bills, you have \(currencySymbol)\(totalAvailable, specifier: "%.0f") available this month.")
-                        .font(.system(size: 12))
+                    Text("Your income minus bills is \(currencySymbol)\(totalAvailable, specifier: "%.0f")")
+                        .font(.normaInput(14))
                         .foregroundColor(.primary.opacity(0.8))
                         .lineSpacing(2)
 
                     Text("You've budgeted \(currencySymbol)\(budgeted, specifier: "%.0f") so far.")
-                        .font(.system(size: 12))
+                        .font(.normaInput(14))
                         .foregroundColor(.primary.opacity(0.8))
                         .lineSpacing(2)
 
                     HStack(spacing: 4) {
                         Text("You have")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(14))
                             .foregroundColor(.primary)
 
                         Text("\(currencySymbol)\(abs(remaining), specifier: "%.0f")")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.normaFinancial(14))
                             .foregroundColor(remaining >= 0 ? Color(red: 0.40, green: 0.60, blue: 0.58) : .red)
 
                         Text(remaining >= 0 ? "left to budget" : "over budget")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(14))
                             .foregroundColor(.primary)
                     }
                 }
@@ -507,11 +505,12 @@ struct BudgetSummaryBox: View {
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
                 )
                 .padding(.top, 8)
                 .transition(.asymmetric(

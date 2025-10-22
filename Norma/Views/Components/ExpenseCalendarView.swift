@@ -353,13 +353,13 @@ struct DayCell: View {
                         .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.4), lineWidth: 1.5)
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color("NormaPastelPurple").opacity(0.08))
+                        .fill(Color("NormaPastelCoral").opacity(0.08))
 
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color("NormaPastelPurple").opacity(0.25), lineWidth: 1)
+                        .stroke(Color("NormaPastelCoral").opacity(0.25), lineWidth: 1)
                 } else if expenseCount > 0 {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color("NormaPastelPurple").opacity(0.05))
+                        .fill(Color("NormaPastelCoral").opacity(0.05))
                 }
             }
         )
@@ -370,7 +370,7 @@ struct DayCell: View {
         if isSelected {
             return .primary
         } else if isToday {
-            return Color("NormaPastelPurple")
+            return Color("NormaPastelCoral")
         } else if !isCurrentMonth {
             return .secondary.opacity(0.5)
         } else {
@@ -382,7 +382,7 @@ struct DayCell: View {
         if isSelected {
             return .primary.opacity(0.8)
         } else {
-            return Color("NormaPastelPurple").opacity(0.9)
+            return Color("NormaPastelCoral").opacity(0.9)
         }
     }
 }

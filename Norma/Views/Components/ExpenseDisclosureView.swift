@@ -16,6 +16,7 @@ struct ExpenseDisclosureView: View {
     @State private var selectedExpense: Expense? = nil
     @State private var showCreateExpense = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @Environment(\.colorScheme) var colorScheme
     
     private let maxExpensesToShow = 5
     
@@ -51,48 +52,6 @@ struct ExpenseDisclosureView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            // Header section matching ExpenseTrackerChartView style
-            VStack(spacing: 12) {
-                Text("RECENT EXPENSES")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                
-                // Summary stats
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Total Spent")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalExpenseAmount))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Transactions")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("\(filteredExpenses.count)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-            }
-            
             // Add expense button
             Button(action: {
                 showCreateExpense = true
@@ -102,9 +61,9 @@ struct ExpenseDisclosureView: View {
                         .font(.system(size: 15))
 
                     Text("Add Expense")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaInput(14))
                 }
-                .foregroundColor(Color("NormaPastelPurple"))
+                .foregroundColor(colorScheme == .dark ? .white : Color(red: 0.50, green: 0.45, blue: 0.65))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
@@ -148,16 +107,16 @@ struct ExpenseDisclosureView: View {
 
                         Image(systemName: "creditcard.and.123")
                             .font(.system(size: 36))
-                            .foregroundColor(Color("NormaPastelPurple"))
+                            .foregroundColor(Color("NormaPastelCoral"))
                     }
 
                     VStack(spacing: 12) {
                         Text("No expenses yet")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.normaFinancial(20))
                             .foregroundColor(.primary)
 
                         Text("Start tracking your daily expenses\nto better manage your budget")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
@@ -171,17 +130,17 @@ struct ExpenseDisclosureView: View {
                                 .foregroundColor(Color("NormaPastelBeige"))
 
                             Text("Track groceries, dining, and shopping")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
 
                         HStack(spacing: 12) {
                             Image(systemName: "chart.pie.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelPurple"))
+                                .foregroundColor(Color("NormaPastelCoral"))
 
                             Text("Categorize spending automatically")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
 
@@ -191,7 +150,7 @@ struct ExpenseDisclosureView: View {
                                 .foregroundColor(Color("NormaPastelTeal"))
 
                             Text("Visualize your spending habits")
-                                .font(.system(size: 13))
+                                .font(.normaInput(13))
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -268,7 +227,7 @@ struct ExpenseDisclosureView: View {
                             HStack {
                                 Text("See All Expenses")
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(Color("NormaPastelPurple"))
+                                    .foregroundColor(Color("NormaPastelCoral"))
 
                                 Spacer()
 
@@ -278,7 +237,7 @@ struct ExpenseDisclosureView: View {
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Color("NormaPastelPurple"))
+                                    .foregroundColor(Color("NormaPastelCoral"))
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
@@ -333,22 +292,22 @@ struct ExpenseRowView: View {
         HStack(spacing: 12) {
             // Category icon
             Circle()
-                .fill((category?.color ?? Color("NormaPastelPurple")).opacity(0.15))
-                .frame(width: 30, height: 30)
+                .fill((category?.color ?? Color("NormaPastelCoral")).opacity(0.15))
+                .frame(width: 34, height: 34)
                 .overlay(
                     Image(systemName: category?.icon ?? "dollarsign.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(category?.color ?? Color("NormaPastelPurple"))
+                        .font(.system(size: 14))
+                        .foregroundColor(category?.color ?? Color("NormaPastelCoral"))
                 )
 
             // Expense info
             VStack(alignment: .leading, spacing: 2) {
                 Text(expense.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.primary)
 
                 Text(timeAgoText)
-                    .font(.system(size: 10))
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
 
@@ -356,7 +315,7 @@ struct ExpenseRowView: View {
 
             // Amount
             Text(profileViewModel.formatCurrency(expense.amount))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
         }
     }

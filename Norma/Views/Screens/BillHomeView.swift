@@ -87,8 +87,14 @@ struct BillHomeView: View {
                     isScrolling = false
                 }
             }
-            .navigationTitle(Text("My Bills"))
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("My Bills")
+                        .font(.normaTitle(20))
+                }
+            }
             .refreshable {
                 await performRefresh()
             }

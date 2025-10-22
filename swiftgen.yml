@@ -1,0 +1,13 @@
+input_dir: .
+output_dir: Norma/Generated/
+
+fonts:
+  inputs:
+    - Norma/Resources/Nunito-Variable.ttf
+    - Norma/Resources/Rubik-Variable.ttf
+  outputs:
+    templateName: swift5
+    params:
+       fontAliasName: Fonts
+       publicAccess: true
+    output: Fonts+Generated.swift
