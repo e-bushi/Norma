@@ -132,7 +132,7 @@ struct MainChatView: View {
                         }
 
                         if isLoading {
-                            TypingIndicatorView()
+                            ThinkingIndicator()
                                 .id("typing")
                                 .transition(.scale.combined(with: .opacity))
                         }
@@ -177,9 +177,13 @@ struct MainChatView: View {
 
         inputText = ""
         hideKeyboard()
-        isLoading = true
 
         Task {
+            // Delay showing loading indicator to make fast responses feel instant
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            if !Task.isCancelled {
+                isLoading = true
+            }
             await processUserMessage(userMessage)
         }
     }

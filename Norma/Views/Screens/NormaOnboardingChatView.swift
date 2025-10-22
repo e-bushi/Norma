@@ -52,7 +52,7 @@ struct NormaOnboardingChatView: View {
                             }
                             
                             if onboardingViewModel.isTyping {
-                                TypingIndicatorView()
+                                ThinkingIndicator()
                                     .id("typing")
                             }
                             

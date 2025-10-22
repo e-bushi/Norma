@@ -173,7 +173,7 @@ struct NormaChatView: View {
                     }
                     
                     if isLoading {
-                        TypingIndicatorView()
+                        ThinkingIndicator()
                             .id("typing")
                     }
                 }
@@ -366,12 +366,16 @@ struct NormaChatView: View {
         let chatMessage = ChatMessage(role: .user, content: userMessage)
         messages.append(chatMessage)
 
-        // Clear input and show loading
+        // Clear input
         inputText = ""
-        isLoading = true
 
         // Process message with AI
         Task {
+            // Delay showing loading indicator to make fast responses feel instant
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            if !Task.isCancelled {
+                isLoading = true
+            }
             await processUserMessage(userMessage)
         }
     }

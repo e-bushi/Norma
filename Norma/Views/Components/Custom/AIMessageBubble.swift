@@ -31,10 +31,25 @@ struct AIMessageBubble: View {
     let uiComponent: UIComponent?
     let revealDirection: TextRevealDirection
 
-    @State private var revealedLines: Int = -1
+    @State private var visibleWordCount = 0
+    @State private var showCards = false
 
-    private var lines: [String] {
-        content.components(separatedBy: "\n")
+    private var words: [String] {
+        // Split by whitespace but preserve the spaces
+        var result: [String] = []
+        var currentWord = ""
+
+        for char in content {
+            currentWord.append(char)
+            if char.isWhitespace {
+                result.append(currentWord)
+                currentWord = ""
+            }
+        }
+        if !currentWord.isEmpty {
+            result.append(currentWord)
+        }
+        return result
     }
 
     init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight) {
@@ -45,22 +60,17 @@ struct AIMessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Text first
+            // Markdown text using native SwiftUI with word-by-word reveal
             HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: revealDirection.alignment, spacing: 4) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                        Text(line)
-                            .font(.system(size: 16))
-                            .lineSpacing(4)
-                            .foregroundColor(Color("NormaText"))
-                            .opacity(index <= revealedLines ? 1 : 0)
-                            .offset(x: index <= revealedLines ? 0 : revealDirection.offset)
-                            .frame(maxWidth: .infinity, alignment: revealDirection == .leftToRight ? .leading : .trailing)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onAppear {
-                    startAnimation()
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(try! AttributedString(markdown: words.prefix(visibleWordCount).joined(), options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                        .font(.normaInput(16))
+                        .lineSpacing(4)
+                        .foregroundColor(Color("NormaText"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onAppear {
+                            startWordRevealAnimation()
+                        }
                 }
 
                 Spacer(minLength: 0)
@@ -68,24 +78,39 @@ struct AIMessageBubble: View {
             }
 
             // Cards second (if present)
-            if let component = uiComponent {
+            if let component = uiComponent, showCards {
                 switch component {
                 case .billCards(let bills):
                     BillCardStack(bills: bills)
+                        .transition(.opacity.combined(with: .scale))
                 case .expenseCards(let expenses):
                     ExpenseCardStack(expenses: expenses)
+                        .transition(.opacity.combined(with: .scale))
                 case .budgetCards(let budgets):
                     BudgetCardStack(budgets: budgets)
+                        .transition(.opacity.combined(with: .scale))
                 }
             }
         }
     }
 
-    private func startAnimation() {
-        for i in 0..<lines.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    revealedLines = i
+    private func startWordRevealAnimation() {
+        let totalWords = words.count
+
+        for index in 0...totalWords {
+            let delay = Double(index) * 0.05 // 50ms per word
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    visibleWordCount = index
+                }
+
+                // Show cards after all words are revealed
+                if index == totalWords && uiComponent != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showCards = true
+                        }
+                    }
                 }
             }
         }
