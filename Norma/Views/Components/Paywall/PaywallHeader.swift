@@ -19,7 +19,7 @@ struct PaywallHeader: View {
                     .font(.normaTitle(28))
 
                 Text("Unlock AI-powered financial insights")
-                    .font(.normaBody(16))
+                    .font(.custom(FontFamily.Rubik.regular, size: 16))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }

@@ -44,7 +44,7 @@ struct StartYourFreeTrialView: View {
                             .multilineTextAlignment(.center)
 
                         Text("No payment today. Cancel anytime.")
-                            .font(.normaBody(16))
+                            .font(.custom(FontFamily.Rubik.regular, size: 16))
                             .foregroundColor(.white.opacity(0.9))
                             .multilineTextAlignment(.center)
                     }
@@ -105,7 +105,7 @@ struct StartYourFreeTrialView: View {
 
                     // No payment today text
                     Text("No payment today. Cancel anytime")
-                        .font(.normaBody(17))
+                        .font(.custom(FontFamily.Rubik.regular, size: 17))
                         .foregroundColor(.white.opacity(0.9))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -164,7 +164,7 @@ struct StartYourFreeTrialView: View {
                             // Handle login
                         }
                     }
-                    .font(.normaMicro(13))
+                    .font(.custom(FontFamily.Rubik.regular, size: 13))
                     .foregroundColor(.white.opacity(0.7))
                     .padding(.bottom, 24)
                 }
@@ -282,7 +282,7 @@ struct FreeTrialTimelineItem: View {
                     .foregroundColor(.white)
 
                 Text(subtitle)
-                    .font(.normaBody(15))
+                    .font(.custom(FontFamily.Rubik.regular, size: 15))
                     .foregroundColor(.white.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
             }

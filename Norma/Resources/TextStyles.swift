@@ -40,26 +40,26 @@ struct NormaSubheadlineStyle: ViewModifier {
 struct NormaBodyStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.normaBody(16))
+            .font(.custom(FontFamily.Rubik.regular, size: 16))
             .foregroundColor(.primary)
     }
 }
 
-/// Chat message text style - Used for chat bubbles (Nunito Medium)
+/// Chat message text style - Used for chat bubbles
 struct NormaChatTextStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.normaChatText(16))
+            .font(.custom(FontFamily.Rubik.regular, size: 16))
             .foregroundColor(.primary)
             .lineSpacing(4)
     }
 }
 
-/// Caption style - Used for small labels and metadata (Nunito Light)
+/// Caption style - Used for small labels and metadata
 struct NormaCaptionStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.normaMicro(13))
+            .font(.custom(FontFamily.Rubik.regular, size: 13))
             .foregroundColor(.secondary)
     }
 }
@@ -134,6 +134,6 @@ extension View {
 
     /// Apply Norma label style
     func normaLabel() -> some View {
-        font(.normaLabel(12))
+        font(.custom(FontFamily.Rubik.semiBold, size: 12))
     }
 }

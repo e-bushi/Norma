@@ -94,10 +94,10 @@ struct PaywallView: View {
                                 // Show Coming Soon for Pro tier
                                 VStack(spacing: 2) {
                                     Text("Coming Soon")
-                                        .font(.normaHeadline(17))
+                                        .font(.custom(FontFamily.Rubik.medium, size: 17))
 
                                     Text("Pro features in development")
-                                        .font(.normaMicro(13))
+                                        .font(.custom(FontFamily.Rubik.regular, size: 13))
                                         .opacity(0.9)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -123,7 +123,7 @@ struct PaywallView: View {
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                         .scaleEffect(0.8)
                                     Text("Loading products...")
-                                        .font(.normaBody(14))
+                                        .font(.custom(FontFamily.Rubik.regular, size: 14))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
@@ -135,9 +135,9 @@ struct PaywallView: View {
                             } else if subscriptionManager.availableProducts.isEmpty {
                                 VStack(spacing: 2) {
                                     Text("Products unavailable")
-                                        .font(.normaHeadline(17))
+                                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                                     Text("Tap to retry")
-                                        .font(.normaMicro(13))
+                                        .font(.custom(FontFamily.Rubik.regular, size: 13))
                                         .opacity(0.9)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -152,17 +152,17 @@ struct PaywallView: View {
                                     // Show different text if user already used their trial
                                     if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
                                         Text("Subscribe Now")
-                                            .font(.normaHeadline(17))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 17))
 
                                         Text(getPriceText())
-                                            .font(.normaMicro(13))
+                                            .font(.custom(FontFamily.Rubik.regular, size: 13))
                                             .opacity(0.9)
                                     } else {
                                         Text("Start 3-Day Free Trial")
-                                            .font(.normaHeadline(17))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 17))
 
                                         Text("Then \(getPriceText())")
-                                            .font(.normaMicro(13))
+                                            .font(.custom(FontFamily.Rubik.regular, size: 13))
                                             .opacity(0.9)
                                     }
                                 }
@@ -180,7 +180,7 @@ struct PaywallView: View {
                         // Agreement text and links
                         VStack(spacing: 4) {
                             Text("By subscribing you agree to our")
-                                .font(.normaMicro(12))
+                                .font(.custom(FontFamily.Rubik.regular, size: 12))
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 12) {
@@ -193,7 +193,7 @@ struct PaywallView: View {
                                     showPrivacyPolicy = true
                                 }
                             }
-                            .font(.normaMicro(12))
+                            .font(.custom(FontFamily.Rubik.regular, size: 12))
                             .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 24)
@@ -206,12 +206,12 @@ struct PaywallView: View {
                                     await restorePurchases()
                                 }
                             }
-                            .font(.normaBody(14))
+                            .font(.custom(FontFamily.Rubik.medium, size: 14))
                             .foregroundColor(Color("NormaPastelPurple"))
                             .disabled(isPurchasing)
 
                             Text("Cancel anytime in Settings")
-                                .font(.normaMicro(12))
+                                .font(.custom(FontFamily.Rubik.regular, size: 12))
                                 .foregroundColor(.secondary)
                         }
                     }

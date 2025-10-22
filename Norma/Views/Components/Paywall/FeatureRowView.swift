@@ -19,11 +19,11 @@ struct FeatureRowView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
-                    .font(.normaBody(16))
+                    .font(.custom(FontFamily.Rubik.bold, size: 16))
                     .foregroundColor(.primary)
 
                 Text(feature.description)
-                    .font(.normaMicro(14))
+                    .font(.custom(FontFamily.Rubik.regular, size: 14))
                     .foregroundColor(.secondary)
             }
 
