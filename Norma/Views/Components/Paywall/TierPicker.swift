@@ -51,11 +51,11 @@ struct TierPicker: View {
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: tier.icon)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
 
                             Text(tier.displayName)
-                                .font(.normaBody(14))
+                                .font(.normaHeadline(17))
                                 .foregroundColor(selection == tier ? tier.color : .secondary)
                         }
                         .frame(maxWidth: .infinity)
