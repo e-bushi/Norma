@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Bill: Identifiable, Codable {
+struct Bill: Identifiable, Codable, Equatable {
     var id: String?
     let userId: String
     var name: String

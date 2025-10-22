@@ -109,15 +109,15 @@ struct DayView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isToday && !isSelected ? Color.blue : Color.clear, lineWidth: 1.5)
+                .stroke(isToday && !isSelected ? Color("NormaPastelTeal") : Color.clear, lineWidth: 1.5)
         )
     }
     
     private var backgroundFill: some ShapeStyle {
         if isSelected {
-            return Color.blue
+            return Color("NormaPastelTeal")
         } else if isToday {
-            return Color.blue.opacity(0.1)
+            return Color("NormaPastelTeal").opacity(0.1)
         } else {
             return Color(.systemBackground)
         }
@@ -131,7 +131,7 @@ struct AllDaysView: View {
         VStack {
             Image(systemName: "calendar")
                 .font(.title3)
-                .foregroundColor(isSelected ? .white : .blue)
+                .foregroundColor(isSelected ? .white : Color("NormaPastelTeal"))
             Text("All")
                 .font(.title3)
                 .fontWeight(.semibold)
@@ -143,11 +143,11 @@ struct AllDaysView: View {
         .frame(width: 50, height: 75)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.blue : Color(.systemBackground))
+                .fill(isSelected ? Color("NormaPastelTeal") : Color(.systemBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         )
     }
 }

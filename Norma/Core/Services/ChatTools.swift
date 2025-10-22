@@ -1,0 +1,211 @@
+//
+//  ChatTools.swift
+//  Norma
+//
+//  Created by Claude on 5/10/25.
+//
+
+import Foundation
+
+/// Provides tool definitions for Anthropic API chat interactions
+struct ChatToolsProvider {
+
+    static func getAllTools() -> [AnthropicTool] {
+        return [
+            getBillCreationTool(),
+            getUpdateBillTool(),
+            getExpenseCreationTool(),
+            getBillQueryTool(),
+            getExpenseSummaryTool(),
+            getShowBillsTool(),
+            getShowExpensesTool(),
+            getShowBudgetsTool()
+        ]
+    }
+
+    // MARK: - Tool Definitions
+
+    static func getBillCreationTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "create_bill",
+            description: "Create a new recurring bill for the user. Frequency defaults to 'Monthly' and status is automatically determined based on the due date.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "Name of the bill"
+                    ),
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "Amount of the bill"
+                    ),
+                    "due_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "Due date in YYYY-MM-DD format"
+                    )
+                ],
+                required: ["name", "amount", "due_date"]
+            )
+        )
+    }
+
+    static func getUpdateBillTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "update_bill",
+            description: "Update an existing bill's properties. Use the bill ID from the USER'S BILLS section in the system prompt.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "bill_id": AnthropicToolProperty(
+                        type: "string",
+                        description: "UUID of the bill to update (from the system prompt)"
+                    ),
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "New bill name (optional)"
+                    ),
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "New bill amount (optional)"
+                    ),
+                    "due_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "New due date in YYYY-MM-DD format (optional)"
+                    ),
+                    "frequency": AnthropicToolProperty(
+                        type: "string",
+                        description: "New frequency: 'Monthly', 'Quarterly', or 'Yearly' (optional)"
+                    ),
+                    "status": AnthropicToolProperty(
+                        type: "string",
+                        description: "New status: 'Paid', 'Overdue', or 'Scheduled' (optional)"
+                    )
+                ],
+                required: ["bill_id"]
+            )
+        )
+    }
+
+    static func getExpenseCreationTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "create_expense",
+            description: "Create a new expense record",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "Name/description of the expense"
+                    ),
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "Amount spent"
+                    ),
+                    "expense_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "Date in ISO8601 format"
+                    ),
+                    "payment_method": AnthropicToolProperty(
+                        type: "string",
+                        description: "Payment method: 'Cash', 'Credit Card', 'Debit Card', etc."
+                    ),
+                    "merchant": AnthropicToolProperty(
+                        type: "string",
+                        description: "Merchant name (optional)"
+                    ),
+                    "tags": AnthropicToolProperty(
+                        type: "array",
+                        description: "Tags for categorization (optional)"
+                    )
+                ],
+                required: ["name", "amount", "expense_date", "payment_method"]
+            )
+        )
+    }
+
+    static func getBillQueryTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "query_bills",
+            description: "Query user's bills and due dates",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "status": AnthropicToolProperty(
+                        type: "string",
+                        description: "Filter by status: 'all', 'overdue', 'scheduled', 'paid'"
+                    )
+                ],
+                required: ["status"]
+            )
+        )
+    }
+
+    static func getExpenseSummaryTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "expense_summary",
+            description: "Get expense summary for a time period",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "period": AnthropicToolProperty(
+                        type: "string",
+                        description: "Time period: 'week', 'month', 'year'"
+                    )
+                ],
+                required: ["period"]
+            )
+        )
+    }
+
+    static func getShowBillsTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_bills_tool",
+            description: "Display bill cards visually in the UI. Use this when the user wants to SEE their bills, not just hear about them. Pass the bill IDs from the system prompt.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "bill_ids": AnthropicToolProperty(
+                        type: "array",
+                        description: "Array of bill UUID strings to display as cards. Use the 'id' values from the USER'S BILLS section in the system prompt. Example: [\"uuid-1\", \"uuid-2\"]"
+                    )
+                ],
+                required: ["bill_ids"]
+            )
+        )
+    }
+
+    static func getShowExpensesTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_expenses_tool",
+            description: "Display expense cards visually in the UI. Use this when the user wants to SEE their expenses, not just hear about them. Pass the expense IDs from the system prompt as a comma-separated string.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "expense_ids": AnthropicToolProperty(
+                        type: "string",
+                        description: "Comma-separated string of expense UUID values from the USER'S RECENT EXPENSES section in the system prompt. Example: \"uuid-1,uuid-2,uuid-3\""
+                    )
+                ],
+                required: ["expense_ids"]
+            )
+        )
+    }
+
+    static func getShowBudgetsTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_budgets_tool",
+            description: "Display budget cards visually in the UI. Use this when the user wants to SEE their budgets, not just hear about them. Pass the budget IDs from the system prompt.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "budget_ids": AnthropicToolProperty(
+                        type: "array",
+                        description: "Array of budget UUID strings to display as cards. Use the 'id' values from the USER'S BUDGETS section in the system prompt. Example: [\"uuid-1\", \"uuid-2\"]"
+                    )
+                ],
+                required: ["budget_ids"]
+            )
+        )
+    }
+}

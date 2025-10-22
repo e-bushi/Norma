@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Binding var isMenuOpen: Bool
+
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @StateObject private var notificationService = NotificationService.shared
@@ -22,354 +24,448 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
-    
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @Environment(\.colorScheme) private var colorScheme
+
     private var hasEncryptionEnabled: Bool {
         guard let userId = sessionViewModel.currentUser?.userId else { return false }
         let userKeyManager = UserKeyManager(supabaseService: dataManager.supabaseService)
         return userKeyManager.hasStoredRecoveryPhrase(for: userId)
     }
-    
+
     var body: some View {
-        NavigationView {
-            List {
-                // User Profile Section
-                Section("Profile") {
-                    if let user = sessionViewModel.currentUser {
-                        HStack {
-                            Image(systemName: "person.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                            
-                            VStack(alignment: .leading) {
-                                Text(user.name)
-                                    .font(.headline)
-                                Text(user.email)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-                
-                // Subscription Section
-                Section("Subscription") {
-                    if subscriptionManager.isInFreeTrial {
-                        // Trial status
-                        HStack {
-                            Image(systemName: "sparkles")
-                                .foregroundColor(.purple)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Free Trial")
-                                    .font(.headline)
-                                if let daysRemaining = subscriptionManager.trialDaysRemaining {
-                                    Text("\(daysRemaining) day\(daysRemaining == 1 ? "" : "s") remaining")
-                                        .font(.caption)
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // User Profile Section
+                    SettingsSectionView(title: "Profile") {
+                        if let user = sessionViewModel.currentUser {
+                            HStack {
+                                Image(systemName: "person.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(Color("NormaPastelPurple"))
+
+                                VStack(alignment: .leading) {
+                                    Text(user.name)
+                                        .font(.normaHeadline(17))
+                                    Text(user.email)
+                                        .font(.normaHeadline(13))
                                         .foregroundColor(.secondary)
                                 }
+
+                                Spacer()
                             }
-                            
-                            Spacer()
-                            
-                            Button("View Plans") {
-                                showPaywall = true
-                            }
-                            .font(.caption)
-                            .buttonStyle(.borderedProminent)
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
-                    } else if subscriptionManager.hasActiveSubscription {
-                        // Active subscription
+                    }
+
+                    // Appearance Section
+                    SettingsSectionView(title: "Appearance") {
                         HStack {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(.green)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Pro Subscription")
-                                    .font(.headline)
-                                if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
-                                    if subscriptionManager.subscriptionStatus.willRenew {
-                                        Text("Renews \(expirationDate, style: .date)")
-                                            .font(.caption)
+                            Text("Mode")
+                                .font(.normaHeadline(17))
+
+                            Spacer()
+
+                            Picker("", selection: $appearanceMode) {
+                                ForEach(AppearanceMode.allCases) { mode in
+                                    HStack {
+                                        Image(systemName: mode.icon)
+                                        Text(mode.rawValue)
+                                    }
+                                    .tag(mode)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    }
+
+                    // Subscription Section
+                    SettingsSectionView(title: "Subscription") {
+                        if subscriptionManager.isInFreeTrial {
+                            // Trial status
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .foregroundColor(Color("NormaPastelPurple"))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Free Trial")
+                                        .font(.normaHeadline(17))
+                                    if let daysRemaining = subscriptionManager.trialDaysRemaining {
+                                        Text("\(daysRemaining) day\(daysRemaining == 1 ? "" : "s") remaining")
+                                            .font(.normaHeadline(13))
                                             .foregroundColor(.secondary)
-                                    } else {
-                                        Text("Expires \(expirationDate, style: .date)")
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
                                     }
                                 }
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
-                        
-                        // Manage subscription button
-                        Button(action: {
-                            // Open App Store subscription management
-                            if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                                UIApplication.shared.open(url)
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "creditcard")
-                                    .foregroundColor(.blue)
-                                Text("Manage Subscription")
-                                    .foregroundColor(.primary)
+
                                 Spacer()
-                                Image(systemName: "arrow.up.forward.square")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
+
+                                Button("View Plans") {
+                                    showPaywall = true
+                                }
+                                .font(.normaHeadline(13))
+                                .buttonStyle(.borderedProminent)
                             }
-                        }
-                    } else {
-                        // No subscription
-                        HStack {
-                            Image(systemName: "lock.fill")
-                                .foregroundColor(.gray)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Limited Access")
-                                    .font(.headline)
-                                Text("Unlock all features with Pro")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                            .padding(.vertical, 4)
+                        } else if subscriptionManager.hasActiveSubscription {
+                            // Active subscription
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundColor(Color("NormaPastelTeal"))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Pro Subscription")
+                                        .font(.normaHeadline(17))
+                                    if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
+                                        if subscriptionManager.subscriptionStatus.willRenew {
+                                            Text("Renews \(expirationDate, style: .date)")
+                                                .font(.normaHeadline(13))
+                                                .foregroundColor(.secondary)
+                                        } else {
+                                            Text("Expires \(expirationDate, style: .date)")
+                                                .font(.normaHeadline(13))
+                                                .foregroundColor(.orange)
+                                        }
+                                    }
+                                }
+
+                                Spacer()
                             }
-                            
-                            Spacer()
-                            
-                            Button("Subscribe") {
-                                showPaywall = true
-                            }
-                            .font(.caption)
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding(.vertical, 4)
-                        
-                        // Restore purchases option
-                        Button(action: {
-                            Task {
-                                do {
-                                    try await subscriptionManager.restorePurchases()
-                                } catch {
-                                    print("Failed to restore purchases: \(error)")
+                            .padding(.vertical, 4)
+
+                            // Manage subscription button
+                            Button(action: {
+                                // Open App Store subscription management
+                                if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                                    UIApplication.shared.open(url)
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "creditcard")
+                                        .foregroundColor(Color("NormaPastelPurple"))
+                                    Text("Manage Subscription")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward.square")
+                                        .foregroundColor(.secondary)
+                                        .font(.normaHeadline(13))
                                 }
                             }
-                        }) {
+                        } else {
+                            // No subscription
                             HStack {
-                                Image(systemName: "arrow.clockwise.circle")
-                                    .foregroundColor(.blue)
-                                Text("Restore Purchases")
-                                    .foregroundColor(.primary)
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(.gray)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Limited Access")
+                                        .font(.normaHeadline(17))
+                                    Text("Unlock all features with Pro")
+                                        .font(.normaHeadline(13))
+                                        .foregroundColor(.secondary)
+                                }
+
                                 Spacer()
+
+                                Button("Subscribe") {
+                                    showPaywall = true
+                                }
+                                .font(.normaHeadline(13))
+                                .buttonStyle(.borderedProminent)
+                            }
+                            .padding(.vertical, 4)
+
+                            // Restore purchases option
+                            Button(action: {
+                                Task {
+                                    do {
+                                        try await subscriptionManager.restorePurchases()
+                                    } catch {
+                                        print("Failed to restore purchases: \(error)")
+                                    }
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.clockwise.circle")
+                                        .foregroundColor(Color("NormaPastelPurple"))
+                                    Text("Restore Purchases")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                }
                             }
                         }
                     }
-                }
-                
-                // App Settings Section
-                Section("App Settings") {
-                    // Notifications row - different behavior based on permission status
-                    if notificationService.isNotificationsEnabled {
-                        NavigationLink(destination: UpcomingNotificationsView()) {
+
+                    // App Settings Section
+                    SettingsSectionView(title: "App Settings") {
+                        // Notifications row - different behavior based on permission status
+                        if notificationService.isNotificationsEnabled {
+                            NavigationLink(destination: UpcomingNotificationsView()) {
+                                HStack {
+                                    Image(systemName: "bell.fill")
+                                        .foregroundColor(Color("NormaPastelCoral"))
+                                    Text("Notifications")
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color("NormaPastelTeal"))
+                                        .font(.normaHeadline(13))
+                                }
+                            }
+                        } else {
+                            Button(action: {
+                                Task {
+                                    await requestNotificationPermission()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "bell.slash.fill")
+                                        .foregroundColor(Color("NormaPastelCoral"))
+                                    Text("Enable Notifications")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                        .font(.normaHeadline(13))
+                                }
+                            }
+                        }
+                    }
+
+                    // Security Section
+                    SettingsSectionView(title: "Security") {
+                        if hasEncryptionEnabled {
                             HStack {
-                                Image(systemName: "bell.fill")
-                                    .foregroundColor(.orange)
-                                Text("Notifications")
+                                Image(systemName: "checkmark.shield.fill")
+                                    .foregroundColor(Color("NormaPastelTeal"))
+                                VStack(alignment: .leading) {
+                                    Text("Encryption Enabled")
+                                        .font(.normaHeadline(17))
+                                    Text("Your data is protected")
+                                        .font(.normaHeadline(13))
+                                        .foregroundColor(.secondary)
+                                }
                                 Spacer()
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
+                                    .foregroundColor(Color("NormaPastelTeal"))
+                            }
+                            .padding(.vertical, 2)
+
+                            Button(action: {
+                                showRecoveryPhrase = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "key.fill")
+                                        .foregroundColor(Color("NormaPastelPurple"))
+                                    Text("View Recovery Phrase")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                        .font(.normaHeadline(13))
+                                }
+                            }
+                        } else {
+                            HStack {
+                                Image(systemName: "exclamationmark.shield.fill")
+                                    .foregroundColor(Color("NormaPastelCoral"))
+                                VStack(alignment: .leading) {
+                                    Text("Encryption Disabled")
+                                        .font(.normaHeadline(17))
+                                    Text("Enable encryption to protect your data")
+                                        .font(.normaHeadline(13))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
+                    // Data Section
+                    SettingsSectionView(title: "Data") {
+                        HStack {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(Color("NormaPastelPurple"))
+                            Text("Sync Data")
+                            Spacer()
+                            if dataManager.isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
                             }
                         }
-                    } else {
-                        Button(action: {
+                        .onTapGesture {
                             Task {
-                                await requestNotificationPermission()
+                                try? await dataManager.syncAllData()
                             }
-                        }) {
+                        }
+
+                        if let lastSync = dataManager.lastSyncDate {
                             HStack {
-                                Image(systemName: "bell.slash.fill")
-                                    .foregroundColor(.red)
-                                Text("Enable Notifications")
-                                    .foregroundColor(.primary)
+                                Image(systemName: "clock")
+                                    .foregroundColor(.secondary)
+                                Text("Last synced")
                                 Spacer()
-                                Image(systemName: "chevron.right")
+                                Text(lastSync, style: .relative)
+                                    .font(.normaHeadline(13))
                                     .foregroundColor(.secondary)
-                                    .font(.caption)
                             }
                         }
                     }
-                    
-                    HStack {
-                        Image(systemName: "creditcard.fill")
-                            .foregroundColor(.green)
-                        Text("Payment Methods")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                    }
-                    
-                }
-                
-                // Security Section
-                Section("Security") {
-                    if hasEncryptionEnabled {
-                        HStack {
-                            Image(systemName: "checkmark.shield.fill")
-                                .foregroundColor(.green)
-                            VStack(alignment: .leading) {
-                                Text("Encryption Enabled")
-                                    .font(.headline)
-                                Text("Your data is protected")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        }
-                        .padding(.vertical, 2)
-                        
+
+                    // Support Section
+                    SettingsSectionView(title: "Support") {
                         Button(action: {
-                            showRecoveryPhrase = true
+                            showHelpSupport = true
                         }) {
-                            HStack {
-                                Image(systemName: "key.fill")
-                                    .foregroundColor(.blue)
-                                Text("View Recovery Phrase")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
+                            HStack(spacing: 8) {
+                                Image(systemName: "questionmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
+
+                                Text("Help & Support")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
+                                    )
+                            )
                         }
-                    } else {
-                        HStack {
-                            Image(systemName: "exclamationmark.shield.fill")
-                                .foregroundColor(.orange)
-                            VStack(alignment: .leading) {
-                                Text("Encryption Disabled")
-                                    .font(.headline)
-                                Text("Enable encryption to protect your data")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                        .buttonStyle(PlainButtonStyle())
+
+                        Button(action: {
+                            showTermsOfUse = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc.text.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
+
+                                Text("Terms of Use")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
                             }
-                            Spacer()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
+                                    )
+                            )
                         }
-                        .padding(.vertical, 2)
+                        .buttonStyle(PlainButtonStyle())
+
+                        Button(action: {
+                            showPrivacyPolicy = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
+
+                                Text("Privacy Policy")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(Color("NormaPastelPurple"))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color("NormaPastelPurple").opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+
+                    // Account Section
+                    SettingsSectionView(title: "Account") {
+                        Button(action: {
+                            showLogoutAlert = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.red)
+
+                                Text("Sign Out")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(.red)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.red.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.red.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
+                        Button(action: {
+                            showDeleteAccountAlert = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.red)
+
+                                Text("Delete Account")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(.red)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.red.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.red.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .disabled(isDeletingAccount)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
-                
-                // Data Section
-                Section("Data") {
-                    HStack {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundColor(.blue)
-                        Text("Sync Data")
-                        Spacer()
-                        if dataManager.isLoading {
-                            ProgressView()
-                                .scaleEffect(0.8)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+            .background(Color("NormaBackground"))
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        let impactMedium = UIImpactFeedbackGenerator(style: .medium)
+                        impactMedium.impactOccurred()
+
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            isMenuOpen.toggle()
                         }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 20))
+                            .foregroundColor(.primary)
                     }
-                    .onTapGesture {
-                        Task {
-                            try? await dataManager.syncAllData()
-                        }
-                    }
-                    
-                    if let lastSync = dataManager.lastSyncDate {
-                        HStack {
-                            Image(systemName: "clock")
-                                .foregroundColor(.secondary)
-                            Text("Last synced")
-                            Spacer()
-                            Text(lastSync, style: .relative)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                // Support Section
-                Section("Support") {
-                    Button(action: {
-                        showHelpSupport = true
-                    }) {
-                        HStack {
-                            Image(systemName: "questionmark.circle.fill")
-                                .foregroundColor(.blue)
-                            Text("Help & Support")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
-                    
-                    Button(action: {
-                        showTermsOfUse = true
-                    }) {
-                        HStack {
-                            Image(systemName: "doc.text.fill")
-                                .foregroundColor(.blue)
-                            Text("Terms of Use")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
-                    
-                    Button(action: {
-                        showPrivacyPolicy = true
-                    }) {
-                        HStack {
-                            Image(systemName: "lock.shield.fill")
-                                .foregroundColor(.blue)
-                            Text("Privacy Policy")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
-                }
-                
-                // Account Section
-                Section("Account") {
-                    Button(action: {
-                        showLogoutAlert = true
-                    }) {
-                        HStack {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .foregroundColor(.red)
-                            Text("Sign Out")
-                                .foregroundColor(.red)
-                        }
-                    }
-                    
-                    Button(action: {
-                        showDeleteAccountAlert = true
-                    }) {
-                        HStack {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                            Text("Delete Account")
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .disabled(isDeletingAccount)
                 }
             }
-            .navigationTitle("Settings")
             .alert("Sign Out", isPresented: $showLogoutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -431,11 +527,11 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private func requestNotificationPermission() async {
         let granted = await notificationService.requestNotificationPermission()
         print("🔔 Notification permission granted: \(granted)")
-        
+
         if !granted {
             // If permission was denied, we could show an alert directing them to Settings
             // But the NotificationService already handles this via the permission status
@@ -443,8 +539,30 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Supporting Views
+
+struct SettingsSectionView<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.normaHeadline(13))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 12) {
+                content
+            }
+            .padding()
+            .background(Color("NormaBackground"))
+        }
+    }
+}
+
 #Preview {
-    SettingsView()
+    SettingsView( isMenuOpen: .constant(false))
         .environmentObject(SessionViewModel(dataManager: DataManager()))
         .environmentObject(DataManager())
 }

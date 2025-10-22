@@ -17,10 +17,9 @@ struct BudgetDetailView: View {
     
     @State private var showEditBudgetSheet = false
     @State private var showDeleteConfirmation = false
-    @State private var showAddExpenseSheet = false
     
     private var linkedExpenses: [Expense] {
-        dataManager.expenses.filter { $0.budgetId == budget.id }
+        expenseViewModel.expenses.filter { $0.budgetId == budget.id }
             .sorted { expense1, expense2 in
                 let formatter = ISO8601DateFormatter()
                 guard let date1 = formatter.date(from: expense1.expenseDate),
@@ -32,7 +31,8 @@ struct BudgetDetailView: View {
     }
     
     private var totalSpent: Double {
-        linkedExpenses.reduce(0) { $0 + $1.amount }
+        // Use the currentSpent from the budget model (maintained in database)
+        budget.currentSpent
     }
     
     private var remainingAmount: Double {
@@ -50,11 +50,11 @@ struct BudgetDetailView: View {
     
     private var statusColor: Color {
         if percentageUsed < 0.5 {
-            return .green
+            return Color("NormaPastelTeal")
         } else if percentageUsed < 0.8 {
-            return .yellow
+            return Color("NormaPastelBeige")
         } else if percentageUsed < 1.0 {
-            return .orange
+            return Color("NormaPastelCoral")
         } else {
             return .red
         }
@@ -62,52 +62,32 @@ struct BudgetDetailView: View {
     
     private var linkedCategory: Category? {
         guard let categoryId = budget.categoryId else { return nil }
+        // Categories are managed by DataManager as they're relatively static
+        // and shared across all ViewModels
         return dataManager.categories.first { $0.id == categoryId }
     }
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                    // Budget overview section
-                    budgetOverviewView
-                    
-                    // Budget details section
-                    budgetDetailsView
-                    
-                    // Progress section
-                    progressView
-                    
-                    // Category info if available
-                    if linkedCategory != nil {
-                        categoryView
-                    }
-                    
-                    // Notes if available
-                    if let notes = budget.notes, !notes.isEmpty {
-                        notesView(notes: notes)
-                    }
-                    
+                    // Header with budget name (centered)
+                    headerView
+
+                    // Date metadata
+                    dateMetadataView
+
+                    // Combined budget details (progress + end date)
+                    budgetDetailsRow
+
                     // Recent expenses section
                     expensesSection
-                    
+
                     // Action buttons
                     actionButtonsView
             }
             .padding()
         }
         .scrollIndicators(.hidden)
-        .sheet(isPresented: $showEditBudgetSheet) {
-            EditBudgetView(budget: budget)
-                .environmentObject(dataManager)
-                .environmentObject(budgetViewModel)
-                .environmentObject(profileViewModel)
-        }
-        .sheet(isPresented: $showAddExpenseSheet) {
-            AddExpenseView(preselectedBudget: budget)
-                .environmentObject(dataManager)
-                .environmentObject(expenseViewModel)
-                .environmentObject(profileViewModel)
-        }
         .alert("Delete Budget", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -121,262 +101,235 @@ struct BudgetDetailView: View {
     }
     
     @ViewBuilder
-    private var budgetOverviewView: some View {
-        VStack(spacing: 16) {
-            // Header with amount and name
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(budget.name)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    if let category = linkedCategory {
-                        Text(category.name)
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(profileViewModel.formatCurrency(budget.amount))
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.blue)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "target")
-                            .font(.system(size: 12))
-                        Text("Budget")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(.blue)
+    private var headerView: some View {
+        VStack(spacing: 12) {
+            // Category icon (if available)
+            if let category = linkedCategory {
+                Circle()
+                    .fill(category.color.opacity(0.1))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: category.icon)
+                            .font(.system(size: 26))
+                            .foregroundColor(category.color)
+                    )
+            }
+
+            // Budget name
+            VStack(spacing: 4) {
+                Text(budget.name)
+                    .font(.normaTitle(24))
+                    .foregroundColor(.primary)
+
+                if let category = linkedCategory {
+                    Text(category.name)
+                        .font(.normaHeadline(14))
+                        .foregroundColor(.secondary)
                 }
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-            )
-            
-            // Status and progress info
-            HStack {
-                Label {
-                    Text(budget.startDate, format: .dateTime.month().day().year())
-                        .font(.system(size: 14))
-                } icon: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 14))
-                }
-                .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "chart.bar.fill")
-                        .font(.system(size: 14))
-                    Text("\(Int(percentageUsed * 100))% used")
-                        .font(.system(size: 14))
-                }
-                .foregroundColor(statusColor)
-            }
-            .padding(.horizontal, 4)
         }
+        .frame(maxWidth: .infinity)
     }
-    
-    private var budgetDetailsView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Budget Details")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            VStack(spacing: 0) {
-                // Budget amount
-                HStack {
-                    Text("Budget Amount")
+
+    @ViewBuilder
+    private var dateMetadataView: some View {
+        HStack(spacing: 12) {
+            // Start date
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.1))
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(profileViewModel.formatCurrency(budget.amount))
-                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.blue)
                 }
-                .padding(.vertical, 12)
-                
-                Divider()
-                
-                // Alert threshold
-                HStack {
-                    Text("Alert Threshold")
-                        .font(.system(size: 14))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Start")
+                        .font(.normaHeadline(11))
                         .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(Int(budget.alertThreshold * 100))%")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.orange)
+
+                    Text(budget.startDate, format: .dateTime.month().day().year())
+                        .font(.normaHeadline(13))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
-                .padding(.vertical, 12)
-                
-                Divider()
-                
-                // End date
-                HStack {
-                    Text("End Date")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Arrow separator
+            Image(systemName: "arrow.right")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary.opacity(0.5))
+                .padding(.horizontal, 4)
+
+            // End date
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.1))
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "flag.checkered")
                         .font(.system(size: 14))
+                        .foregroundColor(.green)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("End")
+                        .font(.normaHeadline(11))
                         .foregroundColor(.secondary)
-                    Spacer()
+
                     if let endDate = budget.endDate {
                         Text(endDate, format: .dateTime.month().day().year())
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.normaHeadline(13))
                             .foregroundColor(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     } else {
-                        Text("Not set")
-                            .font(.system(size: 14, weight: .medium))
+                        Text("No end date")
+                            .font(.normaHeadline(13))
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                .padding(.vertical, 12)
             }
-            .padding(.horizontal)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-    
-    @ViewBuilder
-    private var progressView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Spending Progress")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            VStack(spacing: 16) {
-                // Amount summary
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Spent")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalSpent))
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(isOverBudget ? .red : .primary)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(isOverBudget ? "Over by" : "Remaining")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(abs(remainingAmount)))
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(isOverBudget ? .red : .green)
-                    }
-                }
-                
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.1))
-                            .frame(height: 16)
-                        
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(statusColor)
-                            .frame(
-                                width: min(geometry.size.width * percentageUsed, geometry.size.width),
-                                height: 16
-                            )
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: percentageUsed)
-                    }
-                }
-                .frame(height: 16)
-                
-                // Alert threshold warning
-                if percentageUsed >= budget.alertThreshold {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 14))
-                        Text("Alert threshold reached")
-                            .font(.system(size: 14))
-                    }
-                    .foregroundColor(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(statusColor.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(statusColor.opacity(0.2), lineWidth: 1)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.03),
+                            Color.gray.opacity(0.01)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-            )
-        }
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.15),
+                            Color.gray.opacity(0.05)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
     }
-    
+
     @ViewBuilder
-    private var categoryView: some View {
-        if let category = linkedCategory {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Linked Category")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                
-                HStack {
-                    ZStack {
-                        Circle()
-                            .fill(category.color.opacity(0.1))
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: category.icon)
-                            .font(.system(size: 18))
-                            .foregroundColor(category.color)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(category.name)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                        
-                        Text(category.type.rawValue)
-                            .font(.system(size: 12))
+    private var budgetDetailsRow: some View {
+        HStack {
+            // Icon and progress info
+            HStack(spacing: 12) {
+                // Circular progress indicator
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 6)
+                        .frame(width: 50, height: 50)
+
+                    Circle()
+                        .trim(from: 0, to: min(percentageUsed, 1.0))
+                        .stroke(
+                            statusColor,
+                            style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 50, height: 50)
+
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(statusColor)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    // Progress percentage
+                    HStack(spacing: 4) {
+                        Image(systemName: statusIcon)
+                            .font(.caption)
+                            .foregroundColor(statusColor)
+
+                        Text("\(Int(percentageUsed * 100))%")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary)
                     }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "link")
-                        .font(.system(size: 14))
-                        .foregroundColor(category.color)
+
+                    // End date
+                    if let endDate = budget.endDate {
+                        HStack(spacing: 4) {
+                            Text("•")
+                                .foregroundColor(.secondary)
+                            Text("Ends \(endDate, format: .dateTime.month().day())")
+                                .font(.normaHeadline(14))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(category.color.opacity(0.1))
-                )
+            }
+
+            Spacer()
+
+            // Amount section
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(profileViewModel.formatCurrency(totalSpent))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.primary)
+
+                Text("of \(profileViewModel.formatCurrency(budget.amount))")
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundColor(.secondary)
             }
         }
-    }
-    
-    private func notesView(notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Notes")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-            
-            Text(notes)
-                .font(.system(size: 14))
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(UIColor.systemBackground),
+                            Color.gray.opacity(0.02)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.2),
+                            Color.gray.opacity(0.05)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private var statusIcon: String {
+        if percentageUsed >= 1.0 {
+            return "exclamationmark.triangle.fill"
+        } else if percentageUsed >= 0.8 {
+            return "exclamationmark.circle.fill"
+        } else {
+            return "checkmark.circle.fill"
         }
     }
     
@@ -385,14 +338,14 @@ struct BudgetDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Linked Expenses")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.normaHeadline(16))
                     .foregroundColor(.primary)
-                
+
                 Spacer()
-                
+
                 if !linkedExpenses.isEmpty {
                     Text("\(linkedExpenses.count)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -402,19 +355,19 @@ struct BudgetDetailView: View {
                         )
                 }
             }
-            
+
             if linkedExpenses.isEmpty {
                 VStack(spacing: 12) {
-                    Image(systemName: "doc.text")
+                    Image(systemName: "message.fill")
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
-                    
+
                     Text("No expenses linked yet")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.normaHeadline(16))
                         .foregroundColor(.primary)
-                    
-                    Text("Expenses linked to this budget will appear here")
-                        .font(.system(size: 14))
+
+                    Text("Use the chat to add expenses to this budget")
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -422,70 +375,56 @@ struct BudgetDetailView: View {
                 .padding(.vertical, 32)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
+                        .fill(Color.gray.opacity(0.05))
                 )
             } else {
-                VStack(spacing: 8) {
-                    ForEach(linkedExpenses.prefix(5)) { expense in
-                        BudgetExpenseRow(expense: expense)
+                VStack(spacing: 12) {
+                    ForEach(linkedExpenses.prefix(10)) { expense in
+                        BudgetExpenseRow(expense: expense, category: linkedCategory)
                     }
-                    
-                    if linkedExpenses.count > 5 {
+
+                    if linkedExpenses.count > 10 {
                         Button(action: {
                             // Navigate to full expenses list
                         }) {
                             Text("View all \(linkedExpenses.count) expenses")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.blue)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 8)
                         }
                     }
                 }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.gray.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
             }
         }
     }
     
     private var actionButtonsView: some View {
-        VStack(spacing: 12) {
-            // Primary action
-            HStack(spacing: 12) {
-                Button(action: {
-                    showAddExpenseSheet = true
-                }) {
-                    VStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20))
-                        Text("Add Expense")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.blue.opacity(0.1))
-                    )
-                    .foregroundColor(.blue)
-                }
+        // Delete button
+        Button(action: {
+            showDeleteConfirmation = true
+        }) {
+            HStack {
+                Image(systemName: "trash")
+                    .font(.system(size: 16))
+                Text("Delete Budget")
+                    .font(.normaHeadline(16))
             }
-            
-            // Delete button
-            Button(action: {
-                showDeleteConfirmation = true
-            }) {
-                HStack {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16))
-                    Text("Delete Budget")
-                        .font(.system(size: 16, weight: .medium))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.red.opacity(0.1))
-                )
-                .foregroundColor(.red)
-            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.red.opacity(0.1))
+            )
+            .foregroundColor(.red)
         }
         .padding(.top, 8)
     }
@@ -499,37 +438,53 @@ struct BudgetDetailView: View {
 
 struct BudgetExpenseRow: View {
     let expense: Expense
+    let category: Category?
     @EnvironmentObject private var profileViewModel: ProfileViewModel
-    
+
     private var expenseDate: Date {
         let formatter = ISO8601DateFormatter()
         return formatter.date(from: expense.expenseDate) ?? Date()
     }
-    
+
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            // Category icon (if available)
+            if let category = category {
+                Circle()
+                    .fill(category.color.opacity(0.1))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Image(systemName: category.icon)
+                            .font(.system(size: 12))
+                            .foregroundColor(category.color)
+                    )
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Image(systemName: "dollarsign.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(expense.name)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.normaHeadline(12))
                     .foregroundColor(.primary)
-                
+
                 Text(expenseDate, format: .dateTime.month().day())
-                    .font(.system(size: 12))
+                    .font(.normaHeadline(10))
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             Text(profileViewModel.formatCurrency(expense.amount))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.systemGray6))
-        )
     }
 }
 

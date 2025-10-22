@@ -17,6 +17,7 @@ struct ExpenseCalendarView: View {
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
     @EnvironmentObject var incomeViewModel: IncomeViewModel
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @Environment(\.colorScheme) var colorScheme
     
     // Voice mode states
     @State private var showVoiceMode = false
@@ -51,43 +52,19 @@ struct ExpenseCalendarView: View {
             // Header section matching ExpenseTrackerChartView style
             VStack(spacing: 12) {
                 Text(monthYearFormatter.string(from: currentMonth).uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.normaFinancial(18))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
-                
-                // Summary stats
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Month Total")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalExpensesThisMonth))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Active Days")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("\(daysWithExpenses)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
+
+                // Summary stats - redesigned with larger numbers
+                VStack(spacing: 8) {
+                    Text(profileViewModel.formatCurrency(totalExpensesThisMonth))
+                        .font(.normaHeadline(48))
+                        .foregroundColor(.primary)
+                    Text("Total spent this month")
+                        .font(.normaInput(13))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
             }
             
             // Voice mode instruction - Temporarily commented out
@@ -124,7 +101,10 @@ struct ExpenseCalendarView: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
+                            gradient: Gradient(colors: colorScheme == .dark ? [
+                                Color(red: 0.160, green: 0.128, blue: 0.102),
+                                Color(red: 0.180, green: 0.145, blue: 0.118)
+                            ] : [
                                 Color(UIColor.systemBackground),
                                 Color.gray.opacity(0.02)
                             ]),
@@ -158,7 +138,7 @@ struct ExpenseCalendarView: View {
                     HStack(spacing: 0) {
                         ForEach(days, id: \.self) { day in
                             Text(day)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.normaInput(12))
                                 .frame(maxWidth: .infinity)
                                 .foregroundColor(.secondary)
                         }
@@ -339,17 +319,17 @@ struct DayCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 14, weight: isToday ? .semibold : .regular))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundColor(cellTextColor)
-            
+
             // Expense indicator
             if expenseCount > 0 {
                 Text(formattedExpenseAmount)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.purple.opacity(0.8))
+                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                    .foregroundColor(expenseAmountColor)
             } else {
                 Text(" ")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9, weight: .regular, design: .rounded))
             }
         }
         .frame(height: 45)
@@ -358,19 +338,28 @@ struct DayCell: View {
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.1))
-                    
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
+                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.purple.opacity(0.3), lineWidth: 1.5)
+                        .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.4), lineWidth: 1.5)
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.blue.opacity(0.05))
-                    
+                        .fill(Color("NormaPastelCoral").opacity(0.08))
+
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                        .stroke(Color("NormaPastelCoral").opacity(0.25), lineWidth: 1)
                 } else if expenseCount > 0 {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.05))
+                        .fill(Color("NormaPastelCoral").opacity(0.05))
                 }
             }
         )
@@ -379,13 +368,21 @@ struct DayCell: View {
     
     private var cellTextColor: Color {
         if isSelected {
-            return .purple
+            return .primary
         } else if isToday {
-            return .blue
+            return Color("NormaPastelCoral")
         } else if !isCurrentMonth {
             return .secondary.opacity(0.5)
         } else {
             return .primary
+        }
+    }
+
+    private var expenseAmountColor: Color {
+        if isSelected {
+            return .primary.opacity(0.8)
+        } else {
+            return Color("NormaPastelCoral").opacity(0.9)
         }
     }
 }

@@ -167,8 +167,13 @@ class ExpenseViewModel: ObservableObject {
         )
         
         do {
-            print("🔍 [DEBUG] ExpenseViewModel.addExpense calling addExpenseWithEncryption")
             try await dataManager.addExpenseWithEncryption(newExpense)
+
+            // If expense is linked to a budget, update budget's currentSpent
+            if let budgetId = budgetId {
+                try await dataManager.updateBudgetSpent(budgetId: budgetId, amountChange: amount)
+            }
+
             loadExpenses()
             showAddExpense = false
             isLoading = false
@@ -183,28 +188,53 @@ class ExpenseViewModel: ObservableObject {
     func updateExpense(_ expense: Expense) async {
         isLoading = true
         clearError()
-        
+
         do {
+            // Get the old expense to check if budgetId changed
+            let oldExpense = expenses.first { $0.id == expense.id }
+            let oldBudgetId = oldExpense?.budgetId
+            let newBudgetId = expense.budgetId
+
+            // Update the expense
             try await dataManager.updateExpense(expense)
+
+            // Update budget currentSpent if budgetId changed
+            if oldBudgetId != newBudgetId {
+                // Remove amount from old budget
+                if let oldBudgetId = oldBudgetId {
+                    try await dataManager.updateBudgetSpent(budgetId: oldBudgetId, amountChange: -expense.amount)
+                }
+
+                // Add amount to new budget
+                if let newBudgetId = newBudgetId {
+                    try await dataManager.updateBudgetSpent(budgetId: newBudgetId, amountChange: expense.amount)
+                }
+            }
+
             loadExpenses()
         } catch {
             showError("Failed to update expense: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
     func deleteExpense(_ expense: Expense) async {
         isLoading = true
         clearError()
-        
+
         do {
+            // If expense was linked to a budget, subtract from currentSpent
+            if let budgetId = expense.budgetId {
+                try await dataManager.updateBudgetSpent(budgetId: budgetId, amountChange: -expense.amount)
+            }
+
             try await dataManager.deleteExpense(expense)
             loadExpenses()
         } catch {
             showError("Failed to delete expense: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     

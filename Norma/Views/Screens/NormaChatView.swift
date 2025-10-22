@@ -34,15 +34,14 @@ enum NormaChatContext {
         }
     }
     
-    func systemPrompt(currency: String) -> String {
-        switch self {
-        case .bills:
-            return NormaSystemPrompts.billCreationPrompt(currency: currency)
-        case .expenses:
-            return NormaSystemPrompts.expenseCreationPrompt(currency: currency)
-        case .profile:
-            return NormaSystemPrompts.generalAssistantPrompt(currency: currency)
-        }
+    func systemPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+        // All contexts now use the same comprehensive prompt
+        return NormaSystemPrompts.generalChatPrompt(
+            currency: currency,
+            bills: bills,
+            expenses: expenses,
+            budgets: budgets
+        )
     }
 }
 
@@ -173,7 +172,7 @@ struct NormaChatView: View {
                     }
                     
                     if isLoading {
-                        TypingIndicatorView()
+                        ThinkingIndicator()
                             .id("typing")
                     }
                 }
@@ -352,26 +351,30 @@ struct NormaChatView: View {
     
     private func setupInitialMessage() {
         let welcomeMessage = ChatMessage(
-            text: context.welcomeMessage,
-            isUser: false
+            role: .assistant,
+            content: context.welcomeMessage
         )
         messages = [welcomeMessage]
     }
-    
+
     private func sendMessage() {
         let userMessage = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userMessage.isEmpty else { return }
-        
+
         // Add user message
-        let chatMessage = ChatMessage(text: userMessage, isUser: true)
+        let chatMessage = ChatMessage(role: .user, content: userMessage)
         messages.append(chatMessage)
-        
-        // Clear input and show loading
+
+        // Clear input
         inputText = ""
-        isLoading = true
-        
+
         // Process message with AI
         Task {
+            // Delay showing loading indicator to make fast responses feel instant
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            if !Task.isCancelled {
+                isLoading = true
+            }
             await processUserMessage(userMessage)
         }
     }
@@ -386,11 +389,16 @@ struct NormaChatView: View {
             
             // Get user's currency (default to USD if not set)
             let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
-            
-            // Get response from Norma AI with context-specific tools and prompt
+
+            // Get response from Norma AI with comprehensive prompt including all user data
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
-                systemPrompt: context.systemPrompt(currency: currency),
+                systemPrompt: context.systemPrompt(
+                    currency: currency,
+                    bills: billViewModel.bills,
+                    expenses: expenseViewModel.expenses,
+                    budgets: [] // No budget support in this view yet
+                ),
                 tools: tools
             )
             
@@ -399,7 +407,7 @@ struct NormaChatView: View {
             case .text(let text):
                 await MainActor.run {
                     isLoading = false
-                    let aiMessage = ChatMessage(text: text, isUser: false)
+                    let aiMessage = ChatMessage(role: .assistant, content: text)
                     messages.append(aiMessage)
                 }
                 
@@ -426,16 +434,21 @@ struct NormaChatView: View {
                 // Get Claude's final response after tool execution
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
-                    systemPrompt: context.systemPrompt(currency: currency),
+                    systemPrompt: context.systemPrompt(
+                        currency: currency,
+                        bills: billViewModel.bills,
+                        expenses: expenseViewModel.expenses,
+                        budgets: []
+                    ),
                     tools: tools
                 )
                 
                 await MainActor.run {
                     isLoading = false
-                    
+
                     // Handle final response
                     if case .text(let text) = finalResponse {
-                        let aiMessage = ChatMessage(text: text, isUser: false)
+                        let aiMessage = ChatMessage(role: .assistant, content: text)
                         messages.append(aiMessage)
                     }
                 }
@@ -459,8 +472,8 @@ struct NormaChatView: View {
     private func createConversationHistory() -> [AnthropicMessage] {
         return messages.map { chatMessage in
             AnthropicMessage(
-                role: chatMessage.isUser ? "user" : "assistant",
-                content: .text(chatMessage.text)
+                role: chatMessage.role == .user ? "user" : "assistant",
+                content: .text(chatMessage.content)
             )
         }
     }

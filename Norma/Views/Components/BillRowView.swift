@@ -29,9 +29,9 @@ struct BillRowView: View {
     
     private var statusColor: Color {
         switch billStatus {
-        case .paid: return .green
-        case .overdue: return .red
-        case .scheduled: return .blue
+        case .paid: return Color("NormaPastelTeal")
+        case .overdue: return Color("NormaPastelCoral")
+        case .scheduled: return Color("NormaPastelPurple")
         }
     }
     
@@ -84,38 +84,35 @@ struct BillRowView: View {
         Button(action: {
             selectedBill = bill
         }) {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // Status icon
-                ZStack {
-                    Circle()
-                        .fill(statusColor.opacity(0.1))
-                        .frame(width: 40, height: 40)
-                    
-                    Image(systemName: statusIcon)
-                        .font(.system(size: 18))
-                        .foregroundColor(statusColor)
-                }
-                
+                Circle()
+                    .fill(statusColor.opacity(0.1))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Image(systemName: statusIcon)
+                            .font(.system(size: 14))
+                            .foregroundColor(statusColor)
+                    )
+
                 // Bill info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(bill.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
-                    
+
                     Text(dueDateText)
-                        .font(.system(size: 12))
-                        .foregroundColor(billStatus == .overdue ? .red : .secondary)
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundColor(billStatus == .overdue ? Color("NormaPastelCoral") : .secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Amount
                 Text(profileViewModel.formatCurrency(bill.amount))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(billStatus == .overdue ? .red : .primary)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(billStatus == .overdue ? Color("NormaPastelCoral") : .primary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(item: $selectedBill) { bill in
@@ -172,7 +169,7 @@ struct BillRowView: View {
         BillRowView(bill: overdueBill)
     }
     .padding()
-    .background(Color.gray.opacity(0.1))
+    .background(Color("NormaCard"))
     .environmentObject(expenseViewModel)
     .environmentObject(profileViewModel)
 }

@@ -176,16 +176,19 @@ class OnboardingViewModel: ObservableObject {
     func sendMessage(_ messageText: String) async {
         let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty else { return }
-        
+
         userInput = ""
         clearError()
-        
+
         // Add user message
         addUserMessage(trimmedMessage)
         conversationHistory.append(AnthropicMessage(role: "user", content: .text(trimmedMessage)))
-        
+
         // Only get AI response if we haven't completed onboarding
         if !showCompletionTransition {
+            // Delay showing typing indicator to make fast responses feel instant
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
             // Get AI response
             isTyping = true
             
@@ -247,13 +250,13 @@ class OnboardingViewModel: ObservableObject {
     
     private func addUserMessage(_ text: String) {
         withAnimation {
-            messages.append(ChatMessage(text: text, isUser: true))
+            messages.append(ChatMessage(role: .user, content: text))
         }
     }
-    
+
     private func addNormaMessage(_ text: String) {
         withAnimation {
-            messages.append(ChatMessage(text: text, isUser: false))
+            messages.append(ChatMessage(role: .assistant, content: text))
         }
     }
     

@@ -88,20 +88,20 @@ class BudgetViewModel: ObservableObject {
         updateBudgetPerformance()
         updateStatistics()
     }
-    
+
     func refreshBudgets() async {
         guard let userId = sessionViewModel.currentUser?.userId else { return }
-        
+
         isLoading = true
         clearError()
-        
+
         do {
-            try await dataManager.fetchBudgets(userId: userId)
-            loadBudgets()
+            try await dataManager.fetchBudgetsWithEncryption(userId: userId)
+            // loadBudgets() will be called automatically by the observer
         } catch {
             showError(error.localizedDescription)
         }
-        
+
         isLoading = false
     }
     

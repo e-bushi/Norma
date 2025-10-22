@@ -16,6 +16,7 @@ struct ExpenseDisclosureView: View {
     @State private var selectedExpense: Expense? = nil
     @State private var showCreateExpense = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @Environment(\.colorScheme) var colorScheme
     
     private let maxExpensesToShow = 5
     
@@ -51,213 +52,152 @@ struct ExpenseDisclosureView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            // Header section matching ExpenseTrackerChartView style
-            VStack(spacing: 12) {
-                Text("RECENT EXPENSES")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                
-                // Summary stats
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Total Spent")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text(profileViewModel.formatCurrency(totalExpenseAmount))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Transactions")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("\(filteredExpenses.count)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
+            // Add expense button
+            Button(action: {
+                showCreateExpense = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 15))
+
+                    Text("Add Expense")
+                        .font(.normaInput(14))
                 }
-                .padding(.horizontal, 24)
+                .foregroundColor(colorScheme == .dark ? .white : Color(red: 0.50, green: 0.45, blue: 0.65))
+                .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
+                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
                         )
                 )
             }
-            
-            // Add expense buttons
-            HStack(spacing: 12) {
-                // Add manually button
-                Button(action: {
-                    showCreateExpense = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 15))
-                        
-                        Text("Add manually")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.purple)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.purple.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.purple.opacity(0.2), lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                // Add with AI button
-                Button(action: {
-                    showNormaChat = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 15))
-                        
-                        Text("Add with AI")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
+            .buttonStyle(PlainButtonStyle())
             
             // Expenses list container
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(UIColor.systemBackground),
-                                Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
+            if displayedExpenses.isEmpty {
+                // Enhanced empty state
+                VStack(spacing: 24) {
+                    // Icon with gradient background
+                    ZStack {
+                        Circle()
+                            .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color.gray.opacity(0.2),
-                                        Color.gray.opacity(0.05)
+                                        Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
+                                        Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.3)
                                     ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 80, height: 80)
+
+                        Image(systemName: "creditcard.and.123")
+                            .font(.system(size: 36))
+                            .foregroundColor(Color("NormaPastelCoral"))
+                    }
+
+                    VStack(spacing: 12) {
+                        Text("No expenses yet")
+                            .font(.normaFinancial(20))
+                            .foregroundColor(.primary)
+
+                        Text("Start tracking your daily expenses\nto better manage your budget")
+                            .font(.normaInput(14))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                    }
+
+                    // Quick tips
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(Color("NormaPastelBeige"))
+
+                            Text("Track groceries, dining, and shopping")
+                                .font(.normaInput(13))
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.pie.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(Color("NormaPastelCoral"))
+
+                            Text("Categorize spending automatically")
+                                .font(.normaInput(13))
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 16))
+                                .foregroundColor(Color("NormaPastelTeal"))
+
+                            Text("Visualize your spending habits")
+                                .font(.normaInput(13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.05))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                             )
                     )
-                
-                VStack(spacing: 0) {
-                    if displayedExpenses.isEmpty {
-                        // Enhanced empty state
-                        VStack(spacing: 24) {
-                            // Icon with gradient background
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.purple.opacity(0.1),
-                                                Color.purple.opacity(0.05)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 80, height: 80)
-                                
-                                Image(systemName: "creditcard.circle.fill")
-                                    .font(.system(size: 36))
-                                    .foregroundColor(.purple)
-                            }
-                            
-                            VStack(spacing: 12) {
-                                Text("No expenses yet")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                
-                                Text("Start tracking your spending to see your patterns")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .lineSpacing(4)
-                            }
-                            
-                            // Quick tips
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.green)
-                                    
-                                    Text("Tap + to add an expense")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                HStack(spacing: 12) {
-                                    Image(systemName: "chart.line.uptrend.xyaxis")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.blue)
-                                    
-                                    Text("Watch your spending trends grow")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                HStack(spacing: 12) {
-                                    Image(systemName: "target")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.orange)
-                                    
-                                    Text("Stay within your budget goals")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.gray.opacity(0.05))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                                    )
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .padding(.horizontal, 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(UIColor.systemBackground),
+                                    Color.gray.opacity(0.02)
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                        }
-                        .padding(.vertical, 40)
-                        .padding(.horizontal, 20)
-                    } else {
-                        // Expense items
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.gray.opacity(0.2),
+                                            Color.gray.opacity(0.05)
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+            } else {
+                VStack(spacing: 0) {
+                    // Expense items
+                    VStack(spacing: 16) {
                         ForEach(displayedExpenses) { expense in
                             Button(action: {
                                 selectedExpense = expense
@@ -265,49 +205,50 @@ struct ExpenseDisclosureView: View {
                                 ExpenseRowView(expense: expense)
                             }
                             .buttonStyle(PlainButtonStyle())
-                            
-                            if expense.id != displayedExpenses.last?.id {
-                                Divider()
-                                    .padding(.horizontal, 20)
-                            }
                         }
-                        
-                        // See all button
-                        if filteredExpenses.count > maxExpensesToShow {
-                            Divider()
-                                .padding(.horizontal, 20)
-                            
-                            Button(action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showingAllExpenses.toggle()
-                                }
-                            }) {
-                                HStack {
-                                    Text("See All Expenses")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.purple)
-                                    
-                                    Spacer()
-                                    
-                                    Text("\(filteredExpenses.count - maxExpensesToShow) more")
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundColor(.secondary)
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.purple)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+
+                    // See all button
+                    if filteredExpenses.count > maxExpensesToShow {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showingAllExpenses.toggle()
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .sheet(isPresented: $showingAllExpenses) {
-                                MyExpensesView()
+                        }) {
+                            HStack {
+                                Text("See All Expenses")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color("NormaPastelCoral"))
+
+                                Spacer()
+
+                                Text("\(filteredExpenses.count - maxExpensesToShow) more")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color("NormaPastelCoral"))
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.top, 12)
+                        .sheet(isPresented: $showingAllExpenses) {
+                            MyExpensesView()
                         }
                     }
                 }
-                .padding(.vertical, 8)
             }
         }
         .sheet(item: $selectedExpense) { expense in
@@ -324,13 +265,19 @@ struct ExpenseDisclosureView: View {
 struct ExpenseRowView: View {
     let expense: Expense
     @EnvironmentObject var profileViewModel: ProfileViewModel
-    
-    private var expenseCategory: ExpenseCategory {
-        // TODO: Map category from Expense.categoryId to ExpenseCategory
-        // For now, default to .other since we don't have the mapping implemented
-        .other
+    @EnvironmentObject var dataManager: DataManager
+    @EnvironmentObject var budgetViewModel: BudgetViewModel
+
+    private var category: Category? {
+        // Get category through the budget
+        guard let budgetId = expense.budgetId,
+              let budget = budgetViewModel.budgets.first(where: { $0.id == budgetId }),
+              let categoryId = budget.categoryId else {
+            return nil
+        }
+        return dataManager.categories.first { $0.id == categoryId }
     }
-    
+
     private var timeAgoText: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
@@ -340,40 +287,37 @@ struct ExpenseRowView: View {
         }
         return formatter.localizedString(for: expenseDate, relativeTo: Date())
     }
-    
+
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Category icon
-            ZStack {
-                Circle()
-                    .fill(expenseCategory.color.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                
-                Image(systemName: expenseCategory.icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(expenseCategory.color)
-            }
-            
+            Circle()
+                .fill((category?.color ?? Color("NormaPastelCoral")).opacity(0.15))
+                .frame(width: 34, height: 34)
+                .overlay(
+                    Image(systemName: category?.icon ?? "dollarsign.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(category?.color ?? Color("NormaPastelCoral"))
+                )
+
             // Expense info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(expense.name)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.primary)
-                
+
                 Text(timeAgoText)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             // Amount
             Text(profileViewModel.formatCurrency(expense.amount))
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
     }
 }
 
@@ -382,13 +326,13 @@ struct ExpenseRowView: View {
     let dateFormatter = ISO8601DateFormatter()
     let sampleExpenses: [Expense] = [
         Expense(userId: "preview-user", name: "Groceries", amount: 120.50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 1)), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Gas", amount: 45.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 2)), paymentMethod: .debitCard),
-        Expense(userId: "preview-user", name: "Movie Tickets", amount: 32.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 3)), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Restaurant", amount: 85.75, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 4)), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Uber Ride", amount: 18.50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 5)), paymentMethod: .digitalWallet),
-        Expense(userId: "preview-user", name: "Clothing", amount: 99.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 6)), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Doctor Visit", amount: 75.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 7)), paymentMethod: .creditCard),
-        Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 8)), paymentMethod: .bankTransfer)
+//        Expense(userId: "preview-user", name: "Gas", amount: 45.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 2)), paymentMethod: .debitCard),
+//        Expense(userId: "preview-user", name: "Movie Tickets", amount: 32.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 3)), paymentMethod: .creditCard),
+//        Expense(userId: "preview-user", name: "Restaurant", amount: 85.75, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 4)), paymentMethod: .creditCard),
+//        Expense(userId: "preview-user", name: "Uber Ride", amount: 18.50, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 5)), paymentMethod: .digitalWallet),
+//        Expense(userId: "preview-user", name: "Clothing", amount: 99.99, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 6)), paymentMethod: .creditCard),
+//        Expense(userId: "preview-user", name: "Doctor Visit", amount: 75.00, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 7)), paymentMethod: .creditCard),
+//        Expense(userId: "preview-user", name: "Electricity Bill", amount: 135.62, expenseDate: dateFormatter.string(from: Date().addingTimeInterval(-86400 * 8)), paymentMethod: .bankTransfer)
     ]
     
     // Create preview view models

@@ -42,81 +42,38 @@ struct BillHomeView: View {
         return billViewModel.activeBills.isEmpty && profileIncomeAmount > 0
     }
     
-    private var currentSpentAmount: Double {
-        // Calculate total spent: all active bill amounts + non-bill expenses for current month
-        // This prevents double counting - we count bill amounts, not the bill payment expenses
-        
-        // Get current month and year
+    private var billsPerDayDict: [Date: [Double]] {
         let calendar = Calendar.current
-        let now = Date()
-        let currentMonth = calendar.component(.month, from: now)
-        let currentYear = calendar.component(.year, from: now)
-        
-        // Filter expenses for current month only
-        let currentMonthExpenses = expenseViewModel.expenses.filter { expense in
-            // Parse the expense date string (assuming ISO format)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
-            // Try with fractional seconds first, then without
-            if let date = formatter.date(from: expense.expenseDate) {
-                let expenseMonth = calendar.component(.month, from: date)
-                let expenseYear = calendar.component(.year, from: date)
-                return expenseMonth == currentMonth && expenseYear == currentYear
+        var dict: [Date: [Double]] = [:]
+
+        for bill in billViewModel.activeBills {
+            let startOfDay = calendar.startOfDay(for: bill.dueDate)
+            if dict[startOfDay] != nil {
+                dict[startOfDay]?.append(bill.amount)
             } else {
-                // Try without fractional seconds
-                formatter.formatOptions = [.withInternetDateTime]
-                if let date = formatter.date(from: expense.expenseDate) {
-                    let expenseMonth = calendar.component(.month, from: date)
-                    let expenseYear = calendar.component(.year, from: date)
-                    return expenseMonth == currentMonth && expenseYear == currentYear
-                }
+                dict[startOfDay] = [bill.amount]
             }
-            return false
         }
-        
-        // Get the bill amounts for all active bills (regardless of payment status)
-        let activeBillsAmount = billViewModel.activeBills
-            .filter { $0.isActive ?? true } // Include bills where isActive is true or nil (default to active)
-            .reduce(0) { $0 + $1.amount }
-        
-        // Get expenses that are NOT linked to bills (billId is nil) for current month
-        let nonBillExpenses = currentMonthExpenses.filter { $0.billId == nil }
-        let nonBillExpensesAmount = nonBillExpenses.reduce(0) { $0 + $1.amount }
-        
-        return activeBillsAmount + nonBillExpensesAmount
+
+        return dict
     }
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack {
-                    // Hidden view to detect scrolling
-                    GeometryReader { geometry in
-                        Color.clear
-                            .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
-                    }
-                    .frame(height: 0)
-                    
-                    // Trial status banner
-                    TrialStatusBanner()
-                    
-                    ExpenseTrackerChartView(
-                    billAmount: billViewModel.totalMonthlyBills,
-                    currentExpenseAmount: currentSpentAmount,
-                    incomeAmount: profileIncomeAmount,
-                    month: currentMonth,
-                    isOnboardingMode: shouldShowOnboardingMode,
-                    showNormaChat: $showNormaChat
-                    )
-    
-                
+                VStack(spacing: 24) {
+                    // Bill Due Date Calendar
+                    BillDueDateCalendarView(billsPerDay: billsPerDayDict)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                    // Bill Disclosure
                     BillDisclosureView(bills: billViewModel.activeBills, showNormaChat: $showNormaChat)
-                    .padding(.vertical)
-                    .padding(.horizontal)
-                    .padding(.horizontal)
+                        .padding(.horizontal)
                 }
+                .padding(.bottom)
             }
+            .background(Color("NormaBackground"))
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { _ in
                 // Scroll detected
@@ -130,19 +87,16 @@ struct BillHomeView: View {
                     isScrolling = false
                 }
             }
-            .navigationTitle(Text("Home"))
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .refreshable {
-                await performRefresh()
-            }
-            .task {
-                // Only load if bills are empty (not already loaded by RootView)
-                if billViewModel.bills.isEmpty {
-                    await loadInitialData()
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("My Bills")
+                        .font(.normaTitle(20))
                 }
             }
-            .sheet(isPresented: $showNormaChat) {
-                NormaChatView(context: .bills)
+            .refreshable {
+                await performRefresh()
             }
             .sheet(isPresented: $showCreateBill) {
                 CreateBillView()

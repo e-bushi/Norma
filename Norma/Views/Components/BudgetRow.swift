@@ -41,12 +41,12 @@ struct BudgetRow: View {
                 // Category icon
                 ZStack {
                     Circle()
-                        .fill(category.color.opacity(0.1))
+                        .fill(category.color)
                         .frame(width: 36, height: 36)
-                    
+
                     Image(systemName: category.icon)
                         .font(.system(size: 16))
-                        .foregroundColor(category.color)
+                        .foregroundColor(.white)
                 }
                 
                 // Budget info

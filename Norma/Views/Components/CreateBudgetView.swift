@@ -20,10 +20,12 @@ struct CreateBudgetView: View {
     @State private var budgetName = ""
     @State private var selectedCategory: Category?
     @State private var budgetAmount = ""
-    @State private var alertThreshold: Double = 0.8
     @State private var startDate = Date()
     @State private var endDate = Date().addingTimeInterval(86400 * 30) // 30 days from now
     @State private var notes = ""
+
+    // Alert threshold is set to 80% by default and not user-configurable
+    private let alertThreshold: Double = 0.8
     
     init(preselectedCategory: Category? = nil) {
         self.preselectedCategory = preselectedCategory
@@ -50,32 +52,28 @@ struct CreateBudgetView: View {
         formattedAmount != nil &&
         formattedAmount! > 0
     }
-    
-    private var alertPercentage: Int {
-        Int(alertThreshold * 100)
+
+    private var currencySymbol: String {
+        let currencyCode = sessionViewModel.currentUser?.settings.currency ?? "USD"
+        return CurrencyData.getCurrency(for: currencyCode).symbol
     }
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Main budget card
-                    mainBudgetCard
-                    
+                    // Header with centered icon and name
+                    headerView
+
+                    // Budget amount card
+                    budgetAmountCard
+
                     // Budget details section
                     budgetDetailsSection
-                    
-                    // Alert settings section
-                    alertSettingsSection
-                    
+
                     // Date range section
                     dateRangeSection
-                    
-                    // Notes section
-                    if !notes.isEmpty {
-                        notesSection
-                    }
-                    
+
                     // Save button
                     saveButtonView
                 }
@@ -107,98 +105,111 @@ struct CreateBudgetView: View {
     }
     
     // MARK: - View Sections
-    
+
     @ViewBuilder
-    private var mainBudgetCard: some View {
-        VStack(spacing: 16) {
-            // Header with name input
-            HStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Budget Name", text: $budgetName)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    if let category = selectedCategory {
-                        HStack(spacing: 8) {
-                            Image(systemName: category.icon)
-                                .font(.system(size: 12))
-                                .foregroundColor(category.color)
-                            
-                            Text(category.name)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Text("$")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.secondary)
-                        
-                        TextField("0.00", text: $budgetAmount)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.primary)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 100)
-                            .focused($isAmountFieldFocused)
-                            .toolbar {
-                                ToolbarItemGroup(placement: .keyboard) {
-                                    Spacer()
-                                    Button("Done") {
-                                        isAmountFieldFocused = false
-                                    }
-                                    .font(.system(size: 16, weight: .semibold))
-                                }
-                            }
-                    }                                    
+    private var headerView: some View {
+        VStack(spacing: 12) {
+            // Category icon (if available)
+            if let category = selectedCategory {
+                Circle()
+                    .fill(category.color.opacity(0.1))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: category.icon)
+                            .font(.system(size: 26))
+                            .foregroundColor(category.color)
+                    )
+            } else {
+                Circle()
+                    .fill(Color("NormaPastelTeal").opacity(0.15))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: "target")
+                            .font(.system(size: 26))
+                            .foregroundColor(Color("NormaPastelTeal"))
+                    )
+            }
+
+            // Budget name
+            VStack(spacing: 4) {
+                TextField("Budget Name", text: $budgetName)
+                    .font(.normaTitle())
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+
+                if let category = selectedCategory {
+                    Text(category.name)
+                        .font(.normaHeadline(14))
+                        .foregroundColor(.secondary)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(UIColor.systemBackground),
-                                Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.gray.opacity(0.2),
-                                        Color.gray.opacity(0.05)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var budgetAmountCard: some View {
+        VStack(spacing: 8) {
+            Text("Budget Amount (\(currencySymbol))")
+                .font(.normaHeadline(12))
+                .foregroundColor(.secondary)
+
+            TextField("0.00", text: $budgetAmount)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.center)
+                .focused($isAmountFieldFocused)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isAmountFieldFocused = false
+                        }
+                        .font(.normaHeadline(16))
+                    }
+                }
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(UIColor.systemBackground),
+                            Color.gray.opacity(0.02)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.gray.opacity(0.2),
+                                    Color.gray.opacity(0.05)
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
     
     @ViewBuilder
     private var budgetDetailsSection: some View {
         VStack(spacing: 16) {
             Text("BUDGET DETAILS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             VStack(spacing: 12) {
                 // Category selection
                 DetailRow(label: "Category", value: "") {
@@ -206,7 +217,7 @@ struct CreateBudgetView: View {
                         Button("None") {
                             selectedCategory = nil
                         }
-                        
+
                         ForEach(expenseCategories) { category in
                             Button {
                                 selectedCategory = category
@@ -223,7 +234,7 @@ struct CreateBudgetView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: category.icon)
                                         .foregroundColor(category.color)
-                                        .font(.system(size: 14))
+                                        .font(.normaHeadline(14))
                                     Text(category.name)
                                         .foregroundColor(.primary)
                                 }
@@ -231,24 +242,25 @@ struct CreateBudgetView: View {
                                 Text("Select Category")
                                     .foregroundColor(.secondary)
                             }
-                            
+
                             Image(systemName: "chevron.down")
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                     }
                 }
-                
-                // Period selection
+
+                Divider()
+
                 // Notes input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.secondary)
-                    
+
                     TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.normaHeadline(14))
                         .foregroundColor(.primary)
                         .lineLimit(3...6)
                 }
@@ -268,54 +280,10 @@ struct CreateBudgetView: View {
     }
     
     @ViewBuilder
-    private var alertSettingsSection: some View {
-        VStack(spacing: 16) {
-            Text("ALERT SETTINGS")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
-                .tracking(1.2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Alert Threshold")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        Text("\(alertPercentage)%")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.orange)
-                    }
-                    
-                    Slider(value: $alertThreshold, in: 0.5...0.95, step: 0.05)
-                        .accentColor(.orange)
-                    
-                    Text("You'll be notified when spending reaches this percentage")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                    )
-            )
-        }
-    }
-    
-    @ViewBuilder
     private var dateRangeSection: some View {
         VStack(spacing: 16) {
             Text("DATE RANGE")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.normaHeadline(11))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -343,36 +311,7 @@ struct CreateBudgetView: View {
             )
         }
     }
-    
-    @ViewBuilder
-    private var notesSection: some View {
-        VStack(spacing: 16) {
-            Text("NOTES")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
-                .tracking(1.2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(notes)
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-                    .lineLimit(nil)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                    )
-            )
-        }
-    }
-    
+
     @ViewBuilder
     private var saveButtonView: some View {
         Button(action: {
@@ -387,19 +326,32 @@ struct CreateBudgetView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                 }
-                
+
                 Text("Create Budget")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.normaHeadline(16))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isFormValid ? Color.blue : Color.gray)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: isFormValid ? [
+                                Color("NormaPastelTeal"),
+                                Color("NormaPastelTeal").opacity(0.8)
+                            ] : [
+                                Color.gray,
+                                Color.gray.opacity(0.8)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
         }
         .disabled(!isFormValid || isLoading)
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Actions
@@ -471,16 +423,16 @@ struct DetailRow<Content: View>: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(.normaHeadline(14))
                 .foregroundColor(.secondary)
-            
+
             Spacer()
-            
+
             if let content = content {
                 content()
             } else {
                 Text(value)
-                    .font(.system(size: 14))
+                    .font(.normaHeadline(14))
                     .foregroundColor(.primary)
             }
         }

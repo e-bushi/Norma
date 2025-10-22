@@ -9,7 +9,8 @@ import SwiftUI
 
 struct PaywallFeaturesBox: View {
     let selectedTier: SubscriptionTier
-    
+    @Environment(\.colorScheme) var colorScheme
+
     // Animation state
     @State private var appearAnimation = false
     @State private var animationTrigger = UUID()
@@ -54,14 +55,14 @@ struct PaywallFeaturesBox: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Text("\(selectedTier.displayName.uppercased()) FEATURES")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.normaLabel(11))
                         .foregroundColor(.secondary)
                         .tracking(1.2)
-                    
+
                     Spacer()
-                    
+
                     Text("\(features.count) features")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.normaLabel(11))
                         .foregroundColor(.secondary)
                 }
                 
@@ -90,10 +91,10 @@ struct PaywallFeaturesBox: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("COMING SOON")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.normaLabel(11))
                             .foregroundColor(.secondary)
                             .tracking(1.2)
-                        
+
                         Spacer()
                     }
                     
@@ -120,10 +121,13 @@ struct PaywallFeaturesBox: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 28)
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [
+                        gradient: Gradient(colors: colorScheme == .dark ? [
+                            Color(red: 0.160, green: 0.128, blue: 0.102),
+                            Color(red: 0.180, green: 0.145, blue: 0.118)
+                        ] : [
                             Color(UIColor.systemBackground),
                             Color.gray.opacity(0.02)
                         ]),
@@ -132,7 +136,7 @@ struct PaywallFeaturesBox: View {
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 28)
                         .stroke(
                             LinearGradient(
                                 gradient: Gradient(colors: [

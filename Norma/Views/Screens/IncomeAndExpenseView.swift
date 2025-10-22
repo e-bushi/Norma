@@ -35,10 +35,7 @@ struct IncomeAndExpenseView: View {
     
     // Track selected date for calendar integration
     @State private var selectedDate: Date = Date()
-    
-    // Custom picker selection
-    @State private var selectedView: BudgetExpensePicker.ViewType = .expenses
-    
+
     // Sheet presentation
     @State private var showNormaChatView = false
     @State private var showCreateExpense = false
@@ -113,49 +110,25 @@ struct IncomeAndExpenseView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     ExpenseCalendarView(expensesPerDay: expensesPerDay)
-                    .padding(.horizontal)
-                    
-                    // Custom Picker
-                    BudgetExpensePicker(selection: $selectedView)
                         .padding(.horizontal)
+
+                    // Expense list
+                    ExpenseDisclosureView(expenses: currentMonthExpenses, category: nil, showNormaChat: $showNormaChatView)
                         .padding(.horizontal)
-                    
-                    // Conditional view display with animation
-                    Group {
-                        switch selectedView {
-                        case .budget:
-                            BudgetDisclosureView(expenses: currentMonthExpenses, month: currentMonth)
-                            .environmentObject(budgetViewModel)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                        case .expenses:
-                            ExpenseDisclosureView(expenses: currentMonthExpenses, category: nil, showNormaChat: $showNormaChatView)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .leading).combined(with: .opacity),
-                                    removal: .move(edge: .trailing).combined(with: .opacity)
-                                ))
-                        }
-                    }
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedView)
-                    .padding(.horizontal)
                 }
                 .padding(.vertical)
             }
+            .background(Color("NormaBackground"))
             .scrollIndicators(.hidden)
-            .navigationTitle("Expenses")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                Task {
-                    await expenseViewModel.refreshExpenses()
-                    await incomeViewModel.refreshIncomes()
-                    // Fetch budgets
-                    if let userId = sessionViewModel.currentUser?.userId {
-                        try? await dataManager.fetchBudgets(userId: userId)
-                    }
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Expenses")
+                        .font(.normaTitle(20))
                 }
             }
+            // Removed .onAppear - data is loaded by RootView
             .sheet(isPresented: $showNormaChatView) {
                 NormaChatView(context: .expenses)
             }

@@ -9,16 +9,24 @@ import SwiftUI
 
 struct AppCoordinatorView: View {
     @EnvironmentObject var appCoordinator: AppCoordinator
-    
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+
     var body: some View {
-        Group {
-            if appCoordinator.isReady {
-                appCoordinator.currentViewContent
-            } else {
-                LoadingView()
+        ZStack {
+            // Base layer background
+            Color("NormaBackground")
+                .ignoresSafeArea()
+
+            Group {
+                if appCoordinator.isReady {
+                    appCoordinator.currentViewContent
+                } else {
+                    LoadingView()
+                }
             }
+            .animation(.easeInOut(duration: 0.3), value: appCoordinator.currentView)
         }
-        .animation(.easeInOut(duration: 0.3), value: appCoordinator.currentView)
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
 }
 

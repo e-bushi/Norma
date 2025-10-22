@@ -27,6 +27,9 @@ struct PaywallView: View {
     var body: some View {
         NavigationStack {
             ZStack {
+                Color("NormaBackground")
+                    .ignoresSafeArea()
+
                 ScrollView {
                     VStack(spacing: 32) {
                         // Header
@@ -40,112 +43,146 @@ struct PaywallView: View {
                         // Features
                         PaywallFeaturesBox(selectedTier: selectedTier)
                         
-                        // Billing Option Cards
-                        VStack(spacing: 12) {
-                            PaywallBillingCard(
-                                icon: "calendar",
-                                iconColor: .blue,
-                                title: "Monthly",
-                                price: selectedTier == .base ? "$7.99" : "$14.99",
-                                subtitle: "Billed monthly",
-                                isSelected: selectedBilling == .monthly,
-                                selectedTier: selectedTier
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    selectedBilling = .monthly
+                        // Billing Option Cards (only show for base tier)
+                        if selectedTier == .base {
+                            VStack(spacing: 12) {
+                                PaywallBillingCard(
+                                    icon: "calendar",
+                                    iconColor: .blue,
+                                    title: "Monthly",
+                                    price: selectedTier == .base ? "$7.99" : "$14.99",
+                                    subtitle: "Billed monthly",
+                                    isSelected: selectedBilling == .monthly,
+                                    selectedTier: selectedTier
+                                ) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedBilling = .monthly
+                                    }
+                                }
+
+                                PaywallBillingCard(
+                                    icon: "calendar.badge.clock",
+                                    iconColor: .green,
+                                    title: "Yearly",
+                                    price: selectedTier == .base ? "$79.99" : "$149.99",
+                                    subtitle: "Save 17%",
+                                    badge: "BEST VALUE",
+                                    isSelected: selectedBilling == .yearly,
+                                    selectedTier: selectedTier
+                                ) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedBilling = .yearly
+                                    }
                                 }
                             }
-                            
-                            PaywallBillingCard(
-                                icon: "calendar.badge.clock",
-                                iconColor: .green,
-                                title: "Yearly",
-                                price: selectedTier == .base ? "$79.99" : "$149.99",
-                                subtitle: "Save 17%",
-                                badge: "BEST VALUE",
-                                isSelected: selectedBilling == .yearly,
-                                selectedTier: selectedTier
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    selectedBilling = .yearly
-                                }
-                            }
+                            .transition(.asymmetric(
+                                insertion: .scale.combined(with: .opacity),
+                                removal: .scale.combined(with: .opacity)
+                            ))
                         }
                         
                         // CTA Button
                         Button {
                             Task {
-                                await purchaseSelectedProduct()
+                                // Only allow purchase for base tier
+                                if selectedTier == .base {
+                                    await purchaseSelectedProduct()
+                                }
                             }
                         } label: {
-                            if isPurchasing {
+                            if selectedTier == .pro {
+                                // Show Coming Soon for Pro tier
+                                VStack(spacing: 2) {
+                                    Text("Coming Soon")
+                                        .font(.normaHeadline(17))
+
+                                    Text("Pro features in development")
+                                        .font(.normaMicro(13))
+                                        .opacity(0.9)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.gray.opacity(0.5))
+                                )
+                                .foregroundColor(.white)
+                            } else if isPurchasing {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 54)
-                                    .background(selectedTier.color.opacity(0.7))
+                                    .background(
+                                        Capsule()
+                                            .fill(selectedTier.color.opacity(0.7))
+                                    )
                                     .foregroundColor(.white)
-                                    .cornerRadius(12)
                             } else if subscriptionManager.isLoadingProducts {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                         .scaleEffect(0.8)
                                     Text("Loading products...")
-                                        .font(.system(size: 14))
+                                        .font(.normaBody(14))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                .background(Color.gray.opacity(0.7))
+                                .background(
+                                    Capsule()
+                                        .fill(Color.gray.opacity(0.7))
+                                )
                                 .foregroundColor(.white)
-                                .cornerRadius(12)
                             } else if subscriptionManager.availableProducts.isEmpty {
                                 VStack(spacing: 2) {
                                     Text("Products unavailable")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.normaHeadline(17))
                                     Text("Tap to retry")
-                                        .font(.system(size: 12))
+                                        .font(.normaMicro(13))
                                         .opacity(0.9)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                .background(Color.orange)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelCoral"))
+                                )
                                 .foregroundColor(.white)
-                                .cornerRadius(12)
                             } else {
                                 VStack(spacing: 2) {
                                     // Show different text if user already used their trial
                                     if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
                                         Text("Subscribe Now")
-                                            .font(.system(size: 16, weight: .semibold))
-                                        
+                                            .font(.normaHeadline(17))
+
                                         Text(getPriceText())
-                                            .font(.system(size: 12))
+                                            .font(.normaMicro(13))
                                             .opacity(0.9)
                                     } else {
                                         Text("Start 3-Day Free Trial")
-                                            .font(.system(size: 16, weight: .semibold))
-                                        
+                                            .font(.normaHeadline(17))
+
                                         Text("Then \(getPriceText())")
-                                            .font(.system(size: 12))
+                                            .font(.normaMicro(13))
                                             .opacity(0.9)
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                .background(selectedTier.color)
+                                .background(
+                                    Capsule()
+                                        .fill(selectedTier.color)
+                                )
                                 .foregroundColor(.white)
-                                .cornerRadius(12)
                             }
                         }
-                        .disabled(isPurchasing || subscriptionManager.isLoadingProducts)
+                        .disabled(selectedTier == .pro || isPurchasing || subscriptionManager.isLoadingProducts)
                         
                         // Agreement text and links
                         VStack(spacing: 4) {
                             Text("By subscribing you agree to our")
-                                .font(.system(size: 12))
+                                .font(.normaMicro(12))
                                 .foregroundColor(.secondary)
-                            
+
                             HStack(spacing: 12) {
                                 Button("Terms of Use") {
                                     showTermsOfUse = true
@@ -156,7 +193,7 @@ struct PaywallView: View {
                                     showPrivacyPolicy = true
                                 }
                             }
-                            .font(.system(size: 12))
+                            .font(.normaMicro(12))
                             .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 24)
@@ -169,12 +206,12 @@ struct PaywallView: View {
                                     await restorePurchases()
                                 }
                             }
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.accentColor)
+                            .font(.normaBody(14))
+                            .foregroundColor(Color("NormaPastelPurple"))
                             .disabled(isPurchasing)
-                            
+
                             Text("Cancel anytime in Settings")
-                                .font(.system(size: 12))
+                                .font(.normaMicro(12))
                                 .foregroundColor(.secondary)
                         }
                     }

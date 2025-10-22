@@ -420,9 +420,38 @@ extension DataManager {
         }
         
         print("Migrated \(migratedCount) budgets to encrypted format")
-        
+
         // Refresh to get encrypted versions
         try await fetchBudgetsWithEncryption(userId: userId)
+    }
+
+    /// Update a budget's currentSpent field by adding/subtracting an amount
+    /// - Parameters:
+    ///   - budgetId: The ID of the budget to update
+    ///   - amountChange: The amount to add (positive) or subtract (negative)
+    func updateBudgetSpent(budgetId: String, amountChange: Double) async throws {
+        // Find the budget
+        guard let budget = budgets.first(where: { $0.id == budgetId }) else {
+            throw NSError(domain: "DataManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Budget not found"])
+        }
+
+        // Calculate new currentSpent (ensure it doesn't go below 0)
+        let newCurrentSpent = max(0, budget.currentSpent + amountChange)
+
+        // Create updated budget
+        var updatedBudget = budget
+        updatedBudget.currentSpent = newCurrentSpent
+
+        // Check if encryption is enabled
+        let hasEncryption = await hasEncryptionEnabled()
+
+        if hasEncryption {
+            // Use encrypted update path
+            try await updateBudgetWithEncryption(updatedBudget)
+        } else {
+            // Use legacy update path
+            try await updateBudget(updatedBudget)
+        }
     }
 }
 

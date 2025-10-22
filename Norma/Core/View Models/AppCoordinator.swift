@@ -12,11 +12,12 @@ import Combine
 
 @MainActor
 class AppCoordinator: ObservableObject {
-    
+
     // MARK: - Published Properties
-    
+
     @Published var currentView: AppView = .loading
     @Published var isReady = false
+    @Published var mainLayerView: MainLayerViewType = .chat
     
     // MARK: - Core Managers and ViewModels
     
@@ -73,16 +74,9 @@ class AppCoordinator: ObservableObject {
     }
     
     private func updateCurrentView() {
-        print("🔄 [DEBUG] AppCoordinator.updateCurrentView called")
-        print("🔄 [DEBUG] isLoadingAuth: \(sessionViewModel.isLoadingAuth)")
-        print("🔄 [DEBUG] shouldShowMainApp: \(sessionViewModel.shouldShowMainApp)")
-        print("🔄 [DEBUG] shouldShowAuthFlow: \(sessionViewModel.shouldShowAuthFlow)")
-        print("🔄 [DEBUG] shouldShowInitialSetup: \(sessionViewModel.shouldShowInitialSetup)")
-        
         if sessionViewModel.isLoadingAuth {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
-            print("🔄 [DEBUG] Setting currentView to .main")
             currentView = .main
         } else if sessionViewModel.shouldShowAuthFlow {
             currentView = .onboarding
@@ -92,8 +86,6 @@ class AppCoordinator: ObservableObject {
             // Default to onboarding if no other condition is met
             currentView = .onboarding
         }
-        
-        print("🔄 [DEBUG] Final currentView: \(currentView)")
     }
     
     private func observeSessionChanges() {
@@ -155,6 +147,7 @@ class AppCoordinator: ObservableObject {
             RootView()
                 .environmentObject(dataManager)
                 .environmentObject(sessionViewModel)
+                .environmentObject(self)
         }
     }
 }
@@ -165,6 +158,11 @@ enum AppView {
     case loading
     case onboarding
     case main
+}
+
+enum MainLayerViewType {
+    case chat
+    case settings
 }
 
 // MARK: - Coordinator Views

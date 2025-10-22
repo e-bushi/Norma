@@ -11,16 +11,15 @@ import Supabase
 extension SupabaseService {
     
     // MARK: - Categories Methods
-    
-    /// Fetch all categories for a user
-    func fetchCategories(userId: String) async throws -> [Category] {
+
+    /// Fetch all categories (shared across all users)
+    func fetchCategories() async throws -> [Category] {
         let response: [Category] = try await from("categories")
             .select()
-            .eq("user_id", value: userId)
-            .order("name", ascending: true)
+            .order("sort_order", ascending: true)
             .execute()
             .value
-        
+
         return response
     }
     
@@ -58,15 +57,14 @@ extension SupabaseService {
     }
     
     /// Fetch categories by type
-    func fetchCategories(userId: String, type: CategoryType) async throws -> [Category] {
+    func fetchCategories(type: CategoryType) async throws -> [Category] {
         let response: [Category] = try await from("categories")
             .select()
-            .eq("user_id", value: userId)
             .eq("type", value: type.rawValue)
-            .order("name", ascending: true)
+            .order("sort_order", ascending: true)
             .execute()
             .value
-        
+
         return response
     }
 }

@@ -10,20 +10,16 @@ import SwiftUI
 struct PaywallHeader: View {
     var body: some View {
         VStack(spacing: 16) {
-            // Icon with background
-            Image(systemName: "sparkles")
-                .font(.system(size: 36))
-                .foregroundColor(.accentColor)
-                .frame(width: 80, height: 80)
-                .background(Color.accentColor.opacity(0.15))
-                .clipShape(Circle())
             
+            Spacer()
+                .frame(height: 32)
+
             VStack(spacing: 8) {
                 Text("Start Using Norma")
-                    .font(.system(size: 24, weight: .bold))
-                
+                    .font(.normaTitle(28))
+
                 Text("Unlock AI-powered financial insights")
-                    .font(.system(size: 15))
+                    .font(.normaBody(16))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
