@@ -12,6 +12,9 @@ struct ChatToolsProvider {
 
     static func getAllTools() -> [AnthropicTool] {
         return [
+            getSaveUserNameTool(),
+            getSaveUserCurrencyTool(),
+            getSaveUserIncomeTool(),
             getBillCreationTool(),
             getUpdateBillTool(),
             getExpenseCreationTool(),
@@ -19,11 +22,67 @@ struct ChatToolsProvider {
             getExpenseSummaryTool(),
             getShowBillsTool(),
             getShowExpensesTool(),
-            getShowBudgetsTool()
+            getShowBudgetsTool(),
+            getShowSaveProgressModalTool()
         ]
     }
 
     // MARK: - Tool Definitions
+
+    static func getSaveUserNameTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "save_user_name",
+            description: "Save the user's name during onboarding in preview mode",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "name": AnthropicToolProperty(
+                        type: "string",
+                        description: "The user's name"
+                    )
+                ],
+                required: ["name"]
+            )
+        )
+    }
+
+    static func getSaveUserCurrencyTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "save_user_currency",
+            description: "Save the user's currency during onboarding in preview mode. This will also generate mock financial data with amounts converted using the exchange rate.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "currency": AnthropicToolProperty(
+                        type: "string",
+                        description: "The user's currency code (e.g., USD, EUR, GBP, ZAR, JPY)"
+                    ),
+                    "exchange_rate": AnthropicToolProperty(
+                        type: "number",
+                        description: "The approximate USD to [currency] exchange rate based on your training data. Use 1.0 for USD."
+                    )
+                ],
+                required: ["currency", "exchange_rate"]
+            )
+        )
+    }
+
+    static func getSaveUserIncomeTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "save_user_income",
+            description: "Save the user's monthly income after taxes during real onboarding. This should be their take-home pay.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "income": AnthropicToolProperty(
+                        type: "number",
+                        description: "The user's monthly income after taxes (take-home pay)"
+                    )
+                ],
+                required: ["income"]
+            )
+        )
+    }
 
     static func getBillCreationTool() -> AnthropicTool {
         AnthropicTool(
@@ -205,6 +264,18 @@ struct ChatToolsProvider {
                     )
                 ],
                 required: ["budget_ids"]
+            )
+        )
+    }
+
+    static func getShowSaveProgressModalTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_save_progress_modal",
+            description: "Display a modal prompting the user to save their progress after completing the 3 onboarding questions. This should be called after collecting income, biggest bill, and main challenge.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [:],
+                required: []
             )
         )
     }
