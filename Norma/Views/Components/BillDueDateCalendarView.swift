@@ -23,19 +23,15 @@ struct BillDueDateCalendarView: View {
     // Dictionary to track bills per day
     var billsPerDay: [Date: [Double]] = [:]
 
-    private var totalBillsThisMonth: Double {
-        let calendar = Calendar.current
-        let bills = billsPerDay.filter { date, _ in
-            calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
-        }
-        return bills.values.flatMap { $0 }.reduce(0, +)
-    }
-
     private var daysWithBills: Int {
         let calendar = Calendar.current
         return billsPerDay.filter { date, _ in
             calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
         }.count
+    }
+    
+    private var billAmountTotal: Double {
+        billViewModel.activeBills.reduce(0) { $0 + $1.amount }
     }
 
     var body: some View {
@@ -49,7 +45,7 @@ struct BillDueDateCalendarView: View {
 
                 // Summary stats - redesigned with larger number
                 VStack(spacing: 8) {
-                    Text(profileViewModel.formatCurrency(totalBillsThisMonth))
+                    Text(profileViewModel.formatCurrency(billAmountTotal))
                         .font(.normaHeadline(48))
                         .foregroundColor(.primary)
                     Text("Total of all bills combined")

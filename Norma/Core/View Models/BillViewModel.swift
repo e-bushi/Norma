@@ -34,6 +34,17 @@ class BillViewModel: ObservableObject {
     @Published var totalMonthlyBills: Double = 0
     @Published var nextBillDue: Bill?
     @Published var billsDueSoon: [Bill] = []
+
+    var totalBillsThisMonth: Double {
+        let calendar = Calendar.current
+        let currentMonth = Date()
+
+        return activeBills
+            .filter { bill in
+                calendar.isDate(bill.dueDate, equalTo: currentMonth, toGranularity: .month)
+            }
+            .reduce(0) { $0 + $1.amount }
+    }
     
     // MARK: - Dependencies
     
@@ -71,7 +82,7 @@ class BillViewModel: ObservableObject {
     func loadBills() {
         // Update overdue status for bills past their due date
         updateOverdueBills()
-        
+
         bills = dataManager.bills
         activeBills = dataManager.getActiveBills()
         upcomingBills = dataManager.getUpcomingBills()
@@ -79,10 +90,10 @@ class BillViewModel: ObservableObject {
         billsDueSoon = dataManager.getBillsDueSoon()
         totalMonthlyBills = dataManager.getTotalMonthlyBills()
         nextBillDue = dataManager.getNextBillDue()
-        
+
         // Check for bill verification after loading
         checkForBillVerification()
-        
+
         // Update widget data
         updateWidgetData()
     }

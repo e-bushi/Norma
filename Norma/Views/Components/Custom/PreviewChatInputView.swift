@@ -12,10 +12,7 @@ struct PreviewChatInputView: View {
     @Binding var showCapsules: Bool
     let isLoading: Bool
     let onSend: () -> Void
-    let billsTotal: Double
-    let budgetCount: Int
-    let monthlySpend: Double
-    let currencyCode: String?
+    @ObservedObject var viewModel: PreviewModeViewModel
 
     @State private var showBills = false
     @State private var showBudgets = false
@@ -34,7 +31,7 @@ struct PreviewChatInputView: View {
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = currencyCode ?? "USD"
+        formatter.currencyCode = viewModel.userCurrency ?? "USD"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
     }
@@ -71,8 +68,14 @@ struct PreviewChatInputView: View {
                                     .font(.system(size: 11))
                                 Text("Bills:")
                                     .font(.normaFinancial(15))
-                                Text(formatCurrency(billsTotal))
+                                Text(formatCurrency(viewModel.totalBills))
                                     .font(.normaFinancial(15))
+                                    .onAppear {
+                                        print("🔍 [InputView] Bills capsule appeared - Total: \(viewModel.totalBills)")
+                                    }
+                                    .onChange(of: viewModel.totalBills) { oldValue, newValue in
+                                        print("🔍 [InputView] Bills total changed from \(oldValue) to \(newValue)")
+                                    }
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
@@ -99,7 +102,7 @@ struct PreviewChatInputView: View {
                                     .font(.system(size: 11))
                                 Text("Budgets:")
                                     .font(.normaFinancial(15))
-                                Text("\(budgetCount)")
+                                Text("\(viewModel.budgetCount)")
                                     .font(.normaFinancial(15))
                             }
                             .padding(.horizontal, 12)
@@ -132,7 +135,7 @@ struct PreviewChatInputView: View {
                                     .font(.system(size: 11))
                                 Text("\(currentMonthAbbreviation). Spend:")
                                     .font(.normaFinancial(15))
-                                Text(formatCurrency(monthlySpend))
+                                Text(formatCurrency(viewModel.totalExpenses))
                                     .font(.normaFinancial(15))
                             }
                             .padding(.horizontal, 12)
@@ -213,6 +216,11 @@ struct PreviewChatInputView: View {
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     impactFeedback.impactOccurred(intensity: 0.6)
+                }
+            } else {
+                // Animate capsules disappearing
+                withAnimation(.easeOut(duration: 0.3)) {
+                    visibleCapsules = 0
                 }
             }
         }
@@ -352,16 +360,14 @@ struct PreviewModeExpensesView: View {
 #Preview {
     @Previewable @State var text = ""
     @Previewable @State var showCapsules = true
+    let viewModel = PreviewModeViewModel()
 
     return PreviewChatInputView(
         text: $text,
         showCapsules: $showCapsules,
         isLoading: false,
         onSend: { print("Send tapped") },
-        billsTotal: 1635.99,
-        budgetCount: 2,
-        monthlySpend: 135.50,
-        currencyCode: "USD"
+        viewModel: viewModel
     )
     .background(Color("NormaBackground"))
     .preferredColorScheme(.dark)

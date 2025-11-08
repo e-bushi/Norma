@@ -15,6 +15,8 @@ struct ChatToolsProvider {
             getSaveUserNameTool(),
             getSaveUserCurrencyTool(),
             getSaveUserIncomeTool(),
+            getSaveUserSavingsTool(),
+            getSaveUserChallengeTool(),
             getBillCreationTool(),
             getUpdateBillTool(),
             getExpenseCreationTool(),
@@ -80,6 +82,40 @@ struct ChatToolsProvider {
                     )
                 ],
                 required: ["income"]
+            )
+        )
+    }
+
+    static func getSaveUserSavingsTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "save_user_savings",
+            description: "Save the user's current savings amount during real onboarding.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "savings": AnthropicToolProperty(
+                        type: "number",
+                        description: "The user's current savings amount"
+                    )
+                ],
+                required: ["savings"]
+            )
+        )
+    }
+
+    static func getSaveUserChallengeTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "save_user_challenge",
+            description: "Save the user's main financial challenge or worry during real onboarding.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "challenge": AnthropicToolProperty(
+                        type: "string",
+                        description: "The user's biggest money worry or financial challenge"
+                    )
+                ],
+                required: ["challenge"]
             )
         )
     }

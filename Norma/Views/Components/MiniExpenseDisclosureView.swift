@@ -8,49 +8,12 @@
 import SwiftUI
 
 struct MiniExpenseDisclosureView: View {
+    let appeared: Bool
+
+    @State private var itemStates: [Bool] = Array(repeating: false, count: 6)
+
     var body: some View {
         VStack(spacing: 16) {
-            // Header
-            VStack(spacing: 8) {
-                Text("RECENT EXPENSES")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Total Spent")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("$1,850")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Transactions")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("24")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-            }
-            
             // Recent transactions
             VStack(spacing: 12) {
                 HStack {
@@ -65,19 +28,22 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Grocery Store")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("2 hours ago")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$85.42")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[0] ? 1 : 0)
+                .offset(x: itemStates[0] ? 0 : -20)
+
                 
                 HStack {
                     Circle()
@@ -91,19 +57,22 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Gas Station")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("Yesterday")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
                     Text("$42.18")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[1] ? 1 : 0)
+                .offset(x: itemStates[1] ? 0 : -20)
+
                 
                 HStack {
                     Circle()
@@ -117,19 +86,22 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Coffee Shop")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("2 days ago")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
                     Text("$6.50")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[2] ? 1 : 0)
+                .offset(x: itemStates[2] ? 0 : -20)
+
                 
                 HStack {
                     Circle()
@@ -143,19 +115,22 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Pharmacy")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("4 days ago")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
                     Text("$24.75")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[3] ? 1 : 0)
+                .offset(x: itemStates[3] ? 0 : -20)
+
                 
                 HStack {
                     Circle()
@@ -169,19 +144,22 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Restaurant")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("5 days ago")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
                     Text("$48.30")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[4] ? 1 : 0)
+                .offset(x: itemStates[4] ? 0 : -20)
+
                 
                 HStack {
                     Circle()
@@ -195,34 +173,59 @@ struct MiniExpenseDisclosureView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Streaming Service")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("6 days ago")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
                     Text("$15.99")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.primary)
                 }
+                .opacity(itemStates[5] ? 1 : 0)
+                .offset(x: itemStates[5] ? 0 : -20)
+
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.gray.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                    )
+                    .fill(.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
             )
         }
+        .onChange(of: appeared) { _, isAppeared in
+            if isAppeared {
+                animateItemsStaggered()
+            } else {
+                resetAnimations()
+            }
+        }
+    }
+
+    private func animateItemsStaggered() {
+        for i in 0..<itemStates.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.08) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    itemStates[i] = true
+                }
+            }
+        }
+    }
+
+    private func resetAnimations() {
+        itemStates = Array(repeating: false, count: 6)
     }
 }
 
 #Preview {
-    MiniExpenseDisclosureView()
+    MiniExpenseDisclosureView(appeared: true)
         .padding()
 }

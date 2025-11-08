@@ -23,21 +23,22 @@ struct HowDidYouHearView: View {
     
     let options: [HearAboutOption] = [
         HearAboutOption(id: "appstore", title: "App Store", icon: "app.badge"),
-        HearAboutOption(id: "social", title: "Social Media", icon: "heart.text.square"),
+        HearAboutOption(id: "instagram", title: "Instagram", icon: "camera"),
+        HearAboutOption(id: "tiktok", title: "TikTok", icon: "music.note"),
+        HearAboutOption(id: "twitter", title: "X/Twitter", icon: "bird"),
         HearAboutOption(id: "friend", title: "Friend or Family", icon: "person.2"),
         HearAboutOption(id: "search", title: "Search Engine", icon: "magnifyingglass"),
-        HearAboutOption(id: "blog", title: "Blog or Article", icon: "doc.text"),
-        HearAboutOption(id: "ad", title: "Advertisement", icon: "megaphone"),
-        HearAboutOption(id: "other", title: "Other", icon: "ellipsis.circle")
+        HearAboutOption(id: "blog", title: "Blog or Article", icon: "doc.text")
     ]
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 16) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 16) {
                     Text("How did you hear about us?")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.normaTitle(24))
                         .foregroundColor(.primary)
                         .offset(y: titleOffset)
                         .opacity(titleOpacity)
@@ -47,9 +48,9 @@ struct HowDidYouHearView: View {
                                 titleOpacity = 1.0
                             }
                         }
-                    
+
                     Text("Help us understand how you discovered Norma so we can improve our outreach.")
-                        .font(.system(size: 16))
+                        .font(.normaInput(16))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(nil)
@@ -100,7 +101,7 @@ struct HowDidYouHearView: View {
                                 .font(.system(size: 16))
                             
                             Text("Continue")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.normaHeadline(16))
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -110,13 +111,14 @@ struct HowDidYouHearView: View {
                                 .fill(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            selectedOption != nil ? Color.purple : Color.gray,
-                                            selectedOption != nil ? Color.purple.opacity(0.8) : Color.gray.opacity(0.8)
+                                            selectedOption != nil ? Color("NormaPastelTeal") : Color.gray,
+                                            selectedOption != nil ? Color("NormaPastelTeal").opacity(0.8) : Color.gray.opacity(0.8)
                                         ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
                                     )
                                 )
+                                .shadow(color: selectedOption != nil ? Color("NormaPastelTeal").opacity(0.3) : Color.clear, radius: 4, x: 0, y: 2)
                         )
                         .opacity(selectedOption != nil ? 1.0 : 0.6)
                     }
@@ -133,7 +135,12 @@ struct HowDidYouHearView: View {
                         buttonOpacity = 1.0
                     }
                 }
+                }
             }
+            .background(
+                Color("NormaBackground")
+                    .ignoresSafeArea()
+            )
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -154,30 +161,30 @@ struct OptionToggleRow: View {
                 // Selection indicator
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color.purple : Color.clear)
+                        .fill(isSelected ? Color("NormaPastelTeal") : Color.clear)
                         .frame(width: 24, height: 24)
                         .overlay(
                             Circle()
-                                .stroke(isSelected ? Color.purple : Color.gray.opacity(0.3), lineWidth: 2)
+                                .stroke(isSelected ? Color("NormaPastelTeal") : Color.gray.opacity(0.3), lineWidth: 2)
                         )
-                    
+
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
-                
+
                 // Option icon and info
                 HStack(spacing: 12) {
                     Image(systemName: option.icon)
                         .font(.system(size: 20))
-                        .foregroundColor(isSelected ? .purple : .secondary)
+                        .foregroundColor(isSelected ? Color("NormaPastelTeal") : .secondary)
                         .frame(width: 32, height: 32)
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(option.title)
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.normaHeadline(16))
                             .foregroundColor(.primary)
                     }
                 }
@@ -188,11 +195,11 @@ struct OptionToggleRow: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.purple.opacity(0.05) : Color.gray.opacity(0.02))
+                    .fill(isSelected ? Color("NormaPastelTeal").opacity(0.05) : Color.gray.opacity(0.02))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                isSelected ? Color.purple.opacity(0.2) : Color.gray.opacity(0.1),
+                                isSelected ? Color("NormaPastelTeal").opacity(0.2) : Color.gray.opacity(0.1),
                                 lineWidth: 1
                             )
                     )
@@ -217,4 +224,5 @@ struct HearAboutOption {
             print("Skipped")
         }
     )
+    .preferredColorScheme(.dark)
 }

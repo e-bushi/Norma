@@ -107,8 +107,14 @@ struct PreviewModeChatView: View {
         .sheet(isPresented: $previewModeViewModel.showSaveProgressModal) {
             SaveProgressModal(
                 userName: previewModeViewModel.userName ?? "there",
-                onSaveProgress: {
-                    handleSaveProgress()
+                onSignUpWithEmail: {
+                    previewModeViewModel.showSaveProgressModal = false
+                    onboardingViewModel.showSignUp = true
+                    onboardingViewModel.currentStep = .authentication
+                },
+                onSignUpWithApple: {
+                    previewModeViewModel.showSaveProgressModal = false
+                    handleAppleSignIn()
                 },
                 onContinueChatting: {
                     handleKeepChatting()
@@ -185,10 +191,7 @@ struct PreviewModeChatView: View {
             showCapsules: $showCapsules,
             isLoading: isLoading,
             onSend: sendMessage,
-            billsTotal: previewModeViewModel.totalBills,
-            budgetCount: previewModeViewModel.budgetCount,
-            monthlySpend: previewModeViewModel.totalExpenses,
-            currencyCode: previewModeViewModel.userCurrency
+            viewModel: previewModeViewModel
         )
     }
 
@@ -520,6 +523,9 @@ struct PreviewModeChatView: View {
         // Clear mock data but keep name and currency
         previewModeViewModel.clearMockData()
 
+        // Hide capsules when transitioning to real onboarding
+        showCapsules = false
+
         // Clear messages
         messages.removeAll()
 
@@ -532,14 +538,6 @@ struct PreviewModeChatView: View {
         showInitialGreeting()
     }
 
-    private func handleSaveProgress() {
-        // Close the modal
-        previewModeViewModel.showSaveProgressModal = false
-
-        // Navigate to authentication (sign up) view
-        onboardingViewModel.currentStep = .authentication
-    }
-
     private func handleKeepChatting() {
         // Close the modal
         previewModeViewModel.showSaveProgressModal = false
@@ -548,6 +546,12 @@ struct PreviewModeChatView: View {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
             showSaveButton = true
         }
+    }
+
+    private func handleAppleSignIn() {
+        // TODO: Implement Apple Sign In
+        // For now, just navigate to authentication
+        onboardingViewModel.currentStep = .authentication
     }
 }
 
@@ -661,7 +665,8 @@ struct PreviewModeCompletionModal: View {
 
 struct SaveProgressModal: View {
     let userName: String
-    let onSaveProgress: () -> Void
+    let onSignUpWithEmail: () -> Void
+    let onSignUpWithApple: () -> Void
     let onContinueChatting: () -> Void
 
     var body: some View {
@@ -675,7 +680,7 @@ struct SaveProgressModal: View {
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("You're all set up! Now you can:")
+                Text("You're all set up! To save your progress, create an account:")
                     .normaBody()
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -692,7 +697,7 @@ struct SaveProgressModal: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("•")
                         .normaBody()
-                    Text("Save your progress now to create an account")
+                    Text("Your data is fully encrypted and private")
                         .normaBody()
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -703,30 +708,51 @@ struct SaveProgressModal: View {
             .cornerRadius(12)
             .padding(.horizontal)
 
-            Text("Your data is fully encrypted and private.")
-                .font(.system(size: 13))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            // Authentication buttons
+            VStack(spacing: 16) {
+                // Sign up with Apple button
+                Button(action: onSignUpWithApple) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
 
-            VStack(spacing: 12) {
-                Button(action: onSaveProgress) {
-                    Text("Save Progress & Sign Up")
-                        .font(.normaFinancial(16))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color("NormaPastelTeal"))
-                        .cornerRadius(12)
+                        Text("Sign up with Apple")
+                            .font(.normaHeadline(16))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(Color.black)
+                    .cornerRadius(12)
                 }
 
-                Button(action: onContinueChatting) {
-                    Text("Keep Chatting")
-                        .normaBody()
-                        .foregroundColor(.secondary)
+                // Sign up with Email button
+                Button(action: onSignUpWithEmail) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+
+                        Text("Sign up with Email")
+                            .font(.normaHeadline(16))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(Color("NormaPastelTeal"))
+                    .cornerRadius(12)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 24)
+
+            // Keep chatting button
+            Button(action: onContinueChatting) {
+                Text("Keep Chatting")
+                    .normaBody()
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 8)
         }
         .padding(.vertical, 32)
     }

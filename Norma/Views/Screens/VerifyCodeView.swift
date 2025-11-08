@@ -39,32 +39,10 @@ struct VerifyCodeView: View {
                     // Icon with enhanced styling
                     ZStack {
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 20))
                             .frame(width: 100, height: 100)
-                        
+
                         Image(systemName: "envelope.badge.shield.half.filled")
                             .font(.system(size: 44))
                             .foregroundColor(.primary)
@@ -76,15 +54,15 @@ struct VerifyCodeView: View {
                     // Title and description
                     VStack(spacing: 8) {
                         Text("Verify your email")
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.normaTitle(32))
                             .foregroundColor(.primary)
-                        
+
                         Text("We've sent a code to")
-                            .font(.system(size: 17))
+                            .font(.normaInput(17))
                             .foregroundColor(.secondary)
-                        
+
                         Text(email)
-                            .font(.system(size: 17, weight: .medium))
+                            .font(.normaHeadline(17))
                             .foregroundColor(.primary)
                     }
                     .multilineTextAlignment(.center)
@@ -94,34 +72,12 @@ struct VerifyCodeView: View {
                     // Code input container
                     ZStack {
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
-                        
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 20))
+
                         VStack(spacing: 16) {
                             Text("VERIFICATION CODE")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.normaFinancial(11))
                                 .foregroundColor(.secondary)
                                 .tracking(1.2)
                             
@@ -145,7 +101,7 @@ struct VerifyCodeView: View {
                                     Button("Done") {
                                         focusedField = nil
                                     }
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.normaHeadline(16))
                                     .foregroundColor(.primary)
                                 }
                             }
@@ -159,7 +115,7 @@ struct VerifyCodeView: View {
                     // Error message
                     if showError {
                         Text(errorMessage)
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.red)
                             .padding(.top, 8)
                     }
@@ -174,20 +130,29 @@ struct VerifyCodeView: View {
                         HStack {
                             if isLoading {
                                 ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: Color(UIColor.systemBackground)))
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             } else {
                                 Text("Verify")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.normaHeadline(16))
                             }
                         }
-                        .foregroundColor(Color(UIColor.systemBackground))
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary)
-                                .shadow(color: Color.primary.opacity(0.1), radius: 2, x: 0, y: 1)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color("NormaPastelTeal"),
+                                            Color("NormaPastelTeal").opacity(0.8)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color("NormaPastelTeal").opacity(0.3), radius: 4, x: 0, y: 2)
                         )
                     }
                     .disabled(isLoading || !isCodeComplete)
@@ -197,14 +162,14 @@ struct VerifyCodeView: View {
                     // Resend code
                     VStack(spacing: 16) {
                         Text("Didn't receive the code?")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
-                        
+
                         Button(action: {
                             handleResendCode()
                         }) {
                             Text("Resend code")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.primary)
                         }
                     }
@@ -217,14 +182,17 @@ struct VerifyCodeView: View {
                 .padding(.horizontal, 24)
             }
         }
-        .background(Color(UIColor.systemBackground))
+        .background(
+            Color("NormaBackground")
+                .ignoresSafeArea()
+        )
         .overlay(
             Group {
                 if showTransition {
                     ZStack {
-                        Color(UIColor.systemBackground)
+                        Color("NormaBackground")
                             .ignoresSafeArea()
-                        
+
                         VStack(spacing: 24) {
                             // Welcome message
                             VStack(spacing: 12) {
@@ -232,13 +200,13 @@ struct VerifyCodeView: View {
                                     .font(.system(size: 48))
                                     .foregroundColor(.green)
                                     .symbolEffect(.bounce, value: showTransition)
-                                
+
                                 Text("Welcome aboard!")
-                                    .font(.system(size: 24, weight: .bold))
+                                    .font(.normaTitle(24))
                                     .foregroundColor(.primary)
-                                
+
                                 Text("Let's get to know you better...")
-                                    .font(.system(size: 16))
+                                    .font(.normaInput(16))
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
                                 
@@ -389,7 +357,7 @@ struct CodeDigitField: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                isActive ? Color.primary : Color.gray.opacity(0.1),
+                                isActive ? Color("NormaPastelTeal") : Color.gray.opacity(0.1),
                                 lineWidth: isActive ? 2 : 1
                             )
                     )
@@ -418,4 +386,5 @@ struct CodeDigitField: View {
         showVerifyCode: .constant(true)
     )
     .environmentObject(OnboardingViewModel(sessionViewModel: SessionViewModel(dataManager: DataManager())))
+    .preferredColorScheme(.dark)
 }

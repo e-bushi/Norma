@@ -56,7 +56,7 @@ struct LoginView: View {
                                 .font(.system(size: 14))
                             
                             Text(errorMessage)
-                                .font(.system(size: 14))
+                                .font(.normaInput(14))
                                 .foregroundColor(.red)
                             
                             Spacer()
@@ -80,7 +80,7 @@ struct LoginView: View {
                         // Email field
                         VStack(alignment: .leading, spacing: 8) {
                             Text("EMAIL")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.normaFinancial(11))
                                 .foregroundColor(.secondary)
                                 .tracking(1.2)
                             
@@ -99,7 +99,7 @@ struct LoginView: View {
                         // Password field
                         VStack(alignment: .leading, spacing: 8) {
                             Text("PASSWORD")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.normaFinancial(11))
                                 .foregroundColor(.secondary)
                                 .tracking(1.2)
                             
@@ -141,30 +141,8 @@ struct LoginView: View {
                     .padding(20)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(UIColor.systemBackground),
-                                        Color.gray.opacity(0.02)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.gray.opacity(0.2),
-                                                Color.gray.opacity(0.05)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 20))
                     )
                     .padding(.horizontal, 24)
                     .opacity(formOpacity)
@@ -179,7 +157,7 @@ struct LoginView: View {
                             // Handle forgot password
                         }) {
                             Text("Forgot password?")
-                                .font(.system(size: 14))
+                                .font(.normaInput(14))
                                 .foregroundColor(.secondary)
                                 .underline(color: Color.secondary.opacity(0.4))
                         }
@@ -201,15 +179,15 @@ struct LoginView: View {
                                 .fill(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            Color.purple,
-                                            Color.purple.opacity(0.8)
+                                            Color("NormaPastelTeal"),
+                                            Color("NormaPastelTeal").opacity(0.8)
                                         ]),
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: Color.purple.opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
-                            
+                                .shadow(color: Color("NormaPastelTeal").opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
+
                             HStack {
                                 if isLoading {
                                     ProgressView()
@@ -217,7 +195,7 @@ struct LoginView: View {
                                         .scaleEffect(0.8)
                                 } else {
                                     Text("Sign in")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.normaHeadline(16))
                                 }
                             }
                             .foregroundColor(.white)
@@ -239,14 +217,14 @@ struct LoginView: View {
                     // Sign up link
                     HStack(spacing: 4) {
                         Text("Don't have an account?")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
-                        
+
                         Button(action: {
                             showSignUp = true
                         }) {
                             Text("Sign up")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.primary)
                                 .underline()
                         }
@@ -271,7 +249,7 @@ struct LoginView: View {
                     }
                 }
             }
-            .background(Color(UIColor.systemBackground))
+            .background(Color("NormaBackground"))
             .overlay(
                 Group {
                     if isLoading {
@@ -315,7 +293,7 @@ struct LoginView: View {
                                 }
                                 
                                 Text("Signing you in...")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.normaHeadline(16))
                                     .foregroundColor(.primary)
                             }
                             .padding(40)
@@ -422,7 +400,7 @@ struct LoginView: View {
 // Enhanced text field style matching app design
 struct EnhancedTextFieldStyle: TextFieldStyle {
     var isFocused: Bool = false
-    
+
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .padding(.horizontal, 16)
@@ -433,7 +411,7 @@ struct EnhancedTextFieldStyle: TextFieldStyle {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                isFocused ? Color.purple.opacity(0.3) : Color.gray.opacity(0.1),
+                                isFocused ? Color("NormaPastelTeal").opacity(0.3) : Color.gray.opacity(0.1),
                                 lineWidth: isFocused ? 1.5 : 1
                             )
                     )

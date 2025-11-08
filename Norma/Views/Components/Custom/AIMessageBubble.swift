@@ -65,7 +65,25 @@ struct AIMessageBubble: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 16) {
+            // Cards first (if present) - moved above message
+            if let component = uiComponent, showCards {
+                switch component {
+                case .billCards(let bills):
+                    BillCardStack(bills: bills)
+                        .transition(.opacity.combined(with: .scale))
+                case .expenseCards(let expenses):
+                    ExpenseCardStack(expenses: expenses)
+                        .transition(.opacity.combined(with: .scale))
+                case .budgetCards(let budgets):
+                    BudgetCardStack(budgets: budgets)
+                        .transition(.opacity.combined(with: .scale))
+                case .actionConfirmation(let icon, let message, let colorName):
+                    ActionConfirmationCard(icon: icon, message: message, colorName: colorName)
+                        .transition(.opacity.combined(with: .scale))
+                }
+            }
+
             // Markdown text using native SwiftUI with word-by-word reveal
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -88,21 +106,6 @@ struct AIMessageBubble: View {
 
                 Spacer(minLength: 0)
                     .frame(width: UIScreen.main.bounds.width * 0.02)
-            }
-
-            // Cards second (if present)
-            if let component = uiComponent, showCards {
-                switch component {
-                case .billCards(let bills):
-                    BillCardStack(bills: bills)
-                        .transition(.opacity.combined(with: .scale))
-                case .expenseCards(let expenses):
-                    ExpenseCardStack(expenses: expenses)
-                        .transition(.opacity.combined(with: .scale))
-                case .budgetCards(let budgets):
-                    BudgetCardStack(budgets: budgets)
-                        .transition(.opacity.combined(with: .scale))
-                }
             }
         }
     }
@@ -127,6 +130,44 @@ struct AIMessageBubble: View {
                 }
             }
         }
+    }
+}
+
+struct ActionConfirmationCard: View {
+    let icon: String
+    let message: String
+    let colorName: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Icon
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color(colorName))
+                )
+
+            // Message
+            Text(message)
+                .font(.normaInput(13))
+                .foregroundColor(Color("NormaText"))
+                .multilineTextAlignment(.leading)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(colorName).opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(colorName).opacity(0.3), lineWidth: 1)
+        )
     }
 }
 

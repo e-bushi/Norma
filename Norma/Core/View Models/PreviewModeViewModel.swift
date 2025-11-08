@@ -21,6 +21,8 @@ class PreviewModeViewModel: ObservableObject {
     @Published var userName: String?
     @Published var userCurrency: String?
     @Published var userIncome: Double?
+    @Published var userSavings: Double?
+    @Published var userChallenge: String?
 
     // Preview mode completion tracking
     @Published var hasAddedBill = false
@@ -30,6 +32,8 @@ class PreviewModeViewModel: ObservableObject {
 
     // Real onboarding tracking
     @Published var showSaveProgressModal = false
+    @Published var shouldShowCapsules = false
+    @Published var isRealOnboarding = false
 
     // MARK: - Computed Properties
 
@@ -68,7 +72,7 @@ class PreviewModeViewModel: ObservableObject {
     private func generateMockData(exchangeRate: Double) {
         let mockUserId = "preview-mode-user"
         let calendar = Calendar.current
-        let today = Date()
+        let today = Date() 
         let dateFormatter = ISO8601DateFormatter()
 
         // Helper to convert USD amounts
@@ -262,7 +266,25 @@ class PreviewModeViewModel: ObservableObject {
     // MARK: - Data Management
 
     func addBill(_ bill: Bill) {
+        print("🔍 [ViewModel] ========== addBill CALLED ==========")
+        print("🔍 [ViewModel] Bill ID: \(bill.id ?? "nil")")
+        print("🔍 [ViewModel] Bill Name: \(bill.name)")
+        print("🔍 [ViewModel] Bill Amount: \(bill.amount)")
+        print("🔍 [ViewModel] Bills before: \(bills.count), Total: \(totalBills)")
+        print("🔍 [ViewModel] Existing bills: \(bills.map { "\($0.name): \($0.amount)" }.joined(separator: ", "))")
         bills.append(bill)
+        print("🔍 [ViewModel] Bills after: \(bills.count), Total: \(totalBills)")
+        print("🔍 [ViewModel] All bills now: \(bills.map { "\($0.name): \($0.amount)" }.joined(separator: ", "))")
+        print("🔍 [ViewModel] ==========================================")
+
+        // Trigger capsules to show when first bill is added (on main thread)
+        if bills.count == 1 && !shouldShowCapsules {
+            Task { @MainActor in
+                shouldShowCapsules = true
+                print("🔍 [ViewModel] First bill added, triggering capsules to appear on main thread")
+            }
+        }
+
         checkForCompletion()
     }
 
@@ -296,12 +318,18 @@ class PreviewModeViewModel: ObservableObject {
         let userBudgetsCount = budgets.count - initialBudgetsCount
         let userExpensesCount = expenses.count - initialExpensesCount
 
+        print("🔍 [Completion] Bills: \(bills.count) total, \(userBillsCount) user-added (initial: \(initialBillsCount))")
+        print("🔍 [Completion] Budgets: \(budgets.count) total, \(userBudgetsCount) user-added (initial: \(initialBudgetsCount))")
+        print("🔍 [Completion] Expenses: \(expenses.count) total, \(userExpensesCount) user-added (initial: \(initialExpensesCount))")
+
         if userBillsCount > 0 && !hasAddedBill {
             hasAddedBill = true
+            print("🔍 [Completion] Marked hasAddedBill = true")
         }
 
         if userBudgetsCount > 0 && !hasAddedBudget {
             hasAddedBudget = true
+            print("🔍 [Completion] Marked hasAddedBudget = true")
         }
 
         if userExpensesCount > 0 && !hasAddedExpense {
@@ -325,6 +353,7 @@ class PreviewModeViewModel: ObservableObject {
         hasAddedExpense = false
         showCompletionModal = false
         hasMockData = false
+        isRealOnboarding = false  // Reset to preview mode
         generateMockDataIfNeeded()
     }
 
@@ -338,6 +367,8 @@ class PreviewModeViewModel: ObservableObject {
         hasAddedExpense = false
         showCompletionModal = false
         hasMockData = false
+        shouldShowCapsules = false
+        isRealOnboarding = true  // Mark that we're in real onboarding mode
         // Don't regenerate mock data - user will add their own
     }
 }

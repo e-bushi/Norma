@@ -11,6 +11,7 @@ enum UIComponent: Codable, Equatable {
     case billCards([Bill])
     case expenseCards([Expense])
     case budgetCards([Budget])
+    case actionConfirmation(icon: String, message: String, color: String)
 
     // For JSON encoding/decoding if needed
     enum CodingKeys: String, CodingKey {
@@ -18,6 +19,9 @@ enum UIComponent: Codable, Equatable {
         case bills
         case expenses
         case budgets
+        case icon
+        case message
+        case color
     }
 
     init(from decoder: Decoder) throws {
@@ -34,6 +38,11 @@ enum UIComponent: Codable, Equatable {
         case "budgetCards":
             let budgets = try container.decode([Budget].self, forKey: .budgets)
             self = .budgetCards(budgets)
+        case "actionConfirmation":
+            let icon = try container.decode(String.self, forKey: .icon)
+            let message = try container.decode(String.self, forKey: .message)
+            let color = try container.decode(String.self, forKey: .color)
+            self = .actionConfirmation(icon: icon, message: message, color: color)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type")
         }
@@ -52,6 +61,11 @@ enum UIComponent: Codable, Equatable {
         case .budgetCards(let budgets):
             try container.encode("budgetCards", forKey: .type)
             try container.encode(budgets, forKey: .budgets)
+        case .actionConfirmation(let icon, let message, let color):
+            try container.encode("actionConfirmation", forKey: .type)
+            try container.encode(icon, forKey: .icon)
+            try container.encode(message, forKey: .message)
+            try container.encode(color, forKey: .color)
         }
     }
 }

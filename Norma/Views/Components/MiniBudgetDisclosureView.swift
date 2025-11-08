@@ -8,50 +8,12 @@
 import SwiftUI
 
 struct MiniBudgetDisclosureView: View {
+    let appeared: Bool
+
+    @State private var itemStates: [Bool] = Array(repeating: false, count: 6)
+
     var body: some View {
         VStack(spacing: 16) {
-            // Header
-            VStack(spacing: 8) {
-                Text("AUGUST BUDGET")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("Total Budget")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("$2,500")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Remaining")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("$1,200")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.green)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.clear)
-                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                )
-            }
-            
             // Mini budget categories
             VStack(spacing: 12) {
                 HStack {
@@ -62,22 +24,24 @@ struct MiniBudgetDisclosureView: View {
                             Text("🍕")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Food & Dining")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$450 of $600")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$150")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
+                        .font(.normaFinancial(12))
+                        .foregroundColor(Color("NormaPastelTeal"))
                 }
+                .opacity(itemStates[0] ? 1 : 0)
+                .offset(x: itemStates[0] ? 0 : -20)
                 
                 HStack {
                     Circle()
@@ -87,23 +51,25 @@ struct MiniBudgetDisclosureView: View {
                             Text("🎬")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Entertainment")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$280 of $300")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$20")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.orange)
                 }
-                
+                .opacity(itemStates[1] ? 1 : 0)
+                .offset(x: itemStates[1] ? 0 : -20)
+
                 HStack {
                     Circle()
                         .fill(Color.red.opacity(0.1))
@@ -112,23 +78,25 @@ struct MiniBudgetDisclosureView: View {
                             Text("🚗")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Transportation")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$180 of $250")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$70")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
+                        .font(.normaFinancial(12))
+                        .foregroundColor(Color("NormaPastelTeal"))
                 }
-                
+                .opacity(itemStates[2] ? 1 : 0)
+                .offset(x: itemStates[2] ? 0 : -20)
+
                 HStack {
                     Circle()
                         .fill(Color.orange.opacity(0.1))
@@ -137,23 +105,25 @@ struct MiniBudgetDisclosureView: View {
                             Text("🛍️")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Shopping")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$320 of $200")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("-$120")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.normaFinancial(12))
                         .foregroundColor(.red)
                 }
-                
+                .opacity(itemStates[3] ? 1 : 0)
+                .offset(x: itemStates[3] ? 0 : -20)
+
                 HStack {
                     Circle()
                         .fill(Color.green.opacity(0.1))
@@ -162,23 +132,25 @@ struct MiniBudgetDisclosureView: View {
                             Text("💊")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Healthcare")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$150 of $200")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$50")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
+                        .font(.normaFinancial(12))
+                        .foregroundColor(Color("NormaPastelTeal"))
                 }
-                
+                .opacity(itemStates[4] ? 1 : 0)
+                .offset(x: itemStates[4] ? 0 : -20)
+
                 HStack {
                     Circle()
                         .fill(Color.yellow.opacity(0.1))
@@ -187,22 +159,24 @@ struct MiniBudgetDisclosureView: View {
                             Text("💡")
                                 .font(.system(size: 14))
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Utilities")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.normaInput(12))
                             .foregroundColor(.primary)
                         Text("$240 of $250")
-                            .font(.system(size: 10))
+                            .font(.normaInput(10))
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text("$10")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
+                        .font(.normaFinancial(12))
+                        .foregroundColor(Color("NormaPastelTeal"))
                 }
+                .opacity(itemStates[5] ? 1 : 0)
+                .offset(x: itemStates[5] ? 0 : -20)
             }
             .padding(16)
             .background(
@@ -215,10 +189,31 @@ struct MiniBudgetDisclosureView: View {
                     .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
             )
         }
+        .onChange(of: appeared) { _, isAppeared in
+            if isAppeared {
+                animateItemsStaggered()
+            } else {
+                resetAnimations()
+            }
+        }
+    }
+
+    private func animateItemsStaggered() {
+        for i in 0..<itemStates.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.08) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    itemStates[i] = true
+                }
+            }
+        }
+    }
+
+    private func resetAnimations() {
+        itemStates = Array(repeating: false, count: 6)
     }
 }
 
 #Preview {
-    MiniBudgetDisclosureView()
+    MiniBudgetDisclosureView(appeared: true)
         .padding()
 }

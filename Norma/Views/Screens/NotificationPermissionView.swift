@@ -28,7 +28,7 @@ struct NotificationPermissionView: View {
         VStack(spacing: 20) {
             // Title
             Text("Stay on Track")
-                .font(.system(size: 28, weight: .bold))
+                .font(.normaTitle(28))
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
                 .offset(y: titleOffset)
@@ -40,10 +40,10 @@ struct NotificationPermissionView: View {
                     }
                 }
                 .padding(.top, 40)
-            
+
             // Description
             Text("Get timely reminders for upcoming bills and never miss a payment again.")
-                .font(.system(size: 16))
+                .font(.normaInput(16))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
@@ -61,7 +61,7 @@ struct NotificationPermissionView: View {
             Spacer()
             
             // Mini Expense View
-            MiniExpenseDisclosureView()
+            MiniExpenseDisclosureView(appeared: true)
                 .scaleEffect(0.8)
                 .padding(.horizontal, 24)
                 .scaleEffect(miniViewScale)
@@ -99,7 +99,7 @@ struct NotificationPermissionView: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text("Enable Notifications")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.normaHeadline(16))
                             Image(systemName: "bell.fill")
                                 .font(.system(size: 14, weight: .semibold))
                         }
@@ -109,7 +109,17 @@ struct NotificationPermissionView: View {
                     .frame(height: 56)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.purple)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color("NormaPastelTeal"),
+                                        Color("NormaPastelTeal").opacity(0.8)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: Color("NormaPastelTeal").opacity(0.3), radius: 4, x: 0, y: 2)
                     )
                 }
                 .disabled(isLoading)
@@ -127,7 +137,7 @@ struct NotificationPermissionView: View {
                     onSkip()
                 }) {
                     Text("Not Now")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.normaHeadline(16))
                         .foregroundColor(.secondary)
                 }
                 .opacity(buttonOpacity)
@@ -135,7 +145,10 @@ struct NotificationPermissionView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 50)
         }
-        .background(Color(UIColor.systemBackground))
+        .background(
+            Color("NormaBackground")
+                .ignoresSafeArea()
+        )
     }
     
     private func requestNotificationPermission() {
@@ -172,14 +185,14 @@ struct MockNotificationCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Apple iCloud")
-                        .font(.headline)
+                        .font(.normaHeadline(16))
                         .foregroundColor(.primary)
                     HStack(spacing: 8) {
                         Text("Dec 8")
                         Text("•")
                         Text("Monthly")
                     }
-                    .font(.subheadline)
+                    .font(.normaInput(14))
                     .foregroundColor(.secondary)
                 }
             }
@@ -189,10 +202,10 @@ struct MockNotificationCard: View {
             // Amount Section
             VStack(alignment: .trailing, spacing: 4) {
                 Text("$9.99")
-                    .font(.headline)
+                    .font(.normaFinancial(16))
                     .foregroundColor(.primary)
                 Text("Due Soon")
-                    .font(.caption)
+                    .font(.normaInput(12))
                     .foregroundColor(.orange)
             }
         }
@@ -217,4 +230,5 @@ struct MockNotificationCard: View {
         onPermissionGranted: { print("Permission granted") },
         onSkip: { print("Skipped") }
     )
+    .preferredColorScheme(.dark)
 }

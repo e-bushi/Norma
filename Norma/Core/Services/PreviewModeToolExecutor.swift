@@ -26,6 +26,10 @@ class PreviewModeToolExecutor {
             return handleSaveUserCurrency(input: input)
         case "save_user_income":
             return handleSaveUserIncome(input: input)
+        case "save_user_savings":
+            return handleSaveUserSavings(input: input)
+        case "save_user_challenge":
+            return handleSaveUserChallenge(input: input)
         case "create_bill":
             return await handleCreateBill(input: input)
         case "create_expense":
@@ -53,7 +57,12 @@ class PreviewModeToolExecutor {
         }
 
         previewModeViewModel.userName = name
-        return ("User name saved as '\(name)'", nil)
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "person.fill",
+            message: "Norma saved your name: \(name)",
+            color: "NormaPastelTeal"
+        )
+        return ("User name saved as '\(name)'", uiComponent)
     }
 
     private func handleSaveUserCurrency(input: [String: Any]) -> (String, UIComponent?) {
@@ -73,10 +82,19 @@ class PreviewModeToolExecutor {
 
         previewModeViewModel.userCurrency = currency.uppercased()
 
-        // Generate mock data with exchange rate multiplier
-        previewModeViewModel.generateMockDataIfNeeded(exchangeRate: exchangeRate)
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "dollarsign.circle.fill",
+            message: "Norma saved your currency: \(currency.uppercased())",
+            color: "NormaPastelPurple"
+        )
 
-        return ("User currency saved as '\(currency.uppercased())'. Mock financial data has been generated with exchange rate \(exchangeRate).", nil)
+        // Only generate mock data during preview mode, NOT during real onboarding
+        if !previewModeViewModel.isRealOnboarding {
+            previewModeViewModel.generateMockDataIfNeeded(exchangeRate: exchangeRate)
+            return ("User currency saved as '\(currency.uppercased())'. Mock financial data has been generated with exchange rate \(exchangeRate).", uiComponent)
+        } else {
+            return ("User currency saved as '\(currency.uppercased())'.", uiComponent)
+        }
     }
 
     private func handleSaveUserIncome(input: [String: Any]) -> (String, UIComponent?) {
@@ -91,16 +109,86 @@ class PreviewModeToolExecutor {
         }
 
         previewModeViewModel.userIncome = income
-        return ("Monthly income after taxes saved as \(income)", nil)
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        let formattedIncome = formatter.string(from: NSNumber(value: income)) ?? "\(income)"
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "banknote.fill",
+            message: "Norma saved your income: \(formattedIncome)",
+            color: "NormaPastelTeal"
+        )
+        return ("Monthly income after taxes saved as \(income)", uiComponent)
+    }
+
+    private func handleSaveUserSavings(input: [String: Any]) -> (String, UIComponent?) {
+        // Handle savings as either Int or Double
+        let savings: Double
+        if let savingsDouble = input["savings"] as? Double {
+            savings = savingsDouble
+        } else if let savingsInt = input["savings"] as? Int {
+            savings = Double(savingsInt)
+        } else {
+            return ("Missing or invalid savings parameter", nil)
+        }
+
+        previewModeViewModel.userSavings = savings
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        let formattedSavings = formatter.string(from: NSNumber(value: savings)) ?? "\(savings)"
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "sparkles",
+            message: "Norma saved your savings: \(formattedSavings)",
+            color: "NormaPastelCoral"
+        )
+        return ("Current savings saved as \(savings)", uiComponent)
+    }
+
+    private func handleSaveUserChallenge(input: [String: Any]) -> (String, UIComponent?) {
+        guard let challenge = input["challenge"] as? String else {
+            return ("Missing challenge parameter", nil)
+        }
+
+        previewModeViewModel.userChallenge = challenge
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "target",
+            message: "Norma noted your challenge: \(challenge)",
+            color: "NormaPastelPurple"
+        )
+        return ("User's main financial challenge saved: '\(challenge)'", uiComponent)
     }
 
     // MARK: - Create Tools
 
     private func handleCreateBill(input: [String: Any]) async -> (String, UIComponent?) {
+        print("🔍 [CreateBill] Input received: \(input)")
+        print("🔍 [CreateBill] name: \(input["name"] as? String ?? "nil")")
+        print("🔍 [CreateBill] amount: \(input["amount"] ?? "nil") (type: \(type(of: input["amount"])))")
+        print("🔍 [CreateBill] due_date: \(input["due_date"] as? String ?? "nil")")
+
         guard let name = input["name"] as? String,
-              let amount = input["amount"] as? Double,
               let dueDateString = input["due_date"] as? String else {
+            print("🔍 [CreateBill] Guard failed - Missing name or due_date")
             return ("Missing required fields for bill creation", nil)
+        }
+
+        // Handle amount as either Int or Double
+        let amount: Double
+        if let amountDouble = input["amount"] as? Double {
+            amount = amountDouble
+        } else if let amountInt = input["amount"] as? Int {
+            amount = Double(amountInt)
+        } else {
+            print("🔍 [CreateBill] Guard failed - Invalid amount type")
+            return ("Missing or invalid amount parameter", nil)
         }
 
         let dateFormatter = DateFormatter()
@@ -111,6 +199,11 @@ class PreviewModeToolExecutor {
 
         let frequency: BillFrequency = .monthly
         let status: BillStatus = .scheduled
+
+        print("🔍 [CreateBill] ========== CREATING BILL ==========")
+        print("🔍 [CreateBill] Name: \(name)")
+        print("🔍 [CreateBill] Amount extracted: \(amount)")
+        print("🔍 [CreateBill] Due date: \(dueDate)")
 
         let bill = Bill(
             id: UUID().uuidString,
@@ -128,8 +221,24 @@ class PreviewModeToolExecutor {
             notes: input["notes"] as? String
         )
 
+        print("🔍 [CreateBill] Bill object created with amount: \(bill.amount)")
+        print("🔍 [CreateBill] About to call addBill...")
         previewModeViewModel.addBill(bill)
-        return ("Bill '\(name)' created successfully for \(amount)", nil)
+        print("🔍 [CreateBill] addBill completed")
+        print("🔍 [CreateBill] ======================================")
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "doc.text.fill",
+            message: "Norma created a bill: \(name) - \(formattedAmount)",
+            color: "NormaPastelTeal"
+        )
+        return ("Bill '\(name)' created successfully for \(amount)", uiComponent)
     }
 
     private func handleCreateExpense(input: [String: Any]) async -> (String, UIComponent?) {
@@ -162,7 +271,19 @@ class PreviewModeToolExecutor {
         )
 
         previewModeViewModel.addExpense(expense)
-        return ("Expense '\(name)' created successfully for \(amount)", nil)
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "creditcard.fill",
+            message: "Norma created an expense: \(name) - \(formattedAmount)",
+            color: "NormaPastelCoral"
+        )
+        return ("Expense '\(name)' created successfully for \(amount)", uiComponent)
     }
 
     private func handleCreateBudget(input: [String: Any]) async -> (String, UIComponent?) {
@@ -190,7 +311,19 @@ class PreviewModeToolExecutor {
         )
 
         previewModeViewModel.addBudget(budget)
-        return ("Budget '\(name)' created successfully for \(amount)", nil)
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+
+        let uiComponent = UIComponent.actionConfirmation(
+            icon: "chart.pie.fill",
+            message: "Norma created a budget: \(name) - \(formattedAmount)",
+            color: "NormaPastelPurple"
+        )
+        return ("Budget '\(name)' created successfully for \(amount)", uiComponent)
     }
 
     // MARK: - Show Tools
