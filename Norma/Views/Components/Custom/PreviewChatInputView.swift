@@ -36,6 +36,33 @@ struct PreviewChatInputView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
     }
 
+    private func animateCapsules() {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.prepare()
+
+        // Animate capsules appearing with staggered delays + haptics
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3)) {
+            visibleCapsules = 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
+            visibleCapsules = 2
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5)) {
+            visibleCapsules = 3
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Floating input container
@@ -193,35 +220,18 @@ struct PreviewChatInputView: View {
         .padding(.top, 16)
         .onChange(of: showCapsules) { _, newValue in
             if newValue {
-                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                impactFeedback.prepare()
-
-                // Animate capsules appearing with staggered delays + haptics
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3)) {
-                    visibleCapsules = 1
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    impactFeedback.impactOccurred(intensity: 0.6)
-                }
-
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
-                    visibleCapsules = 2
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    impactFeedback.impactOccurred(intensity: 0.6)
-                }
-
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5)) {
-                    visibleCapsules = 3
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    impactFeedback.impactOccurred(intensity: 0.6)
-                }
+                animateCapsules()
             } else {
                 // Animate capsules disappearing
                 withAnimation(.easeOut(duration: 0.3)) {
                     visibleCapsules = 0
                 }
+            }
+        }
+        .onChange(of: viewModel.triggerCapsuleAnimation) { _, newValue in
+            if newValue {
+                // Re-animate capsules when user adds their first bill
+                animateCapsules()
             }
         }
         .background(

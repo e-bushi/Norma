@@ -66,7 +66,7 @@ struct AIMessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Cards first (if present) - moved above message
+            // Cards first (if present) - shown before text
             if let component = uiComponent, showCards {
                 switch component {
                 case .billCards(let bills):
@@ -96,10 +96,24 @@ struct AIMessageBubble: View {
                             // Only animate once per message
                             if !hasAnimated {
                                 hasAnimated = true
-                                startWordRevealAnimation()
+
+                                // Show cards immediately if present
+                                if uiComponent != nil {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        showCards = true
+                                    }
+                                    // Start text animation after a brief delay
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        startWordRevealAnimation()
+                                    }
+                                } else {
+                                    // No UI component, start text animation immediately
+                                    startWordRevealAnimation()
+                                }
                             } else {
-                                // If already animated, show full text immediately
+                                // If already animated, show full text and cards immediately
                                 visibleWordCount = words.count
+                                showCards = true
                             }
                         }
                 }
@@ -118,15 +132,6 @@ struct AIMessageBubble: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 withAnimation(.easeOut(duration: 0.15)) {
                     visibleWordCount = index
-                }
-
-                // Show cards after all words are revealed
-                if index == totalWords && uiComponent != nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showCards = true
-                        }
-                    }
                 }
             }
         }

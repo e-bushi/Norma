@@ -23,6 +23,11 @@ struct PreviewModeChatView: View {
     @State private var showReadyModal = false
     @State private var hasClickedReady = false
     @State private var showSaveButton = false
+    @State private var dynamicSpacerHeight: CGFloat = 180
+    @State private var viewportHeight: CGFloat = 0
+    @State private var lastMessagePosition: CGFloat = 0
+
+    private let maxSpacerHeight: CGFloat = 600
 
     private var toolExecutor: PreviewModeToolExecutor {
         PreviewModeToolExecutor(previewModeViewModel: previewModeViewModel)
@@ -135,8 +140,8 @@ struct PreviewModeChatView: View {
         .onAppear {
             showInitialGreeting()
         }
-        .onChange(of: previewModeViewModel.userCurrency) { _, newValue in
-            if newValue != nil {
+        .onChange(of: previewModeViewModel.bills) { _, newValue in
+            if newValue.count > 0 {
                 // Trigger capsule animation when currency is set
                 showCapsules = true
             }
@@ -150,36 +155,73 @@ struct PreviewModeChatView: View {
     @ViewBuilder
     private var chatContent: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    ForEach(messages) { message in
-                        ChatBubbleView(message: message)
-                            .id(message.id)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                    }
+            GeometryReader { outerGeometry in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        LazyVStack(spacing: 20) {
+                            ForEach(messages) { message in
+                                ChatBubbleView(message: message)
+                                    .id(message.id)
+                                    .transition(.asymmetric(
+                                        insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                        removal: .opacity
+                                    ))
+                            }
 
-                    if isLoading {
-                        ThinkingIndicator()
-                            .id("typing")
-                            .transition(.scale.combined(with: .opacity))
+                            if isLoading {
+                                ThinkingIndicator()
+                                    .id("typing")
+                                    .background(
+                                        GeometryReader { geo in
+                                            Color.clear.preference(
+                                                key: LastMessagePositionKey.self,
+                                                value: geo.frame(in: .named("scroll")).minY
+                                            )
+                                        }
+                                    )
+                                    .transition(.scale.combined(with: .opacity))
+                            } else if let lastMessage = messages.last {
+                                Color.clear
+                                    .frame(height: 0)
+                                    .background(
+                                        GeometryReader { geo in
+                                            Color.clear.preference(
+                                                key: LastMessagePositionKey.self,
+                                                value: geo.frame(in: .named("scroll")).minY
+                                            )
+                                        }
+                                    )
+                                    .id("lastMessageTracker")
+                            }
+                        }
+                        .padding()
+
+                        // Dynamic spacer to push content up and leave room for input
+                        Color.clear
+                            .frame(height: dynamicSpacerHeight)
+                            .id("bottomSpacer")
                     }
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
                 }
-                .padding()
-                .padding(.bottom, 180)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
-            }
-            .background(Color("NormaBackground"))
-            .onChange(of: messages.count) {
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: isLoading) {
-                scrollToBottom(proxy: proxy)
-            }
-            .onAppear {
-                self.scrollViewProxy = proxy
+                .coordinateSpace(name: "scroll")
+                .background(Color("NormaBackground"))
+                .onPreferenceChange(LastMessagePositionKey.self) { value in
+                    lastMessagePosition = value
+                    // Continuously adjust as position changes during animation
+                    adjustSpacerAndScroll(proxy: proxy)
+                }
+                .onChange(of: messages.count) {
+                    // Initial adjustment when new message is added
+                    adjustSpacerAndScroll(proxy: proxy)
+                }
+                .onChange(of: isLoading) {
+                    // Adjustment when loading state changes
+                    adjustSpacerAndScroll(proxy: proxy)
+                }
+                .onAppear {
+                    self.scrollViewProxy = proxy
+                    viewportHeight = outerGeometry.size.height
+                }
             }
         }
     }
@@ -444,12 +486,31 @@ struct PreviewModeChatView: View {
         }
     }
 
+    private func adjustSpacerAndScroll(proxy: ScrollViewProxy) {
+        // Calculate 50% threshold
+        let fiftyPercentLine = viewportHeight * 0.5
+
+        // Check if last message is below the 50% line
+        if lastMessagePosition > fiftyPercentLine {
+            // Calculate how much we need to push content up
+            let pushUpAmount = lastMessagePosition - fiftyPercentLine
+            let newHeight = min(180 + pushUpAmount, maxSpacerHeight)
+
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                dynamicSpacerHeight = newHeight
+            }
+        }
+
+        // Scroll to position the message at 30% from top
+        scrollToBottom(proxy: proxy)
+    }
+
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.3)) {
             if isLoading {
-                proxy.scrollTo("typing", anchor: .bottom)
+                proxy.scrollTo("typing", anchor: UnitPoint(x: 0.5, y: 0.3))
             } else if let lastMessage = messages.last {
-                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                proxy.scrollTo(lastMessage.id, anchor: UnitPoint(x: 0.5, y: 0.3))
             }
         }
     }
@@ -755,6 +816,14 @@ struct SaveProgressModal: View {
             .padding(.top, 8)
         }
         .padding(.vertical, 32)
+    }
+}
+
+// Preference key to track last message position
+struct LastMessagePositionKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

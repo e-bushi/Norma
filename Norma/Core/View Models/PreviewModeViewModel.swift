@@ -34,6 +34,7 @@ class PreviewModeViewModel: ObservableObject {
     @Published var showSaveProgressModal = false
     @Published var shouldShowCapsules = false
     @Published var isRealOnboarding = false
+    @Published var triggerCapsuleAnimation = false
 
     // MARK: - Computed Properties
 
@@ -272,7 +273,11 @@ class PreviewModeViewModel: ObservableObject {
         print("🔍 [ViewModel] Bill Amount: \(bill.amount)")
         print("🔍 [ViewModel] Bills before: \(bills.count), Total: \(totalBills)")
         print("🔍 [ViewModel] Existing bills: \(bills.map { "\($0.name): \($0.amount)" }.joined(separator: ", "))")
+
+        let userBillsCountBefore = bills.count - initialBillsCount
         bills.append(bill)
+        let userBillsCountAfter = bills.count - initialBillsCount
+
         print("🔍 [ViewModel] Bills after: \(bills.count), Total: \(totalBills)")
         print("🔍 [ViewModel] All bills now: \(bills.map { "\($0.name): \($0.amount)" }.joined(separator: ", "))")
         print("🔍 [ViewModel] ==========================================")
@@ -282,6 +287,19 @@ class PreviewModeViewModel: ObservableObject {
             Task { @MainActor in
                 shouldShowCapsules = true
                 print("🔍 [ViewModel] First bill added, triggering capsules to appear on main thread")
+            }
+        }
+
+        // Trigger capsule animation when first USER bill is added (after mock data)
+        if userBillsCountBefore == 0 && userBillsCountAfter == 1 {
+            Task { @MainActor in
+                // Toggle the trigger to animate capsules again
+                triggerCapsuleAnimation = true
+                print("🔍 [ViewModel] First user bill added, triggering capsule animation")
+
+                // Reset after a delay so it can be triggered again if needed
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                triggerCapsuleAnimation = false
             }
         }
 
