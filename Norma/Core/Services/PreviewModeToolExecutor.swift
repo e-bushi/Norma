@@ -31,7 +31,7 @@ class PreviewModeToolExecutor {
         case "save_user_challenge":
             return handleSaveUserChallenge(input: input)
         case "create_bill":
-            return await handleCreateBill(input: input)
+            return handleCreateBill(input: input)
         case "create_expense":
             return await handleCreateExpense(input: input)
         case "create_budget":
@@ -168,7 +168,7 @@ class PreviewModeToolExecutor {
 
     // MARK: - Create Tools
 
-    private func handleCreateBill(input: [String: Any]) async -> (String, UIComponent?) {
+    private func handleCreateBill(input: [String: Any]) -> (String, UIComponent?) {
         print("🔍 [CreateBill] Input received: \(input)")
         print("🔍 [CreateBill] name: \(input["name"] as? String ?? "nil")")
         print("🔍 [CreateBill] amount: \(input["amount"] ?? "nil") (type: \(type(of: input["amount"])))")

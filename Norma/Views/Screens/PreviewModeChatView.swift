@@ -159,7 +159,7 @@ struct PreviewModeChatView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         LazyVStack(spacing: 20) {
-                            ForEach(messages) { message in
+                            ForEach(messages.filter { $0.isVisible }) { message in
                                 ChatBubbleView(message: message)
                                     .id(message.id)
                                     .transition(.asymmetric(
@@ -279,14 +279,18 @@ struct PreviewModeChatView: View {
         do {
             let conversationHistory = createConversationHistory()
             let tools = getAllTools()
-
+            print("Convo history:\n\n\n\(conversationHistory)\n\n\n")
             // Choose prompt based on whether user has clicked "I'm Ready"
             let systemPrompt: String
             if hasClickedReady {
                 // Real onboarding - 3 questions flow
                 systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
                     userName: previewModeViewModel.userName ?? "there",
-                    currency: previewModeViewModel.userCurrency ?? "USD"
+                    currency: previewModeViewModel.userCurrency ?? "USD",
+                    hasIncome: previewModeViewModel.userIncome != nil,
+                    hasBill: !previewModeViewModel.bills.isEmpty,
+                    hasSavings: previewModeViewModel.userSavings != nil,
+                    hasChallenge: previewModeViewModel.userChallenge != nil
                 )
             } else {
                 // Preview mode with mock data
@@ -299,9 +303,9 @@ struct PreviewModeChatView: View {
                 )
             }
 
-            print("📋 System Prompt:")
-            print(systemPrompt)
-            print("---")
+//            print("📋 System Prompt:")
+//            print(systemPrompt)
+            print("---\n\n")
 
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
@@ -326,6 +330,29 @@ struct PreviewModeChatView: View {
                 print("📤 Tool result: \(toolResult)")
                 print("🎨 UI Component: \(String(describing: uiComponent))")
 
+                // Save tool use and tool result to messages array
+                await MainActor.run {
+                    // Save tool use message (visible as activity indicator)
+                    let activityMessage = createToolActivityMessage(name: name, input: input)
+                    let toolUseMessage = ChatMessage(
+                        role: .assistant,
+                        content: activityMessage,
+                        uiComponent: .toolActivity(activityMessage),
+                        isVisible: true,
+                        anthropicContent: .toolUse(id: id, name: name, input: input)
+                    )
+                    messages.append(toolUseMessage)
+
+                    // Save tool result message (hidden from UI, only for API conversation history)
+                    let toolResultMessage = ChatMessage(
+                        role: .user,
+                        content: "",  // Empty content, not displayed
+                        isVisible: false,
+                        anthropicContent: .toolResult(toolUseId: id, content: toolResult)
+                    )
+                    messages.append(toolResultMessage)
+                }
+
                 var updatedHistory = conversationHistory
                 updatedHistory.append(AnthropicMessage(
                     role: "assistant",
@@ -341,7 +368,11 @@ struct PreviewModeChatView: View {
                 if hasClickedReady {
                     finalSystemPrompt = NormaSystemPrompts.realOnboardingPrompt(
                         userName: previewModeViewModel.userName ?? "there",
-                        currency: previewModeViewModel.userCurrency ?? "USD"
+                        currency: previewModeViewModel.userCurrency ?? "USD",
+                        hasIncome: previewModeViewModel.userIncome != nil,
+                        hasBill: !previewModeViewModel.bills.isEmpty,
+                        hasSavings: previewModeViewModel.userSavings != nil,
+                        hasChallenge: previewModeViewModel.userChallenge != nil
                     )
                 } else {
                     finalSystemPrompt = NormaSystemPrompts.previewModePrompt(
@@ -358,7 +389,7 @@ struct PreviewModeChatView: View {
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
                     systemPrompt: finalSystemPrompt,
-                    tools: tools
+                    tools: []
                 )
 
                 print("✅ Final response received: \(finalResponse)")
@@ -401,8 +432,46 @@ struct PreviewModeChatView: View {
         return messages.map { chatMessage in
             AnthropicMessage(
                 role: chatMessage.role == .user ? "user" : "assistant",
-                content: .text(chatMessage.content)
+                content: chatMessage.anthropicContent ?? .text(chatMessage.content)
             )
+        }
+    }
+
+    private func createToolActivityMessage(name: String, input: [String: Any]) -> String {
+        switch name {
+        case "save_user_name":
+            if let userName = input["name"] as? String {
+                return "Saving your name: \(userName)..."
+            }
+            return "Saving your name..."
+        case "save_user_currency":
+            if let currency = input["currency"] as? String {
+                return "Setting currency to \(currency.uppercased())..."
+            }
+            return "Setting your currency..."
+        case "save_user_income":
+            return "Saving your income..."
+        case "save_user_savings":
+            return "Saving your savings..."
+        case "save_user_challenge":
+            return "Noting your financial goal..."
+        case "create_bill":
+            if let billName = input["name"] as? String {
+                return "Creating bill: \(billName)..."
+            }
+            return "Creating bill..."
+        case "create_expense":
+            if let expenseName = input["name"] as? String {
+                return "Creating expense: \(expenseName)..."
+            }
+            return "Creating expense..."
+        case "create_budget":
+            if let budgetName = input["name"] as? String {
+                return "Creating budget: \(budgetName)..."
+            }
+            return "Creating budget..."
+        default:
+            return "Processing..."
         }
     }
 
@@ -438,7 +507,11 @@ struct PreviewModeChatView: View {
         if hasClickedReady {
             systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
                 userName: previewModeViewModel.userName ?? "there",
-                currency: previewModeViewModel.userCurrency ?? "USD"
+                currency: previewModeViewModel.userCurrency ?? "USD",
+                hasIncome: previewModeViewModel.userIncome != nil,
+                hasBill: !previewModeViewModel.bills.isEmpty,
+                hasSavings: previewModeViewModel.userSavings != nil,
+                hasChallenge: previewModeViewModel.userChallenge != nil
             )
         } else {
             systemPrompt = NormaSystemPrompts.previewModePrompt(
@@ -538,7 +611,11 @@ struct PreviewModeChatView: View {
                 if hasClickedReady {
                     systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
                         userName: previewModeViewModel.userName ?? "there",
-                        currency: previewModeViewModel.userCurrency ?? "USD"
+                        currency: previewModeViewModel.userCurrency ?? "USD",
+                        hasIncome: previewModeViewModel.userIncome != nil,
+                        hasBill: !previewModeViewModel.bills.isEmpty,
+                        hasSavings: previewModeViewModel.userSavings != nil,
+                        hasChallenge: previewModeViewModel.userChallenge != nil
                     )
                 } else {
                     systemPrompt = NormaSystemPrompts.previewModePrompt(

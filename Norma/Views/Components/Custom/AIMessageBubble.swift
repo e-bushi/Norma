@@ -58,6 +58,13 @@ struct AIMessageBubble: View {
         return words.prefix(visibleWordCount).joined()
     }
 
+    private var isToolActivityMessage: Bool {
+        if case .toolActivity = uiComponent {
+            return true
+        }
+        return false
+    }
+
     init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight) {
         self.content = content
         self.uiComponent = uiComponent
@@ -81,45 +88,64 @@ struct AIMessageBubble: View {
                 case .actionConfirmation(let icon, let message, let colorName):
                     ActionConfirmationCard(icon: icon, message: message, colorName: colorName)
                         .transition(.opacity.combined(with: .scale))
+                case .toolActivity(let message):
+                    ToolActivityView(message: message)
+                        .transition(.opacity.combined(with: .scale))
                 }
             }
 
             // Markdown text using native SwiftUI with word-by-word reveal
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(try! AttributedString(markdown: displayText, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-                        .font(.normaInput(16))
-                        .lineSpacing(4)
-                        .foregroundColor(Color("NormaText"))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .onAppear {
-                            // Only animate once per message
-                            if !hasAnimated {
-                                hasAnimated = true
+            // Don't show text content for tool activity messages (content is already in the ToolActivityView)
+            if !isToolActivityMessage {
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(try! AttributedString(markdown: displayText, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                            .font(.normaInput(16))
+                            .lineSpacing(4)
+                            .foregroundColor(Color("NormaText"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onAppear {
+                                // Only animate once per message
+                                if !hasAnimated {
+                                    hasAnimated = true
 
-                                // Show cards immediately if present
-                                if uiComponent != nil {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                        showCards = true
-                                    }
-                                    // Start text animation after a brief delay
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    // Show cards immediately if present
+                                    if uiComponent != nil {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            showCards = true
+                                        }
+                                        // Start text animation after a brief delay
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            startWordRevealAnimation()
+                                        }
+                                    } else {
+                                        // No UI component, start text animation immediately
                                         startWordRevealAnimation()
                                     }
                                 } else {
-                                    // No UI component, start text animation immediately
-                                    startWordRevealAnimation()
+                                    // If already animated, show full text and cards immediately
+                                    visibleWordCount = words.count
+                                    showCards = true
                                 }
-                            } else {
-                                // If already animated, show full text and cards immediately
-                                visibleWordCount = words.count
+                            }
+                    }
+
+                    Spacer(minLength: 0)
+                        .frame(width: UIScreen.main.bounds.width * 0.02)
+                }
+            } else {
+                // For tool activity messages, just show the cards immediately
+                EmptyView()
+                    .onAppear {
+                        if !hasAnimated {
+                            hasAnimated = true
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 showCards = true
                             }
+                        } else {
+                            showCards = true
                         }
-                }
-
-                Spacer(minLength: 0)
-                    .frame(width: UIScreen.main.bounds.width * 0.02)
+                    }
             }
         }
     }
@@ -172,6 +198,33 @@ struct ActionConfirmationCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(colorName).opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+struct ToolActivityView: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Activity indicator
+            ProgressView()
+                .scaleEffect(0.7)
+                .frame(width: 20, height: 20)
+
+            // Message
+            Text(message)
+                .font(.normaInput(13))
+                .foregroundColor(Color("NormaText").opacity(0.6))
+                .italic()
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color("NormaText").opacity(0.04))
         )
     }
 }
