@@ -131,6 +131,11 @@ struct BillHomeView: View {
                     )
                 }
             }
+            .onAppear {
+                Task {
+                    await loadInitialData()
+                }
+            }
             .onDisappear {
                 refreshTask?.cancel()
             }

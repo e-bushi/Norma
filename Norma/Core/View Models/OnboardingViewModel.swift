@@ -151,7 +151,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func proceedToWelcome() {
-        currentStep = .welcome
+        currentStep = .notifications
     }
     
     // MARK: - Chat Methods
@@ -420,6 +420,7 @@ class OnboardingViewModel: ObservableObject {
 
 enum OnboardingStep: CaseIterable {
     case landing
+    case previewMode
     case welcome
     case authentication
     case verification
@@ -427,7 +428,7 @@ enum OnboardingStep: CaseIterable {
     case howDidYouHear
     case normaChat
     case complete
-    
+
     func next() -> OnboardingStep {
         let allCases = OnboardingStep.allCases
         guard let currentIndex = allCases.firstIndex(of: self),

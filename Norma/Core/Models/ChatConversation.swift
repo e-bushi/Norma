@@ -31,13 +31,19 @@ struct ChatMessage: Identifiable, Codable {
     let content: String
     let timestamp: String
     var uiComponent: UIComponent?
+    let isVisible: Bool  // Controls whether message is displayed in UI
 
-    init(id: String = UUID().uuidString, role: MessageRole, content: String, timestamp: String = ISO8601DateFormatter().string(from: Date()), uiComponent: UIComponent? = nil) {
+    // Store raw Anthropic content for conversation history
+    var anthropicContent: AnthropicMessageContent?
+
+    init(id: String = UUID().uuidString, role: MessageRole, content: String, timestamp: String = ISO8601DateFormatter().string(from: Date()), uiComponent: UIComponent? = nil, isVisible: Bool = true, anthropicContent: AnthropicMessageContent? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.uiComponent = uiComponent
+        self.isVisible = isVisible
+        self.anthropicContent = anthropicContent
     }
 
     enum MessageRole: String, Codable {

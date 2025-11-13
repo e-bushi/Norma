@@ -183,11 +183,15 @@ struct OnboardingCoordinatorView: View {
                     )
                 )
                 .environmentObject(onboardingViewModel)
-            
-            case .welcome:
-                OnboardingView()
+
+            case .previewMode:
+                PreviewModeChatView()
+                    .environmentObject(sessionViewModel)
                     .environmentObject(onboardingViewModel)
-            
+
+            case .welcome:
+                EmptyView()
+
             case .authentication:
                 if onboardingViewModel.showSignUp {
                     SignUpView(
@@ -218,10 +222,10 @@ struct OnboardingCoordinatorView: View {
                     onContinue: { option in
                         // Store the selection
                         onboardingViewModel.howDidYouHear = option?.id
-                        onboardingViewModel.currentStep = .notifications
+                        onboardingViewModel.currentStep = .normaChat
                     },
                     onSkip: {
-                        onboardingViewModel.currentStep = .notifications
+                        onboardingViewModel.currentStep = .normaChat
                     }
                 )
                 .environmentObject(onboardingViewModel)
@@ -229,10 +233,10 @@ struct OnboardingCoordinatorView: View {
             case .notifications:
                 NotificationPermissionView(
                     onPermissionGranted: {
-                        onboardingViewModel.currentStep = .normaChat
+                        onboardingViewModel.currentStep = .howDidYouHear
                     },
                     onSkip: {
-                        onboardingViewModel.currentStep = .normaChat
+                        onboardingViewModel.currentStep = .howDidYouHear
                     }
                 )
                 .environmentObject(onboardingViewModel)

@@ -8,49 +8,12 @@
 import SwiftUI
 
 struct MiniExpenseCalendarView: View {
+    let appeared: Bool
+
+    @State private var dayStates: [Bool] = Array(repeating: false, count: 31)
+
     var body: some View {
         VStack(spacing: 16) {
-            // Header
-            VStack(spacing: 8) {
-                Text("AUGUST EXPENSES")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-                
-                HStack(spacing: 20) {
-                    VStack(spacing: 4) {
-                        Text("This Month")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("$1,850")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                    
-                    VStack(spacing: 4) {
-                        Text("Active Days")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Text("12")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.purple)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                        )
-                )
-            }
-            
             // Mini calendar grid
             VStack(spacing: 8) {
                 HStack {
@@ -64,6 +27,7 @@ struct MiniExpenseCalendarView: View {
                 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 4) {
                     ForEach(1...31, id: \.self) { day in
+                        let index = day - 1
                         Text("\(day)")
                             .font(.system(size: 10))
                             .foregroundColor(.primary)
@@ -71,7 +35,9 @@ struct MiniExpenseCalendarView: View {
                             .padding(.vertical, 4)
                             .background(
                                 Circle()
-                                    .fill(day % 3 == 0 ? Color.purple.opacity(0.1) : Color.clear)
+                                    .fill(day % 3 == 0 ? Color("NormaPastelTeal").opacity(0.1) : Color.clear)
+                                    .scaleEffect(dayStates[index] ? 1.0 : 0.3)
+                                    .opacity(dayStates[index] ? 1.0 : 0)
                             )
                     }
                 }
@@ -79,17 +45,39 @@ struct MiniExpenseCalendarView: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.gray.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                    )
+                    .fill(.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
             )
         }
+        .onChange(of: appeared) { _, isAppeared in
+            if isAppeared {
+                animateDaysStaggered()
+            } else {
+                resetAnimations()
+            }
+        }
+    }
+
+    private func animateDaysStaggered() {
+        for i in 0..<dayStates.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.02) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    dayStates[i] = true
+                }
+            }
+        }
+    }
+
+    private func resetAnimations() {
+        dayStates = Array(repeating: false, count: 31)
     }
 }
 
 #Preview {
-    MiniExpenseCalendarView()
+    MiniExpenseCalendarView(appeared: true)
         .padding()
 }

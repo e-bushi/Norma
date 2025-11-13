@@ -56,171 +56,9 @@ struct SignUpView: View {
                 VStack(spacing: 20) {
                     Spacer()
                         .frame(height: 20)
-                    
-                    // Form fields container
-                    VStack(spacing: 16) {
-                            // Name field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("FULL NAME")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                TextField("Enter your name", text: $name, onEditingChanged: { editing in
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        nameFieldFocused = editing
-                                        isTextFieldFocused = editing || emailFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
-                                    }
-                                })
-                                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: nameFieldFocused))
-                                    .textInputAutocapitalization(.words)
-                            }
-                            
-                            // Email field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("EMAIL")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                TextField("Enter your email", text: $email, onEditingChanged: { editing in
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        emailFieldFocused = editing
-                                        isTextFieldFocused = editing || nameFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
-                                    }
-                                })
-                                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: emailFieldFocused))
-                                    .keyboardType(.emailAddress)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                            }
-                            
-                            // Password field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("PASSWORD")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                HStack {
-                                    if showPassword {
-                                        TextField("Create a password", text: $password, onEditingChanged: { editing in
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                passwordFieldFocused = editing
-                                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || confirmPasswordFieldFocused
-                                            }
-                                        })
-                                            .textInputAutocapitalization(.never)
-                                            .autocorrectionDisabled()
-                                    } else {
-                                        SecureField("Create a password", text: $password)
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                    passwordFieldFocused = true
-                                                    isTextFieldFocused = true
-                                                }
-                                            }
-                                    }
-                                    
-                                    Button(action: {
-                                        showPassword.toggle()
-                                    }) {
-                                        Image(systemName: showPassword ? "eye.slash" : "eye")
-                                            .foregroundColor(.secondary)
-                                            .font(.system(size: 16))
-                                    }
-                                }
-                                .textFieldStyle(EnhancedTextFieldStyle(isFocused: passwordFieldFocused))
-                            }
-                            
-                            // Confirm password field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("CONFIRM PASSWORD")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .tracking(1.2)
-                                
-                                HStack {
-                                    if showConfirmPassword {
-                                        TextField("Confirm your password", text: $confirmPassword, onEditingChanged: { editing in
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                confirmPasswordFieldFocused = editing
-                                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || passwordFieldFocused
-                                            }
-                                        })
-                                            .textInputAutocapitalization(.never)
-                                            .autocorrectionDisabled()
-                                    } else {
-                                        SecureField("Confirm your password", text: $confirmPassword)
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                    confirmPasswordFieldFocused = true
-                                                    isTextFieldFocused = true
-                                                }
-                                            }
-                                    }
-                                    
-                                    Button(action: {
-                                        showConfirmPassword.toggle()
-                                    }) {
-                                        Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
-                                            .foregroundColor(.secondary)
-                                            .font(.system(size: 16))
-                                    }
-                                }
-                                .textFieldStyle(EnhancedTextFieldStyle(isFocused: confirmPasswordFieldFocused))
-                                
-                                // Password validation indicator
-                                if !confirmPassword.isEmpty {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: password == confirmPassword ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(password == confirmPassword ? .green : .red)
-                                        
-                                        Text(password == confirmPassword ? "Passwords match" : "Passwords do not match")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(password == confirmPassword ? .green : .red)
-                                    }
-                                    .padding(.top, 4)
-                                    .transition(.opacity.combined(with: .scale))
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: password == confirmPassword)
-                                }
-                            }
-                        }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color(UIColor.systemBackground),
-                                            Color.gray.opacity(0.02)
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.gray.opacity(0.2),
-                                                    Color.gray.opacity(0.05)
-                                                ]),
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                )
-                        )
-                    .padding(.horizontal, 24)
-                    .opacity(formOpacity)
-                    .offset(y: formOffset)
-                    .scaleEffect(isTextFieldFocused ? 1.02 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTextFieldFocused)
-                    
+
+                    formFields
+
                     // Terms and conditions
                     HStack(alignment: .top, spacing: 12) {
                         Button(action: {
@@ -228,13 +66,13 @@ struct SignUpView: View {
                         }) {
                             Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 20))
-                                .foregroundColor(agreedToTerms ? .purple : .secondary)
+                                .foregroundColor(agreedToTerms ? Color("NormaPastelTeal") : .secondary)
                                 .scaleEffect(agreedToTerms ? 1.1 : 1.0)
                                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: agreedToTerms)
                         }
-                        
+
                         Text("I agree to the Terms of Service and Privacy Policy")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.leading)
                         
@@ -257,15 +95,15 @@ struct SignUpView: View {
                                 .fill(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            Color.purple,
-                                            Color.purple.opacity(0.8)
+                                            Color("NormaPastelTeal"),
+                                            Color("NormaPastelTeal").opacity(0.8)
                                         ]),
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: Color.purple.opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
-                            
+                                .shadow(color: Color("NormaPastelTeal").opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
+
                             HStack {
                                 if isLoading {
                                     ProgressView()
@@ -273,7 +111,7 @@ struct SignUpView: View {
                                         .scaleEffect(0.8)
                                 } else {
                                     Text("Create account")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.normaHeadline(16))
                                 }
                             }
                             .foregroundColor(.white)
@@ -295,14 +133,14 @@ struct SignUpView: View {
                     // Sign in link
                     HStack(spacing: 4) {
                         Text("Already have an account?")
-                            .font(.system(size: 14))
+                            .font(.normaInput(14))
                             .foregroundColor(.secondary)
-                        
+
                         Button(action: {
                             showSignUp = false
                         }) {
                             Text("Sign in")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.normaHeadline(14))
                                 .foregroundColor(.primary)
                                 .underline()
                         }
@@ -327,7 +165,7 @@ struct SignUpView: View {
                     }
                 }
             }
-        .background(Color(UIColor.systemBackground))
+        .background(Color("NormaBackground"))
         .overlay(
             Group {
                 if isLoading {
@@ -371,7 +209,7 @@ struct SignUpView: View {
                             }
                             
                             Text("Creating your account...")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.normaHeadline(16))
                                 .foregroundColor(.primary)
                         }
                         .padding(40)
@@ -445,7 +283,154 @@ struct SignUpView: View {
         password == confirmPassword &&
         agreedToTerms
     }
-    
+
+    private var formFields: some View {
+        VStack(spacing: 16) {
+            // Name field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("FULL NAME")
+                    .font(.normaFinancial(11))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+
+                TextField("Enter your name", text: $name, onEditingChanged: { editing in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        nameFieldFocused = editing
+                        isTextFieldFocused = editing || emailFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
+                    }
+                })
+                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: nameFieldFocused))
+                    .textInputAutocapitalization(.words)
+            }
+
+            // Email field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("EMAIL")
+                    .font(.normaFinancial(11))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+
+                TextField("Enter your email", text: $email, onEditingChanged: { editing in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        emailFieldFocused = editing
+                        isTextFieldFocused = editing || nameFieldFocused || passwordFieldFocused || confirmPasswordFieldFocused
+                    }
+                })
+                    .textFieldStyle(EnhancedTextFieldStyle(isFocused: emailFieldFocused))
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+
+            // Password field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PASSWORD")
+                    .font(.normaFinancial(11))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+
+                HStack {
+                    if showPassword {
+                        TextField("Create a password", text: $password, onEditingChanged: { editing in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                passwordFieldFocused = editing
+                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || confirmPasswordFieldFocused
+                            }
+                        })
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("Create a password", text: $password)
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    passwordFieldFocused = true
+                                    isTextFieldFocused = true
+                                }
+                            }
+                    }
+
+                    Button(action: {
+                        showPassword.toggle()
+                    }) {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 16))
+                    }
+                }
+                .textFieldStyle(EnhancedTextFieldStyle(isFocused: passwordFieldFocused))
+            }
+
+            // Confirm password field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("CONFIRM PASSWORD")
+                    .font(.normaFinancial(11))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+
+                HStack {
+                    if showConfirmPassword {
+                        TextField("Confirm your password", text: $confirmPassword, onEditingChanged: { editing in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                confirmPasswordFieldFocused = editing
+                                isTextFieldFocused = editing || nameFieldFocused || emailFieldFocused || passwordFieldFocused
+                            }
+                        })
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("Confirm your password", text: $confirmPassword)
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    confirmPasswordFieldFocused = true
+                                    isTextFieldFocused = true
+                                }
+                            }
+                    }
+
+                    Button(action: {
+                        showConfirmPassword.toggle()
+                    }) {
+                        Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 16))
+                    }
+                }
+                .textFieldStyle(EnhancedTextFieldStyle(isFocused: confirmPasswordFieldFocused))
+
+                // Password validation indicator
+                if !confirmPassword.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: password == confirmPassword ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(password == confirmPassword ? .green : .red)
+
+                        Text(password == confirmPassword ? "Passwords match" : "Passwords do not match")
+                            .font(.normaInput(12))
+                            .foregroundColor(password == confirmPassword ? Color("NormaPastelTeal") : .red)
+                    }
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .scale))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: password == confirmPassword)
+                }
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.clear)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 20))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+        )
+        .padding(.horizontal, 24)
+        .opacity(formOpacity)
+        .offset(y: formOffset)
+        .scaleEffect(isTextFieldFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTextFieldFocused)
+    }
+
     private func handleSignUp() {
         isLoading = true
         errorMessage = ""
