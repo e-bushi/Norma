@@ -26,6 +26,7 @@ struct PreviewModeChatView: View {
     @State private var dynamicSpacerHeight: CGFloat = 180
     @State private var viewportHeight: CGFloat = 0
     @State private var lastMessagePosition: CGFloat = 0
+    @GestureState private var isUserScrolling = false
 
     private let maxSpacerHeight: CGFloat = 600
 
@@ -205,6 +206,12 @@ struct PreviewModeChatView: View {
                 }
                 .coordinateSpace(name: "scroll")
                 .background(Color("NormaBackground"))
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 4)
+                        .updating($isUserScrolling) { _, state, _ in
+                            state = true
+                        }
+                )
                 .onPreferenceChange(LastMessagePositionKey.self) { value in
                     lastMessagePosition = value
                     // Continuously adjust as position changes during animation
@@ -560,31 +567,16 @@ struct PreviewModeChatView: View {
     }
 
     private func adjustSpacerAndScroll(proxy: ScrollViewProxy) {
-        // Calculate 50% threshold
-        let fiftyPercentLine = viewportHeight * 0.5
-
-        // Check if last message is below the 50% line
-        if lastMessagePosition > fiftyPercentLine {
-            // Calculate how much we need to push content up
-            let pushUpAmount = lastMessagePosition - fiftyPercentLine
-            let newHeight = min(180 + pushUpAmount, maxSpacerHeight)
-
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                dynamicSpacerHeight = newHeight
-            }
+        // Scroll to bottom only if user is NOT manually scrolling
+        if !isUserScrolling {
+            scrollToBottom(proxy: proxy)
         }
-
-        // Scroll to position the message at 30% from top
-        scrollToBottom(proxy: proxy)
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.3)) {
-            if isLoading {
-                proxy.scrollTo("typing", anchor: UnitPoint(x: 0.5, y: 0.3))
-            } else if let lastMessage = messages.last {
-                proxy.scrollTo(lastMessage.id, anchor: UnitPoint(x: 0.5, y: 0.3))
-            }
+            // Scroll to the bottom spacer to ensure we can see the full message
+            proxy.scrollTo("bottomSpacer", anchor: .bottom)
         }
     }
 
@@ -741,7 +733,6 @@ struct ReadyToStartModal: View {
         .padding(.vertical, 32)
     }
 }
-
 
 struct PreviewModeCompletionModal: View {
     let onSaveProgress: () -> Void
