@@ -25,7 +25,8 @@ struct Bill: Identifiable, Codable, Equatable {
     var updatedAt: String?
     var notes: String?
     var verificationDate: String?
-    
+    var isMostCritical: Bool? // Marks the most important bill (usually rent/mortgage) for arc calculation
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -44,6 +45,7 @@ struct Bill: Identifiable, Codable, Equatable {
         case updatedAt = "updated_at"
         case notes
         case verificationDate = "verification_date"
+        case isMostCritical = "is_most_critical"
     }
     
     // Custom decoding to handle date formats from Supabase
@@ -65,7 +67,8 @@ struct Bill: Identifiable, Codable, Equatable {
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         verificationDate = try container.decodeIfPresent(String.self, forKey: .verificationDate)
-        
+        isMostCritical = try container.decodeIfPresent(Bool.self, forKey: .isMostCritical)
+
         // Handle date decoding with multiple formats
         let dueDateString = try container.decode(String.self, forKey: .dueDate)
         
@@ -134,7 +137,8 @@ struct Bill: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
-        
+        try container.encodeIfPresent(isMostCritical, forKey: .isMostCritical)
+
         // Encode dates as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -166,7 +170,8 @@ struct Bill: Identifiable, Codable, Equatable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         notes: String? = nil,
-        verificationDate: String? = nil
+        verificationDate: String? = nil,
+        isMostCritical: Bool? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -185,6 +190,7 @@ struct Bill: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.notes = notes
         self.verificationDate = verificationDate
+        self.isMostCritical = isMostCritical
     }
 }
 

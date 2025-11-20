@@ -26,8 +26,8 @@ class PreviewModeToolExecutor {
             return handleSaveUserCurrency(input: input)
         case "save_user_income":
             return handleSaveUserIncome(input: input)
-        case "save_user_savings":
-            return handleSaveUserSavings(input: input)
+        case "save_user_freedom_fund":
+            return handleSaveUserFreedomFund(input: input)
         case "save_user_challenge":
             return handleSaveUserChallenge(input: input)
         case "create_bill":
@@ -44,6 +44,12 @@ class PreviewModeToolExecutor {
             return handleShowBudgets(input: input)
         case "show_save_progress_modal":
             return handleShowSaveProgressModal(input: input)
+        case "show_days":
+            return handleShowDays(input: input)
+        case "show_arc_count":
+            return handleShowArcCount(input: input)
+        case "show_flow_state":
+            return handleShowFlowState(input: input)
         default:
             return ("Tool not supported in preview mode", nil)
         }
@@ -124,31 +130,31 @@ class PreviewModeToolExecutor {
         return ("Monthly income after taxes saved as \(income)", uiComponent)
     }
 
-    private func handleSaveUserSavings(input: [String: Any]) -> (String, UIComponent?) {
-        // Handle savings as either Int or Double
-        let savings: Double
-        if let savingsDouble = input["savings"] as? Double {
-            savings = savingsDouble
-        } else if let savingsInt = input["savings"] as? Int {
-            savings = Double(savingsInt)
+    private func handleSaveUserFreedomFund(input: [String: Any]) -> (String, UIComponent?) {
+        // Handle freedom_fund as either Int or Double
+        let freedomFund: Double
+        if let fundDouble = input["freedom_fund"] as? Double {
+            freedomFund = fundDouble
+        } else if let fundInt = input["freedom_fund"] as? Int {
+            freedomFund = Double(fundInt)
         } else {
-            return ("Missing or invalid savings parameter", nil)
+            return ("Missing or invalid freedom_fund parameter", nil)
         }
 
-        previewModeViewModel.userSavings = savings
+        previewModeViewModel.userFreedomFund = freedomFund
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
         formatter.maximumFractionDigits = 0
-        let formattedSavings = formatter.string(from: NSNumber(value: savings)) ?? "\(savings)"
+        let formattedFund = formatter.string(from: NSNumber(value: freedomFund)) ?? "\(freedomFund)"
 
         let uiComponent = UIComponent.actionConfirmation(
             icon: "sparkles",
-            message: "Norma saved your savings: \(formattedSavings)",
+            message: "Norma saved your freedom fund: \(formattedFund)",
             color: "NormaPastelCoral"
         )
-        return ("Current savings saved as \(savings)", uiComponent)
+        return ("Freedom fund saved as \(freedomFund)", uiComponent)
     }
 
     private func handleSaveUserChallenge(input: [String: Any]) -> (String, UIComponent?) {
@@ -391,5 +397,82 @@ class PreviewModeToolExecutor {
         // Trigger the save progress modal to show
         previewModeViewModel.showSaveProgressModal = true
         return ("Save progress modal will be displayed", nil)
+    }
+
+    // MARK: - Arc Display Tools
+
+    private func handleShowDays(input: [String: Any]) -> (String, UIComponent?) {
+        // Get user's financial data
+        guard let freedomFund = previewModeViewModel.userFreedomFund else {
+            return ("Freedom fund not yet collected", nil)
+        }
+
+        let bills = previewModeViewModel.bills
+        let budgets = previewModeViewModel.budgets
+
+        // Calculate daily burn
+        let totalMonthlyBills = ArcCalculationService.calculateMonthlyBillsTotal(bills: bills)
+        let totalMonthlyBudgets = ArcCalculationService.calculateBudgetsTotal(budgets: budgets)
+        let dailyBurn = (totalMonthlyBills + totalMonthlyBudgets) / 30.0
+
+        // Calculate days
+        let days = dailyBurn > 0 ? Int(floor(freedomFund / dailyBurn)) : 0
+
+        // Convert to human-scale time
+        let humanScale = ArcCalculationService.convertDaysToHumanScale(days: days)
+
+        // Return days count with human-scale description (no UI component, just text)
+        return ("You have \(days) days - that's \(humanScale)", nil)
+    }
+
+    private func handleShowArcCount(input: [String: Any]) -> (String, UIComponent?) {
+        // Check if arc_count parameter was provided (for showing example arcs)
+        let displayArcCount: Int
+
+        if let providedCount = input["arc_count"] as? Int {
+            // Use the provided arc count (e.g., showing 1 arc when user has 0)
+            displayArcCount = providedCount
+        } else if let providedCountDouble = input["arc_count"] as? Double {
+            displayArcCount = Int(providedCountDouble)
+        } else {
+            // Calculate actual arc count from user's data
+            guard let freedomFund = previewModeViewModel.userFreedomFund else {
+                return ("Freedom fund not yet collected", nil)
+            }
+
+            let bills = previewModeViewModel.bills
+            let budgets = previewModeViewModel.budgets
+
+            // Calculate arcs using the correct formula
+            displayArcCount = ArcCalculationService.calculateArcs(
+                freedomFund: freedomFund,
+                bills: bills,
+                budgets: budgets
+            )
+        }
+
+        // Create UI component with the arc count (either calculated or provided)
+        let uiComponent = UIComponent.arcDisplay(displayArcCount)
+
+        // Format the response
+        return ("Displaying \(displayArcCount) arc\(displayArcCount == 1 ? "" : "s")", uiComponent)
+    }
+
+    private func handleShowFlowState(input: [String: Any]) -> (String, UIComponent?) {
+        guard let flowState = input["flow_state"] as? String else {
+            return ("Missing flow_state parameter", nil)
+        }
+
+        // Validate the flow state value
+        let validStates = ["In flow", "Stagnant", "Drifting"]
+        guard validStates.contains(flowState) else {
+            return ("Invalid flow_state. Must be 'In flow', 'Stagnant', or 'Drifting'", nil)
+        }
+
+        // Create UI component with the flow state
+        let uiComponent = UIComponent.flowStateCapsule(flowState)
+
+        // Format the response
+        return ("Displaying flow state: \(flowState)", uiComponent)
     }
 }

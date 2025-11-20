@@ -21,7 +21,7 @@ class PreviewModeViewModel: ObservableObject {
     @Published var userName: String?
     @Published var userCurrency: String?
     @Published var userIncome: Double?
-    @Published var userSavings: Double?
+    @Published var userFreedomFund: Double?
     @Published var userChallenge: String?
 
     // Preview mode completion tracking

@@ -13,6 +13,8 @@ enum UIComponent: Codable, Equatable {
     case budgetCards([Budget])
     case actionConfirmation(icon: String, message: String, color: String)
     case toolActivity(String)
+    case arcDisplay(Int)
+    case flowStateCapsule(String) // "In flow", "Stagnant", or "Drifting"
 
     // For JSON encoding/decoding if needed
     enum CodingKeys: String, CodingKey {
@@ -23,6 +25,8 @@ enum UIComponent: Codable, Equatable {
         case icon
         case message
         case color
+        case arcCount
+        case flowState
     }
 
     init(from decoder: Decoder) throws {
@@ -47,6 +51,12 @@ enum UIComponent: Codable, Equatable {
         case "toolActivity":
             let message = try container.decode(String.self, forKey: .message)
             self = .toolActivity(message)
+        case "arcDisplay":
+            let arcCount = try container.decode(Int.self, forKey: .arcCount)
+            self = .arcDisplay(arcCount)
+        case "flowStateCapsule":
+            let flowState = try container.decode(String.self, forKey: .flowState)
+            self = .flowStateCapsule(flowState)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type")
         }
@@ -73,6 +83,12 @@ enum UIComponent: Codable, Equatable {
         case .toolActivity(let message):
             try container.encode("toolActivity", forKey: .type)
             try container.encode(message, forKey: .message)
+        case .arcDisplay(let arcCount):
+            try container.encode("arcDisplay", forKey: .type)
+            try container.encode(arcCount, forKey: .arcCount)
+        case .flowStateCapsule(let flowState):
+            try container.encode("flowStateCapsule", forKey: .type)
+            try container.encode(flowState, forKey: .flowState)
         }
     }
 }

@@ -91,6 +91,12 @@ struct AIMessageBubble: View {
                 case .toolActivity(let message):
                     ToolActivityView(message: message)
                         .transition(.opacity.combined(with: .scale))
+                case .arcDisplay(let arcCount):
+                    ArcDisplayView(arcCount: arcCount)
+                        .transition(.opacity.combined(with: .scale))
+                case .flowStateCapsule:
+                    // Flow state is displayed in nav bar, not in message bubble
+                    EmptyView()
                 }
             }
 
