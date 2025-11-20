@@ -15,7 +15,7 @@ struct ChatToolsProvider {
             getSaveUserNameTool(),
             getSaveUserCurrencyTool(),
             getSaveUserIncomeTool(),
-            getSaveUserSavingsTool(),
+            getSaveUserFreedomFundTool(),
             getSaveUserChallengeTool(),
             getBillCreationTool(),
             getUpdateBillTool(),
@@ -25,7 +25,10 @@ struct ChatToolsProvider {
             getShowBillsTool(),
             getShowExpensesTool(),
             getShowBudgetsTool(),
-            getShowSaveProgressModalTool()
+            getShowSaveProgressModalTool(),
+            getShowDaysTool(),
+            getShowArcCountTool(),
+            getShowFlowStateTool()
         ]
     }
 
@@ -86,19 +89,19 @@ struct ChatToolsProvider {
         )
     }
 
-    static func getSaveUserSavingsTool() -> AnthropicTool {
+    static func getSaveUserFreedomFundTool() -> AnthropicTool {
         AnthropicTool(
-            name: "save_user_savings",
-            description: "Save the user's current savings amount during real onboarding.",
+            name: "save_user_freedom_fund",
+            description: "Save the user's freedom fund - money set aside that could cover their bills and lifestyle if income stopped. Not retirement or long-term savings, just their cushion.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
-                    "savings": AnthropicToolProperty(
+                    "freedom_fund": AnthropicToolProperty(
                         type: "number",
-                        description: "The user's current savings amount"
+                        description: "The user's freedom fund amount"
                     )
                 ],
-                required: ["savings"]
+                required: ["freedom_fund"]
             )
         )
     }
@@ -312,6 +315,52 @@ struct ChatToolsProvider {
                 type: "object",
                 properties: [:],
                 required: []
+            )
+        )
+    }
+
+    static func getShowDaysTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_days",
+            description: "Calculate and display how many days the user's freedom fund can sustain their current lifestyle. Use in Step 2 of the transformation to show 'money converted to time'.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [:],
+                required: []
+            )
+        )
+    }
+
+    static func getShowArcCountTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_arc_count",
+            description: "Calculate and display the user's arc count visually. This should be called during the arc reveal in Phase 2 of real onboarding, in Step 2 after introducing arcs. The tool will calculate arcs from the user's freedom fund and bills. Optionally accepts arc_count parameter to display a specific number (useful for showing what 1 arc looks like when user has 0).",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "arc_count": AnthropicToolProperty(
+                        type: "number",
+                        description: "Optional: Specific arc count to display (e.g., 1 to show what 1 arc looks like when user has 0). If not provided, will calculate actual arc count."
+                    )
+                ],
+                required: []
+            )
+        )
+    }
+
+    static func getShowFlowStateTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_flow_state",
+            description: "Display the user's spending flow state as a capsule in the navigation bar. This should be called when introducing spending flow in Step 5 of onboarding. The capsule shows one of three states: 'In flow' (arcs growing), 'Stagnant' (arcs flat), or 'Drifting' (arcs shrinking). Since the user hasn't tracked expenses yet during onboarding, you cannot calculate their actual state - use this to show them what the capsule looks like as an example (default to 'In flow' as an aspirational starting point).",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "flow_state": AnthropicToolProperty(
+                        type: "string",
+                        description: "The flow state to display: 'In flow', 'Stagnant', or 'Drifting'. During onboarding before expense tracking, use 'In flow' as the default example."
+                    )
+                ],
+                required: ["flow_state"]
             )
         )
     }

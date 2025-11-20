@@ -173,7 +173,8 @@ class BillViewModel: ObservableObject {
         merchant: String? = nil,
         isReminderOn: Bool = false,
         reminderDays: Int? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        isMostCritical: Bool? = nil
     ) async -> Bill? {
         print("🔍 [DEBUG] BillViewModel.addBill called with name: \(name), amount: \(amount)")
         

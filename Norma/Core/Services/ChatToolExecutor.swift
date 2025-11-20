@@ -86,12 +86,16 @@ class ChatToolExecutor {
             status = .scheduled
         }
 
+        // Check if this is the first bill (mark as most critical for arc calculation)
+        let isFirstBill = billViewModel.bills.isEmpty
+
         await billViewModel.addBill(
             name: name,
             amount: amount,
             dueDate: dueDate,
             frequency: frequency,
-            status: status
+            status: status,
+            isMostCritical: isFirstBill ? true : nil
         )
 
         return "Successfully created bill '\(name)' for $\(String(format: "%.2f", amount)). Frequency is set to Monthly and status is \(status == .overdue ? "Overdue" : "Scheduled")."

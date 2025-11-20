@@ -27,8 +27,57 @@ struct PreviewModeChatView: View {
     @State private var viewportHeight: CGFloat = 0
     @State private var lastMessagePosition: CGFloat = 0
     @GestureState private var isUserScrolling = false
+    @State private var flowState: String? = nil // "In flow", "Stagnant", or "Drifting"
+    @State private var visibleNavCapsules: Int = 0
 
     private let maxSpacerHeight: CGFloat = 600
+
+    // Currency formatter for nav bar capsules
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+
+    // Animate nav bar capsules with staggered timing and haptics
+    private func animateNavCapsules() {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.prepare()
+
+        // Animate capsules appearing with staggered delays + haptics
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.4)) {
+            visibleNavCapsules = 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.6)) {
+            visibleNavCapsules = 2
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.8)) {
+            visibleNavCapsules = 3
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            impactFeedback.impactOccurred(intensity: 0.6)
+        }
+    }
+
+    // Calculate arc count for display
+    private var arcCount: Int {
+        guard let freedomFund = previewModeViewModel.userFreedomFund else { return 0 }
+        return ArcCalculationService.calculateArcs(
+            freedomFund: freedomFund,
+            bills: previewModeViewModel.bills,
+            budgets: previewModeViewModel.budgets
+        )
+    }
 
     private var toolExecutor: PreviewModeToolExecutor {
         PreviewModeToolExecutor(previewModeViewModel: previewModeViewModel)
@@ -61,20 +110,73 @@ struct PreviewModeChatView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Text("Norma")
-                            .font(.normaHeadline(20))
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text("Norma")
+                                .font(.normaHeadline(20))
 
-                        Text("Preview Mode")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelTeal").opacity(0.8))
-                            )
+                            Text("Preview Mode")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelTeal").opacity(0.8))
+                                )
+                        }
+
+                        // Three capsules row (Income, Spending Flow, Arcs)
+                        if flowState != nil {
+                            HStack(spacing: 6) {
+                                // Income capsule
+                                if let income = previewModeViewModel.userIncome {
+                                    Text("Income: \(formatCurrency(income))")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color("NormaPastelTeal"))
+                                        )
+                                        .opacity(visibleNavCapsules > 0 ? 1 : 0)
+                                        .scaleEffect(visibleNavCapsules > 0 ? 1.0 : 0.3)
+                                }
+
+                                // Spending Flow capsule
+                                if let flowState = flowState {
+                                    Text(flowState)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(
+                                            Capsule()
+                                                .fill(flowStateColor(for: flowState))
+                                        )
+                                        .opacity(visibleNavCapsules > 1 ? 1 : 0)
+                                        .scaleEffect(visibleNavCapsules > 1 ? 1.0 : 0.3)
+                                }
+
+                                // Arcs capsule
+                                Text("\(arcCount) arc\(arcCount == 1 ? "" : "s")")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color("NormaPastelPurple"))
+                                    )
+                                    .opacity(visibleNavCapsules > 2 ? 1 : 0)
+                                    .scaleEffect(visibleNavCapsules > 2 ? 1.0 : 0.3)
+                            }
+                            .transition(.opacity.combined(with: .scale))
+                        }
                     }
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: flowState)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: visibleNavCapsules)
                 }
 
                 if showSaveButton {
@@ -126,7 +228,7 @@ struct PreviewModeChatView: View {
                     handleKeepChatting()
                 }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showReadyModal) {
@@ -135,7 +237,7 @@ struct PreviewModeChatView: View {
                     handleReadyToStart()
                 }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .onAppear {
@@ -145,6 +247,12 @@ struct PreviewModeChatView: View {
             if newValue.count > 0 {
                 // Trigger capsule animation when currency is set
                 showCapsules = true
+            }
+        }
+        .onChange(of: flowState) { oldValue, newValue in
+            // Trigger nav bar capsule animation when flow state is set
+            if oldValue == nil && newValue != nil {
+                animateNavCapsules()
             }
         }
     }
@@ -296,7 +404,7 @@ struct PreviewModeChatView: View {
                     currency: previewModeViewModel.userCurrency ?? "USD",
                     hasIncome: previewModeViewModel.userIncome != nil,
                     hasBill: !previewModeViewModel.bills.isEmpty,
-                    hasSavings: previewModeViewModel.userSavings != nil,
+                    hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
                     hasChallenge: previewModeViewModel.userChallenge != nil
                 )
             } else {
@@ -378,7 +486,7 @@ struct PreviewModeChatView: View {
                         currency: previewModeViewModel.userCurrency ?? "USD",
                         hasIncome: previewModeViewModel.userIncome != nil,
                         hasBill: !previewModeViewModel.bills.isEmpty,
-                        hasSavings: previewModeViewModel.userSavings != nil,
+                        hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
                         hasChallenge: previewModeViewModel.userChallenge != nil
                     )
                 } else {
@@ -410,9 +518,23 @@ struct PreviewModeChatView: View {
                     await MainActor.run {
                         isLoading = false
                         print("💬 Creating AI message with text: \(text)")
-                        print("🎨 Attaching UI component: \(String(describing: uiComponent))")
-                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
-                        messages.append(aiMessage)
+
+                        // Handle flow state capsule specially - set nav bar state
+                        if let component = uiComponent,
+                           case .flowStateCapsule(let state) = component {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                flowState = state
+                            }
+                            print("🎨 Flow state set in nav bar: \(state)")
+                            // Don't attach to message - it's shown in nav bar only
+                            let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                            messages.append(aiMessage)
+                        } else {
+                            // Normal UI components attach to message
+                            print("🎨 Attaching UI component: \(String(describing: uiComponent))")
+                            let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
+                            messages.append(aiMessage)
+                        }
                         print("✅ Message appended to chat")
                     }
                 } else {
@@ -517,7 +639,7 @@ struct PreviewModeChatView: View {
                 currency: previewModeViewModel.userCurrency ?? "USD",
                 hasIncome: previewModeViewModel.userIncome != nil,
                 hasBill: !previewModeViewModel.bills.isEmpty,
-                hasSavings: previewModeViewModel.userSavings != nil,
+                hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
                 hasChallenge: previewModeViewModel.userChallenge != nil
             )
         } else {
@@ -547,10 +669,23 @@ struct PreviewModeChatView: View {
                 await MainActor.run {
                     isLoading = false
                     print("💬 Creating AI message with text: \(text)")
-                    let finalUIComponent = uiComponent ?? previousUIComponent
-                    print("🎨 Attaching UI component: \(String(describing: finalUIComponent))")
-                    let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: finalUIComponent)
-                    messages.append(aiMessage)
+
+                    // Handle flow state capsule specially - set nav bar state
+                    if let component = uiComponent ?? previousUIComponent,
+                       case .flowStateCapsule(let state) = component {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            flowState = state
+                        }
+                        print("🎨 Flow state set in nav bar: \(state)")
+                        // Don't attach to message - it's shown in nav bar only
+                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                        messages.append(aiMessage)
+                    } else {
+                        // Normal UI components attach to message
+                        print("🎨 Attaching UI component: \(String(describing: uiComponent ?? previousUIComponent))")
+                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
+                        messages.append(aiMessage)
+                    }
                     print("✅ Message appended to chat")
                 }
             } else {
@@ -606,7 +741,7 @@ struct PreviewModeChatView: View {
                         currency: previewModeViewModel.userCurrency ?? "USD",
                         hasIncome: previewModeViewModel.userIncome != nil,
                         hasBill: !previewModeViewModel.bills.isEmpty,
-                        hasSavings: previewModeViewModel.userSavings != nil,
+                        hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
                         hasChallenge: previewModeViewModel.userChallenge != nil
                     )
                 } else {
@@ -683,6 +818,20 @@ struct PreviewModeChatView: View {
         // For now, just navigate to authentication
         onboardingViewModel.currentStep = .authentication
     }
+
+    private func flowStateColor(for state: String) -> Color {
+        switch state {
+        case "In flow":
+            return Color.green.opacity(0.8)
+        case "Stagnant":
+            return Color.orange.opacity(0.8)
+        case "Drifting":
+            return Color.red.opacity(0.8)
+        default:
+            return Color.gray.opacity(0.8)
+        }
+    }
+
 }
 
 struct ReadyToStartModal: View {
@@ -690,45 +839,68 @@ struct ReadyToStartModal: View {
 
     var body: some View {
         VStack(spacing: 24) {
+            Spacer()
+
             Image(systemName: "sparkles")
                 .font(.system(size: 60))
                 .foregroundColor(Color("NormaPastelTeal"))
 
-            Text("Love What You're Seeing?")
+            Text("Let's Make This Real")
                 .font(.normaHeadline(24))
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("You've explored how I work with sample data. Now let's make this real!")
+                Text("You've seen how I work with sample data. Now let's personalize it for you:")
                     .normaBody()
                     .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("I'll ask just 3 quick questions about YOUR finances so I can give you advice tailored just for you.")
-                    .normaBody()
-                    .foregroundColor(.primary)
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .normaBody()
+                    Text("Just a few short questions about your finances")
+                        .normaBody()
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-                Text("Don't worry—your data is fully encrypted and private.")
-                    .normaBody()
-                    .foregroundColor(.secondary)
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .normaBody()
+                    Text("Get advice tailored specifically to you")
+                        .normaBody()
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .normaBody()
+                    Text("Your data is fully encrypted and private")
+                        .normaBody()
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .lineSpacing(2)
             .padding()
             .background(Color("NormaSurface"))
             .cornerRadius(12)
-            .padding(.horizontal)
+            .padding(.horizontal, 24)
 
             Button(action: {
                 onReady()
             }) {
                 Text("I'm Ready")
-                    .font(.normaFinancial(16))
+                    .font(.normaHeadline(16))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .frame(height: 56)
                     .background(Color("NormaPastelTeal"))
                     .cornerRadius(12)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 24)
+
+            Spacer()
         }
         .padding(.vertical, 32)
     }
@@ -875,13 +1047,33 @@ struct SaveProgressModal: View {
             }
             .padding(.horizontal, 24)
 
-            // Keep chatting button
-            Button(action: onContinueChatting) {
-                Text("Keep Chatting")
-                    .normaBody()
+            // Divider with "or"
+            HStack(spacing: 12) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(height: 1)
+                Text("or")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(height: 1)
             }
-            .padding(.top, 8)
+            .padding(.horizontal, 24)
+
+            // Keep chatting button with warning
+            VStack(spacing: 8) {
+                Button(action: onContinueChatting) {
+                    Text("Keep Chatting")
+                        .normaBody()
+                        .foregroundColor(.secondary)
+                }
+
+                Text("Don't forget to save or you'll risk losing all your progress")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(.vertical, 32)
     }
