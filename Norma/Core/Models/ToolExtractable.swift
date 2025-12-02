@@ -54,26 +54,29 @@ extension UserOnboardingData: ToolExtractable {
             properties: [
                 "name": AnthropicToolProperty(type: "string", description: "User's first name"),
                 "currency": AnthropicToolProperty(type: "string", description: "3-letter currency code (e.g., USD, EUR)"),
-                "monthlyIncome": AnthropicToolProperty(type: "number", description: "User's monthly income amount"),
-                "primaryGoal": AnthropicToolProperty(type: "string", description: "User's primary financial goal"),
+                "monthlyIncome": AnthropicToolProperty(type: "number", description: "User's monthly income after taxes"),
+                "freedomFund": AnthropicToolProperty(type: "number", description: "User's freedom fund/emergency savings amount"),
+                "painPoint": AnthropicToolProperty(type: "string", description: "User's main pain point with money"),
                 "reminderPreference": AnthropicToolProperty(type: "string", description: "When user wants bill reminders")
             ],
-            required: ["name", "currency", "monthlyIncome", "primaryGoal", "reminderPreference"]
+            required: ["name", "currency", "monthlyIncome", "painPoint", "reminderPreference"]
         )
     }
-    
+
     static func parse(from input: [String: Any]) throws -> UserOnboardingData {
         let name = input["name"] as? String ?? ""
         let currency = input["currency"] as? String ?? "USD"
         let monthlyIncome = input["monthlyIncome"] as? Double ?? 0
-        let primaryGoal = input["primaryGoal"] as? String ?? ""
+        let freedomFund = input["freedomFund"] as? Double ?? 0
+        let painPoint = input["painPoint"] as? String ?? ""
         let reminderPreference = input["reminderPreference"] as? String ?? ""
-        
+
         return UserOnboardingData(
             name: name,
             currency: currency,
             monthlyIncome: monthlyIncome,
-            primaryGoal: primaryGoal,
+            freedomFund: freedomFund,
+            painPoint: painPoint,
             reminderPreference: reminderPreference
         )
     }

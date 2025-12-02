@@ -427,13 +427,14 @@ class PreviewModeToolExecutor {
 
     private func handleShowArcCount(input: [String: Any]) -> (String, UIComponent?) {
         // Check if arc_count parameter was provided (for showing example arcs)
-        let displayArcCount: Int
+        let displayArcCount: Double
 
-        if let providedCount = input["arc_count"] as? Int {
-            // Use the provided arc count (e.g., showing 1 arc when user has 0)
+        if let providedCount = input["arc_count"] as? Double {
+            // Use the provided arc count directly
             displayArcCount = providedCount
-        } else if let providedCountDouble = input["arc_count"] as? Double {
-            displayArcCount = Int(providedCountDouble)
+        } else if let providedCountInt = input["arc_count"] as? Int {
+            // Convert Int to Double
+            displayArcCount = Double(providedCountInt)
         } else {
             // Calculate actual arc count from user's data
             guard let freedomFund = previewModeViewModel.userFreedomFund else {
@@ -443,8 +444,8 @@ class PreviewModeToolExecutor {
             let bills = previewModeViewModel.bills
             let budgets = previewModeViewModel.budgets
 
-            // Calculate arcs using the correct formula
-            displayArcCount = ArcCalculationService.calculateArcs(
+            // Calculate arcs as decimal to show fractional progress
+            displayArcCount = ArcCalculationService.calculateArcsDecimal(
                 freedomFund: freedomFund,
                 bills: bills,
                 budgets: budgets
@@ -454,8 +455,15 @@ class PreviewModeToolExecutor {
         // Create UI component with the arc count (either calculated or provided)
         let uiComponent = UIComponent.arcDisplay(displayArcCount)
 
-        // Format the response
-        return ("Displaying \(displayArcCount) arc\(displayArcCount == 1 ? "" : "s")", uiComponent)
+        // Format the response - show decimal for fractional, whole number for >= 1
+        let arcText: String
+        if displayArcCount < 1 && displayArcCount > 0 {
+            arcText = String(format: "%.1f arcs (%.0f%% to first arc)", displayArcCount, displayArcCount * 100)
+        } else {
+            let wholeArcs = Int(displayArcCount)
+            arcText = "\(wholeArcs) arc\(wholeArcs == 1 ? "" : "s")"
+        }
+        return ("Displaying \(arcText)", uiComponent)
     }
 
     private func handleShowFlowState(input: [String: Any]) -> (String, UIComponent?) {

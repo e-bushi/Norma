@@ -55,27 +55,30 @@ struct Profile: Identifiable, Codable, Equatable {
 
 struct ProfileSettings: Codable, Equatable {
     var currency: String
-    var monthlyIncome: Double
-    var primaryGoal: String
+    var monthlyIncome: Double  // After-tax monthly income
+    var freedomFund: Double
+    var painPoint: String
     var notificationsEnabled: Bool
     var billReminderDays: Int
     var monthlyBudgetAlert: Bool
     var darkModeEnabled: Bool
-    
+
     enum CodingKeys: String, CodingKey {
         case currency
         case monthlyIncome = "monthly_income"
-        case primaryGoal = "primary_goal"
+        case freedomFund = "freedom_fund"
+        case painPoint = "pain_point"
         case notificationsEnabled = "notifications_enabled"
         case billReminderDays = "bill_reminder_days"
         case monthlyBudgetAlert = "monthly_budget_alert"
         case darkModeEnabled = "dark_mode_enabled"
     }
-    
+
     init(
         currency: String = "USD",
         monthlyIncome: Double = 0,
-        primaryGoal: String = "All of the above",
+        freedomFund: Double = 0,
+        painPoint: String = "",
         notificationsEnabled: Bool = true,
         billReminderDays: Int = 3,
         monthlyBudgetAlert: Bool = true,
@@ -83,7 +86,8 @@ struct ProfileSettings: Codable, Equatable {
     ) {
         self.currency = currency
         self.monthlyIncome = monthlyIncome
-        self.primaryGoal = primaryGoal
+        self.freedomFund = freedomFund
+        self.painPoint = painPoint
         self.notificationsEnabled = notificationsEnabled
         self.billReminderDays = billReminderDays
         self.monthlyBudgetAlert = monthlyBudgetAlert

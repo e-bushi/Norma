@@ -13,7 +13,7 @@ enum UIComponent: Codable, Equatable {
     case budgetCards([Budget])
     case actionConfirmation(icon: String, message: String, color: String)
     case toolActivity(String)
-    case arcDisplay(Int)
+    case arcDisplay(Double)
     case flowStateCapsule(String) // "In flow", "Stagnant", or "Drifting"
 
     // For JSON encoding/decoding if needed
@@ -52,7 +52,7 @@ enum UIComponent: Codable, Equatable {
             let message = try container.decode(String.self, forKey: .message)
             self = .toolActivity(message)
         case "arcDisplay":
-            let arcCount = try container.decode(Int.self, forKey: .arcCount)
+            let arcCount = try container.decode(Double.self, forKey: .arcCount)
             self = .arcDisplay(arcCount)
         case "flowStateCapsule":
             let flowState = try container.decode(String.self, forKey: .flowState)

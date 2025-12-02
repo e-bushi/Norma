@@ -8,9 +8,13 @@
 import SwiftUI
 
 struct PreviewModeChatView: View {
-    @StateObject private var previewModeViewModel = PreviewModeViewModel()
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var onboardingViewModel: OnboardingViewModel
+
+    // Access the shared preview mode view model from onboarding
+    private var previewModeViewModel: PreviewModeViewModel {
+        onboardingViewModel.previewModeViewModel
+    }
 
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
@@ -198,7 +202,7 @@ struct PreviewModeChatView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $previewModeViewModel.showCompletionModal) {
+        .sheet(isPresented: $onboardingViewModel.previewModeViewModel.showCompletionModal) {
             PreviewModeCompletionModal(
                 onSaveProgress: {
                     // Handle save progress action - transition to authentication
@@ -212,7 +216,7 @@ struct PreviewModeChatView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $previewModeViewModel.showSaveProgressModal) {
+        .sheet(isPresented: $onboardingViewModel.previewModeViewModel.showSaveProgressModal) {
             SaveProgressModal(
                 userName: previewModeViewModel.userName ?? "there",
                 onSignUpWithEmail: {
@@ -229,7 +233,8 @@ struct PreviewModeChatView: View {
                 }
             )
             .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled()
         }
         .sheet(isPresented: $showReadyModal) {
             ReadyToStartModal(
@@ -238,7 +243,8 @@ struct PreviewModeChatView: View {
                 }
             )
             .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled()
         }
         .onAppear {
             showInitialGreeting()
@@ -504,7 +510,7 @@ struct PreviewModeChatView: View {
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
                     systemPrompt: finalSystemPrompt,
-                    tools: []
+                    tools: tools
                 )
 
                 print("✅ Final response received: \(finalResponse)")
@@ -837,17 +843,26 @@ struct PreviewModeChatView: View {
 struct ReadyToStartModal: View {
     let onReady: () -> Void
 
+    @State private var animateArrow = false
+    @State private var animateTitle = false
+    @State private var animateContent = false
+    @State private var animateButton = false
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "sparkles")
-                .font(.system(size: 60))
-                .foregroundColor(Color("NormaPastelTeal"))
+            // 3D Arrow
+            Arrow3DView()
+                .frame(width: 180, height: 180)
+                .scaleEffect(animateArrow ? 1.0 : 0.3)
+                .opacity(animateArrow ? 1.0 : 0.0)
 
             Text("Let's Make This Real")
                 .font(.normaHeadline(24))
                 .multilineTextAlignment(.center)
+                .scaleEffect(animateTitle ? 1.0 : 0.8)
+                .opacity(animateTitle ? 1.0 : 0.0)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("You've seen how I work with sample data. Now let's personalize it for you:")
@@ -886,6 +901,8 @@ struct ReadyToStartModal: View {
             .background(Color("NormaSurface"))
             .cornerRadius(12)
             .padding(.horizontal, 24)
+            .offset(y: animateContent ? 0 : 20)
+            .opacity(animateContent ? 1.0 : 0.0)
 
             Button(action: {
                 onReady()
@@ -899,10 +916,27 @@ struct ReadyToStartModal: View {
                     .cornerRadius(12)
             }
             .padding(.horizontal, 24)
+            .scaleEffect(animateButton ? 1.0 : 0.8)
+            .opacity(animateButton ? 1.0 : 0.0)
 
             Spacer()
         }
         .padding(.vertical, 32)
+        .onAppear {
+            // Staggered animations
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
+                animateArrow = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+                animateTitle = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
+                animateContent = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
+                animateButton = true
+            }
+        }
     }
 }
 
@@ -970,30 +1004,32 @@ struct SaveProgressModal: View {
     let onSignUpWithApple: () -> Void
     let onContinueChatting: () -> Void
 
+    @State private var animateArrow = false
+    @State private var animateTitle = false
+    @State private var animateContent = false
+    @State private var animateButtons = false
+    @State private var animateDivider = false
+    @State private var animateKeepChatting = false
+
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(Color("NormaPastelTeal"))
+            // 3D Arrow
+            Arrow3DView()
+                .frame(width: 180, height: 180)
+                .scaleEffect(animateArrow ? 1.0 : 0.3)
+                .opacity(animateArrow ? 1.0 : 0.0)
 
             Text("Nice Work, \(userName)!")
                 .font(.normaHeadline(24))
                 .multilineTextAlignment(.center)
+                .scaleEffect(animateTitle ? 1.0 : 0.8)
+                .opacity(animateTitle ? 1.0 : 0.0)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("You're all set up! To save your progress, create an account:")
                     .normaBody()
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .normaBody()
-                    Text("Keep chatting with me to add more bills and expenses")
-                        .normaBody()
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
 
                 HStack(alignment: .top, spacing: 8) {
                     Text("•")
@@ -1008,6 +1044,8 @@ struct SaveProgressModal: View {
             .background(Color("NormaSurface"))
             .cornerRadius(12)
             .padding(.horizontal)
+            .offset(y: animateContent ? 0 : 20)
+            .opacity(animateContent ? 1.0 : 0.0)
 
             // Authentication buttons
             VStack(spacing: 16) {
@@ -1046,6 +1084,8 @@ struct SaveProgressModal: View {
                 }
             }
             .padding(.horizontal, 24)
+            .scaleEffect(animateButtons ? 1.0 : 0.8)
+            .opacity(animateButtons ? 1.0 : 0.0)
 
             // Divider with "or"
             HStack(spacing: 12) {
@@ -1060,22 +1100,51 @@ struct SaveProgressModal: View {
                     .frame(height: 1)
             }
             .padding(.horizontal, 24)
+            .opacity(animateDivider ? 1.0 : 0.0)
 
             // Keep chatting button with warning
             VStack(spacing: 8) {
                 Button(action: onContinueChatting) {
                     Text("Keep Chatting")
-                        .normaBody()
-                        .foregroundColor(.secondary)
+                        .font(.normaHeadline(14))
+                        .foregroundColor(Color("NormaPastelTeal"))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color("NormaPastelTeal").opacity(0.15))
+                        .cornerRadius(10)
                 }
+                .padding(.horizontal, 24)
 
                 Text("Don't forget to save or you'll risk losing all your progress")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
+            .offset(y: animateKeepChatting ? 0 : 15)
+            .opacity(animateKeepChatting ? 1.0 : 0.0)
         }
         .padding(.vertical, 32)
+        .onAppear {
+            // Staggered animations
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
+                animateArrow = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+                animateTitle = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
+                animateContent = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
+                animateButtons = true
+            }
+            withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
+                animateDivider = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.55)) {
+                animateKeepChatting = true
+            }
+        }
     }
 }
 

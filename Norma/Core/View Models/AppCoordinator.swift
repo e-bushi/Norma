@@ -217,40 +217,21 @@ struct OnboardingCoordinatorView: View {
                 )
                 .environmentObject(onboardingViewModel)
             
-            case .howDidYouHear:
-                HowDidYouHearView(
-                    onContinue: { option in
-                        // Store the selection
-                        onboardingViewModel.howDidYouHear = option?.id
-                        onboardingViewModel.currentStep = .normaChat
-                    },
-                    onSkip: {
-                        onboardingViewModel.currentStep = .normaChat
-                    }
-                )
-                .environmentObject(onboardingViewModel)
-            
             case .notifications:
                 NotificationPermissionView(
                     onPermissionGranted: {
-                        onboardingViewModel.currentStep = .howDidYouHear
+                        Task {
+                            await onboardingViewModel.finalizeOnboarding()
+                        }
                     },
                     onSkip: {
-                        onboardingViewModel.currentStep = .howDidYouHear
+                        Task {
+                            await onboardingViewModel.finalizeOnboarding()
+                        }
                     }
                 )
                 .environmentObject(onboardingViewModel)
-            
-            case .normaChat:
-                if onboardingViewModel.showCompletionTransition {
-                    OnboardingCompletionView()
-                        .environmentObject(onboardingViewModel)
-                        .environmentObject(sessionViewModel)
-                } else {
-                    NormaOnboardingChatView()
-                        .environmentObject(onboardingViewModel)
-                }
-            
+
             case .complete:
                 // Transition to main app
                 EmptyView()

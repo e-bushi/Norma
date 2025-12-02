@@ -9,7 +9,7 @@ import Foundation
 
 struct Expense: Identifiable, Codable, Equatable {
     var id: String?
-    let userId: String
+    var userId: String
     let name: String
     let amount: Double
     let expenseDate: String

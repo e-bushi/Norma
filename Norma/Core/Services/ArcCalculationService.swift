@@ -50,6 +50,31 @@ struct ArcCalculationService {
         return Int(arcs)
     }
 
+    /// Calculate the number of arcs as a decimal (for fractional arc display)
+    ///
+    /// Same formula as calculateArcs but returns Double instead of Int
+    /// This allows showing progress toward the first arc (e.g., 0.4 arcs = 40% to first arc)
+    ///
+    /// - Parameters:
+    ///   - freedomFund: User's freedom fund
+    ///   - bills: Array of user's bills
+    ///   - budgets: Array of user's selected budgets
+    /// - Returns: The number of arcs as a decimal
+    static func calculateArcsDecimal(freedomFund: Double, bills: [Bill], budgets: [Budget] = []) -> Double {
+        // Calculate total monthly expenses
+        let totalMonthlyBills = calculateMonthlyBillsTotal(bills: bills)
+        let totalMonthlyBudgets = calculateBudgetsTotal(budgets: budgets)
+        let totalMonthlyExpenses = totalMonthlyBills + totalMonthlyBudgets
+
+        // Guard against division by zero
+        guard totalMonthlyExpenses > 0 else {
+            return 0
+        }
+
+        // Calculate arcs as decimal
+        return freedomFund / totalMonthlyExpenses
+    }
+
     /// Calculate the total monthly bill amount from an array of bills
     /// Converts all bill frequencies to monthly equivalents
     ///

@@ -42,9 +42,12 @@ class OnboardingViewModel: ObservableObject {
     private let sessionViewModel: SessionViewModel
     private let anthropicService = AnthropicService.shared
     private let supabaseService = SupabaseService.shared
-    
+
+    // Preview mode view model - owned here to persist throughout onboarding
+    var previewModeViewModel = PreviewModeViewModel()
+
     // MARK: - Initialization
-    
+
     init(sessionViewModel: SessionViewModel) {
         self.sessionViewModel = sessionViewModel
     }
@@ -152,6 +155,12 @@ class OnboardingViewModel: ObservableObject {
     
     func proceedToWelcome() {
         currentStep = .notifications
+    }
+
+    /// Finalize onboarding by saving profile data from preview mode and completing
+    func finalizeOnboarding() async {
+        await saveProfileDataFromPreviewMode()
+        completeOnboarding()
     }
     
     // MARK: - Chat Methods
@@ -295,22 +304,33 @@ class OnboardingViewModel: ObservableObject {
                 monthlyIncome = parsed
             }
             
-            let primaryGoal = input["primaryGoal"] as? String ?? ""
+            // Parse freedom fund (similar to monthlyIncome)
+            var freedomFund: Double = 0
+            if let fundDouble = input["freedomFund"] as? Double {
+                freedomFund = fundDouble
+            } else if let fundInt = input["freedomFund"] as? Int {
+                freedomFund = Double(fundInt)
+            } else if let fundString = input["freedomFund"] as? String, let parsed = Double(fundString) {
+                freedomFund = parsed
+            }
+
+            let painPoint = input["painPoint"] as? String ?? ""
             let reminderPreference = input["reminderPreference"] as? String ?? ""
-            
+
             let extractedData = UserOnboardingData(
                 name: name,
                 currency: currency,
                 monthlyIncome: monthlyIncome,
-                primaryGoal: primaryGoal,
+                freedomFund: freedomFund,
+                painPoint: painPoint,
                 reminderPreference: reminderPreference
             )
-            
-            
+
+
             // Check if we have ALL required data
             if !extractedData.name.isEmpty &&
                !extractedData.currency.isEmpty &&
-               !extractedData.primaryGoal.isEmpty &&
+               !extractedData.painPoint.isEmpty &&
                extractedData.monthlyIncome > 0 &&
                !extractedData.reminderPreference.isEmpty {
                 
@@ -335,7 +355,7 @@ class OnboardingViewModel: ObservableObject {
                     showCompletionTransition = true
                 }
             } else {
-                print("Data incomplete from tool - name: '\(extractedData.name)', currency: '\(extractedData.currency)', goal: '\(extractedData.primaryGoal)', income: \(extractedData.monthlyIncome), reminder: '\(extractedData.reminderPreference)'")
+                print("Data incomplete from tool - name: '\(extractedData.name)', currency: '\(extractedData.currency)', painPoint: '\(extractedData.painPoint)', income: \(extractedData.monthlyIncome), freedomFund: \(extractedData.freedomFund), reminder: '\(extractedData.reminderPreference)'")
                 // This shouldn't happen if Claude is using the tool correctly
                 addNormaMessage("I'm still collecting some information. Let's continue our conversation!")
             }
@@ -372,7 +392,8 @@ class OnboardingViewModel: ObservableObject {
             let settings = ProfileSettings(
                 currency: collectedData.currency,
                 monthlyIncome: collectedData.monthlyIncome,
-                primaryGoal: collectedData.primaryGoal,
+                freedomFund: collectedData.freedomFund,
+                painPoint: collectedData.painPoint,
                 notificationsEnabled: collectedData.reminderPreference != "No reminders",
                 billReminderDays: reminderDays
             )
@@ -408,11 +429,127 @@ class OnboardingViewModel: ObservableObject {
                     sessionViewModel.currentUser = savedProfile
                 }
             }
-            
+
+            // Transfer preview mode data (bills, budgets, expenses) to the real account
+            await transferPreviewModeData(userId: supabaseUser.id.uuidString)
+
         } catch {
             print("Failed to save profile data: \(error)")
             // Still allow completion view to show
         }
+    }
+
+    /// Save profile data using values collected in preview mode
+    private func saveProfileDataFromPreviewMode() async {
+        do {
+            // Get current authenticated user
+            guard let supabaseUser = supabaseService.currentUser else {
+                print("No authenticated user found for profile save")
+                return
+            }
+
+            // Get data from preview mode view model
+            let name = previewModeViewModel.userName ?? collectedData.name
+            let currency = previewModeViewModel.userCurrency ?? "USD"
+            let monthlyIncome = previewModeViewModel.userIncome ?? 0
+            let freedomFund = previewModeViewModel.userFreedomFund ?? 0
+            let painPoint = previewModeViewModel.userChallenge ?? ""
+
+            // Default reminder days (can be customized later in settings)
+            let reminderDays = 3
+
+            // Create profile settings
+            let settings = ProfileSettings(
+                currency: currency,
+                monthlyIncome: monthlyIncome,
+                freedomFund: freedomFund,
+                painPoint: painPoint,
+                notificationsEnabled: true,
+                billReminderDays: reminderDays
+            )
+
+            // Check if profile already exists
+            if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
+                // Update existing profile
+                var updatedProfile = existingProfile
+                updatedProfile.settings = settings
+                let savedProfile = try await supabaseService.updateProfile(updatedProfile)
+
+                // Update SessionViewModel with the new profile data
+                await MainActor.run {
+                    sessionViewModel.currentUser = savedProfile
+                }
+            } else {
+                // Create new profile
+                let newProfile = Profile(
+                    userId: supabaseUser.id.uuidString,
+                    email: supabaseUser.email ?? "",
+                    name: name,
+                    settings: settings
+                )
+                let savedProfile = try await supabaseService.createProfile(newProfile)
+
+                // Update SessionViewModel with the new profile data
+                await MainActor.run {
+                    sessionViewModel.currentUser = savedProfile
+                }
+            }
+
+            // Transfer preview mode data (bills, budgets, expenses) to the real account
+            await transferPreviewModeData(userId: supabaseUser.id.uuidString)
+
+            print("✅ Profile data saved from preview mode")
+
+        } catch {
+            print("❌ Failed to save profile data from preview mode: \(error)")
+        }
+    }
+
+    /// Transfer bills, budgets, and expenses from preview mode to the real account
+    private func transferPreviewModeData(userId: String) async {
+        guard previewModeViewModel.hasUserDataToTransfer else {
+            print("📦 No preview mode data to transfer")
+            return
+        }
+
+        print("📦 Transferring preview mode data to user: \(userId)")
+
+        // Get the data ready for transfer (with real userId)
+        let billsToTransfer = previewModeViewModel.getUserBillsForTransfer(withUserId: userId)
+        let budgetsToTransfer = previewModeViewModel.getUserBudgetsForTransfer(withUserId: userId)
+        let expensesToTransfer = previewModeViewModel.getUserExpensesForTransfer(withUserId: userId)
+
+        // Save bills
+        for bill in billsToTransfer {
+            do {
+                _ = try await supabaseService.createBill(bill)
+                print("✅ Transferred bill: \(bill.name)")
+            } catch {
+                print("❌ Failed to transfer bill \(bill.name): \(error)")
+            }
+        }
+
+        // Save budgets
+        for budget in budgetsToTransfer {
+            do {
+                _ = try await supabaseService.createBudget(budget)
+                print("✅ Transferred budget: \(budget.name)")
+            } catch {
+                print("❌ Failed to transfer budget \(budget.name): \(error)")
+            }
+        }
+
+        // Save expenses
+        for expense in expensesToTransfer {
+            do {
+                _ = try await supabaseService.createExpense(expense)
+                print("✅ Transferred expense: \(expense.name)")
+            } catch {
+                print("❌ Failed to transfer expense \(expense.name): \(error)")
+            }
+        }
+
+        print("📦 Preview mode data transfer complete")
     }
 }
 
@@ -425,8 +562,6 @@ enum OnboardingStep: CaseIterable {
     case authentication
     case verification
     case notifications
-    case howDidYouHear
-    case normaChat
     case complete
 
     func next() -> OnboardingStep {
