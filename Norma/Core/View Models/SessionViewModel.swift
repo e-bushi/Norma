@@ -133,7 +133,7 @@ class SessionViewModel: ObservableObject {
         
         // Check if user has completed initial financial setup
         // Check if they have essential onboarding data (income, currency, etc.)
-        if user.settings.monthlyIncome > 0 && !user.settings.primaryGoal.isEmpty {
+        if user.settings.monthlyIncome > 0 && !user.settings.painPoint.isEmpty {
             hasCompletedInitialSetup = true
             hasCompletedOnboarding = true
         } else {
@@ -259,7 +259,8 @@ class SessionViewModel: ObservableObject {
         let settings = ProfileSettings(
             currency: data.currency,
             monthlyIncome: data.monthlyIncome,
-            primaryGoal: data.primaryGoal,
+            freedomFund: data.freedomFund,
+            painPoint: data.painPoint,
             notificationsEnabled: data.reminderPreference != "No reminders",
             billReminderDays: reminderDays
         )

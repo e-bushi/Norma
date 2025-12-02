@@ -269,8 +269,9 @@ struct AnthropicErrorDetail: Codable {
 struct UserOnboardingData: Codable {
     var name: String = ""
     var currency: String = "USD"
-    var monthlyIncome: Double = 0
-    var primaryGoal: String = ""
+    var monthlyIncome: Double = 0  // After-tax monthly income
+    var freedomFund: Double = 0
+    var painPoint: String = ""
     var reminderPreference: String = ""
 }
 

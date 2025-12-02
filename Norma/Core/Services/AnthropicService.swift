@@ -15,9 +15,11 @@ class AnthropicService {
     
     // Model cascade in order of preference (optimized for quality and capability)
     private let modelCascade = [
-        "claude-sonnet-4-20250514",      // Latest and most capable model
-        "claude-3-7-sonnet-20250219",    // High quality fallback
-        "claude-3-5-sonnet-20241022",    // Solid fallback
+        "claude-opus-4-5-20251101",      // Most capable model - Opus 4.5
+        "claude-sonnet-4-5-20250929",    // Sonnet 4.5 - excellent balance
+        "claude-sonnet-4-20250514",      // Sonnet 4 fallback
+        "claude-3-7-sonnet-20250219",    // Solid fallback
+        "claude-3-5-sonnet-20241022",    // Additional fallback
         "claude-3-5-haiku-20241022",     // Faster fallback if needed
         "claude-3-haiku-20240307"        // Last resort
     ]

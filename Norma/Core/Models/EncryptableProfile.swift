@@ -184,51 +184,61 @@ extension Profile {
 struct EncryptedProfileSettings: Codable, Equatable {
     // Non-sensitive fields (plain)
     var currency: String
-    var primaryGoal: String
+    var painPoint: String
     var notificationsEnabled: Bool
     var billReminderDays: Int
     var monthlyBudgetAlert: Bool
     var darkModeEnabled: Bool
-    
+
     // Sensitive fields (encrypted)
     var encryptedMonthlyIncome: String
-    
+    var encryptedFreedomFund: String
+
     enum CodingKeys: String, CodingKey {
         case currency
-        case primaryGoal = "primary_goal"
+        case painPoint = "pain_point"
         case notificationsEnabled = "notifications_enabled"
         case billReminderDays = "bill_reminder_days"
         case monthlyBudgetAlert = "monthly_budget_alert"
         case darkModeEnabled = "dark_mode_enabled"
         case encryptedMonthlyIncome = "encrypted_monthly_income"
+        case encryptedFreedomFund = "encrypted_freedom_fund"
     }
-    
+
     // Convert from regular ProfileSettings
     init(from settings: ProfileSettings, using key: SymmetricKey) throws {
         self.currency = settings.currency
-        self.primaryGoal = settings.primaryGoal
+        self.painPoint = settings.painPoint
         self.notificationsEnabled = settings.notificationsEnabled
         self.billReminderDays = settings.billReminderDays
         self.monthlyBudgetAlert = settings.monthlyBudgetAlert
         self.darkModeEnabled = settings.darkModeEnabled
-        
+
         // Encrypt the monthly income
-        guard let encrypted = EncryptionService.shared.encryptAmount(settings.monthlyIncome, with: key) else {
+        guard let encryptedIncome = EncryptionService.shared.encryptAmount(settings.monthlyIncome, with: key) else {
             throw EncryptionError.encryptionFailed
         }
-        self.encryptedMonthlyIncome = encrypted
+        self.encryptedMonthlyIncome = encryptedIncome
+
+        // Encrypt the freedom fund
+        guard let encryptedFund = EncryptionService.shared.encryptAmount(settings.freedomFund, with: key) else {
+            throw EncryptionError.encryptionFailed
+        }
+        self.encryptedFreedomFund = encryptedFund
     }
-    
+
     // Convert to regular ProfileSettings
     func toProfileSettings(using key: SymmetricKey) -> ProfileSettings? {
-        guard let monthlyIncome = EncryptionService.shared.decryptAmount(encryptedMonthlyIncome, with: key) else {
+        guard let monthlyIncome = EncryptionService.shared.decryptAmount(encryptedMonthlyIncome, with: key),
+              let freedomFund = EncryptionService.shared.decryptAmount(encryptedFreedomFund, with: key) else {
             return nil
         }
-        
+
         return ProfileSettings(
             currency: currency,
             monthlyIncome: monthlyIncome,
-            primaryGoal: primaryGoal,
+            freedomFund: freedomFund,
+            painPoint: painPoint,
             notificationsEnabled: notificationsEnabled,
             billReminderDays: billReminderDays,
             monthlyBudgetAlert: monthlyBudgetAlert,

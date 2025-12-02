@@ -9,7 +9,7 @@ import Foundation
 
 struct Bill: Identifiable, Codable, Equatable {
     var id: String?
-    let userId: String
+    var userId: String
     var name: String
     var dueDate: Date
     var nextDueDate: Date?

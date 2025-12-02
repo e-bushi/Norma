@@ -389,4 +389,47 @@ class PreviewModeViewModel: ObservableObject {
         isRealOnboarding = true  // Mark that we're in real onboarding mode
         // Don't regenerate mock data - user will add their own
     }
+
+    // MARK: - Data Transfer
+
+    /// Get bills ready for transfer to a real account (excludes mock data)
+    func getUserBillsForTransfer(withUserId userId: String) -> [Bill] {
+        // Only transfer user-added bills (beyond initial mock data count)
+        let userBills = Array(bills.dropFirst(initialBillsCount))
+        return userBills.map { bill in
+            var updatedBill = bill
+            updatedBill.userId = userId
+            return updatedBill
+        }
+    }
+
+    /// Get budgets ready for transfer to a real account (excludes mock data)
+    func getUserBudgetsForTransfer(withUserId userId: String) -> [Budget] {
+        // Only transfer user-added budgets (beyond initial mock data count)
+        let userBudgets = Array(budgets.dropFirst(initialBudgetsCount))
+        return userBudgets.map { budget in
+            var updatedBudget = budget
+            updatedBudget.userId = userId
+            return updatedBudget
+        }
+    }
+
+    /// Get expenses ready for transfer to a real account (excludes mock data)
+    func getUserExpensesForTransfer(withUserId userId: String) -> [Expense] {
+        // Only transfer user-added expenses (beyond initial mock data count)
+        let userExpenses = Array(expenses.dropFirst(initialExpensesCount))
+        return userExpenses.map { expense in
+            var updatedExpense = expense
+            updatedExpense.userId = userId
+            return updatedExpense
+        }
+    }
+
+    /// Check if there's user data to transfer
+    var hasUserDataToTransfer: Bool {
+        let userBillsCount = bills.count - initialBillsCount
+        let userBudgetsCount = budgets.count - initialBudgetsCount
+        let userExpensesCount = expenses.count - initialExpensesCount
+        return userBillsCount > 0 || userBudgetsCount > 0 || userExpensesCount > 0
+    }
 }
