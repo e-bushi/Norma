@@ -42,6 +42,7 @@ class OnboardingViewModel: ObservableObject {
     private let sessionViewModel: SessionViewModel
     private let anthropicService = AnthropicService.shared
     private let supabaseService = SupabaseService.shared
+    private let appleSignInManager = AppleSignInManager()
 
     // Preview mode view model - owned here to persist throughout onboarding
     var previewModeViewModel = PreviewModeViewModel()
@@ -99,16 +100,26 @@ class OnboardingViewModel: ObservableObject {
     func signIn(email: String, password: String) async -> Bool {
         isLoading = true
         clearError()
-        
+
         do {
             _ = try await supabaseService.signIn(email: email, password: password)
-            
-            // Notify SessionViewModel of successful authentication
-            await sessionViewModel.handleAuthenticationSuccess()
-            
+
+            // For login, just authenticate and go to main app
+            // Returning users have already completed onboarding
+            sessionViewModel.isAuthenticated = true
+            sessionViewModel.hasCompletedOnboarding = true
+            sessionViewModel.hasCompletedInitialSetup = true
+
+            // Fetch the profile in the background (for display purposes)
+            await sessionViewModel.fetchUserProfile()
+
             isLoading = false
+
+            print("🔑 Login complete - navigating to main app")
+            currentStep = .complete
+
             return true
-            
+
         } catch {
             isLoading = false
             showError(error.localizedDescription)
@@ -161,6 +172,95 @@ class OnboardingViewModel: ObservableObject {
     func finalizeOnboarding() async {
         await saveProfileDataFromPreviewMode()
         completeOnboarding()
+    }
+
+    // MARK: - Apple Sign In Methods
+
+    /// Sign in with Apple
+    /// - Parameter fromPreviewMode: Whether this is being called from preview mode (to trigger data transfer)
+    /// - Returns: True if sign-in was successful
+    func signInWithApple(fromPreviewMode: Bool = false) async -> Bool {
+        isLoading = true
+        clearError()
+
+        do {
+            // Step 1: Get Apple credentials
+            print("🍎 Step 1: Getting Apple credentials...")
+            let appleResult = try await appleSignInManager.signIn()
+            print("🍎 Step 1 complete: Got idToken, nonce: \(appleResult.nonce != nil), name: \(appleResult.fullName ?? "nil"), email: \(appleResult.email ?? "nil")")
+
+            // Step 2: Sign in with Supabase using the Apple ID token
+            print("🍎 Step 2: Signing in with Supabase...")
+            let session = try await supabaseService.signInWithApple(
+                idToken: appleResult.idToken,
+                nonce: appleResult.nonce,
+                firstName: appleResult.firstName,
+                lastName: appleResult.lastName
+            )
+            print("🍎 Step 2 complete: Supabase session created, user: \(session.user.id)")
+
+            // Step 3: Store name if available (for profile creation)
+            if let fullName = appleResult.fullName {
+                collectedData.name = fullName
+                print("🍎 Step 3: Stored name from Apple: \(fullName)")
+            } else if let userName = previewModeViewModel.userName {
+                // Fall back to preview mode name
+                collectedData.name = userName
+                print("🍎 Step 3: Using preview mode name: \(userName)")
+            }
+
+            // Store email if available
+            if let email = appleResult.email {
+                self.email = email
+            }
+
+            // Step 4: Notify SessionViewModel of successful authentication
+            print("🍎 Step 4: Handling auth success...")
+            await sessionViewModel.handleAuthenticationSuccess()
+            print("🍎 Step 4 complete")
+
+            // Step 5: If from preview mode, save profile and transfer data
+            if fromPreviewMode {
+                print("🍎 Step 5: Saving profile from preview mode...")
+                await saveProfileDataFromPreviewMode()
+                print("🍎 Step 5 complete")
+            }
+
+            isLoading = false
+
+            // For returning users who have completed onboarding, go to main app
+            if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
+                print("🍎 Returning user - navigating to main app")
+                currentStep = .complete
+            } else {
+                // New users: navigate to notifications step (skip verification since Apple already verified)
+                print("🍎 New user - navigating to notifications")
+                currentStep = .notifications
+            }
+
+            return true
+
+        } catch {
+            isLoading = false
+            print("🍎 ❌ Apple Sign In error: \(error)")
+
+            // Don't show error for user cancellation
+            if let authError = error as? AuthError,
+               case .appleSignInError(let message) = authError,
+               message.contains("canceled") {
+                // User canceled - just return false without showing error
+                print("🍎 User canceled sign in")
+                return false
+            }
+
+            showError(error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Sign in with Apple specifically from preview mode (handles data transfer)
+    func signInWithAppleFromPreviewMode() async {
+        _ = await signInWithApple(fromPreviewMode: true)
     }
     
     // MARK: - Chat Methods

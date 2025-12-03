@@ -62,8 +62,37 @@ class SupabaseService {
             token: code,
             type: .signup
         )
-        
+
         return response
+    }
+
+    /// Sign in with Apple using ID token
+    /// - Parameters:
+    ///   - idToken: The identity token from Apple Sign In
+    ///   - nonce: Optional nonce for additional security
+    ///   - firstName: User's first name (only available on first sign-in)
+    ///   - lastName: User's last name (only available on first sign-in)
+    /// - Returns: Session containing the authenticated user
+    func signInWithApple(idToken: String, nonce: String? = nil, firstName: String? = nil, lastName: String? = nil) async throws -> Session {
+        let session = try await client.auth.signInWithIdToken(
+            credentials: .init(
+                provider: .apple,
+                idToken: idToken,
+                nonce: nonce
+            )
+        )
+
+        // If we have name data (first sign-in only), update user metadata
+        if let firstName = firstName, !firstName.isEmpty {
+            _ = try? await client.auth.update(user: UserAttributes(
+                data: [
+                    "first_name": .string(firstName),
+                    "last_name": .string(lastName ?? "")
+                ]
+            ))
+        }
+
+        return session
     }
 }
 
@@ -155,8 +184,9 @@ enum AuthError: LocalizedError {
     case invalidCredentials
     case invalidCode
     case supabaseError(String)
+    case appleSignInError(String)
     case unknownError
-    
+
     var errorDescription: String? {
         switch self {
         case .networkError:
@@ -167,6 +197,8 @@ enum AuthError: LocalizedError {
             return "Invalid verification code."
         case .supabaseError(let message):
             return message
+        case .appleSignInError(let message):
+            return "Apple Sign In failed: \(message)"
         case .unknownError:
             return "An unknown error occurred. Please try again."
         }

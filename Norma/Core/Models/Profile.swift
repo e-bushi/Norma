@@ -93,4 +93,18 @@ struct ProfileSettings: Codable, Equatable {
         self.monthlyBudgetAlert = monthlyBudgetAlert
         self.darkModeEnabled = darkModeEnabled
     }
+
+    // Custom decoder to handle missing fields with default values
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+        monthlyIncome = try container.decodeIfPresent(Double.self, forKey: .monthlyIncome) ?? 0
+        freedomFund = try container.decodeIfPresent(Double.self, forKey: .freedomFund) ?? 0
+        painPoint = try container.decodeIfPresent(String.self, forKey: .painPoint) ?? ""
+        notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
+        billReminderDays = try container.decodeIfPresent(Int.self, forKey: .billReminderDays) ?? 3
+        monthlyBudgetAlert = try container.decodeIfPresent(Bool.self, forKey: .monthlyBudgetAlert) ?? true
+        darkModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
+    }
 }
