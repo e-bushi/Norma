@@ -225,7 +225,8 @@ struct PreviewModeChatView: View {
                     onboardingViewModel.currentStep = .authentication
                 },
                 onSignUpWithApple: {
-                    previewModeViewModel.showSaveProgressModal = false
+                    // Don't dismiss modal here - let it stay open during sign-in
+                    // The modal will be dismissed after successful sign-in via currentStep change
                     handleAppleSignIn()
                 },
                 onContinueChatting: {
@@ -379,7 +380,7 @@ struct PreviewModeChatView: View {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             if !Task.isCancelled {
                 // Check if we should show the ready modal
-                if !hasClickedReady && userMessageCount >= 3 {
+                if !hasClickedReady && userMessageCount >= 8 {
                     await MainActor.run {
                         showReadyModal = true
                         isLoading = false
@@ -820,9 +821,9 @@ struct PreviewModeChatView: View {
     }
 
     private func handleAppleSignIn() {
-        // TODO: Implement Apple Sign In
-        // For now, just navigate to authentication
-        onboardingViewModel.currentStep = .authentication
+        Task {
+            await onboardingViewModel.signInWithAppleFromPreviewMode()
+        }
     }
 
     private func flowStateColor(for state: String) -> Color {

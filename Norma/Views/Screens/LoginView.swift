@@ -40,14 +40,15 @@ struct LoginView: View {
     @State private var loadingRotation = 0.0
     @State private var loadingScale = 0.8
     @State private var loadingOpacity = 0.0
-    
+    @State private var isAppleSignInLoading = false
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ScrollView {
                 VStack(spacing: 20) {
                     Spacer()
                         .frame(height: 20)
-                    
+
                     // Error message if needed
                     if showError {
                         HStack(spacing: 12) {
@@ -213,7 +214,54 @@ struct LoginView: View {
                             buttonScale = hovering ? 1.02 : 0.95
                         }
                     }
-                    
+
+                    // Divider
+                    HStack(spacing: 12) {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.3))
+                            .frame(height: 1)
+                        Text("or")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.3))
+                            .frame(height: 1)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                    .opacity(buttonOpacity)
+
+                    // Sign in with Apple button
+                    Button(action: {
+                        handleAppleSignIn()
+                    }) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.black)
+                                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+
+                            HStack(spacing: 12) {
+                                if isAppleSignInLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "apple.logo")
+                                        .font(.system(size: 20, weight: .semibold))
+                                    Text("Sign in with Apple")
+                                        .font(.normaHeadline(16))
+                                }
+                            }
+                            .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                    }
+                    .disabled(isAppleSignInLoading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                    .opacity(buttonOpacity)
+
                     // Sign up link
                     HStack(spacing: 4) {
                         Text("Don't have an account?")
@@ -231,9 +279,11 @@ struct LoginView: View {
                     }
                     .padding(.top, 16)
                     .opacity(signUpLinkOpacity)
-                    
+
                     Spacer()
+                        .frame(height: 40)
                 }
+                .padding(.bottom, 20)
             }
             .navigationTitle("Sign In")
             .navigationBarTitleDisplayMode(.inline)
@@ -391,6 +441,35 @@ struct LoginView: View {
                             showError = false
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private func handleAppleSignIn() {
+        // Clear any previous errors
+        withAnimation {
+            showError = false
+        }
+
+        isAppleSignInLoading = true
+
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+
+        Task {
+            let success = await onboardingViewModel.signInWithApple(fromPreviewMode: false)
+
+            await MainActor.run {
+                isAppleSignInLoading = false
+
+                if success {
+                    isAuthenticated = true
+                } else {
+                    // Error is shown by OnboardingViewModel via alert
+                    let notificationFeedback = UINotificationFeedbackGenerator()
+                    notificationFeedback.notificationOccurred(.error)
                 }
             }
         }

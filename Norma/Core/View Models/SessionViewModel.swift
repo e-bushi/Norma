@@ -66,16 +66,18 @@ class SessionViewModel: ObservableObject {
     
     func handleAuthenticationSuccess(user: Profile? = nil) async {
         isAuthenticated = true
-        
+
         if let user = user {
             currentUser = user
         } else {
             // Fetch user profile if not provided
             await fetchUserProfile()
         }
-        
+
         // Check if user has completed initial setup
         await checkInitialSetupStatus()
+
+        print("🔐 Auth success - isAuthenticated: \(isAuthenticated), hasCompletedOnboarding: \(hasCompletedOnboarding), hasCompletedInitialSetup: \(hasCompletedInitialSetup), currentUser: \(currentUser?.name ?? "nil")")
     }
     
     func handleNoAuthentication() async {
@@ -104,12 +106,17 @@ class SessionViewModel: ObservableObject {
     // MARK: - User Profile Methods
     
     func fetchUserProfile() async {
-        guard isAuthenticated else { return }
-        
+        guard isAuthenticated else {
+            print("⚠️ fetchUserProfile: Not authenticated, skipping")
+            return
+        }
+
         do {
             let profile = try await dataManager.getCurrentUserProfile()
             currentUser = profile
+            print("✅ fetchUserProfile: Loaded profile - \(profile?.name ?? "nil"), income: \(profile?.settings.monthlyIncome ?? 0)")
         } catch {
+            print("❌ fetchUserProfile: Failed - \(error)")
             showError("Failed to load user profile")
         }
     }
@@ -126,14 +133,21 @@ class SessionViewModel: ObservableObject {
     // MARK: - Setup and Onboarding
     
     func checkInitialSetupStatus() async {
-        guard let user = currentUser else { return }
-        
+        guard let user = currentUser else {
+            print("⚠️ checkInitialSetupStatus: No currentUser, cannot check setup status")
+            return
+        }
+
         // Ensure default categories are created for authenticated users
         await ensureDefaultCategoriesExist()
-        
+
         // Check if user has completed initial financial setup
-        // Check if they have essential onboarding data (income, currency, etc.)
-        if user.settings.monthlyIncome > 0 && !user.settings.painPoint.isEmpty {
+        // Only require monthlyIncome to be set - painPoint is optional for legacy users
+        let hasIncome = user.settings.monthlyIncome > 0
+
+        print("📊 Setup check - income: \(user.settings.monthlyIncome), painPoint: '\(user.settings.painPoint)', hasIncome: \(hasIncome)")
+
+        if hasIncome {
             hasCompletedInitialSetup = true
             hasCompletedOnboarding = true
         } else {
@@ -169,6 +183,7 @@ class SessionViewModel: ObservableObject {
     
     func completeOnboarding() {
         hasCompletedOnboarding = true
+        hasCompletedInitialSetup = true
         shouldShowOnboarding = false
     }
     

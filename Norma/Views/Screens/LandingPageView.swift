@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct LandingPageView: View {
     @Binding var showSignUp: Bool
@@ -14,14 +13,11 @@ struct LandingPageView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
     
     // Animation states
-    @State private var logoScale = 0.8
-    @State private var logoOpacity = 0.0
     @State private var titleScale: CGFloat = 0.5
     @State private var titleOpacity = 0.0
     @State private var descriptionOpacity = 0.0
     @State private var buttonsOpacity = 0.0
-    @State private var floatingOffset: CGFloat = 0
-    @State private var contentShouldBlur = false
+    @State private var contentShouldBlur = true
     @State private var contentScale: CGFloat = 0.8
     @State private var typedSubtitle = ""
     @State private var typedDescription = ""
@@ -29,15 +25,16 @@ struct LandingPageView: View {
     // Text animation states
     @State private var textAppearAnimation = false
     @State private var currentPage = 0
+    @State private var peekOffset: CGFloat = 0
 
-    private let fullSubtitle = "Your Personal Finance Assistant"
+    private let fullSubtitle = "Know what you can really afford"
     
     // Content for each page
     private let pageContent = [
-        (title: "Smart Budgeting", description: "Track your spending and stay within budget with intelligent insights and alerts."),
-        (title: "Expense Calendar", description: "Visualize your spending patterns with our interactive calendar view."),
-        (title: "Transaction History", description: "Keep track of all your expenses with detailed transaction records."),
-        (title: "AI Assistant", description: "Get personalized financial advice and insights powered by artificial intelligence.")
+        (title: "See Where It Goes", description: "Your spending by category. No guesswork."),
+        (title: "Never Miss a Bill", description: "Every due date, right where you need it."),
+        (title: "Quick Expense Logging", description: "Track purchases in seconds. Ask Norma to log it."),
+        (title: "Ask Before You Buy", description: "Should I buy this? Just ask. I'll tell you if it's smart.")
     ]
     
     var body: some View {
@@ -56,32 +53,38 @@ struct LandingPageView: View {
                         .foregroundColor(.secondary)
                         .opacity(descriptionOpacity)
                 }
-                .padding(.top, 40)
-                .padding(.bottom, 24)
+                .padding(.top, 32)
+                .padding(.bottom, 20)
 
-                VStack(spacing: 32) {
+                VStack(spacing: 20) {
                     // Mock views section - Swipeable horizontal layout
                     TabView(selection: $currentPage) {
                         // Mini Budget Disclosure View
                         MiniBudgetDisclosureView(appeared: currentPage == 0 && titleOpacity > 0)
                             .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
                             .tag(0)
 
                         // Mini Expense Calendar View
                         MiniExpenseCalendarView(appeared: currentPage == 1 && titleOpacity > 0)
                             .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
                             .tag(1)
 
                         // Mini Expense Disclosure View
                         MiniExpenseDisclosureView(appeared: currentPage == 2 && titleOpacity > 0)
                             .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
                             .tag(2)
 
                         // Mini Chat View
                         MiniChatView(appeared: currentPage == 3 && titleOpacity > 0)
                             .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
                             .tag(3)
                     }
+                    .offset(x: peekOffset)
+                    .frame(height: 320)
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                     .opacity(titleOpacity)
                     .onChange(of: currentPage) {
@@ -97,10 +100,6 @@ struct LandingPageView: View {
                             .offset(x: textAppearAnimation ? 0 : -20)
                             .scaleEffect(textAppearAnimation ? 1 : 0.95)
                             .opacity(textAppearAnimation ? 1 : 0)
-                            .rotation3DEffect(
-                                .degrees(textAppearAnimation ? 0 : -5),
-                                axis: (x: 0.0, y: 1.0, z: 0.0)
-                            )
                             .animation(
                                 .spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0.3)
                                 .delay(0.1),
@@ -112,7 +111,6 @@ struct LandingPageView: View {
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .lineLimit(nil)
-                            .frame(minHeight: 50)
                             .opacity(textAppearAnimation ? 1 : 0)
                     }
                     .padding(.horizontal, 32)
@@ -186,18 +184,12 @@ struct LandingPageView: View {
             .background(Color("NormaBackground"))
         }
         .onAppear {
-            // Trigger blur/pop animation for content
-            contentShouldBlur = true
-
-            // Start haptic feedback sequence
-            startHapticSequence()
-
-            // Start with scale animation
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.6)) {
+            // Single clean entrance for content
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                 contentScale = 1.0
             }
 
-            // Animate title with soft pop
+            // Title with soft pop
             withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
                 titleScale = 1.0
                 titleOpacity = 1.0
@@ -211,34 +203,30 @@ struct LandingPageView: View {
                 startTypingAnimation()
             }
 
-            // Trigger animations
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                logoScale = 1.0
-                logoOpacity = 1.0
-            }
-
-            withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
-                titleOpacity = 1.0
-            }
-
-            withAnimation(.easeOut(duration: 0.6).delay(0.7)) {
+            // Buttons fade in
+            withAnimation(.easeOut(duration: 0.5).delay(0.7)) {
                 buttonsOpacity = 1.0
             }
 
-            // Floating animation
-            withAnimation(.easeInOut(duration: 3.0).delay(1.0).repeatForever(autoreverses: true)) {
-                floatingOffset = -15
-            }
-
-            // Initial text animation
+            // Initial text animation for page content
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     textAppearAnimation = true
                 }
-
-                // Start description typing after title appears
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     startDescriptionTyping()
+                }
+            }
+
+            // Swipe hint animation - peek to show next card
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    peekOffset = -75
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.3)) {
+                        peekOffset = 0
+                    }
                 }
             }
         }
@@ -287,57 +275,6 @@ struct LandingPageView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.03) {
                 typedDescription.append(character)
             }
-        }
-    }
-
-    // Haptic feedback animation that syncs with blur/pop animation
-    private func startHapticSequence() {
-        // Total duration should match animation (~1.2 seconds)
-        let totalDuration: Double = 1.2
-
-        // Phase 1: Fast soft impacts (0.0 - 0.4s) - Light vibration feel
-        let phase1Duration: Double = 0.4
-        let phase1Interval: Double = 0.05 // 20 impacts per second
-        let phase1Count = Int(phase1Duration / phase1Interval)
-
-        let softGenerator = UIImpactFeedbackGenerator(style: .soft)
-        softGenerator.prepare()
-
-        for i in 0..<phase1Count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * phase1Interval) {
-                softGenerator.impactOccurred(intensity: 0.5)
-            }
-        }
-
-        // Phase 2: Transition period (0.4 - 0.7s) - Slowing down, mixing soft and medium
-        let phase2Start: Double = 0.4
-        let phase2Duration: Double = 0.3
-        let phase2Intervals: [Double] = [0.08, 0.10, 0.12] // Gradually slower
-
-        let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
-        mediumGenerator.prepare()
-
-        var currentTime = phase2Start
-        for interval in phase2Intervals {
-            DispatchQueue.main.asyncAfter(deadline: .now() + currentTime) {
-                mediumGenerator.impactOccurred(intensity: 0.7)
-            }
-            currentTime += interval
-        }
-
-        // Phase 3: Slow rigid impacts (0.7 - 1.2s) - Pronounced, spaced out
-        let phase3Start: Double = 0.7
-        let phase3Intervals: [Double] = [0.15, 0.18, 0.20] // Much slower
-
-        let rigidGenerator = UIImpactFeedbackGenerator(style: .rigid)
-        rigidGenerator.prepare()
-
-        currentTime = phase3Start
-        for interval in phase3Intervals {
-            DispatchQueue.main.asyncAfter(deadline: .now() + currentTime) {
-                rigidGenerator.impactOccurred(intensity: 1.0)
-            }
-            currentTime += interval
         }
     }
 }

@@ -74,6 +74,8 @@ class AppCoordinator: ObservableObject {
     }
     
     private func updateCurrentView() {
+        let previousView = currentView
+
         if sessionViewModel.isLoadingAuth {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
@@ -86,26 +88,33 @@ class AppCoordinator: ObservableObject {
             // Default to onboarding if no other condition is met
             currentView = .onboarding
         }
+
+        if previousView != currentView {
+            print("🧭 AppCoordinator: View changed from \(previousView) to \(currentView) | isAuth: \(sessionViewModel.isAuthenticated), hasOnboarding: \(sessionViewModel.hasCompletedOnboarding), hasSetup: \(sessionViewModel.hasCompletedInitialSetup)")
+        }
     }
     
     private func observeSessionChanges() {
         // Listen for authentication state changes
         Task {
-            for await _ in sessionViewModel.$isAuthenticated.values {
+            for await isAuth in sessionViewModel.$isAuthenticated.values {
+                print("👀 Observed isAuthenticated change: \(isAuth)")
                 updateCurrentView()
             }
         }
-        
+
         // Listen for onboarding completion
         Task {
-            for await _ in sessionViewModel.$hasCompletedOnboarding.values {
+            for await completed in sessionViewModel.$hasCompletedOnboarding.values {
+                print("👀 Observed hasCompletedOnboarding change: \(completed)")
                 updateCurrentView()
             }
         }
-        
+
         // Listen for initial setup completion
         Task {
-            for await _ in sessionViewModel.$hasCompletedInitialSetup.values {
+            for await setup in sessionViewModel.$hasCompletedInitialSetup.values {
+                print("👀 Observed hasCompletedInitialSetup change: \(setup)")
                 updateCurrentView()
             }
         }

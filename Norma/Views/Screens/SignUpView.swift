@@ -45,14 +45,14 @@ struct SignUpView: View {
     @State private var loadingRotation = 0.0
     @State private var loadingScale = 0.8
     @State private var loadingOpacity = 0.0
-    
+
     @Binding var isAuthenticated: Bool
     @Binding var showSignUp: Bool
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ScrollView {
                 VStack(spacing: 20) {
                     Spacer()
                         .frame(height: 20)
@@ -129,7 +129,7 @@ struct SignUpView: View {
                             buttonScale = hovering ? 1.02 : 0.95
                         }
                     }
-                    
+
                     // Sign in link
                     HStack(spacing: 4) {
                         Text("Already have an account?")
@@ -147,9 +147,11 @@ struct SignUpView: View {
                     }
                     .padding(.top, 16)
                     .opacity(signInLinkOpacity)
-                    
+
                     Spacer()
+                        .frame(height: 40)
                 }
+                .padding(.bottom, 20)
             }
             .navigationTitle("Sign Up")
             .navigationBarTitleDisplayMode(.inline)
@@ -497,6 +499,7 @@ struct SignUpView: View {
             }
         }
     }
+
 }
 
 #Preview {
