@@ -25,7 +25,6 @@ struct LoginView: View {
     @State private var titleOpacity = 0.0
     @State private var formOpacity = 0.0
     @State private var buttonOpacity = 0.0
-    @State private var signUpLinkOpacity = 0.0
     
     // Enhanced animation states
     @State private var logoRotation = 0.0
@@ -262,24 +261,6 @@ struct LoginView: View {
                     .padding(.top, 8)
                     .opacity(buttonOpacity)
 
-                    // Sign up link
-                    HStack(spacing: 4) {
-                        Text("Don't have an account?")
-                            .font(.normaInput(14))
-                            .foregroundColor(.secondary)
-
-                        Button(action: {
-                            showSignUp = true
-                        }) {
-                            Text("Sign up")
-                                .font(.normaHeadline(14))
-                                .foregroundColor(.primary)
-                                .underline()
-                        }
-                    }
-                    .padding(.top, 16)
-                    .opacity(signUpLinkOpacity)
-
                     Spacer()
                         .frame(height: 40)
                 }
@@ -372,10 +353,6 @@ struct LoginView: View {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.6)) {
                     buttonOpacity = 1.0
                     buttonScale = 1.0
-                }
-                
-                withAnimation(.easeOut(duration: 0.6).delay(0.8)) {
-                    signUpLinkOpacity = 1.0
                 }
             }
         }

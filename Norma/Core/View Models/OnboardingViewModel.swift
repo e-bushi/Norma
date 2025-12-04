@@ -202,6 +202,7 @@ class OnboardingViewModel: ObservableObject {
             // Step 3: Store name if available (for profile creation)
             if let fullName = appleResult.fullName {
                 collectedData.name = fullName
+                previewModeViewModel.userName = fullName  // Sync to previewModeViewModel for profile save
                 print("🍎 Step 3: Stored name from Apple: \(fullName)")
             } else if let userName = previewModeViewModel.userName {
                 // Fall back to preview mode name
@@ -502,13 +503,16 @@ class OnboardingViewModel: ObservableObject {
             if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
                 // Update existing profile
                 var updatedProfile = existingProfile
+                updatedProfile.monthlyIncome = collectedData.monthlyIncome
+                updatedProfile.freedomFund = collectedData.freedomFund
+                updatedProfile.painPoint = collectedData.painPoint
                 updatedProfile.settings = settings
                 // Update howDidYouHear if we have a value and it's not already set
                 if let howDidYouHear = self.howDidYouHear, updatedProfile.howDidYouHear == nil {
                     updatedProfile.howDidYouHear = howDidYouHear
                 }
                 let savedProfile = try await supabaseService.updateProfile(updatedProfile)
-                
+
                 // Update SessionViewModel with the new profile data
                 await MainActor.run {
                     sessionViewModel.currentUser = savedProfile
@@ -520,10 +524,13 @@ class OnboardingViewModel: ObservableObject {
                     email: supabaseUser.email ?? "",
                     name: collectedData.name,
                     howDidYouHear: self.howDidYouHear,
+                    monthlyIncome: collectedData.monthlyIncome,
+                    freedomFund: collectedData.freedomFund,
+                    painPoint: collectedData.painPoint,
                     settings: settings
                 )
                 let savedProfile = try await supabaseService.createProfile(newProfile)
-                
+
                 // Update SessionViewModel with the new profile data
                 await MainActor.run {
                     sessionViewModel.currentUser = savedProfile
@@ -555,6 +562,17 @@ class OnboardingViewModel: ObservableObject {
             let freedomFund = previewModeViewModel.userFreedomFund ?? 0
             let painPoint = previewModeViewModel.userChallenge ?? ""
 
+            // Validation warnings for missing onboarding data
+            if monthlyIncome == 0 {
+                print("⚠️ WARNING: Monthly income not collected during onboarding!")
+            }
+            if freedomFund == 0 {
+                print("⚠️ WARNING: Freedom fund not collected during onboarding!")
+            }
+            if painPoint.isEmpty {
+                print("⚠️ WARNING: Financial challenge not collected during onboarding!")
+            }
+
             // Default reminder days (can be customized later in settings)
             let reminderDays = 3
 
@@ -572,6 +590,9 @@ class OnboardingViewModel: ObservableObject {
             if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
                 // Update existing profile
                 var updatedProfile = existingProfile
+                updatedProfile.monthlyIncome = monthlyIncome
+                updatedProfile.freedomFund = freedomFund
+                updatedProfile.painPoint = painPoint
                 updatedProfile.settings = settings
                 let savedProfile = try await supabaseService.updateProfile(updatedProfile)
 
@@ -585,6 +606,9 @@ class OnboardingViewModel: ObservableObject {
                     userId: supabaseUser.id.uuidString,
                     email: supabaseUser.email ?? "",
                     name: name,
+                    monthlyIncome: monthlyIncome,
+                    freedomFund: freedomFund,
+                    painPoint: painPoint,
                     settings: settings
                 )
                 let savedProfile = try await supabaseService.createProfile(newProfile)

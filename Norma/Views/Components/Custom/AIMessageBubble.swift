@@ -76,14 +76,14 @@ struct AIMessageBubble: View {
             // Cards first (if present) - shown before text
             if let component = uiComponent, showCards {
                 switch component {
-                case .billCards(let bills):
-                    BillCardStack(bills: bills)
+                case .billCards(let bills, let currency):
+                    MiniBillCardView(bills: bills, currency: currency)
                         .transition(.opacity.combined(with: .scale))
-                case .expenseCards(let expenses):
-                    ExpenseCardStack(expenses: expenses)
+                case .expenseCards(let expenses, let currency):
+                    MiniExpenseCardView(expenses: expenses, currency: currency)
                         .transition(.opacity.combined(with: .scale))
-                case .budgetCards(let budgets):
-                    BudgetCardStack(budgets: budgets)
+                case .budgetCards(let budgets, let currency):
+                    MiniBudgetCardView(budgets: budgets, currency: currency)
                         .transition(.opacity.combined(with: .scale))
                 case .actionConfirmation(let icon, let message, let colorName):
                     ActionConfirmationCard(icon: icon, message: message, colorName: colorName)

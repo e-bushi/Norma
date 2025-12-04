@@ -16,7 +16,6 @@ struct BillHomeView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @State private var showMyBills: Bool = false
     @State private var showNormaChat: Bool = false
-    @State private var refreshTask: Task<Void, Never>?
     @State private var showBillVerificationPopup = false
     @State private var showBillReviewSheet = false
     @State private var isScrolling = false
@@ -95,9 +94,6 @@ struct BillHomeView: View {
                         .font(.normaTitle(20))
                 }
             }
-            .refreshable {
-                await performRefresh()
-            }
             .sheet(isPresented: $showCreateBill) {
                 CreateBillView()
             }
@@ -136,9 +132,6 @@ struct BillHomeView: View {
                     await loadInitialData()
                 }
             }
-            .onDisappear {
-                refreshTask?.cancel()
-            }
             .onReceive(billViewModel.verificationService.$showVerificationPrompt) { showPrompt in
                 showBillVerificationPopup = showPrompt
             }
@@ -148,24 +141,6 @@ struct BillHomeView: View {
     // MARK: - Data Loading
     
     private func loadInitialData() async {
-        await expenseViewModel.refreshExpenses()
-        await billViewModel.refreshBills()
-        await incomeViewModel.refreshIncomes()
-    }
-    
-    private func performRefresh() async {
-        // Cancel any existing refresh task
-        refreshTask?.cancel()
-        
-        // Create new refresh task
-        refreshTask = Task {
-            await refreshData()
-        }
-        
-        await refreshTask?.value
-    }
-    
-    private func refreshData() async {
         await expenseViewModel.refreshExpenses()
         await billViewModel.refreshBills()
         await incomeViewModel.refreshIncomes()

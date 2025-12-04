@@ -93,16 +93,8 @@ struct ExpenseDisclosureView: View {
                     // Icon with gradient background
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
-                                        Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.3)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(.clear)
+                            .glassEffect(in: Circle())
                             .frame(width: 80, height: 80)
 
                         Image(systemName: "creditcard.and.123")

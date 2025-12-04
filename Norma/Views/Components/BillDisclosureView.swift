@@ -128,16 +128,8 @@ struct BillDisclosureView: View {
                     // Icon with gradient background
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(red: 0.80, green: 0.90, blue: 0.88).opacity(0.6),
-                                        Color(red: 0.82, green: 0.92, blue: 0.90).opacity(0.4)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(.clear)
+                            .glassEffect(in: Circle())
                             .frame(width: 80, height: 80)
 
                         Image(systemName: "calendar.badge.plus")

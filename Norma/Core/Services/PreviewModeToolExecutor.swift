@@ -335,59 +335,74 @@ class PreviewModeToolExecutor {
     // MARK: - Show Tools
 
     private func handleShowBills(input: [String: Any]) -> (String, UIComponent?) {
-        guard let billIdsString = input["bill_ids"] as? String else {
-            return ("No bill IDs provided", nil)
-        }
+        let billIdsString = input["bill_ids"] as? String ?? ""
 
-        let billIds = billIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let bills = previewModeViewModel.bills.filter { bill in
-            guard let billId = bill.id else { return false }
-            return billIds.contains(billId)
+        // If bill_ids is empty, show all bills
+        let bills: [Bill]
+        if billIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
+            bills = previewModeViewModel.bills
+        } else {
+            let billIds = billIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            bills = previewModeViewModel.bills.filter { bill in
+                guard let billId = bill.id else { return false }
+                return billIds.contains(billId)
+            }
         }
 
         if bills.isEmpty {
             return ("No bills found", nil)
         }
 
-        let uiComponent = UIComponent.billCards(bills)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+        let uiComponent = UIComponent.billCards(bills, currency: currency)
         return ("Showing \(bills.count) bill(s)", uiComponent)
     }
 
     private func handleShowExpenses(input: [String: Any]) -> (String, UIComponent?) {
-        guard let expenseIdsString = input["expense_ids"] as? String else {
-            return ("No expense IDs provided", nil)
-        }
+        let expenseIdsString = input["expense_ids"] as? String ?? ""
 
-        let expenseIds = expenseIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let expenses = previewModeViewModel.expenses.filter { expense in
-            guard let expenseId = expense.id else { return false }
-            return expenseIds.contains(expenseId)
+        // If expense_ids is empty, show all expenses
+        let expenses: [Expense]
+        if expenseIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
+            expenses = previewModeViewModel.expenses
+        } else {
+            let expenseIds = expenseIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            expenses = previewModeViewModel.expenses.filter { expense in
+                guard let expenseId = expense.id else { return false }
+                return expenseIds.contains(expenseId)
+            }
         }
 
         if expenses.isEmpty {
             return ("No expenses found", nil)
         }
 
-        let uiComponent = UIComponent.expenseCards(expenses)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+        let uiComponent = UIComponent.expenseCards(expenses, currency: currency)
         return ("Showing \(expenses.count) expense(s)", uiComponent)
     }
 
     private func handleShowBudgets(input: [String: Any]) -> (String, UIComponent?) {
-        guard let budgetIdsString = input["budget_ids"] as? String else {
-            return ("No budget IDs provided", nil)
-        }
+        let budgetIdsString = input["budget_ids"] as? String ?? ""
 
-        let budgetIds = budgetIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let budgets = previewModeViewModel.budgets.filter { budget in
-            guard let budgetId = budget.id else { return false }
-            return budgetIds.contains(budgetId)
+        // If budget_ids is empty, show all budgets
+        let budgets: [Budget]
+        if budgetIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
+            budgets = previewModeViewModel.budgets
+        } else {
+            let budgetIds = budgetIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            budgets = previewModeViewModel.budgets.filter { budget in
+                guard let budgetId = budget.id else { return false }
+                return budgetIds.contains(budgetId)
+            }
         }
 
         if budgets.isEmpty {
             return ("No budgets found", nil)
         }
 
-        let uiComponent = UIComponent.budgetCards(budgets)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+        let uiComponent = UIComponent.budgetCards(budgets, currency: currency)
         return ("Showing \(budgets.count) budget(s)", uiComponent)
     }
 

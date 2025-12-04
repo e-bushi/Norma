@@ -326,7 +326,9 @@ class ChatToolExecutor {
             return ("No bills found to display", nil)
         }
 
-        return ("Displaying \(matchedBills.count) bill\(matchedBills.count == 1 ? "" : "s")", .billCards(matchedBills))
+        // TODO: Get currency from user profile settings
+        let currency = "USD"
+        return ("Displaying \(matchedBills.count) bill\(matchedBills.count == 1 ? "" : "s")", .billCards(matchedBills, currency: currency))
     }
 
     private func executeShowExpenses(input: [String: Any]) async -> (String, UIComponent?) {
@@ -353,7 +355,9 @@ class ChatToolExecutor {
             return ("No expenses found to display", nil)
         }
 
-        return ("Displaying \(matchedExpenses.count) expense\(matchedExpenses.count == 1 ? "" : "s")", .expenseCards(matchedExpenses))
+        // TODO: Get currency from user profile settings
+        let currency = "USD"
+        return ("Displaying \(matchedExpenses.count) expense\(matchedExpenses.count == 1 ? "" : "s")", .expenseCards(matchedExpenses, currency: currency))
     }
 
     private func executeShowBudgets(input: [String: Any]) async -> (String, UIComponent?) {
@@ -378,6 +382,8 @@ class ChatToolExecutor {
             return ("No budgets found to display", nil)
         }
 
-        return ("Displaying \(matchedBudgets.count) budget\(matchedBudgets.count == 1 ? "" : "s")", .budgetCards(matchedBudgets))
+        // TODO: Get currency from user profile settings
+        let currency = "USD"
+        return ("Displaying \(matchedBudgets.count) budget\(matchedBudgets.count == 1 ? "" : "s")", .budgetCards(matchedBudgets, currency: currency))
     }
 }

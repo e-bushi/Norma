@@ -8,9 +8,9 @@
 import Foundation
 
 enum UIComponent: Codable, Equatable {
-    case billCards([Bill])
-    case expenseCards([Expense])
-    case budgetCards([Budget])
+    case billCards([Bill], currency: String)
+    case expenseCards([Expense], currency: String)
+    case budgetCards([Budget], currency: String)
     case actionConfirmation(icon: String, message: String, color: String)
     case toolActivity(String)
     case arcDisplay(Double)
@@ -22,6 +22,7 @@ enum UIComponent: Codable, Equatable {
         case bills
         case expenses
         case budgets
+        case currency
         case icon
         case message
         case color
@@ -36,13 +37,16 @@ enum UIComponent: Codable, Equatable {
         switch type {
         case "billCards":
             let bills = try container.decode([Bill].self, forKey: .bills)
-            self = .billCards(bills)
+            let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+            self = .billCards(bills, currency: currency)
         case "expenseCards":
             let expenses = try container.decode([Expense].self, forKey: .expenses)
-            self = .expenseCards(expenses)
+            let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+            self = .expenseCards(expenses, currency: currency)
         case "budgetCards":
             let budgets = try container.decode([Budget].self, forKey: .budgets)
-            self = .budgetCards(budgets)
+            let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+            self = .budgetCards(budgets, currency: currency)
         case "actionConfirmation":
             let icon = try container.decode(String.self, forKey: .icon)
             let message = try container.decode(String.self, forKey: .message)
@@ -66,15 +70,18 @@ enum UIComponent: Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case .billCards(let bills):
+        case .billCards(let bills, let currency):
             try container.encode("billCards", forKey: .type)
             try container.encode(bills, forKey: .bills)
-        case .expenseCards(let expenses):
+            try container.encode(currency, forKey: .currency)
+        case .expenseCards(let expenses, let currency):
             try container.encode("expenseCards", forKey: .type)
             try container.encode(expenses, forKey: .expenses)
-        case .budgetCards(let budgets):
+            try container.encode(currency, forKey: .currency)
+        case .budgetCards(let budgets, let currency):
             try container.encode("budgetCards", forKey: .type)
             try container.encode(budgets, forKey: .budgets)
+            try container.encode(currency, forKey: .currency)
         case .actionConfirmation(let icon, let message, let color):
             try container.encode("actionConfirmation", forKey: .type)
             try container.encode(icon, forKey: .icon)

@@ -24,7 +24,10 @@ struct MainChatView: View {
     @State private var errorMessage = ""
     @State private var scrollViewProxy: ScrollViewProxy?
 
-    @State private var showPaywall = false
+    // Paywall state - commented out for later
+    // @State private var showPaywall = false
+
+    @State private var showFinancialContext = false
 
     private var toolExecutor: ChatToolExecutor {
         ChatToolExecutor(
@@ -88,11 +91,11 @@ struct MainChatView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showPaywall = true
+                        showFinancialContext = true
                     } label: {
-                        Image(systemName: subscriptionManager.hasActiveSubscription ? "checkmark.shield.fill" : "lock.shield")
+                        Image(systemName: "chart.pie.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(subscriptionManager.hasActiveSubscription ? .green : .orange)
+                            .foregroundColor(Color("NormaPastelTeal"))
                     }
                 }
             }
@@ -102,10 +105,16 @@ struct MainChatView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+        // Paywall sheet - commented out for later
+        // .sheet(isPresented: $showPaywall) {
+        //     PaywallView()
+        //         .presentationDetents([.large])
+        //         .presentationDragIndicator(.visible)
+        // }
+        .overlay {
+            if showFinancialContext {
+                FinancialContextPopover(isPresented: $showFinancialContext)
+            }
         }
     }
 

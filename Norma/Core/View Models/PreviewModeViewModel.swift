@@ -392,10 +392,16 @@ class PreviewModeViewModel: ObservableObject {
 
     // MARK: - Data Transfer
 
-    /// Get bills ready for transfer to a real account (excludes mock data)
+    /// Get bills ready for transfer to a real account (excludes mock data in preview mode)
     func getUserBillsForTransfer(withUserId userId: String) -> [Bill] {
-        // Only transfer user-added bills (beyond initial mock data count)
-        let userBills = Array(bills.dropFirst(initialBillsCount))
+        // In real onboarding mode, ALL bills are user-added (no mock data exists)
+        // In preview mode, only transfer bills beyond the initial mock data count
+        let userBills: [Bill]
+        if isRealOnboarding {
+            userBills = bills
+        } else {
+            userBills = Array(bills.dropFirst(initialBillsCount))
+        }
         return userBills.map { bill in
             var updatedBill = bill
             updatedBill.userId = userId
@@ -403,10 +409,16 @@ class PreviewModeViewModel: ObservableObject {
         }
     }
 
-    /// Get budgets ready for transfer to a real account (excludes mock data)
+    /// Get budgets ready for transfer to a real account (excludes mock data in preview mode)
     func getUserBudgetsForTransfer(withUserId userId: String) -> [Budget] {
-        // Only transfer user-added budgets (beyond initial mock data count)
-        let userBudgets = Array(budgets.dropFirst(initialBudgetsCount))
+        // In real onboarding mode, ALL budgets are user-added (no mock data exists)
+        // In preview mode, only transfer budgets beyond the initial mock data count
+        let userBudgets: [Budget]
+        if isRealOnboarding {
+            userBudgets = budgets
+        } else {
+            userBudgets = Array(budgets.dropFirst(initialBudgetsCount))
+        }
         return userBudgets.map { budget in
             var updatedBudget = budget
             updatedBudget.userId = userId
@@ -414,10 +426,16 @@ class PreviewModeViewModel: ObservableObject {
         }
     }
 
-    /// Get expenses ready for transfer to a real account (excludes mock data)
+    /// Get expenses ready for transfer to a real account (excludes mock data in preview mode)
     func getUserExpensesForTransfer(withUserId userId: String) -> [Expense] {
-        // Only transfer user-added expenses (beyond initial mock data count)
-        let userExpenses = Array(expenses.dropFirst(initialExpensesCount))
+        // In real onboarding mode, ALL expenses are user-added (no mock data exists)
+        // In preview mode, only transfer expenses beyond the initial mock data count
+        let userExpenses: [Expense]
+        if isRealOnboarding {
+            userExpenses = expenses
+        } else {
+            userExpenses = Array(expenses.dropFirst(initialExpensesCount))
+        }
         return userExpenses.map { expense in
             var updatedExpense = expense
             updatedExpense.userId = userId
@@ -427,6 +445,11 @@ class PreviewModeViewModel: ObservableObject {
 
     /// Check if there's user data to transfer
     var hasUserDataToTransfer: Bool {
+        // In real onboarding mode, any data is user data
+        if isRealOnboarding {
+            return !bills.isEmpty || !budgets.isEmpty || !expenses.isEmpty
+        }
+        // In preview mode, count data beyond mock data
         let userBillsCount = bills.count - initialBillsCount
         let userBudgetsCount = budgets.count - initialBudgetsCount
         let userExpensesCount = expenses.count - initialExpensesCount

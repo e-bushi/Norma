@@ -16,8 +16,14 @@ struct Profile: Identifiable, Codable, Equatable {
     var updatedAt: String?
     var profileImageUrl: String?
     var howDidYouHear: String?
+
+    // Direct columns for onboarding data (also in settings JSONB for backwards compatibility)
+    var monthlyIncome: Double?
+    var freedomFund: Double?
+    var painPoint: String?
+
     var settings: ProfileSettings
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -27,9 +33,12 @@ struct Profile: Identifiable, Codable, Equatable {
         case updatedAt = "updated_at"
         case profileImageUrl = "profile_image_url"
         case howDidYouHear = "how_did_you_hear"
+        case monthlyIncome = "monthly_income"
+        case freedomFund = "freedom_fund"
+        case painPoint = "pain_point"
         case settings
     }
-    
+
     init(
         id: String? = nil,
         userId: String,
@@ -39,6 +48,9 @@ struct Profile: Identifiable, Codable, Equatable {
         updatedAt: String? = nil,
         profileImageUrl: String? = nil,
         howDidYouHear: String? = nil,
+        monthlyIncome: Double? = nil,
+        freedomFund: Double? = nil,
+        painPoint: String? = nil,
         settings: ProfileSettings = ProfileSettings()
     ) {
         self.id = id
@@ -49,6 +61,9 @@ struct Profile: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.profileImageUrl = profileImageUrl
         self.howDidYouHear = howDidYouHear
+        self.monthlyIncome = monthlyIncome
+        self.freedomFund = freedomFund
+        self.painPoint = painPoint
         self.settings = settings
     }
 }
