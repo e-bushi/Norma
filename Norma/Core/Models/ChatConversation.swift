@@ -7,20 +7,36 @@
 
 import Foundation
 
-struct ChatConversation: Codable {
+struct ChatConversation: Identifiable, Codable {
+    let id: String              // UUID - primary key for multi-conversation support
     let userId: String
+    var title: String?          // AI-generated from first exchange
     var messages: [ChatMessage]
-    var updatedAt: String?
+    var createdAt: String       // ISO8601 timestamp
+    var updatedAt: String       // ISO8601 timestamp
 
     enum CodingKeys: String, CodingKey {
+        case id
         case userId = "user_id"
+        case title
         case messages
+        case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
 
-    init(userId: String, messages: [ChatMessage] = [], updatedAt: String? = nil) {
+    init(
+        id: String = UUID().uuidString,
+        userId: String,
+        title: String? = nil,
+        messages: [ChatMessage] = [],
+        createdAt: String = ISO8601DateFormatter().string(from: Date()),
+        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.id = id
         self.userId = userId
+        self.title = title
         self.messages = messages
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 }

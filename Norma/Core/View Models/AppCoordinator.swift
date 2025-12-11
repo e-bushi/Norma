@@ -26,6 +26,7 @@ class AppCoordinator: ObservableObject {
     
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
+    lazy var conversationManager = ConversationManager(dataManager: dataManager)
     
     // MARK: - Initialization
     
@@ -80,6 +81,13 @@ class AppCoordinator: ObservableObject {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
             currentView = .main
+            // Configure conversation manager with user ID when entering main app
+            if let userId = sessionViewModel.currentUser?.userId {
+                conversationManager.configure(userId: userId)
+                Task {
+                    await conversationManager.loadConversations()
+                }
+            }
         } else if sessionViewModel.shouldShowAuthFlow {
             currentView = .onboarding
         } else if sessionViewModel.shouldShowInitialSetup {
@@ -156,6 +164,7 @@ class AppCoordinator: ObservableObject {
             RootView()
                 .environmentObject(dataManager)
                 .environmentObject(sessionViewModel)
+                .environmentObject(conversationManager)
                 .environmentObject(self)
         }
     }
@@ -169,9 +178,10 @@ enum AppView {
     case main
 }
 
-enum MainLayerViewType {
+enum MainLayerViewType: Hashable {
     case chat
     case settings
+    case currencyConverter
 }
 
 // MARK: - Coordinator Views

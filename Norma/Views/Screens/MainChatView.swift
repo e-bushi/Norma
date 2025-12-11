@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct MainChatView: View {
     @Binding var isMenuOpen: Bool
@@ -15,9 +16,9 @@ struct MainChatView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var budgetViewModel: BudgetViewModel
+    @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
-
-    @State private var messages: [ChatMessage] = []
+    @StateObject private var speechService = SpeechToTextService.shared
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var showError = false
@@ -28,6 +29,65 @@ struct MainChatView: View {
     // @State private var showPaywall = false
 
     @State private var showFinancialContext = false
+    @State private var showIncomeEdit = false
+    @State private var showArcDetail = false
+    @State private var navBarCapsulesVisible = false
+    @State private var showIncomeDropdown = false
+
+    // Voice input state
+    @State private var isRecording = false
+    @State private var transcribedText = ""
+    @State private var audioEngine = AVAudioEngine()
+
+    // Auto-scroll state
+    @State private var dynamicSpacerHeight: CGFloat = 180
+    @State private var viewportHeight: CGFloat = 0
+    @State private var lastMessagePosition: CGFloat = 0
+    @GestureState private var isUserScrolling = false
+
+    // Tool chain depth limit to prevent infinite loops
+    private let maxToolChainDepth: Int = 3
+
+    // Use conversationManager for messages
+    private var messages: [ChatMessage] {
+        conversationManager.currentMessages
+    }
+
+    // Computed financial context for nav bar
+    private var monthlyIncome: Double {
+        sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+    }
+
+    private var freedomFund: Double {
+        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    private var currency: String {
+        sessionViewModel.currentUser?.settings.currency ?? "USD"
+    }
+
+    private var totalMonthlyBills: Double {
+        billViewModel.bills.reduce(0.0) { $0 + $1.amount }
+    }
+
+    private var arcCount: Int {
+        let largestBill = billViewModel.bills.map { $0.amount }.max() ?? 0
+        if freedomFund < largestBill {
+            return 0
+        } else if totalMonthlyBills > 0 {
+            return Int(floor(freedomFund / totalMonthlyBills))
+        } else {
+            return 0
+        }
+    }
+
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(currency) \(Int(amount))"
+    }
 
     private var toolExecutor: ChatToolExecutor {
         ChatToolExecutor(
@@ -48,9 +108,14 @@ struct MainChatView: View {
                         hideKeyboard()
                     }
 
-                // Input area overlays at bottom
-                inputArea
+                // Input area overlays at bottom (hidden when modals are open)
+                if !showIncomeEdit && !showArcDetail {
+                    inputArea
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showIncomeEdit)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showArcDetail)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -74,8 +139,9 @@ struct MainChatView: View {
                             selectionGenerator.selectionChanged()
                         }
 
+                        // Open the menu
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            isMenuOpen.toggle()
+                            isMenuOpen = true
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")
@@ -85,19 +151,102 @@ struct MainChatView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    Text("Norma")
-                        .normaHeadline()
+                    ZStack(alignment: .center) {
+                        // Title row - tappable dropdown trigger
+                        Button {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showIncomeDropdown.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("Norma")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 22))
+                                    .foregroundColor(.primary)
+
+                                Text("Pro")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color("NormaPastelPurple").opacity(0.8))
+                                    )
+
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .rotationEffect(.degrees(showIncomeDropdown ? 180 : 0))
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        // Income capsule dropdown - centered below title
+                        if showIncomeDropdown {
+                            Button {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                showIncomeEdit = true
+                            } label: {
+                                Text(monthlyIncome > 0 ? "Income: \(formatCurrency(monthlyIncome))" : "Set Income")
+                                    .font(.normaFinancial(12))
+                                    .foregroundColor(Color("NormaPastelTeal"))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color("NormaPastelTeal").opacity(0.15))
+                                            .glassEffect(in: Capsule())
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                                    )
+                            }
+                            .buttonStyle(CapsulePressStyle())
+                            .padding(.top, 56)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.5).combined(with: .opacity),
+                                removal: .scale(scale: 0.5).combined(with: .opacity)
+                            ))
+                        }
+                    }
+                    .frame(height: 90)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showFinancialContext = true
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        showArcDetail = true
                     } label: {
-                        Image(systemName: "chart.pie.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(Color("NormaPastelTeal"))
+                        HStack(spacing: 4) {
+                            NavBarCoin3DView()
+                                .frame(width: 20, height: 20)
+
+                            Text("x \(arcCount)")
+                                .font(.normaFinancial(12))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(.clear)
+                                .glassEffect(in: Capsule())
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                        )
                     }
+                    .buttonStyle(.plain)
                 }
+                .sharedBackgroundVisibility(.hidden)
+
             }
         }
         .alert("Error", isPresented: $showError) {
@@ -113,7 +262,23 @@ struct MainChatView: View {
         // }
         .overlay {
             if showFinancialContext {
-                FinancialContextPopover(isPresented: $showFinancialContext)
+                AIInsightsPopover(isPresented: $showFinancialContext)
+            }
+        }
+        .overlay {
+            if showIncomeEdit {
+                IncomeEditPopover(isPresented: $showIncomeEdit)
+            }
+        }
+        .overlay {
+            if showArcDetail {
+                ArcDetailPopover(
+                    isPresented: $showArcDetail,
+                    arcCount: arcCount,
+                    freedomFund: freedomFund,
+                    totalMonthlyBills: totalMonthlyBills,
+                    currency: currency
+                )
             }
         }
     }
@@ -125,55 +290,180 @@ struct MainChatView: View {
     
     @ViewBuilder
     private var chatContent: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                if messages.isEmpty && !isLoading {
-                    ChatEmptyStateView()
-                } else {
-                    LazyVStack(spacing: 20) {
-                        ForEach(messages) { message in
-                            ChatBubbleView(message: message)
-                                .id(message.id)
-                                .transition(.asymmetric(
-                                    insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
-                        }
+        if messages.isEmpty && !isLoading {
+            ChatEmptyStateView(onFlowerTap: {
+                showFinancialContext = true
+            })
+        } else {
+            ScrollViewReader { proxy in
+                GeometryReader { outerGeometry in
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            LazyVStack(spacing: 20) {
+                                ForEach(messages) { message in
+                                    ChatBubbleView(message: message)
+                                        .id(message.id)
+                                        .transition(.asymmetric(
+                                            insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                            removal: .opacity
+                                        ))
+                                }
 
-                        if isLoading {
-                            ThinkingIndicator()
-                                .id("typing")
-                                .transition(.scale.combined(with: .opacity))
+                                if isLoading {
+                                    ThinkingIndicator()
+                                        .id("typing")
+                                        .background(
+                                            GeometryReader { geo in
+                                                Color.clear.preference(
+                                                    key: LastMessagePositionKey.self,
+                                                    value: geo.frame(in: .named("scroll")).minY
+                                                )
+                                            }
+                                        )
+                                        .transition(.scale.combined(with: .opacity))
+                                } else if let _ = messages.last {
+                                    Color.clear
+                                        .frame(height: 0)
+                                        .background(
+                                            GeometryReader { geo in
+                                                Color.clear.preference(
+                                                    key: LastMessagePositionKey.self,
+                                                    value: geo.frame(in: .named("scroll")).minY
+                                                )
+                                            }
+                                        )
+                                        .id("lastMessageTracker")
+                                }
+                            }
+                            .padding()
+
+                            // Dynamic spacer to push content up and leave room for input
+                            Color.clear
+                                .frame(height: dynamicSpacerHeight)
+                                .id("bottomSpacer")
                         }
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
                     }
-                    .padding()
-                    .padding(.bottom, 180)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
+                    .coordinateSpace(name: "scroll")
+                    .background(Color("NormaBackground"))
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 4)
+                            .updating($isUserScrolling) { _, state, _ in
+                                state = true
+                            }
+                    )
+                    .onPreferenceChange(LastMessagePositionKey.self) { value in
+                        lastMessagePosition = value
+                        // Continuously adjust as position changes during animation
+                        adjustSpacerAndScroll(proxy: proxy)
+                    }
+                    .onChange(of: messages.count) {
+                        // Initial adjustment when new message is added
+                        adjustSpacerAndScroll(proxy: proxy)
+                    }
+                    .onChange(of: isLoading) {
+                        // Adjustment when loading state changes
+                        adjustSpacerAndScroll(proxy: proxy)
+                    }
+                    .onAppear {
+                        self.scrollViewProxy = proxy
+                        viewportHeight = outerGeometry.size.height
+                    }
                 }
-            }
-            .background(Color("NormaBackground"))
-            .onChange(of: messages.count) {
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: isLoading) {
-                scrollToBottom(proxy: proxy)
-            }
-            .onAppear {
-                self.scrollViewProxy = proxy
             }
         }
     }
     
     @ViewBuilder
     private var inputArea: some View {
-        ChatInputView(
-            text: $inputText,
-            isLoading: isLoading,
-            onSend: sendMessage,
-            billsTotal: billViewModel.bills.reduce(0) { $0 + $1.amount },
-            budgetCount: budgetViewModel.budgets.count,
-            monthlySpend: expenseViewModel.totalExpenses
-        )
+        VStack(spacing: 0) {
+            // Transcription view appears when recording
+            if isRecording {
+                TranscriptionView(
+                    transcribedText: $transcribedText,
+                    isRecording: Binding(
+                        get: { isRecording },
+                        set: { newValue in
+                            if !newValue {
+                                stopVoiceInput()
+                            }
+                        }
+                    ),
+                    onInsert: { text in
+                        stopVoiceInput()
+                        inputText = text
+                        transcribedText = ""
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            ChatInputView(
+                text: $inputText,
+                isLoading: isLoading,
+                onSend: sendMessage,
+                onVoiceInput: startVoiceInput,
+                billsTotal: billViewModel.bills.reduce(0) { $0 + $1.amount },
+                budgetCount: budgetViewModel.budgets.count,
+                monthlySpend: expenseViewModel.totalExpenses
+            )
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isRecording)
+    }
+
+    private func startVoiceInput() {
+        // Request microphone permission if needed
+        AVAudioApplication.requestRecordPermission { granted in
+            guard granted else {
+                print("Microphone permission denied")
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.isRecording = true
+                self.transcribedText = ""
+
+                do {
+                    // Configure audio session
+                    let audioSession = AVAudioSession.sharedInstance()
+                    try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+                    try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+                    // Start live transcription
+                    try self.speechService.startLiveTranscription(
+                        audioEngine: self.audioEngine,
+                        onPartialResult: { partialText in
+                            self.transcribedText = partialText
+                        },
+                        onFinalResult: { finalText in
+                            self.transcribedText = finalText
+                            self.stopVoiceInput()
+                        },
+                        onError: { error in
+                            print("Transcription error: \(error)")
+                            self.stopVoiceInput()
+                        }
+                    )
+                } catch {
+                    print("Failed to start voice input: \(error)")
+                    self.isRecording = false
+                }
+            }
+        }
+    }
+
+    private func stopVoiceInput() {
+        speechService.stopTranscription()
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        isRecording = false
+
+        // Deactivate audio session
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("Failed to deactivate audio session: \(error)")
+        }
     }
     
 
@@ -182,12 +472,14 @@ struct MainChatView: View {
         guard !userMessage.isEmpty else { return }
 
         let chatMessage = ChatMessage(role: .user, content: userMessage)
-        messages.append(chatMessage)
 
         inputText = ""
         hideKeyboard()
 
         Task {
+            // First append the message and wait for it to complete
+            await conversationManager.appendMessage(chatMessage)
+
             // Delay showing loading indicator to make fast responses feel instant
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             if !Task.isCancelled {
@@ -202,9 +494,13 @@ struct MainChatView: View {
             let conversationHistory = createConversationHistory()
             let tools = getAllTools()
             let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
-            
+            let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+            let freedomFund = sessionViewModel.currentUser?.settings.freedomFund ?? 0
+
             let systemPrompt = NormaSystemPrompts.generalChatPrompt(
                 currency: currency,
+                monthlyIncome: monthlyIncome,
+                freedomFund: freedomFund,
                 bills: billViewModel.bills,
                 expenses: expenseViewModel.expenses,
                 budgets: budgetViewModel.budgets
@@ -225,7 +521,14 @@ struct MainChatView: View {
                 await MainActor.run {
                     isLoading = false
                     let aiMessage = ChatMessage(role: .assistant, content: text)
-                    messages.append(aiMessage)
+                    Task {
+                        await conversationManager.appendMessage(aiMessage)
+                        await conversationManager.saveCurrentConversation()
+                        // Generate title after first exchange if not set
+                        if conversationManager.currentConversation?.title == nil {
+                            await conversationManager.generateTitle()
+                        }
+                    }
                 }
                 
             case .toolUse(let id, let name, let input):
@@ -249,6 +552,8 @@ struct MainChatView: View {
 
                 let finalSystemPrompt = NormaSystemPrompts.generalChatPrompt(
                     currency: currency,
+                    monthlyIncome: monthlyIncome,
+                    freedomFund: freedomFund,
                     bills: billViewModel.bills,
                     expenses: expenseViewModel.expenses,
                     budgets: budgetViewModel.budgets
@@ -264,19 +569,50 @@ struct MainChatView: View {
 
                 print("✅ Final response received: \(finalResponse)")
 
-                await MainActor.run {
-                    isLoading = false
-
-                    if case .text(let text) = finalResponse {
+                // Handle chained tool calls
+                if case .toolUse(let nextId, let nextName, let nextInput) = finalResponse {
+                    print("🔧 Chained tool use detected: \(nextName) (will be depth 1)")
+                    await processToolUse(
+                        id: nextId,
+                        name: nextName,
+                        input: nextInput,
+                        history: updatedHistory,
+                        previousUIComponent: uiComponent,
+                        depth: 1
+                    )
+                } else if case .text(let text) = finalResponse {
+                    await MainActor.run {
+                        isLoading = false
                         print("💬 Creating AI message with text: \(text)")
                         print("🎨 Attaching UI component: \(String(describing: uiComponent))")
                         let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
-                        messages.append(aiMessage)
+                        Task {
+                            await conversationManager.appendMessage(aiMessage)
+                            await conversationManager.saveCurrentConversation()
+                            if conversationManager.currentConversation?.title == nil {
+                                await conversationManager.generateTitle()
+                            }
+                        }
                         print("✅ Message appended to chat")
                     }
+                } else {
+                    print("⚠️ Unexpected final response type (not .text or .toolUse): \(finalResponse)")
+                    await MainActor.run {
+                        isLoading = false
+                        // Still show the UI component if we have one from the tool
+                        if let component = uiComponent {
+                            print("🎨 Appending message with UI component despite unexpected response")
+                            let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                            Task {
+                                await conversationManager.appendMessage(aiMessage)
+                                await conversationManager.saveCurrentConversation()
+                            }
+                        }
+                    }
                 }
-                
+
             case .toolResult:
+                print("⚠️ Received .toolResult as response (unexpected)")
                 await MainActor.run {
                     isLoading = false
                 }
@@ -307,13 +643,132 @@ struct MainChatView: View {
         return await toolExecutor.executeToolAndGetResult(toolId: toolId, name: name, input: input)
     }
 
+    private func processToolUse(id: String, name: String, input: [String: Any], history: [AnthropicMessage], previousUIComponent: UIComponent?, depth: Int = 0) async {
+        print("🔧 Processing tool: \(name) (depth: \(depth))")
+        print("📥 Tool input: \(input)")
+
+        // Prevent infinite tool call loops - recover gracefully
+        if depth >= maxToolChainDepth {
+            print("⚠️ Maximum tool chain depth reached (\(maxToolChainDepth)). Recovering gracefully.")
+            await MainActor.run {
+                isLoading = false
+                // If we have a UI component from earlier tools, display it
+                if let component = previousUIComponent {
+                    let aiMessage = ChatMessage(role: .assistant, content: "Here's what I found:", uiComponent: component)
+                    Task {
+                        await conversationManager.appendMessage(aiMessage)
+                        await conversationManager.saveCurrentConversation()
+                    }
+                } else {
+                    // No component available - give helpful message instead of generic error
+                    let helpfulMessage = ChatMessage(role: .assistant, content: "I had trouble completing that request. Could you try asking in a different way?")
+                    Task {
+                        await conversationManager.appendMessage(helpfulMessage)
+                        await conversationManager.saveCurrentConversation()
+                    }
+                }
+            }
+            return
+        }
+
+        let (toolResult, uiComponent) = await executeToolAndGetResult(toolId: id, name: name, input: input)
+
+        print("📤 Tool result: \(toolResult)")
+        print("🎨 UI Component: \(String(describing: uiComponent))")
+
+        var updatedHistory = history
+        updatedHistory.append(AnthropicMessage(
+            role: "assistant",
+            content: .toolUse(id: id, name: name, input: input)
+        ))
+        updatedHistory.append(AnthropicMessage(
+            role: "user",
+            content: .toolResult(toolUseId: id, content: toolResult)
+        ))
+
+        let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
+        let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        let freedomFund = sessionViewModel.currentUser?.settings.freedomFund ?? 0
+
+        let systemPrompt = NormaSystemPrompts.generalChatPrompt(
+            currency: currency,
+            monthlyIncome: monthlyIncome,
+            freedomFund: freedomFund,
+            bills: billViewModel.bills,
+            expenses: expenseViewModel.expenses,
+            budgets: budgetViewModel.budgets
+        )
+
+        do {
+            let response = try await AnthropicService.shared.sendMessageWithTools(
+                messages: updatedHistory,
+                systemPrompt: systemPrompt,
+                tools: getAllTools()
+            )
+
+            print("✅ Response received: \(response)")
+
+            // Handle chained tool calls recursively
+            if case .toolUse(let nextId, let nextName, let nextInput) = response {
+                print("🔧 Another chained tool detected: \(nextName) (will be depth \(depth + 1))")
+                await processToolUse(
+                    id: nextId,
+                    name: nextName,
+                    input: nextInput,
+                    history: updatedHistory,
+                    previousUIComponent: uiComponent ?? previousUIComponent,
+                    depth: depth + 1
+                )
+            } else if case .text(let text) = response {
+                await MainActor.run {
+                    isLoading = false
+                    print("💬 Creating AI message with text: \(text)")
+                    print("🎨 Attaching UI component: \(String(describing: uiComponent ?? previousUIComponent))")
+                    let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
+                    Task {
+                        await conversationManager.appendMessage(aiMessage)
+                        await conversationManager.saveCurrentConversation()
+                        if conversationManager.currentConversation?.title == nil {
+                            await conversationManager.generateTitle()
+                        }
+                    }
+                    print("✅ Message appended to chat")
+                }
+            } else {
+                print("⚠️ Unexpected response type received (not .text or .toolUse): \(response)")
+                await MainActor.run {
+                    isLoading = false
+                    // Still append a message if we have a UI component from previous tools
+                    if let component = uiComponent ?? previousUIComponent {
+                        print("🎨 Appending message with previous UI component despite unexpected response")
+                        let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                        Task {
+                            await conversationManager.appendMessage(aiMessage)
+                            await conversationManager.saveCurrentConversation()
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error in processToolUse: \(error.localizedDescription)")
+            await MainActor.run {
+                isLoading = false
+                showError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func adjustSpacerAndScroll(proxy: ScrollViewProxy) {
+        // Scroll to bottom only if user is NOT manually scrolling
+        if !isUserScrolling {
+            scrollToBottom(proxy: proxy)
+        }
+    }
+
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.3)) {
-            if isLoading {
-                proxy.scrollTo("typing", anchor: .bottom)
-            } else if let lastMessage = messages.last {
-                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-            }
+            // Scroll to the bottom spacer to ensure we can see the full message
+            proxy.scrollTo("bottomSpacer", anchor: .bottom)
         }
     }
     
@@ -326,10 +781,12 @@ struct MainChatView: View {
 #Preview {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
+    let conversationManager = ConversationManager(dataManager: dataManager)
 
     MainChatView(isMenuOpen: .constant(false))
         .environmentObject(dataManager)
         .environmentObject(sessionViewModel)
+        .environmentObject(conversationManager)
         .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))

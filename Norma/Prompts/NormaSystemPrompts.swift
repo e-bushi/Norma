@@ -66,11 +66,36 @@ struct NormaSystemPrompts {
         """
     }
     
-    static func generalChatPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    static func generalChatPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
         let currentDate = currentDateFormatter.string(from: Date())
+
+        // Calculate total monthly bills
+        let totalMonthlyBills = bills.reduce(0.0) { $0 + $1.amount }
+
+        // Calculate arc count
+        let largestBill = bills.map { $0.amount }.max() ?? 0
+        let arcCount: Int
+        if freedomFund < largestBill {
+            arcCount = 0  // Critical bill gate: can't cover largest bill
+        } else if totalMonthlyBills > 0 {
+            arcCount = Int(floor(freedomFund / totalMonthlyBills))
+        } else {
+            arcCount = 0
+        }
+
+        // Determine arc state
+        let arcState: String
+        switch arcCount {
+        case 0: arcState = "Critical (0 arcs)"
+        case 1: arcState = "Urgency (1 arc)"
+        case 2...3: arcState = "Cautionary (\(arcCount) arcs)"
+        case 4...6: arcState = "Steady (\(arcCount) arcs)"
+        case 7...12: arcState = "Calm (\(arcCount) arcs)"
+        default: arcState = "Abundant (\(arcCount) arcs)"
+        }
 
         // Format bills
         let dateFormatter = DateFormatter()
@@ -105,6 +130,31 @@ struct NormaSystemPrompts {
 
         USER'S BUDGETS:
         \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
+
+        USER'S FINANCIAL CONTEXT:
+        - Monthly income (after taxes): \(currency) \(String(format: "%.2f", monthlyIncome))
+        - Freedom fund: \(currency) \(String(format: "%.2f", freedomFund))
+        - Total monthly bills: \(currency) \(String(format: "%.2f", totalMonthlyBills))
+        - Current arc count: \(arcCount) arcs
+        - Arc state: \(arcState)
+
+        THE ARC SYSTEM (Your Framework):
+        1 arc = 1 complete billing cycle (can pay all bills once)
+        Formula: arcs = floor(Freedom Fund / Total Monthly Bills)
+        Critical Gate: If Freedom Fund < largest bill → 0 arcs
+
+        Arc States (use to calibrate advice):
+        - 0 arcs (Critical): Can't cover next billing cycle - every dollar matters
+        - 1 arc (Urgency): One month covered - purchase decisions are significant
+        - 2-3 arcs (Cautionary): Some breathing room but not comfortable yet
+        - 4-6 arcs (Steady): Solid ground, found a rhythm
+        - 7-12 arcs (Calm): Real distance from zero, comfortable
+        - 13+ arcs (Abundant): Over a year of bills covered
+
+        Spending Flow (how arcs change):
+        - **In Flow**: Income > (Bills + Spending) → arcs grow over time
+        - **Stagnant**: Income = (Bills + Spending) → arcs stay the same
+        - **Drifting**: Income < (Bills + Spending) → arcs shrinking
 
         Your personality:
         - Warm, encouraging, and supportive
@@ -146,11 +196,20 @@ struct NormaSystemPrompts {
         - Ask which property they want to update and use the bill ID from the USER'S BILLS section above
 
         PRE-PURCHASE CONSULTATION (Your Main Value):
-        When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful advice based on:
-        - Their bills and upcoming obligations
-        - Their arc count (how many billing cycles they have covered)
-        - Whether this purchase would significantly impact their financial cushion
-        Frame purchases in terms of arcs when helpful: "That $200 jacket is about 0.15 arcs for you."
+        When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful advice using the arc system.
+        IMPORTANT: Don't assume the purchase will come from their freedom fund - use arcs as a comparison tool for context.
+
+        1. **Calculate arc equivalent**: Purchase amount ÷ Total Monthly Bills = arc equivalent
+           Example: "$200 jacket ÷ $1500 bills = 0.13 arcs"
+
+        2. **Frame it as a comparison**: "This would cost the equivalent of about 0.13 arcs - roughly 13% of one billing cycle."
+
+        3. **Consider their arc state**:
+           - Critical/Urgency (0-1 arcs): Be cautious, every purchase matters
+           - Cautionary (2-3 arcs): Weigh carefully, they have some cushion
+           - Steady+ (4+ arcs): More flexibility, focus on value not just cost
+
+        4. **Give a clear recommendation**: Don't just present numbers - tell them if it's a smart buy based on their situation, upcoming bills, and financial goals.
 
         TRACKING EXPENSES (Optional - For Users Who Want Deeper Insights):
         Some users want to track individual expenses for more detailed analysis. If they ask to log an expense, collect:
@@ -610,5 +669,107 @@ struct NormaSystemPrompts {
             Remember: Make them fall in love with asking you for financial advice BEFORE making purchases!
             """
         }
+    }
+
+    // MARK: - Financial Insights Prompt
+
+    static func insightPrompt(
+        currency: String,
+        monthlyIncome: Double,
+        freedomFund: Double,
+        totalBills: Double,
+        upcomingBillsCount: Int,
+        upcomingBillsTotal: Double,
+        totalMonthlySpend: Double,
+        budgetCount: Int,
+        averageBudgetUtilization: Double,
+        arcState: String
+    ) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+
+        let incomeStr = formatter.string(from: NSNumber(value: monthlyIncome)) ?? "\(currency) \(Int(monthlyIncome))"
+        let freedomStr = formatter.string(from: NSNumber(value: freedomFund)) ?? "\(currency) \(Int(freedomFund))"
+        let billsStr = formatter.string(from: NSNumber(value: totalBills)) ?? "\(currency) \(Int(totalBills))"
+        let upcomingStr = formatter.string(from: NSNumber(value: upcomingBillsTotal)) ?? "\(currency) \(Int(upcomingBillsTotal))"
+        let spendStr = formatter.string(from: NSNumber(value: totalMonthlySpend)) ?? "\(currency) \(Int(totalMonthlySpend))"
+        let afterBills = monthlyIncome - totalBills
+        let afterBillsStr = formatter.string(from: NSNumber(value: afterBills)) ?? "\(currency) \(Int(afterBills))"
+
+        return """
+        You are Norma, a concise financial assistant. Generate ONE specific, personalized insight.
+
+        USER'S FINANCIAL SNAPSHOT:
+        - Monthly income: \(incomeStr)
+        - Freedom fund (savings): \(freedomStr)
+        - Total monthly bills: \(billsStr)
+        - Money after bills: \(afterBillsStr)
+        - Upcoming bills (next 7 days): \(upcomingBillsCount) bills totaling \(upcomingStr)
+        - Monthly spending: \(spendStr)
+        - Active budgets: \(budgetCount)
+        - Average budget utilization: \(Int(averageBudgetUtilization * 100))%
+        - Arc state: \(arcState)
+
+        RULES:
+        1. Give ONE focused insight in 2-3 sentences MAX
+        2. Use their ACTUAL numbers from above
+        3. Be direct and specific, not generic
+        4. End with a brief actionable suggestion
+        5. Vary your insight type (spending pattern, savings opportunity, upcoming challenge, or positive reinforcement)
+        6. Do NOT use bullet points or lists
+        7. Write in a warm but concise tone
+
+        Generate the insight now:
+        """
+    }
+
+    // MARK: - Purchasing Power Insights Prompt
+
+    static func purchasingPowerPrompt(
+        fromCurrency: String,
+        toCurrency: String,
+        fromAmount: Double,
+        toAmount: Double,
+        exchangeRate: Double,
+        userHomeCurrency: String
+    ) -> String {
+        let fromFormatter = NumberFormatter()
+        fromFormatter.numberStyle = .decimal
+        fromFormatter.maximumFractionDigits = 2
+        fromFormatter.minimumFractionDigits = 0
+
+        let toFormatter = NumberFormatter()
+        toFormatter.numberStyle = .decimal
+        toFormatter.maximumFractionDigits = 2
+        toFormatter.minimumFractionDigits = 0
+
+        let fromStr = fromFormatter.string(from: NSNumber(value: fromAmount)) ?? "\(fromAmount)"
+        let toStr = toFormatter.string(from: NSNumber(value: toAmount)) ?? "\(toAmount)"
+
+        return """
+        You are a knowledgeable travel and finance advisor helping someone understand what their money can buy in another country.
+
+        CONVERSION:
+        \(fromStr) \(fromCurrency) → \(toStr) \(toCurrency)
+        Exchange rate: 1 \(fromCurrency) = \(String(format: "%.4f", exchangeRate)) \(toCurrency)
+        User's home currency: \(userHomeCurrency)
+
+        TASK:
+        Give a natural, conversational insight about what this amount of money can buy in the destination country/region where \(toCurrency) is used.
+
+        GUIDELINES:
+        - Be conversational, like a well-traveled friend giving advice
+        - Pick 2-4 specific examples that make sense for this amount and destination
+        - Choose examples natural to that place (safari in South Africa, tapas in Spain, street food in Thailand, ski passes in Switzerland)
+        - Include a relative value comparison when helpful ("your dollar stretches 40% further here" or "think of it as spending $X back home")
+        - Vary your structure - don't always start or end the same way
+        - Keep it under 100 words - punchy and useful
+        - NO bullet points, NO emoji, NO rigid categories
+        - Be honest about expensive places too ("Switzerland is pricey...")
+
+        Write your insight now:
+        """
     }
 }

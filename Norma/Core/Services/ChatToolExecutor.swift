@@ -306,84 +306,95 @@ class ChatToolExecutor {
 
     private func executeShowBills(input: [String: Any]) async -> (String, UIComponent?) {
         print("🔍 executeShowBills called with input: \(input)")
-
-        guard let billIds = input["bill_ids"] as? [String] else {
-            print("❌ No bill_ids found in input")
-            return ("Error: No bill IDs provided", nil)
-        }
-
-        print("📋 Looking for bill IDs: \(billIds)")
         print("📊 Available bills: \(billViewModel.bills.count)")
 
-        let matchedBills = billViewModel.bills.filter { bill in
-            guard let billId = bill.id else { return false }
-            return billIds.contains(billId)
+        let billIds = input["bill_ids"] as? [String]
+
+        let billsToShow: [Bill]
+        if let ids = billIds, !ids.isEmpty {
+            // Filter by specific IDs
+            print("📋 Looking for specific bill IDs: \(ids)")
+            billsToShow = billViewModel.bills.filter { bill in
+                guard let billId = bill.id else { return false }
+                return ids.contains(billId)
+            }
+        } else {
+            // No IDs provided - show ALL bills
+            print("📋 No IDs provided, showing all bills")
+            billsToShow = billViewModel.bills
         }
 
-        print("✅ Matched \(matchedBills.count) bills")
+        print("✅ Showing \(billsToShow.count) bills")
 
-        if matchedBills.isEmpty {
-            return ("No bills found to display", nil)
+        if billsToShow.isEmpty {
+            return ("You don't have any bills yet. Would you like to add one?", nil)
         }
 
         // TODO: Get currency from user profile settings
         let currency = "USD"
-        return ("Displaying \(matchedBills.count) bill\(matchedBills.count == 1 ? "" : "s")", .billCards(matchedBills, currency: currency))
+        return ("Displaying \(billsToShow.count) bill\(billsToShow.count == 1 ? "" : "s")", .billCards(billsToShow, currency: currency))
     }
 
     private func executeShowExpenses(input: [String: Any]) async -> (String, UIComponent?) {
         print("🔍 executeShowExpenses called with input: \(input)")
-
-        guard let expenseIdsString = input["expense_ids"] as? String, !expenseIdsString.isEmpty else {
-            print("❌ No expense_ids found in input")
-            return ("Error: No expense IDs provided", nil)
-        }
-
-        let expenseIds = expenseIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-
-        print("📋 Looking for expense IDs: \(expenseIds)")
         print("📊 Available expenses: \(expenseViewModel.expenses.count)")
 
-        let matchedExpenses = expenseViewModel.expenses.filter { expense in
-            guard let expenseId = expense.id else { return false }
-            return expenseIds.contains(expenseId)
+        let expenseIdsString = input["expense_ids"] as? String
+
+        let expensesToShow: [Expense]
+        if let idsString = expenseIdsString, !idsString.isEmpty {
+            // Filter by specific IDs
+            let expenseIds = idsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            print("📋 Looking for specific expense IDs: \(expenseIds)")
+            expensesToShow = expenseViewModel.expenses.filter { expense in
+                guard let expenseId = expense.id else { return false }
+                return expenseIds.contains(expenseId)
+            }
+        } else {
+            // No IDs provided - show ALL recent expenses (limit to 20)
+            print("📋 No IDs provided, showing all recent expenses")
+            expensesToShow = Array(expenseViewModel.expenses.prefix(20))
         }
 
-        print("✅ Matched \(matchedExpenses.count) expenses")
+        print("✅ Showing \(expensesToShow.count) expenses")
 
-        if matchedExpenses.isEmpty {
-            return ("No expenses found to display", nil)
+        if expensesToShow.isEmpty {
+            return ("You don't have any expenses tracked yet.", nil)
         }
 
         // TODO: Get currency from user profile settings
         let currency = "USD"
-        return ("Displaying \(matchedExpenses.count) expense\(matchedExpenses.count == 1 ? "" : "s")", .expenseCards(matchedExpenses, currency: currency))
+        return ("Displaying \(expensesToShow.count) expense\(expensesToShow.count == 1 ? "" : "s")", .expenseCards(expensesToShow, currency: currency))
     }
 
     private func executeShowBudgets(input: [String: Any]) async -> (String, UIComponent?) {
         print("🔍 executeShowBudgets called with input: \(input)")
-
-        guard let budgetIds = input["budget_ids"] as? [String] else {
-            print("❌ No budget_ids found in input")
-            return ("Error: No budget IDs provided", nil)
-        }
-
-        print("📋 Looking for budget IDs: \(budgetIds)")
         print("📊 Available budgets: \(budgetViewModel.budgets.count)")
 
-        let matchedBudgets = budgetViewModel.budgets.filter { budget in
-            guard let budgetId = budget.id else { return false }
-            return budgetIds.contains(budgetId)
+        let budgetIds = input["budget_ids"] as? [String]
+
+        let budgetsToShow: [Budget]
+        if let ids = budgetIds, !ids.isEmpty {
+            // Filter by specific IDs
+            print("📋 Looking for specific budget IDs: \(ids)")
+            budgetsToShow = budgetViewModel.budgets.filter { budget in
+                guard let budgetId = budget.id else { return false }
+                return ids.contains(budgetId)
+            }
+        } else {
+            // No IDs provided - show ALL budgets
+            print("📋 No IDs provided, showing all budgets")
+            budgetsToShow = budgetViewModel.budgets
         }
 
-        print("✅ Matched \(matchedBudgets.count) budgets")
+        print("✅ Showing \(budgetsToShow.count) budgets")
 
-        if matchedBudgets.isEmpty {
-            return ("No budgets found to display", nil)
+        if budgetsToShow.isEmpty {
+            return ("You don't have any budgets set up yet. Would you like to create one?", nil)
         }
 
         // TODO: Get currency from user profile settings
         let currency = "USD"
-        return ("Displaying \(matchedBudgets.count) budget\(matchedBudgets.count == 1 ? "" : "s")", .budgetCards(matchedBudgets, currency: currency))
+        return ("Displaying \(budgetsToShow.count) budget\(budgetsToShow.count == 1 ? "" : "s")", .budgetCards(budgetsToShow, currency: currency))
     }
 }

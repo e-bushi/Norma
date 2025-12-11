@@ -259,16 +259,16 @@ struct ChatToolsProvider {
     static func getShowBillsTool() -> AnthropicTool {
         AnthropicTool(
             name: "show_bills_tool",
-            description: "Display bill cards visually in the UI. Use this when the user wants to SEE their bills, not just hear about them. Pass the bill IDs from the system prompt.",
+            description: "Display bill cards visually in the UI. Call without parameters to show ALL bills, or pass specific bill_ids to filter. Use this when the user wants to SEE their bills.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
                     "bill_ids": AnthropicToolProperty(
                         type: "array",
-                        description: "Array of bill UUID strings to display as cards. Use the 'id' values from the USER'S BILLS section in the system prompt. Example: [\"uuid-1\", \"uuid-2\"]"
+                        description: "Optional: Array of bill UUID strings to display specific bills. Omit to show ALL bills."
                     )
                 ],
-                required: ["bill_ids"]
+                required: []
             )
         )
     }
@@ -276,16 +276,16 @@ struct ChatToolsProvider {
     static func getShowExpensesTool() -> AnthropicTool {
         AnthropicTool(
             name: "show_expenses_tool",
-            description: "Display expense cards visually in the UI. Use this when the user wants to SEE their expenses, not just hear about them. Pass the expense IDs from the system prompt as a comma-separated string.",
+            description: "Display expense cards visually in the UI. Call without parameters to show ALL recent expenses, or pass specific expense_ids to filter. Use this when the user wants to SEE their expenses.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
                     "expense_ids": AnthropicToolProperty(
                         type: "string",
-                        description: "Comma-separated string of expense UUID values from the USER'S RECENT EXPENSES section in the system prompt. Example: \"uuid-1,uuid-2,uuid-3\""
+                        description: "Optional: Comma-separated string of expense UUID values to display specific expenses. Omit to show ALL recent expenses."
                     )
                 ],
-                required: ["expense_ids"]
+                required: []
             )
         )
     }
@@ -293,16 +293,16 @@ struct ChatToolsProvider {
     static func getShowBudgetsTool() -> AnthropicTool {
         AnthropicTool(
             name: "show_budgets_tool",
-            description: "Display budget cards visually in the UI. Use this when the user wants to SEE their budgets, not just hear about them. Pass the budget IDs from the system prompt.",
+            description: "Display budget cards visually in the UI. Call without parameters to show ALL budgets, or pass specific budget_ids to filter. Use this when the user wants to SEE their budgets.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
                     "budget_ids": AnthropicToolProperty(
                         type: "array",
-                        description: "Array of budget UUID strings to display as cards. Use the 'id' values from the USER'S BUDGETS section in the system prompt. Example: [\"uuid-1\", \"uuid-2\"]"
+                        description: "Optional: Array of budget UUID strings to display specific budgets. Omit to show ALL budgets."
                     )
                 ],
-                required: ["budget_ids"]
+                required: []
             )
         )
     }
