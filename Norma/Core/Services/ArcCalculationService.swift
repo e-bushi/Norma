@@ -22,13 +22,11 @@ struct ArcCalculationService {
     /// - Parameters:
     ///   - freedomFund: User's freedom fund (money set aside to cover bills/lifestyle if income stopped)
     ///   - bills: Array of user's bills
-    ///   - budgets: Array of user's selected budgets
     /// - Returns: The number of arcs (billing cycles), or 0 if calculation isn't possible
-    static func calculateArcs(freedomFund: Double, bills: [Bill], budgets: [Budget] = []) -> Int {
+    static func calculateArcs(freedomFund: Double, bills: [Bill]) -> Int {
         // Calculate total monthly expenses
         let totalMonthlyBills = calculateMonthlyBillsTotal(bills: bills)
-        let totalMonthlyBudgets = calculateBudgetsTotal(budgets: budgets)
-        let totalMonthlyExpenses = totalMonthlyBills + totalMonthlyBudgets
+        let totalMonthlyExpenses = totalMonthlyBills
 
         // Guard against division by zero
         guard totalMonthlyExpenses > 0 else {
@@ -58,13 +56,11 @@ struct ArcCalculationService {
     /// - Parameters:
     ///   - freedomFund: User's freedom fund
     ///   - bills: Array of user's bills
-    ///   - budgets: Array of user's selected budgets
     /// - Returns: The number of arcs as a decimal
-    static func calculateArcsDecimal(freedomFund: Double, bills: [Bill], budgets: [Budget] = []) -> Double {
+    static func calculateArcsDecimal(freedomFund: Double, bills: [Bill]) -> Double {
         // Calculate total monthly expenses
         let totalMonthlyBills = calculateMonthlyBillsTotal(bills: bills)
-        let totalMonthlyBudgets = calculateBudgetsTotal(budgets: budgets)
-        let totalMonthlyExpenses = totalMonthlyBills + totalMonthlyBudgets
+        let totalMonthlyExpenses = totalMonthlyBills
 
         // Guard against division by zero
         guard totalMonthlyExpenses > 0 else {
@@ -94,16 +90,6 @@ struct ArcCalculationService {
             }
 
             total += monthlyAmount
-        }
-    }
-
-    /// Calculate the total monthly budget amount from an array of budgets
-    ///
-    /// - Parameter budgets: Array of user's budgets
-    /// - Returns: Total monthly budget amount
-    static func calculateBudgetsTotal(budgets: [Budget]) -> Double {
-        return budgets.reduce(into: 0.0) { total, budget in
-            total += budget.amount
         }
     }
 

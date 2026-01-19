@@ -103,10 +103,15 @@ extension SupabaseService {
     var currentUser: User? {
         client.auth.currentUser
     }
-    
+
     /// Get the current session
     var currentSession: Session? {
         client.auth.currentSession
+    }
+
+    /// Stream of auth state changes (for token refresh handling)
+    var authStateChanges: AsyncStream<(event: AuthChangeEvent, session: Session?)> {
+        client.auth.authStateChanges
     }
     
     /// Sign out the current user

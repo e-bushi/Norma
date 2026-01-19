@@ -11,22 +11,29 @@ struct ChatInputView: View {
     @Binding var text: String
     let isLoading: Bool
     let onSend: () -> Void
+    let onVoiceInput: () -> Void
     let billsTotal: Double
-    let budgetCount: Int
+    let activeChallenge: Challenge?
     let monthlySpend: Double
 
     @State private var showBills = false
-    @State private var showBudgets = false
+    @State private var showChallenge = false
     @State private var showExpenses = false
     @State private var visibleCapsules: Int = 0
     @State private var isExpanded: Bool = true
     @State private var pressedCapsule: String? = nil
+    @State private var isKeyboardVisible: Bool = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @EnvironmentObject var challengeViewModel: ChallengeViewModel
 
     private var currentMonthAbbreviation: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM"
         return formatter.string(from: Date())
+    }
+
+    private var isSendButtonActive: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
     }
 
     var body: some View {
@@ -46,72 +53,87 @@ struct ChatInputView: View {
                     }
                     .padding(.vertical, 8)
 
-                // Tags rows below text field
-                VStack(alignment: .leading, spacing: 8) {
-                    // First row: Bills and Budgets
-                    HStack(spacing: 8) {
-                        // Bills tag
-                        Button {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            showBills = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "doc.text.fill")
-                                    .font(.system(size: 11))
-                                Text("Bills:")
-                                    .font(.normaFinancial(15))
-                                Text(profileViewModel.formatCurrency(billsTotal))
-                                    .font(.normaFinancial(15))
+                // Tags and buttons row
+                HStack(alignment: .bottom, spacing: 12) {
+                    // Tags on the left
+                    VStack(alignment: .leading, spacing: 8) {
+                        // First row: Bills and Budgets
+                        HStack(spacing: 8) {
+                            // Bills tag
+                            Button {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                showBills = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.text.fill")
+                                        .font(.system(size: 12))
+                                    Text("Bills: \(profileViewModel.formatCurrencyTruncated(billsTotal))")
+                                        .font(.normaFinancial(14))
+                                        .lineLimit(1)
+                                        .fixedSize()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelTeal").opacity(0.15))
+                                        .glassEffect(in: Capsule())
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                                )
+                                .foregroundColor(Color("NormaPastelTeal"))
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelTeal"))
-                            )
-                            .foregroundColor(.white)
-                        }
-                        .buttonStyle(CapsulePressStyle())
-                        .opacity(visibleCapsules > 0 ? 1 : 0)
-                        .scaleEffect(visibleCapsules > 0 ? 1.0 : 0.3)
-                        .offset(x: visibleCapsules > 0 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
+                            .buttonStyle(CapsulePressStyle())
+                            .opacity(visibleCapsules > 0 ? 1 : 0)
+                            .scaleEffect(visibleCapsules > 0 ? 1.0 : 0.3)
+                            .offset(x: visibleCapsules > 0 ? 0 : -30)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
 
-                        // Budgets tag
-                        Button {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            showBudgets = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "chart.pie.fill")
-                                    .font(.system(size: 11))
-                                Text("Budgets:")
-                                    .font(.normaFinancial(15))
-                                Text("\(budgetCount)")
-                                    .font(.normaFinancial(15))
+                            // Challenge tag
+                            Button {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                showChallenge = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "target")
+                                        .font(.system(size: 12))
+                                    if let challenge = activeChallenge {
+                                        Text("\(profileViewModel.formatCurrencyTruncated(challenge.amountRemaining)) left . \(challenge.shortDaysRemaining)")
+                                            .font(.normaFinancial(14))
+                                            .lineLimit(1)
+                                            .fixedSize()
+                                    } else {
+                                        Text("No Challenge")
+                                            .font(.normaFinancial(14))
+                                            .lineLimit(1)
+                                            .fixedSize()
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelPurple").opacity(0.15))
+                                        .glassEffect(in: Capsule())
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 0.5)
+                                )
+                                .foregroundColor(Color("NormaPastelPurple"))
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelPurple"))
-                            )
-                            .foregroundColor(.white)
+                            .buttonStyle(CapsulePressStyle())
+                            .opacity(visibleCapsules > 1 ? 1 : 0)
+                            .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
+                            .offset(x: visibleCapsules > 1 ? 0 : -30)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
                         }
-                        .buttonStyle(CapsulePressStyle())
-                        .opacity(visibleCapsules > 1 ? 1 : 0)
-                        .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
-                        .offset(x: visibleCapsules > 1 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
 
-                        Spacer()
-                    }
-
-                    // Second row: Monthly Spend
-                    HStack(spacing: 8) {
-                        // Monthly Spend tag
+                        // Second row: Monthly Spend
                         Button {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                             impactFeedback.impactOccurred()
@@ -119,48 +141,70 @@ struct ChatInputView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "creditcard.fill")
-                                    .font(.system(size: 11))
-                                Text("\(currentMonthAbbreviation). Spend:")
-                                    .font(.normaFinancial(15))
-                                Text(profileViewModel.formatCurrency(monthlySpend))
-                                    .font(.normaFinancial(15))
+                                    .font(.system(size: 12))
+                                Text("\(currentMonthAbbreviation). Spend: \(profileViewModel.formatCurrencyTruncated(monthlySpend))")
+                                    .font(.normaFinancial(14))
+                                    .lineLimit(1)
+                                    .fixedSize()
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color("NormaPastelCoral"))
+                                    .fill(Color("NormaPastelCoral").opacity(0.15))
+                                    .glassEffect(in: Capsule())
                             )
-                            .foregroundColor(.white)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color("NormaPastelCoral").opacity(0.3), lineWidth: 0.5)
+                            )
+                            .foregroundColor(Color("NormaPastelCoral"))
                         }
                         .buttonStyle(CapsulePressStyle())
                         .opacity(visibleCapsules > 2 ? 1 : 0)
                         .scaleEffect(visibleCapsules > 2 ? 1.0 : 0.3)
                         .offset(x: visibleCapsules > 2 ? 0 : -30)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: visibleCapsules)
-
-                        Spacer()
-
-                        // Send button
-                        Button(action: onSend) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(hex: "2C2C2C") ?? Color.black)
-                                    .frame(width: 44, height: 44)
-
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                        .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.3 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: text.isEmpty)
                     }
+
+                    Spacer()
+
+                    // Dual-purpose voice/send button
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        if isSendButtonActive {
+                            onSend()
+                        } else {
+                            onVoiceInput()
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(isSendButtonActive ? Color.black : Color.gray.opacity(0.15))
+                                .frame(width: 44, height: 44)
+
+                            // Waveform icon when empty
+                            Image(systemName: "waveform")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.primary)
+                                .opacity(isSendButtonActive ? 0 : 1)
+                                .scaleEffect(isSendButtonActive ? 0.5 : 1)
+
+                            // Send arrow when has text
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .opacity(isSendButtonActive ? 1 : 0)
+                                .scaleEffect(isSendButtonActive ? 1 : 0.5)
+                        }
+                        .animation(.spring(response: 0.4, dampingFraction: 0.6, blendDuration: 0), value: isSendButtonActive)
+                    }
+                    .buttonStyle(SendButtonStyle())
+                    .disabled(isLoading)
                 }
                 .frame(height: isExpanded ? nil : 0)
                 .opacity(isExpanded ? 1 : 0)
-                .clipped()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -168,20 +212,32 @@ struct ChatInputView: View {
                 RoundedRectangle(cornerRadius: 28)
                     .fill(.clear)
                     .glassEffect(in: RoundedRectangle(cornerRadius: 28))
-                    .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28)
                     .stroke(Color.gray.opacity(0.22), lineWidth: 1)
             )
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, isKeyboardVisible ? 12 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isKeyboardVisible)
         }
-        .padding(.top, 16)
+        .padding(.top, 12)
         .onAppear {
             // Animate capsules appearing
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 visibleCapsules = 3
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isKeyboardVisible = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isKeyboardVisible = false
             }
         }
         .background(
@@ -211,8 +267,10 @@ struct ChatInputView: View {
         .sheet(isPresented: $showBills) {
             BillHomeView()
         }
-        .sheet(isPresented: $showBudgets) {
-            MyBudgetView()
+        .sheet(isPresented: $showChallenge) {
+            ChallengesView()
+                .environmentObject(challengeViewModel)
+                .environmentObject(profileViewModel)
         }
         .sheet(isPresented: $showExpenses) {
             IncomeAndExpenseView()
@@ -229,6 +287,15 @@ struct CapsulePressStyle: ButtonStyle {
     }
 }
 
+// Custom button style for send button press animation
+struct SendButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 #Preview {
     @Previewable @State var text = ""
 
@@ -236,8 +303,17 @@ struct CapsulePressStyle: ButtonStyle {
         text: $text,
         isLoading: false,
         onSend: { print("Send tapped") },
+        onVoiceInput: { print("Voice input tapped") },
         billsTotal: 1234.56,
-        budgetCount: 3,
+        activeChallenge: Challenge(
+            userId: "user",
+            amountTotal: 500,
+            amountRemaining: 247,
+            currency: "USD",
+            startDate: Date(),
+            endDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date(),
+            status: .active
+        ),
         monthlySpend: 2567.89
     )
     .background(Color("NormaBackground"))

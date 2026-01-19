@@ -361,6 +361,26 @@ struct CreateBillView: View {
     }
 }
 
+// MARK: - Detail Row
+
+private struct DetailRow<Content: View>: View {
+    let label: String
+    let value: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            content()
+        }
+    }
+}
+
 // MARK: - Preview
 
 #Preview {

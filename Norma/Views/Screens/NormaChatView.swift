@@ -34,13 +34,15 @@ enum NormaChatContext {
         }
     }
     
-    func systemPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    func systemPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], challenge: Challenge?) -> String {
         // All contexts now use the same comprehensive prompt
         return NormaSystemPrompts.generalChatPrompt(
             currency: currency,
+            monthlyIncome: monthlyIncome,
+            freedomFund: freedomFund,
             bills: bills,
             expenses: expenses,
-            budgets: budgets
+            challenge: challenge
         )
     }
 }
@@ -387,17 +389,21 @@ struct NormaChatView: View {
             // Get tools for this context
             let tools = getToolsForContext()
             
-            // Get user's currency (default to USD if not set)
+            // Get user's currency and financial data (default to USD and 0 if not set)
             let currency = sessionViewModel.currentUser?.settings.currency ?? "USD"
+            let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+            let freedomFund = sessionViewModel.currentUser?.settings.freedomFund ?? 0
 
             // Get response from Norma AI with comprehensive prompt including all user data
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
                 systemPrompt: context.systemPrompt(
                     currency: currency,
+                    monthlyIncome: monthlyIncome,
+                    freedomFund: freedomFund,
                     bills: billViewModel.bills,
                     expenses: expenseViewModel.expenses,
-                    budgets: [] // No budget support in this view yet
+                    challenge: nil // No challenge support in this view yet
                 ),
                 tools: tools
             )
@@ -436,9 +442,11 @@ struct NormaChatView: View {
                     messages: updatedHistory,
                     systemPrompt: context.systemPrompt(
                         currency: currency,
+                        monthlyIncome: monthlyIncome,
+                        freedomFund: freedomFund,
                         bills: billViewModel.bills,
                         expenses: expenseViewModel.expenses,
-                        budgets: []
+                        challenge: nil
                     ),
                     tools: tools
                 )

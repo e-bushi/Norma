@@ -93,9 +93,6 @@ class BillViewModel: ObservableObject {
 
         // Check for bill verification after loading
         checkForBillVerification()
-
-        // Update widget data
-        updateWidgetData()
     }
     
     private func updateOverdueBills() {
@@ -234,42 +231,51 @@ class BillViewModel: ObservableObject {
     func updateBill(_ bill: Bill) async {
         isLoading = true
         clearError()
-        
+
         do {
             try await dataManager.updateBillWithEncryption(bill)
             loadBills()
+
+            // Check if reducing bill amount increased arcs
+            sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
             showError("Failed to update bill: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
-    
+
     func deleteBill(_ bill: Bill) async {
         isLoading = true
         clearError()
-        
+
         do {
             try await dataManager.deleteBill(bill)
             loadBills()
+
+            // Check if deleting bill increased arcs
+            sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
             showError("Failed to delete bill: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
     func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async {
         isLoading = true
         clearError()
-        
+
         do {
             try await dataManager.markBillAsPaid(bill, paymentMethod: paymentMethod, notes: notes)
             loadBills()
+
+            // Deduct bill amount from freedom fund and show toast
+            await sessionViewModel.deductFreedomFundForBillPayment(amount: bill.amount, bills: bills)
         } catch {
             showError("Failed to mark bill as paid: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
@@ -450,28 +456,6 @@ class BillViewModel: ObservableObject {
                 return ("Due in \(daysUntilDue) days", .secondary)
             }
         }
-    }
-    
-    // MARK: - Widget Integration
-    
-    private func updateWidgetData() {
-        // Get expenses from DataManager if available
-        let expenses = dataManager.expenses
-        let monthlyIncome = dataManager.currentProfile?.settings.monthlyIncome ?? 0
-        
-        // Get currency information
-        let currencyCode = dataManager.currentProfile?.settings.currency ?? "USD"
-        let currencySymbol = CurrencyData.getCurrency(for: currencyCode).symbol
-        
-        // Update widget with current bills and expenses
-        WidgetDataManager.shared.updateWidgetData(
-            bills: bills,
-            expenses: expenses,
-            monthlyIncome: monthlyIncome,
-            currencyCode: currencyCode,
-            currencySymbol: currencySymbol,
-            aiInsight: nil
-        )
     }
     
     // MARK: - Error Handling

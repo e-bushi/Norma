@@ -51,11 +51,17 @@ struct ExpenseListView: View {
             return filteredExpenses
         } else {
             let calendar = Calendar.current
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
             return filteredExpenses.filter { expense in
-                if let expenseDate = dateFormatter.date(from: expense.expenseDate) {
+                // Try with fractional seconds first
+                if let expenseDate = formatter.date(from: expense.expenseDate) {
+                    return calendar.isDate(expenseDate, inSameDayAs: selectedDate)
+                }
+                // Try without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let expenseDate = formatter.date(from: expense.expenseDate) {
                     return calendar.isDate(expenseDate, inSameDayAs: selectedDate)
                 }
                 return false
@@ -191,9 +197,16 @@ struct ExpenseRowCard: View {
     let expense: Expense
     
     private var expenseDate: Date {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        return dateFormatter.date(from: expense.expenseDate) ?? Date()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        // Try with fractional seconds first, then without
+        if let date = formatter.date(from: expense.expenseDate) {
+            return date
+        }
+
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: expense.expenseDate) ?? Date()
     }
     
     private var paymentMethodIcon: String {
@@ -303,9 +316,9 @@ struct ExpenseListView_Previews: PreviewProvider {
         struct PreviewWrapper: View {
             let sampleExpenses: [Expense] = {
                 let sampleUserId = "preview-user-123"
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy-MM-dd"
-                
+                let dateFormatter = ISO8601DateFormatter()
+                dateFormatter.formatOptions = [.withInternetDateTime]
+
                 return [
                     Expense(
                         userId: sampleUserId,

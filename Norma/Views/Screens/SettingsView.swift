@@ -34,8 +34,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     // User Profile Section
                     SettingsSectionView(title: "Profile") {
@@ -456,8 +455,9 @@ struct SettingsView: View {
                         let impactMedium = UIImpactFeedbackGenerator(style: .medium)
                         impactMedium.impactOccurred()
 
+                        // Open the menu
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            isMenuOpen.toggle()
+                            isMenuOpen = true
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")
@@ -525,7 +525,6 @@ struct SettingsView: View {
                     title: "Help & Support"
                 )
             }
-        }
     }
 
     private func requestNotificationPermission() async {
@@ -562,7 +561,9 @@ struct SettingsSectionView<Content: View>: View {
 }
 
 #Preview {
-    SettingsView( isMenuOpen: .constant(false))
-        .environmentObject(SessionViewModel(dataManager: DataManager()))
-        .environmentObject(DataManager())
+    NavigationStack {
+        SettingsView(isMenuOpen: .constant(false))
+            .environmentObject(SessionViewModel(dataManager: DataManager()))
+            .environmentObject(DataManager())
+    }
 }

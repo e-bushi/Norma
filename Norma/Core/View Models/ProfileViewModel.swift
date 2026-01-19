@@ -41,24 +41,21 @@ class ProfileViewModel: ObservableObject {
     private let sessionViewModel: SessionViewModel
     private let billViewModel: BillViewModel?
     private let expenseViewModel: ExpenseViewModel?
-    private let budgetViewModel: BudgetViewModel?
     private let incomeViewModel: IncomeViewModel?
-    
+
     // MARK: - Initialization
-    
+
     init(
         dataManager: DataManager,
         sessionViewModel: SessionViewModel,
         billViewModel: BillViewModel? = nil,
         expenseViewModel: ExpenseViewModel? = nil,
-        budgetViewModel: BudgetViewModel? = nil,
         incomeViewModel: IncomeViewModel? = nil
     ) {
         self.dataManager = dataManager
         self.sessionViewModel = sessionViewModel
         self.billViewModel = billViewModel
         self.expenseViewModel = expenseViewModel
-        self.budgetViewModel = budgetViewModel
         self.incomeViewModel = incomeViewModel
         
         setupObservers()
@@ -226,15 +223,7 @@ class ProfileViewModel: ObservableObject {
             scoreCount += 1
         }
         
-        // Budget Adherence (20% weight)
-        if let budgetVM = budgetViewModel {
-            let budgetAdherence = analyzeBudgetAdherence(budgetVM)
-            insights.append((budgetAdherence, .budgetAdherence))
-            totalScore += Double(budgetAdherence.score) * 0.20
-            scoreCount += 1
-        }
-        
-        // Bill Payment Health (20% weight)
+        // Bill Payment Health (25% weight - increased since budgets removed)
         if let billVM = billViewModel {
             let billPaymentHealth = analyzeBillPaymentHealth(billVM)
             insights.append((billPaymentHealth, .billPayment))
@@ -284,23 +273,6 @@ class ProfileViewModel: ObservableObject {
             score: Int(score),
             trend: score >= 70 ? .improving : .declining,
             psychologicalBarriers: score < 70 ? ["Overspending tendency", "Budget resistance"] : [],
-            assessmentData: nil
-        )
-    }
-    
-    private func analyzeBudgetAdherence(_ budgetVM: BudgetViewModel) -> FinancialHealthInsight {
-        let overBudgetCount = budgetVM.overBudgetItems.count
-        let totalBudgets = budgetVM.activeBudgets.count
-        let adherenceRate = totalBudgets > 0 ? Double(totalBudgets - overBudgetCount) / Double(totalBudgets) : 1.0
-        
-        let score = adherenceRate * 100
-        let status: HealthStatus = score >= 90 ? .excellent : score >= 70 ? .good : score >= 50 ? .fair : .poor
-        
-        return FinancialHealthInsight(
-            userId: sessionViewModel.currentUser?.userId ?? "",
-            score: Int(score),
-            trend: score >= 80 ? .improving : .stable,
-            psychologicalBarriers: score < 80 ? ["Budget perfectionism", "Financial discipline struggles"] : [],
             assessmentData: nil
         )
     }
@@ -396,7 +368,7 @@ class ProfileViewModel: ObservableObject {
                 title: "Improve Budget Discipline",
                 description: "Set more realistic budgets and track spending more carefully.",
                 priority: .medium,
-                category: .budgets
+                category: .expenses
             )
         case .billPayment:
             return HealthRecommendation(
@@ -418,12 +390,11 @@ class ProfileViewModel: ObservableObject {
     // MARK: - Money Personality Analysis
     
     func analyzeMoneyPersonality() async {
-        guard let expenseVM = expenseViewModel,
-              let budgetVM = budgetViewModel else { return }
-        
-        // Analyze spending patterns, budget behavior, etc.
+        guard let expenseVM = expenseViewModel else { return }
+
+        // Analyze spending patterns
         let spendingPattern = analyzeSpendingPattern(expenseVM)
-        let budgetingStyle = analyzeBudgetingStyle(budgetVM)
+        let budgetingStyle: BudgetingStyle = .moderate // Simplified without budgets
         let riskTolerance = analyzeRiskTolerance()
         
         let personalityType = determinePrimaryType(spendingPattern, budgetingStyle, riskTolerance)
@@ -456,19 +427,6 @@ class ProfileViewModel: ObservableObject {
             return .saver
         } else {
             return .balanced
-        }
-    }
-    
-    private func analyzeBudgetingStyle(_ budgetVM: BudgetViewModel) -> BudgetingStyle {
-        let activeBudgetCount = budgetVM.activeBudgets.count
-        let budgetAdherence = budgetVM.budgetPerformance.reduce(0) { $0 + $1.percentageUsed } / Double(max(budgetVM.budgetPerformance.count, 1))
-        
-        if activeBudgetCount > 5 && budgetAdherence < 90 {
-            return .detailed
-        } else if activeBudgetCount <= 2 {
-            return .minimal
-        } else {
-            return .moderate
         }
     }
     
@@ -562,12 +520,9 @@ class ProfileViewModel: ObservableObject {
     
     func formatCurrencyTruncated(_ amount: Double) -> String {
         let symbol = currencyInfo?.symbol ?? "$"
-        
-        if amount < 100 {
-            // Two digits or less: show full amount with decimals
-            return "\(symbol)\(String(format: "%.2f", amount))"
-        } else if amount < 1000 {
-            // Three digits: remove decimals, add + if there were decimals
+
+        if amount < 1000 {
+            // Under 1K: show whole number, add + if there were decimals
             let hasDecimals = amount.truncatingRemainder(dividingBy: 1) > 0
             return "\(symbol)\(Int(amount))" + (hasDecimals ? "+" : "")
         } else if amount < 10000 {

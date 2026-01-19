@@ -9,42 +9,63 @@ import Foundation
 
 extension DataManager {
 
-    // MARK: - Chat Conversation Methods
+    // MARK: - Multi-Conversation Methods
 
-    /// Fetch chat conversation for the current user
-    func fetchChatConversation(userId: String) async throws -> ChatConversation? {
-        return try await supabaseService.fetchChatConversation(userId: userId)
-    }
-
-    /// Save chat conversation
-    func saveChatConversation(_ conversation: ChatConversation) async throws {
+    /// Fetch all conversations for a user, sorted by most recently updated
+    func fetchAllConversations(userId: String) async throws -> [ChatConversation] {
         do {
-            let savedConversation = try await supabaseService.saveChatConversation(conversation)
-            print("✅ Saved chat conversation with \(savedConversation.messages.count) messages")
+            let conversations = try await supabaseService.fetchAllConversations(userId: userId)
+            print("✅ Fetched \(conversations.count) conversations for user: \(userId)")
+            return conversations
         } catch {
-            print("❌ Failed to save chat conversation: \(error.localizedDescription)")
+            print("❌ Failed to fetch conversations: \(error.localizedDescription)")
             throw error
         }
     }
 
-    /// Clear all messages in the chat conversation
-    func clearChatConversation(userId: String) async throws {
+    /// Fetch a single conversation by its ID
+    func fetchConversation(conversationId: String) async throws -> ChatConversation? {
         do {
-            try await supabaseService.clearChatConversation(userId: userId)
-            print("✅ Cleared chat conversation for user: \(userId)")
+            let conversation = try await supabaseService.fetchConversation(conversationId: conversationId)
+            print("✅ Fetched conversation: \(conversationId)")
+            return conversation
         } catch {
-            print("❌ Failed to clear chat conversation: \(error.localizedDescription)")
+            print("❌ Failed to fetch conversation: \(error.localizedDescription)")
             throw error
         }
     }
 
-    /// Delete chat conversation entirely
-    func deleteChatConversation(userId: String) async throws {
+    /// Create a new conversation
+    func createConversation(_ conversation: ChatConversation) async throws -> ChatConversation {
         do {
-            try await supabaseService.deleteChatConversation(userId: userId)
-            print("✅ Deleted chat conversation for user: \(userId)")
+            let created = try await supabaseService.createConversation(conversation)
+            print("✅ Created conversation: \(created.id)")
+            return created
         } catch {
-            print("❌ Failed to delete chat conversation: \(error.localizedDescription)")
+            print("❌ Failed to create conversation: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Update an existing conversation
+    func updateConversation(_ conversation: ChatConversation) async throws -> ChatConversation {
+        do {
+            let updated = try await supabaseService.updateConversation(conversation)
+            print("✅ Updated conversation: \(updated.id) with \(updated.messages.count) messages")
+            return updated
+        } catch {
+            print("❌ Failed to update conversation: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Delete a conversation permanently by ID
+    func deleteConversation(conversationId: String) async throws {
+        do {
+            try await supabaseService.deleteConversation(conversationId: conversationId)
+            print("✅ Deleted conversation: \(conversationId)")
+        } catch {
+            print("❌ Failed to delete conversation: \(error.localizedDescription)")
             throw error
         }
     }

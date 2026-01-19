@@ -11,13 +11,16 @@ import Foundation
 struct ExpenseDisclosureView: View {
     let expenses: [Expense]
     let category: ExpenseCategory?
+    let selectedDate: Date?
+    let monthHasExpenses: Bool
     @Binding var showNormaChat: Bool
+    var animationDelay: Double = 0
     @State private var showingAllExpenses = false
     @State private var selectedExpense: Expense? = nil
-    @State private var showCreateExpense = false
+    @State private var itemStates: [Bool] = []
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @Environment(\.colorScheme) var colorScheme
-    
+
     private let maxExpensesToShow = 5
     
     var title: String {
@@ -49,162 +52,185 @@ struct ExpenseDisclosureView: View {
     private var totalExpenseAmount: Double {
         filteredExpenses.reduce(0) { $0 + $1.amount }
     }
-    
+
+    private var selectedDateText: String {
+        guard let date = selectedDate else { return "this day" }
+        let formatter = DateFormatter()
+        if Calendar.current.isDateInToday(date) {
+            return "today"
+        } else if Calendar.current.isDateInYesterday(date) {
+            return "yesterday"
+        } else {
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
+        }
+    }
+
+    private func animateItemsStaggered() {
+        itemStates = Array(repeating: false, count: displayedExpenses.count)
+        for i in 0..<displayedExpenses.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + animationDelay + Double(i) * 0.1) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+                    if i < itemStates.count {
+                        itemStates[i] = true
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 24) {
-            // Add expense button
-            Button(action: {
-                showCreateExpense = true
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 15))
-
-                    Text("Add Expense")
-                        .font(.normaInput(14))
-                }
-                .foregroundColor(colorScheme == .dark ? .white : Color(red: 0.50, green: 0.45, blue: 0.65))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.4),
-                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
-                                ]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.2), lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            
             // Expenses list container
             if displayedExpenses.isEmpty {
-                // Enhanced empty state
-                VStack(spacing: 24) {
-                    // Icon with gradient background
-                    ZStack {
-                        Circle()
+                if monthHasExpenses {
+                    // Simple empty state for selected day (month has other expenses)
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(.clear)
+                                .glassEffect(in: Circle())
+                                .frame(width: 60, height: 60)
+
+                            Image(systemName: "calendar.badge.minus")
+                                .font(.system(size: 28))
+                                .foregroundColor(Color("NormaPastelCoral").opacity(0.8))
+                        }
+
+                        VStack(spacing: 6) {
+                            Text("No expenses \(selectedDateText)")
+                                .font(.normaFinancial(18))
+                                .foregroundColor(.primary)
+
+                            Text("Select another day or add an expense")
+                                .font(.normaInput(13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                    .padding(.horizontal, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                            )
+                    )
+                } else {
+                    // Full empty state for no expenses this month
+                    VStack(spacing: 24) {
+                        // Icon with gradient background
+                        ZStack {
+                            Circle()
+                                .fill(.clear)
+                                .glassEffect(in: Circle())
+                                .frame(width: 80, height: 80)
+
+                            Image(systemName: "creditcard.and.123")
+                                .font(.system(size: 36))
+                                .foregroundColor(Color("NormaPastelCoral"))
+                        }
+
+                        VStack(spacing: 12) {
+                            Text("No expenses yet")
+                                .font(.normaFinancial(20))
+                                .foregroundColor(.primary)
+
+                            Text("Start tracking your daily expenses\nto better manage your budget")
+                                .font(.normaInput(14))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(4)
+                        }
+
+                        // Quick tips
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "lightbulb.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelBeige"))
+
+                                Text("Track groceries, dining, and shopping")
+                                    .font(.normaInput(13))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            HStack(spacing: 12) {
+                                Image(systemName: "chart.pie.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelCoral"))
+
+                                Text("Categorize spending automatically")
+                                    .font(.normaInput(13))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            HStack(spacing: 12) {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(Color("NormaPastelTeal"))
+
+                                Text("Visualize your spending habits")
+                                    .font(.normaInput(13))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.gray.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .padding(.horizontal, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
-                                        Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.3)
+                                        Color(UIColor.systemBackground),
+                                        Color.gray.opacity(0.02)
                                     ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    startPoint: .top,
+                                    endPoint: .bottom
                                 )
                             )
-                            .frame(width: 80, height: 80)
-
-                        Image(systemName: "creditcard.and.123")
-                            .font(.system(size: 36))
-                            .foregroundColor(Color("NormaPastelCoral"))
-                    }
-
-                    VStack(spacing: 12) {
-                        Text("No expenses yet")
-                            .font(.normaFinancial(20))
-                            .foregroundColor(.primary)
-
-                        Text("Start tracking your daily expenses\nto better manage your budget")
-                            .font(.normaInput(14))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                    }
-
-                    // Quick tips
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "lightbulb.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelBeige"))
-
-                            Text("Track groceries, dining, and shopping")
-                                .font(.normaInput(13))
-                                .foregroundColor(.secondary)
-                        }
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "chart.pie.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelCoral"))
-
-                            Text("Categorize spending automatically")
-                                .font(.normaInput(13))
-                                .foregroundColor(.secondary)
-                        }
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelTeal"))
-
-                            Text("Visualize your spending habits")
-                                .font(.normaInput(13))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.05))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.gray.opacity(0.2),
+                                                Color.gray.opacity(0.05)
+                                            ]),
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        ),
+                                        lineWidth: 1
+                                    )
                             )
                     )
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-                .padding(.horizontal, 20)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(UIColor.systemBackground),
-                                    Color.gray.opacity(0.02)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.gray.opacity(0.2),
-                                            Color.gray.opacity(0.05)
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    ),
-                                    lineWidth: 1
-                                )
-                        )
-                )
             } else {
                 VStack(spacing: 0) {
                     // Expense items
                     VStack(spacing: 16) {
-                        ForEach(displayedExpenses) { expense in
+                        ForEach(Array(displayedExpenses.enumerated()), id: \.element.id) { index, expense in
                             Button(action: {
                                 selectedExpense = expense
                             }) {
                                 ExpenseRowView(expense: expense)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .opacity(index < itemStates.count && itemStates[index] ? 1 : 0)
+                            .offset(x: index < itemStates.count && itemStates[index] ? 0 : -20)
                         }
                     }
                     .padding(16)
@@ -245,9 +271,15 @@ struct ExpenseDisclosureView: View {
                         .buttonStyle(PlainButtonStyle())
                         .padding(.top, 12)
                         .sheet(isPresented: $showingAllExpenses) {
-                            MyExpensesView()
+                            MyExpensesView(presetDate: selectedDate)
                         }
                     }
+                }
+                .onAppear {
+                    animateItemsStaggered()
+                }
+                .onChange(of: expenses) { _, _ in
+                    animateItemsStaggered()
                 }
             }
         }
@@ -256,9 +288,6 @@ struct ExpenseDisclosureView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showCreateExpense) {
-            CreateExpenseView()
-        }
     }
 }
 
@@ -266,17 +295,6 @@ struct ExpenseRowView: View {
     let expense: Expense
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var dataManager: DataManager
-    @EnvironmentObject var budgetViewModel: BudgetViewModel
-
-    private var category: Category? {
-        // Get category through the budget
-        guard let budgetId = expense.budgetId,
-              let budget = budgetViewModel.budgets.first(where: { $0.id == budgetId }),
-              let categoryId = budget.categoryId else {
-            return nil
-        }
-        return dataManager.categories.first { $0.id == categoryId }
-    }
 
     private var timeAgoText: String {
         let formatter = RelativeDateTimeFormatter()
@@ -292,12 +310,12 @@ struct ExpenseRowView: View {
         HStack(spacing: 12) {
             // Category icon
             Circle()
-                .fill((category?.color ?? Color("NormaPastelCoral")).opacity(0.15))
+                .fill(Color("NormaPastelCoral").opacity(0.15))
                 .frame(width: 34, height: 34)
                 .overlay(
-                    Image(systemName: category?.icon ?? "dollarsign.circle.fill")
+                    Image(systemName: "dollarsign.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundColor(category?.color ?? Color("NormaPastelCoral"))
+                        .foregroundColor(Color("NormaPastelCoral"))
                 )
 
             // Expense info
@@ -343,32 +361,32 @@ struct ExpenseRowView: View {
     
     return ScrollView {
         VStack {
-            Text("All Expenses")
+            Text("With Expenses")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
-            
-            ExpenseDisclosureView(expenses: sampleExpenses, category: nil, showNormaChat: $showNormaChat)
+
+            ExpenseDisclosureView(expenses: sampleExpenses, category: nil, selectedDate: Date(), monthHasExpenses: true, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
-            
+
             Divider().padding()
-            
-            Text("Food Expenses Only")
+
+            Text("No Expenses on Day (Month Has Expenses)")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
-            
-            ExpenseDisclosureView(expenses: sampleExpenses, category: nil, showNormaChat: $showNormaChat)
+
+            ExpenseDisclosureView(expenses: [], category: nil, selectedDate: Date(), monthHasExpenses: true, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
-            
+
             Divider().padding()
-            
-            Text("Empty State")
+
+            Text("No Expenses This Month")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
-            
-            ExpenseDisclosureView(expenses: [], category: nil, showNormaChat: $showNormaChat)
+
+            ExpenseDisclosureView(expenses: [], category: nil, selectedDate: nil, monthHasExpenses: false, showNormaChat: $showNormaChat)
                 .padding(.horizontal)
         }
     }

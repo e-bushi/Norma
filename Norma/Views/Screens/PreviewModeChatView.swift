@@ -33,8 +33,10 @@ struct PreviewModeChatView: View {
     @GestureState private var isUserScrolling = false
     @State private var flowState: String? = nil // "In flow", "Stagnant", or "Drifting"
     @State private var visibleNavCapsules: Int = 0
+    @State private var newlyAddedMessageIds: Set<String> = []
 
     private let maxSpacerHeight: CGFloat = 600
+    private let maxToolChainDepth: Int = 2 // Prevent infinite tool call loops
 
     // Currency formatter for nav bar capsules
     private func formatCurrency(_ amount: Double) -> String {
@@ -78,8 +80,7 @@ struct PreviewModeChatView: View {
         guard let freedomFund = previewModeViewModel.userFreedomFund else { return 0 }
         return ArcCalculationService.calculateArcs(
             freedomFund: freedomFund,
-            bills: previewModeViewModel.bills,
-            budgets: previewModeViewModel.budgets
+            bills: previewModeViewModel.bills
         )
     }
 
@@ -276,7 +277,10 @@ struct PreviewModeChatView: View {
                     VStack(spacing: 0) {
                         LazyVStack(spacing: 20) {
                             ForEach(messages.filter { $0.isVisible }) { message in
-                                ChatBubbleView(message: message)
+                                ChatBubbleView(
+                                    message: message,
+                                    shouldAnimate: newlyAddedMessageIds.contains(message.id)
+                                )
                                     .id(message.id)
                                     .transition(.asymmetric(
                                         insertion: .scale(scale: 0.8).combined(with: .opacity),
@@ -420,8 +424,7 @@ struct PreviewModeChatView: View {
                     userName: previewModeViewModel.userName,
                     currency: previewModeViewModel.userCurrency,
                     bills: previewModeViewModel.bills,
-                    expenses: previewModeViewModel.expenses,
-                    budgets: previewModeViewModel.budgets
+                    expenses: previewModeViewModel.expenses
                 )
             }
 
@@ -440,6 +443,7 @@ struct PreviewModeChatView: View {
                 await MainActor.run {
                     isLoading = false
                     let aiMessage = ChatMessage(role: .assistant, content: text)
+                    newlyAddedMessageIds.insert(aiMessage.id)
                     messages.append(aiMessage)
                 }
 
@@ -501,8 +505,7 @@ struct PreviewModeChatView: View {
                         userName: previewModeViewModel.userName,
                         currency: previewModeViewModel.userCurrency,
                         bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses,
-                        budgets: previewModeViewModel.budgets
+                        expenses: previewModeViewModel.expenses
                     )
                 }
 
@@ -518,9 +521,9 @@ struct PreviewModeChatView: View {
 
                 // Handle chained tool calls
                 if case .toolUse(let nextId, let nextName, let nextInput) = finalResponse {
-                    print("🔧 Chained tool use detected: \(nextName)")
+                    print("🔧 Chained tool use detected: \(nextName) (will be depth 1)")
                     // Process the chained tool call recursively
-                    await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent)
+                    await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent, depth: 1)
                 } else if case .text(let text) = finalResponse {
                     await MainActor.run {
                         isLoading = false
@@ -535,28 +538,40 @@ struct PreviewModeChatView: View {
                             print("🎨 Flow state set in nav bar: \(state)")
                             // Don't attach to message - it's shown in nav bar only
                             let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                            newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
                         } else {
                             // Normal UI components attach to message
                             print("🎨 Attaching UI component: \(String(describing: uiComponent))")
                             let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
+                            newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
                         }
                         print("✅ Message appended to chat")
                     }
                 } else {
+                    print("⚠️ Unexpected final response type (not .text or .toolUse): \(finalResponse)")
                     await MainActor.run {
                         isLoading = false
+                        // Still show the UI component if we have one from the tool
+                        if let component = uiComponent {
+                            print("🎨 Appending message with UI component despite unexpected response")
+                            let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                            newlyAddedMessageIds.insert(aiMessage.id)
+                            messages.append(aiMessage)
+                        }
                     }
                 }
 
             case .toolResult:
+                print("⚠️ Received .toolResult as response (unexpected)")
                 await MainActor.run {
                     isLoading = false
                 }
             }
 
         } catch {
+            print("❌ Error in sendUserMessage: \(error.localizedDescription)")
             await MainActor.run {
                 isLoading = false
                 showError(error.localizedDescription)
@@ -601,11 +616,6 @@ struct PreviewModeChatView: View {
                 return "Creating expense: \(expenseName)..."
             }
             return "Creating expense..."
-        case "create_budget":
-            if let budgetName = input["name"] as? String {
-                return "Creating budget: \(budgetName)..."
-            }
-            return "Creating budget..."
         default:
             return "Processing..."
         }
@@ -619,9 +629,20 @@ struct PreviewModeChatView: View {
         return await toolExecutor.executeToolAndGetResult(toolId: toolId, name: name, input: input)
     }
 
-    private func processToolUse(id: String, name: String, input: [String: Any], history: [AnthropicMessage], previousUIComponent: UIComponent?) async {
-        print("🔧 Processing tool: \(name)")
+    private func processToolUse(id: String, name: String, input: [String: Any], history: [AnthropicMessage], previousUIComponent: UIComponent?, depth: Int = 0) async {
+        print("🔧 Processing tool: \(name) (depth: \(depth))")
         print("📥 Tool input: \(input)")
+
+        // Prevent infinite tool call loops
+        if depth >= maxToolChainDepth {
+            print("⚠️ Maximum tool chain depth reached (\(maxToolChainDepth)). Stopping chain.")
+            await MainActor.run {
+                isLoading = false
+                let errorMessage = ChatMessage(role: .assistant, content: "I encountered an issue processing your request. Please try again.")
+                messages.append(errorMessage)
+            }
+            return
+        }
 
         let (toolResult, uiComponent) = await executeToolAndGetResult(toolId: id, name: name, input: input)
 
@@ -654,8 +675,7 @@ struct PreviewModeChatView: View {
                 userName: previewModeViewModel.userName,
                 currency: previewModeViewModel.userCurrency,
                 bills: previewModeViewModel.bills,
-                expenses: previewModeViewModel.expenses,
-                budgets: previewModeViewModel.budgets
+                expenses: previewModeViewModel.expenses
             )
         }
 
@@ -670,8 +690,8 @@ struct PreviewModeChatView: View {
 
             // Handle chained tool calls recursively
             if case .toolUse(let nextId, let nextName, let nextInput) = response {
-                print("🔧 Another chained tool detected: \(nextName)")
-                await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent ?? previousUIComponent)
+                print("🔧 Another chained tool detected: \(nextName) (will be depth \(depth + 1))")
+                await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent ?? previousUIComponent, depth: depth + 1)
             } else if case .text(let text) = response {
                 await MainActor.run {
                     isLoading = false
@@ -686,21 +706,32 @@ struct PreviewModeChatView: View {
                         print("🎨 Flow state set in nav bar: \(state)")
                         // Don't attach to message - it's shown in nav bar only
                         let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                        newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
                     } else {
                         // Normal UI components attach to message
                         print("🎨 Attaching UI component: \(String(describing: uiComponent ?? previousUIComponent))")
                         let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
+                        newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
                     }
                     print("✅ Message appended to chat")
                 }
             } else {
+                print("⚠️ Unexpected response type received (not .text or .toolUse): \(response)")
                 await MainActor.run {
                     isLoading = false
+                    // Still append a message if we have a UI component from previous tools
+                    if let component = uiComponent ?? previousUIComponent {
+                        print("🎨 Appending message with previous UI component despite unexpected response")
+                        let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                        newlyAddedMessageIds.insert(aiMessage.id)
+                        messages.append(aiMessage)
+                    }
                 }
             }
         } catch {
+            print("❌ Error in processToolUse: \(error.localizedDescription)")
             await MainActor.run {
                 isLoading = false
                 showError(error.localizedDescription)
@@ -756,8 +787,7 @@ struct PreviewModeChatView: View {
                         userName: previewModeViewModel.userName,
                         currency: previewModeViewModel.userCurrency,
                         bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses,
-                        budgets: previewModeViewModel.budgets
+                        expenses: previewModeViewModel.expenses
                     )
                 }
 
@@ -778,6 +808,7 @@ struct PreviewModeChatView: View {
 
                     if case .text(let text) = response {
                         let greetingMessage = ChatMessage(role: .assistant, content: text)
+                        newlyAddedMessageIds.insert(greetingMessage.id)
                         messages.append(greetingMessage)
                     }
                 }
@@ -955,7 +986,7 @@ struct PreviewModeCompletionModal: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("You've completed preview mode by adding a bill, budget, and expense!")
+            Text("You've completed preview mode by adding a bill and expense!")
                 .normaBody()
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)

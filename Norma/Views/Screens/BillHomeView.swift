@@ -16,14 +16,13 @@ struct BillHomeView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @State private var showMyBills: Bool = false
     @State private var showNormaChat: Bool = false
-    @State private var refreshTask: Task<Void, Never>?
     @State private var showBillVerificationPopup = false
     @State private var showBillReviewSheet = false
     @State private var isScrolling = false
     @State private var scrollTimer: Timer?
     @State private var showAddOptions = false
     @State private var showCreateBill = false
-    
+
     private var currentMonth: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM"
@@ -95,9 +94,6 @@ struct BillHomeView: View {
                         .font(.normaTitle(20))
                 }
             }
-            .refreshable {
-                await performRefresh()
-            }
             .sheet(isPresented: $showCreateBill) {
                 CreateBillView()
             }
@@ -136,9 +132,6 @@ struct BillHomeView: View {
                     await loadInitialData()
                 }
             }
-            .onDisappear {
-                refreshTask?.cancel()
-            }
             .onReceive(billViewModel.verificationService.$showVerificationPrompt) { showPrompt in
                 showBillVerificationPopup = showPrompt
             }
@@ -148,24 +141,6 @@ struct BillHomeView: View {
     // MARK: - Data Loading
     
     private func loadInitialData() async {
-        await expenseViewModel.refreshExpenses()
-        await billViewModel.refreshBills()
-        await incomeViewModel.refreshIncomes()
-    }
-    
-    private func performRefresh() async {
-        // Cancel any existing refresh task
-        refreshTask?.cancel()
-        
-        // Create new refresh task
-        refreshTask = Task {
-            await refreshData()
-        }
-        
-        await refreshTask?.value
-    }
-    
-    private func refreshData() async {
         await expenseViewModel.refreshExpenses()
         await billViewModel.refreshBills()
         await incomeViewModel.refreshIncomes()
@@ -182,18 +157,18 @@ struct BillHomeView: View {
         // Simulate days with expense activity
         let activeDays = [2, 5, 7, 10, 12, 15, 17, 20, 22, 25, 27]
         let billAmount: Double = 1545.49
-        
+
         var runningTotal = billAmount
-        
+
         return activeDays.map { day in
             // Daily expense amount varies
             let dailyExpense = Double.random(in: 40...180)
-            
+
             let lowAmount = runningTotal
             let highAmount = runningTotal + dailyExpense
-            
+
             runningTotal = highAmount
-            
+
             return ExpenseChartDataPoint(
                 day: day,
                 highAmount: highAmount,
@@ -210,15 +185,13 @@ struct BillHomeView: View {
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    
+
     return BillHomeView()
         .environmentObject(sessionViewModel)
         .environmentObject(billViewModel)
         .environmentObject(expenseViewModel)
         .environmentObject(incomeViewModel)
-        .environmentObject(budgetViewModel)
         .environmentObject(profileViewModel)
         .preferredColorScheme(.light)
 }

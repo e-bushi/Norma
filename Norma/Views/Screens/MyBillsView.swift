@@ -36,7 +36,7 @@ struct MyBillsView: View {
                         .padding(.vertical)
                         .animation(.spring(response: 0.4), value: selectedDate)
                         .animation(.spring(response: 0.4), value: showAllDates)
-                    
+
                     // Bill list view component
                     BillListView(
                         bills: billViewModel.activeBills,

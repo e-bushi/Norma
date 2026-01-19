@@ -34,14 +34,10 @@ class PreviewModeToolExecutor {
             return handleCreateBill(input: input)
         case "create_expense":
             return await handleCreateExpense(input: input)
-        case "create_budget":
-            return await handleCreateBudget(input: input)
         case "show_bills_tool":
             return handleShowBills(input: input)
         case "show_expenses_tool":
             return handleShowExpenses(input: input)
-        case "show_budgets_tool":
-            return handleShowBudgets(input: input)
         case "show_save_progress_modal":
             return handleShowSaveProgressModal(input: input)
         case "show_days":
@@ -292,103 +288,54 @@ class PreviewModeToolExecutor {
         return ("Expense '\(name)' created successfully for \(amount)", uiComponent)
     }
 
-    private func handleCreateBudget(input: [String: Any]) async -> (String, UIComponent?) {
-        guard let name = input["name"] as? String,
-              let amount = input["amount"] as? Double else {
-            return ("Missing required fields for budget creation", nil)
-        }
-
-        let calendar = Calendar.current
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!
-        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
-
-        let budget = Budget(
-            id: UUID().uuidString,
-            userId: "preview-mode-user",
-            name: name,
-            amount: amount,
-            categoryId: input["category_id"] as? String,
-            startDate: startOfMonth,
-            endDate: endOfMonth,
-            isActive: true,
-            currentSpent: 0,
-            alertThreshold: 0.8,
-            notes: input["notes"] as? String
-        )
-
-        previewModeViewModel.addBudget(budget)
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
-        formatter.maximumFractionDigits = 0
-        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
-
-        let uiComponent = UIComponent.actionConfirmation(
-            icon: "chart.pie.fill",
-            message: "Norma created a budget: \(name) - \(formattedAmount)",
-            color: "NormaPastelPurple"
-        )
-        return ("Budget '\(name)' created successfully for \(amount)", uiComponent)
-    }
-
     // MARK: - Show Tools
 
     private func handleShowBills(input: [String: Any]) -> (String, UIComponent?) {
-        guard let billIdsString = input["bill_ids"] as? String else {
-            return ("No bill IDs provided", nil)
-        }
+        let billIdsString = input["bill_ids"] as? String ?? ""
 
-        let billIds = billIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let bills = previewModeViewModel.bills.filter { bill in
-            guard let billId = bill.id else { return false }
-            return billIds.contains(billId)
+        // If bill_ids is empty, show all bills
+        let bills: [Bill]
+        if billIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
+            bills = previewModeViewModel.bills
+        } else {
+            let billIds = billIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            bills = previewModeViewModel.bills.filter { bill in
+                guard let billId = bill.id else { return false }
+                return billIds.contains(billId)
+            }
         }
 
         if bills.isEmpty {
             return ("No bills found", nil)
         }
 
-        let uiComponent = UIComponent.billCards(bills)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+        let uiComponent = UIComponent.billCards(bills, currency: currency)
         return ("Showing \(bills.count) bill(s)", uiComponent)
     }
 
     private func handleShowExpenses(input: [String: Any]) -> (String, UIComponent?) {
-        guard let expenseIdsString = input["expense_ids"] as? String else {
-            return ("No expense IDs provided", nil)
-        }
+        let expenseIdsString = input["expense_ids"] as? String ?? ""
 
-        let expenseIds = expenseIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let expenses = previewModeViewModel.expenses.filter { expense in
-            guard let expenseId = expense.id else { return false }
-            return expenseIds.contains(expenseId)
+        // If expense_ids is empty, show all expenses
+        let expenses: [Expense]
+        if expenseIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
+            expenses = previewModeViewModel.expenses
+        } else {
+            let expenseIds = expenseIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            expenses = previewModeViewModel.expenses.filter { expense in
+                guard let expenseId = expense.id else { return false }
+                return expenseIds.contains(expenseId)
+            }
         }
 
         if expenses.isEmpty {
             return ("No expenses found", nil)
         }
 
-        let uiComponent = UIComponent.expenseCards(expenses)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+        let uiComponent = UIComponent.expenseCards(expenses, currency: currency)
         return ("Showing \(expenses.count) expense(s)", uiComponent)
-    }
-
-    private func handleShowBudgets(input: [String: Any]) -> (String, UIComponent?) {
-        guard let budgetIdsString = input["budget_ids"] as? String else {
-            return ("No budget IDs provided", nil)
-        }
-
-        let budgetIds = budgetIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        let budgets = previewModeViewModel.budgets.filter { budget in
-            guard let budgetId = budget.id else { return false }
-            return budgetIds.contains(budgetId)
-        }
-
-        if budgets.isEmpty {
-            return ("No budgets found", nil)
-        }
-
-        let uiComponent = UIComponent.budgetCards(budgets)
-        return ("Showing \(budgets.count) budget(s)", uiComponent)
     }
 
     // MARK: - Modal Tools
@@ -408,12 +355,10 @@ class PreviewModeToolExecutor {
         }
 
         let bills = previewModeViewModel.bills
-        let budgets = previewModeViewModel.budgets
 
         // Calculate daily burn
         let totalMonthlyBills = ArcCalculationService.calculateMonthlyBillsTotal(bills: bills)
-        let totalMonthlyBudgets = ArcCalculationService.calculateBudgetsTotal(budgets: budgets)
-        let dailyBurn = (totalMonthlyBills + totalMonthlyBudgets) / 30.0
+        let dailyBurn = totalMonthlyBills / 30.0
 
         // Calculate days
         let days = dailyBurn > 0 ? Int(floor(freedomFund / dailyBurn)) : 0
@@ -442,13 +387,11 @@ class PreviewModeToolExecutor {
             }
 
             let bills = previewModeViewModel.bills
-            let budgets = previewModeViewModel.budgets
 
             // Calculate arcs as decimal to show fractional progress
             displayArcCount = ArcCalculationService.calculateArcsDecimal(
                 freedomFund: freedomFund,
-                bills: bills,
-                budgets: budgets
+                bills: bills
             )
         }
 

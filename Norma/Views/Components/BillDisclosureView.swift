@@ -11,8 +11,10 @@ import Foundation
 struct BillDisclosureView: View {
     let bills: [Bill]
     @Binding var showNormaChat: Bool
+    var animationDelay: Double = 0
     @State private var showingAllBills = false
     @State private var showCreateBill = false
+    @State private var itemStates: [Bool] = []
 
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -20,7 +22,7 @@ struct BillDisclosureView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @Environment(\.colorScheme) var colorScheme
-    
+
     private let maxBillsToShow = 5
     
     private var upcomingBills: [Bill] {
@@ -66,7 +68,30 @@ struct BillDisclosureView: View {
             bill.calculateStatus(from: expenseViewModel.expenses) == .paid
         }.count
     }
-    
+
+    @State private var hasAppeared = false
+
+    private var displayedPaidCount: Int {
+        hasAppeared ? paidBillsCount : 0
+    }
+
+    private var displayedTotalCount: Int {
+        hasAppeared ? upcomingBills.count : 0
+    }
+
+    private func animateItemsStaggered() {
+        itemStates = Array(repeating: false, count: displayedBills.count)
+        for i in 0..<displayedBills.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + animationDelay + Double(i) * 0.1) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+                    if i < itemStates.count {
+                        itemStates[i] = true
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             // Header section matching ExpenseTrackerChartView style
@@ -78,15 +103,23 @@ struct BillDisclosureView: View {
 
                 // Summary stats - redesigned with larger numbers
                 VStack(spacing: 8) {
-                    Text("\(paidBillsCount) out of \(upcomingBills.count)")
+                    Text("\(displayedPaidCount) out of \(displayedTotalCount)")
                         .font(.normaHeadline(48))
                         .foregroundColor(.primary)
+                        .contentTransition(.numericText())
                     Text("Bills paid so far")
                         .font(.normaInput(13))
                         .foregroundColor(.secondary)
                 }
             }
-            
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        hasAppeared = true
+                    }
+                }
+            }
+
             // Add bill button
             Button(action: {
                 showCreateBill = true
@@ -128,16 +161,8 @@ struct BillDisclosureView: View {
                     // Icon with gradient background
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(red: 0.80, green: 0.90, blue: 0.88).opacity(0.6),
-                                        Color(red: 0.82, green: 0.92, blue: 0.90).opacity(0.4)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(.clear)
+                            .glassEffect(in: Circle())
                             .frame(width: 80, height: 80)
 
                         Image(systemName: "calendar.badge.plus")
@@ -233,8 +258,10 @@ struct BillDisclosureView: View {
                 VStack(spacing: 0) {
                     // Bills list in single container
                     VStack(spacing: 16) {
-                        ForEach(displayedBills) { bill in
+                        ForEach(Array(displayedBills.enumerated()), id: \.element.id) { index, bill in
                             BillRowView(bill: bill)
+                                .opacity(index < itemStates.count && itemStates[index] ? 1 : 0)
+                                .offset(x: index < itemStates.count && itemStates[index] ? 0 : -20)
                         }
                     }
                     .padding(16)
@@ -246,6 +273,12 @@ struct BillDisclosureView: View {
                                     .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                             )
                     )
+                    .onAppear {
+                        animateItemsStaggered()
+                    }
+                    .onChange(of: bills) { _, _ in
+                        animateItemsStaggered()
+                    }
 
                     // See all button (outside the main container)
                     if upcomingBills.count > maxBillsToShow {

@@ -66,11 +66,36 @@ struct NormaSystemPrompts {
         """
     }
     
-    static func generalChatPrompt(currency: String, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    static func generalChatPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], challenge: Challenge?) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
         let currentDate = currentDateFormatter.string(from: Date())
+
+        // Calculate total monthly bills
+        let totalMonthlyBills = bills.reduce(0.0) { $0 + $1.amount }
+
+        // Calculate arc count
+        let largestBill = bills.map { $0.amount }.max() ?? 0
+        let arcCount: Int
+        if freedomFund < largestBill {
+            arcCount = 0  // Critical bill gate: can't cover largest bill
+        } else if totalMonthlyBills > 0 {
+            arcCount = Int(floor(freedomFund / totalMonthlyBills))
+        } else {
+            arcCount = 0
+        }
+
+        // Determine arc state
+        let arcState: String
+        switch arcCount {
+        case 0: arcState = "Critical (0 arcs)"
+        case 1: arcState = "Urgency (1 arc)"
+        case 2...3: arcState = "Cautionary (\(arcCount) arcs)"
+        case 4...6: arcState = "Steady (\(arcCount) arcs)"
+        case 7...12: arcState = "Calm (\(arcCount) arcs)"
+        default: arcState = "Abundant (\(arcCount) arcs)"
+        }
 
         // Format bills
         let dateFormatter = DateFormatter()
@@ -84,10 +109,21 @@ struct NormaSystemPrompts {
             "- id: \(expense.id ?? "unknown"), \(expense.name): \(currency) \(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
         }.joined(separator: "\n")
 
-        // Format budgets
-        let budgetsList = budgets.map { budget in
-            "- id: \(budget.id ?? "unknown"), \(budget.name): \(currency) \(String(format: "%.2f", budget.amount)), spent: \(currency) \(String(format: "%.2f", budget.currentSpent))"
-        }.joined(separator: "\n")
+        // Format active challenge
+        let challengeInfo: String
+        if let challenge = challenge {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            challengeInfo = """
+            - Status: \(challenge.status.rawValue)
+            - Total budget: \(currency) \(String(format: "%.2f", challenge.amountTotal))
+            - Remaining: \(currency) \(String(format: "%.2f", challenge.amountRemaining))
+            - Period: \(dateFormatter.string(from: challenge.startDate)) to \(dateFormatter.string(from: challenge.endDate))
+            - Days remaining: \(challenge.daysRemaining)
+            """
+        } else {
+            challengeInfo = "No active challenge"
+        }
 
         return """
         You are Norma, a friendly financial companion who helps users make smart spending decisions.
@@ -103,8 +139,33 @@ struct NormaSystemPrompts {
         USER'S RECENT EXPENSES (last 20):
         \(expensesList.isEmpty ? "No expenses tracked yet" : expensesList)
 
-        USER'S BUDGETS:
-        \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
+        USER'S ACTIVE CHALLENGE:
+        \(challengeInfo)
+
+        USER'S FINANCIAL CONTEXT:
+        - Monthly income (after taxes): \(currency) \(String(format: "%.2f", monthlyIncome))
+        - Freedom fund: \(currency) \(String(format: "%.2f", freedomFund))
+        - Total monthly bills: \(currency) \(String(format: "%.2f", totalMonthlyBills))
+        - Current arc count: \(arcCount) arcs
+        - Arc state: \(arcState)
+
+        THE ARC SYSTEM (Your Framework):
+        1 arc = 1 complete billing cycle (can pay all bills once)
+        Formula: arcs = floor(Freedom Fund / Total Monthly Bills)
+        Critical Gate: If Freedom Fund < largest bill → 0 arcs
+
+        Arc States (use to calibrate advice):
+        - 0 arcs (Critical): Can't cover next billing cycle - every dollar matters
+        - 1 arc (Urgency): One month covered - purchase decisions are significant
+        - 2-3 arcs (Cautionary): Some breathing room but not comfortable yet
+        - 4-6 arcs (Steady): Solid ground, found a rhythm
+        - 7-12 arcs (Calm): Real distance from zero, comfortable
+        - 13+ arcs (Abundant): Over a year of bills covered
+
+        Spending Flow (how arcs change):
+        - **In Flow**: Income > (Bills + Spending) → arcs grow over time
+        - **Stagnant**: Income = (Bills + Spending) → arcs stay the same
+        - **Drifting**: Income < (Bills + Spending) → arcs shrinking
 
         Your personality:
         - Warm, encouraging, and supportive
@@ -146,11 +207,20 @@ struct NormaSystemPrompts {
         - Ask which property they want to update and use the bill ID from the USER'S BILLS section above
 
         PRE-PURCHASE CONSULTATION (Your Main Value):
-        When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful advice based on:
-        - Their bills and upcoming obligations
-        - Their arc count (how many billing cycles they have covered)
-        - Whether this purchase would significantly impact their financial cushion
-        Frame purchases in terms of arcs when helpful: "That $200 jacket is about 0.15 arcs for you."
+        When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful advice using the arc system.
+        IMPORTANT: Don't assume the purchase will come from their freedom fund - use arcs as a comparison tool for context.
+
+        1. **Calculate arc equivalent**: Purchase amount ÷ Total Monthly Bills = arc equivalent
+           Example: "$200 jacket ÷ $1500 bills = 0.13 arcs"
+
+        2. **Frame it as a comparison**: "This would cost the equivalent of about 0.13 arcs - roughly 13% of one billing cycle."
+
+        3. **Consider their arc state**:
+           - Critical/Urgency (0-1 arcs): Be cautious, every purchase matters
+           - Cautionary (2-3 arcs): Weigh carefully, they have some cushion
+           - Steady+ (4+ arcs): More flexibility, focus on value not just cost
+
+        4. **Give a clear recommendation**: Don't just present numbers - tell them if it's a smart buy based on their situation, upcoming bills, and financial goals.
 
         TRACKING EXPENSES (Optional - For Users Who Want Deeper Insights):
         Some users want to track individual expenses for more detailed analysis. If they ask to log an expense, collect:
@@ -175,8 +245,9 @@ struct NormaSystemPrompts {
         - merchant, tags: Optional fields
 
         VISUAL DISPLAY TOOLS:
-        - Use show_bills_tool, show_expenses_tool, or show_budgets_tool when users want to SEE their data
-        - Pass the relevant IDs from the USER'S BILLS/EXPENSES/BUDGETS sections above
+        - Use show_bills_tool, show_expenses_tool, or show_challenge_tool when users want to SEE their data
+        - Pass the relevant IDs from the USER'S BILLS/EXPENSES sections above
+        - Use show_challenge_tool to display the user's active spending challenge visually
         - CRITICAL: When you use a show_*_tool, DO NOT list items in your text response. Cards display automatically. Just provide brief context or insights.
 
         Remember to be Norma - helpful, friendly, and focused on making finance management stress-free!
@@ -433,7 +504,7 @@ struct NormaSystemPrompts {
         }
     }
 
-    static func previewModePrompt(userName: String? = nil, currency: String? = nil, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    static func previewModePrompt(userName: String? = nil, currency: String? = nil, bills: [Bill], expenses: [Expense]) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
@@ -463,10 +534,6 @@ struct NormaSystemPrompts {
 
         let expensesList = expenses.prefix(20).map { expense in
             "- id: \(expense.id ?? "unknown"), \(expense.name): \(currencySymbol) \(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
-        }.joined(separator: "\n")
-
-        let budgetsList = budgets.map { budget in
-            "- id: \(budget.id ?? "unknown"), \(budget.name): \(currencySymbol) \(String(format: "%.2f", budget.amount)), spent: \(currencySymbol) \(String(format: "%.2f", budget.currentSpent))"
         }.joined(separator: "\n")
 
         // Build the prompt based on onboarding state
@@ -501,9 +568,9 @@ struct NormaSystemPrompts {
 
                I'm here to help you make **smart spending decisions before you buy**. I've loaded some sample financial data so you can explore what I can do.
 
-               **Are you thinking about buying anything today?** That's where I really shine - helping you figure out if a purchase makes sense based on your bills, budgets, and spending patterns.
+               **Are you thinking about buying anything today?** That's where I really shine - helping you figure out if a purchase makes sense based on your bills and spending patterns.
 
-               You can also ask me to show your bills, recent expenses, or budgets if you want to explore the data first!"
+               You can also ask me to show your bills or recent expenses if you want to explore the data first!"
 
                - **GOAL**: Get them to ask a "Should I buy..." question as their FIRST real interaction with you
 
@@ -566,9 +633,6 @@ struct NormaSystemPrompts {
             USER'S RECENT EXPENSES (last 20):
             \(expensesList.isEmpty ? "No expenses yet" : expensesList)
 
-            USER'S BUDGETS:
-            \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
-
             YOUR PERSONALITY:
             - Warm, encouraging, and enthusiastic
             - Like a trusted friend who's good with money
@@ -587,7 +651,7 @@ struct NormaSystemPrompts {
 
             When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful, contextual advice based on:
             - Their current bills and upcoming obligations
-            - Their budget status and spending patterns
+            - Their spending patterns
             - Their overall financial picture
 
             **PROACTIVE ENGAGEMENT**: If the conversation feels stale or users seem unsure what to ask:
@@ -596,19 +660,119 @@ struct NormaSystemPrompts {
             - Reference their data: "I see you have a Netflix bill coming up - want to review your subscriptions?"
 
             VISUAL DISPLAY TOOLS:
-            - Use show_bills_tool, show_expenses_tool, or show_budgets_tool when users want to SEE their data
+            - Use show_bills_tool or show_expenses_tool when users want to SEE their data
             - Pass the relevant IDs from the data above
             - CRITICAL: When you use a show_*_tool, DO NOT list items in your text response. Cards display automatically.
 
             PREVIEW MODE GUIDANCE:
             - This is SAMPLE DATA for exploration
             - Focus on answering their pre-purchase questions
-            - If they ask to see bills, expenses, or budgets, use the show tools
-            - DO NOT proactively suggest adding bills, expenses, or budgets
+            - If they ask to see bills or expenses, use the show tools
+            - DO NOT proactively suggest adding bills or expenses
             - Let them explore naturally and ask questions about purchases
 
             Remember: Make them fall in love with asking you for financial advice BEFORE making purchases!
             """
         }
+    }
+
+    // MARK: - Financial Insights Prompt
+
+    static func insightPrompt(
+        currency: String,
+        monthlyIncome: Double,
+        freedomFund: Double,
+        totalBills: Double,
+        upcomingBillsCount: Int,
+        upcomingBillsTotal: Double,
+        totalMonthlySpend: Double,
+        budgetCount: Int,
+        averageBudgetUtilization: Double,
+        arcState: String
+    ) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+
+        let incomeStr = formatter.string(from: NSNumber(value: monthlyIncome)) ?? "\(currency) \(Int(monthlyIncome))"
+        let freedomStr = formatter.string(from: NSNumber(value: freedomFund)) ?? "\(currency) \(Int(freedomFund))"
+        let billsStr = formatter.string(from: NSNumber(value: totalBills)) ?? "\(currency) \(Int(totalBills))"
+        let upcomingStr = formatter.string(from: NSNumber(value: upcomingBillsTotal)) ?? "\(currency) \(Int(upcomingBillsTotal))"
+        let spendStr = formatter.string(from: NSNumber(value: totalMonthlySpend)) ?? "\(currency) \(Int(totalMonthlySpend))"
+        let afterBills = monthlyIncome - totalBills
+        let afterBillsStr = formatter.string(from: NSNumber(value: afterBills)) ?? "\(currency) \(Int(afterBills))"
+
+        return """
+        You are Norma, a concise financial assistant. Generate ONE specific, personalized insight.
+
+        USER'S FINANCIAL SNAPSHOT:
+        - Monthly income: \(incomeStr)
+        - Freedom fund (savings): \(freedomStr)
+        - Total monthly bills: \(billsStr)
+        - Money after bills: \(afterBillsStr)
+        - Upcoming bills (next 7 days): \(upcomingBillsCount) bills totaling \(upcomingStr)
+        - Monthly spending: \(spendStr)
+        - Active budgets: \(budgetCount)
+        - Average budget utilization: \(Int(averageBudgetUtilization * 100))%
+        - Arc state: \(arcState)
+
+        RULES:
+        1. Give ONE focused insight in 2-3 sentences MAX
+        2. Use their ACTUAL numbers from above
+        3. Be direct and specific, not generic
+        4. End with a brief actionable suggestion
+        5. Vary your insight type (spending pattern, savings opportunity, upcoming challenge, or positive reinforcement)
+        6. Do NOT use bullet points or lists
+        7. Write in a warm but concise tone
+
+        Generate the insight now:
+        """
+    }
+
+    // MARK: - Purchasing Power Insights Prompt
+
+    static func purchasingPowerPrompt(
+        fromCurrency: String,
+        toCurrency: String,
+        fromAmount: Double,
+        toAmount: Double,
+        exchangeRate: Double,
+        userHomeCurrency: String
+    ) -> String {
+        let fromFormatter = NumberFormatter()
+        fromFormatter.numberStyle = .decimal
+        fromFormatter.maximumFractionDigits = 2
+        fromFormatter.minimumFractionDigits = 0
+
+        let toFormatter = NumberFormatter()
+        toFormatter.numberStyle = .decimal
+        toFormatter.maximumFractionDigits = 2
+        toFormatter.minimumFractionDigits = 0
+
+        let fromStr = fromFormatter.string(from: NSNumber(value: fromAmount)) ?? "\(fromAmount)"
+        let toStr = toFormatter.string(from: NSNumber(value: toAmount)) ?? "\(toAmount)"
+
+        return """
+        You are a knowledgeable travel and finance advisor helping someone understand what their money can buy in another country.
+
+        CONVERSION:
+        \(fromStr) \(fromCurrency) → \(toStr) \(toCurrency)
+        Exchange rate: 1 \(fromCurrency) = \(String(format: "%.4f", exchangeRate)) \(toCurrency)
+        User's home currency: \(userHomeCurrency)
+
+        TASK:
+        Give a natural, conversational insight about what this amount of money can buy in the destination country/region where \(toCurrency) is used.
+
+        GUIDELINES:
+        - Be conversational, like a well-traveled friend giving advice
+        - Pick 1-2 specific examples that make sense for this amount and destination
+        - Choose examples natural to that place (safari in South Africa, tapas in Spain, street food in Thailand, ski passes in Switzerland)
+        - Keep it under 40 words - short and punchy
+        - NO bullet points, NO emoji, NO rigid categories
+        - Be honest about expensive places too
+
+        Write your insight now:
+        """
     }
 }

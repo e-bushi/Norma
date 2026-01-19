@@ -102,11 +102,7 @@ extension DataManager {
             insights.append("Excellent savings rate of over 30% - you're building wealth effectively")
         }
         
-        // Analyze budget adherence
-        let overBudgetCategories = getOverBudgetCategories()
-        if overBudgetCategories.count > 2 {
-            insights.append("Multiple categories are over budget - consider reviewing your spending habits")
-        }
+        // Challenge adherence is now handled by ChallengeViewModel
         
         // Analyze bill payment patterns
         let overdueBills = getOverdueBills()

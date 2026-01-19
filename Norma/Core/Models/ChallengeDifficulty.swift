@@ -1,0 +1,76 @@
+//
+//  ChallengeDifficulty.swift
+//  Norma
+//
+//  Created by Claude on 12/30/25.
+//
+
+import Foundation
+import SwiftUI
+
+/// Represents the difficulty level for a spending challenge
+/// Higher difficulty = tighter budget but more points on completion
+enum ChallengeDifficulty: String, Codable, CaseIterable, Identifiable {
+    case easy = "easy"
+    case medium = "medium"
+    case hard = "hard"
+
+    var id: String { rawValue }
+
+    /// Points earned for completing a challenge at this difficulty
+    var pointReward: Int {
+        switch self {
+        case .easy: return 1
+        case .medium: return 2
+        case .hard: return 3
+        }
+    }
+
+    /// Budget multiplier applied to the calculated challenge amount
+    /// Easy = 20% more budget (easier to complete)
+    /// Medium = standard budget
+    /// Hard = 20% less budget (harder to complete)
+    var budgetMultiplier: Double {
+        switch self {
+        case .easy: return 1.2
+        case .medium: return 1.0
+        case .hard: return 0.8
+        }
+    }
+
+    /// Display name for the difficulty
+    var displayName: String {
+        switch self {
+        case .easy: return "Easy"
+        case .medium: return "Medium"
+        case .hard: return "Hard"
+        }
+    }
+
+    /// SF Symbol icon for the difficulty
+    var icon: String {
+        switch self {
+        case .easy: return "leaf.fill"
+        case .medium: return "flame.fill"
+        case .hard: return "bolt.fill"
+        }
+    }
+
+    /// Color associated with the difficulty
+    var color: Color {
+        switch self {
+        case .easy: return Color("NormaPastelTeal")
+        case .medium: return Color("NormaPastelPurple")
+        case .hard: return Color("NormaPastelCoral")
+        }
+    }
+
+    /// Short description of what this difficulty means
+    var description: String {
+        switch self {
+        case .easy: return "Relaxed budget"
+        case .medium: return "Standard budget"
+        case .hard: return "Tight budget"
+        }
+    }
+}

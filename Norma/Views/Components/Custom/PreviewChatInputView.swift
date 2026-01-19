@@ -15,7 +15,6 @@ struct PreviewChatInputView: View {
     @ObservedObject var viewModel: PreviewModeViewModel
 
     @State private var showBills = false
-    @State private var showBudgets = false
     @State private var showExpenses = false
     @State private var visibleCapsules: Int = 0
     @State private var isExpanded: Bool = true
@@ -36,6 +35,30 @@ struct PreviewChatInputView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
     }
 
+    // Truncated currency formatter for capsules
+    private func formatCurrencyTruncated(_ amount: Double) -> String {
+        let symbol = "$" // Preview mode uses USD
+
+        if amount < 100 {
+            return "\(symbol)\(String(format: "%.2f", amount))"
+        } else if amount < 1000 {
+            let hasDecimals = amount.truncatingRemainder(dividingBy: 1) > 0
+            return "\(symbol)\(Int(amount))" + (hasDecimals ? "+" : "")
+        } else if amount < 10000 {
+            return "\(symbol)\(String(format: "%.1f", amount / 1000))K"
+        } else if amount < 100000 {
+            return "\(symbol)\(Int(amount / 1000))K"
+        } else if amount < 1000000 {
+            return "\(symbol)\(Int(amount / 1000))K"
+        } else {
+            if amount < 10000000 {
+                return "\(symbol)\(String(format: "%.1f", amount / 1000000))M"
+            } else {
+                return "\(symbol)\(Int(amount / 1000000))M"
+            }
+        }
+    }
+
     private func animateCapsules() {
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.prepare()
@@ -52,13 +75,6 @@ struct PreviewChatInputView: View {
             visibleCapsules = 2
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            impactFeedback.impactOccurred(intensity: 0.6)
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5)) {
-            visibleCapsules = 3
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             impactFeedback.impactOccurred(intensity: 0.6)
         }
     }
@@ -82,7 +98,7 @@ struct PreviewChatInputView: View {
 
                 // Tags rows below text field
                 VStack(alignment: .leading, spacing: 8) {
-                    // First row: Bills and Budgets
+                    // Bills and Spend capsules
                     HStack(spacing: 8) {
                         // Bills tag
                         Button {
@@ -92,11 +108,11 @@ struct PreviewChatInputView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "doc.text.fill")
-                                    .font(.system(size: 11))
-                                Text("Bills:")
-                                    .font(.normaFinancial(15))
-                                Text(formatCurrency(viewModel.totalBills))
-                                    .font(.normaFinancial(15))
+                                    .font(.system(size: 12))
+                                Text("Bills: \(formatCurrencyTruncated(viewModel.totalBills))")
+                                    .font(.normaFinancial(14))
+                                    .lineLimit(1)
+                                    .fixedSize()
                                     .onAppear {
                                         print("🔍 [InputView] Bills capsule appeared - Total: \(viewModel.totalBills)")
                                     }
@@ -104,13 +120,18 @@ struct PreviewChatInputView: View {
                                         print("🔍 [InputView] Bills total changed from \(oldValue) to \(newValue)")
                                     }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color("NormaPastelTeal"))
+                                    .fill(Color("NormaPastelTeal").opacity(0.15))
+                                    .glassEffect(in: Capsule())
                             )
-                            .foregroundColor(.white)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                            )
+                            .foregroundColor(Color("NormaPastelTeal"))
                         }
                         .buttonStyle(CapsulePressStyle())
                         .opacity(visibleCapsules > 0 ? 1 : 0)
@@ -118,39 +139,6 @@ struct PreviewChatInputView: View {
                         .offset(x: visibleCapsules > 0 ? 0 : -30)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
 
-                        // Budgets tag
-                        Button {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            showBudgets = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "chart.pie.fill")
-                                    .font(.system(size: 11))
-                                Text("Budgets:")
-                                    .font(.normaFinancial(15))
-                                Text("\(viewModel.budgetCount)")
-                                    .font(.normaFinancial(15))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelPurple"))
-                            )
-                            .foregroundColor(.white)
-                        }
-                        .buttonStyle(CapsulePressStyle())
-                        .opacity(visibleCapsules > 1 ? 1 : 0)
-                        .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
-                        .offset(x: visibleCapsules > 1 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
-
-                        Spacer()
-                    }
-
-                    // Second row: Monthly Spend
-                    HStack(spacing: 8) {
                         // Monthly Spend tag
                         Button {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -159,25 +147,30 @@ struct PreviewChatInputView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "creditcard.fill")
-                                    .font(.system(size: 11))
-                                Text("\(currentMonthAbbreviation). Spend:")
-                                    .font(.normaFinancial(15))
-                                Text(formatCurrency(viewModel.totalExpenses))
-                                    .font(.normaFinancial(15))
+                                    .font(.system(size: 12))
+                                Text("\(currentMonthAbbreviation). Spend: \(formatCurrencyTruncated(viewModel.totalExpenses))")
+                                    .font(.normaFinancial(14))
+                                    .lineLimit(1)
+                                    .fixedSize()
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color("NormaPastelCoral"))
+                                    .fill(Color("NormaPastelCoral").opacity(0.15))
+                                    .glassEffect(in: Capsule())
                             )
-                            .foregroundColor(.white)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color("NormaPastelCoral").opacity(0.3), lineWidth: 0.5)
+                            )
+                            .foregroundColor(Color("NormaPastelCoral"))
                         }
                         .buttonStyle(CapsulePressStyle())
-                        .opacity(visibleCapsules > 2 ? 1 : 0)
-                        .scaleEffect(visibleCapsules > 2 ? 1.0 : 0.3)
-                        .offset(x: visibleCapsules > 2 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: visibleCapsules)
+                        .opacity(visibleCapsules > 1 ? 1 : 0)
+                        .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
+                        .offset(x: visibleCapsules > 1 ? 0 : -30)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
 
                         Spacer()
 
@@ -261,9 +254,6 @@ struct PreviewChatInputView: View {
         .sheet(isPresented: $showBills) {
             PreviewModeBillsView()
         }
-        .sheet(isPresented: $showBudgets) {
-            PreviewModeBudgetsView()
-        }
         .sheet(isPresented: $showExpenses) {
             PreviewModeExpensesView()
         }
@@ -291,38 +281,6 @@ struct PreviewModeBillsView: View {
                     .padding(.horizontal, 40)
             }
             .navigationTitle("My Bills")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct PreviewModeBudgetsView: View {
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: "chart.pie.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(Color("NormaPastelPurple"))
-
-                Text("Budgets Preview")
-                    .font(.normaHeadline())
-
-                Text("This is preview mode! In the full app, you'll see all your budgets here.")
-                    .normaBody()
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 40)
-            }
-            .navigationTitle("My Budgets")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

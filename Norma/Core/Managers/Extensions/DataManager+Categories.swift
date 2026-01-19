@@ -86,14 +86,6 @@ extension DataManager {
     }
     
     func deleteCategory(_ category: Category) async throws {
-        // Check if category is in use
-        let isInUse = expenses.contains { $0.budgetId == category.id } ||
-                     budgets.contains { $0.categoryId == category.id }
-        
-        guard !isInUse else {
-            throw CategoryError.categoryInUse
-        }
-        
         guard let categoryId = category.id else {
             throw NSError(domain: "DataManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Category ID is required for deletion"])
         }
@@ -303,17 +295,11 @@ extension DataManager {
             // Keep the first one, remove the rest
             for i in 1..<sortedGroup.count {
                 let duplicateCategory = sortedGroup[i]
-                
-                // Check if this category is being used
-                let isInUse = expenses.contains { $0.budgetId == duplicateCategory.id } ||
-                             budgets.contains { $0.categoryId == duplicateCategory.id }
-                
-                if !isInUse {
-                    // Safe to remove this duplicate
-                    if let id = duplicateCategory.id {
-                        try await deleteCategory(duplicateCategory)
-                        duplicatesRemoved += 1
-                    }
+
+                // Safe to remove duplicate categories
+                if duplicateCategory.id != nil {
+                    try await deleteCategory(duplicateCategory)
+                    duplicatesRemoved += 1
                 }
             }
         }

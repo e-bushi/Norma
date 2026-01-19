@@ -17,7 +17,14 @@ class AppCoordinator: ObservableObject {
 
     @Published var currentView: AppView = .loading
     @Published var isReady = false
+    @Published var dataLoaded = false
+    @Published var userStartedApp = false
     @Published var mainLayerView: MainLayerViewType = .chat
+
+    /// Only show the fancy loading view if user is authenticated (loading their data)
+    var shouldShowAppLoadingView: Bool {
+        sessionViewModel.isAuthenticated && !userStartedApp
+    }
     
     // MARK: - Core Managers and ViewModels
     
@@ -26,6 +33,7 @@ class AppCoordinator: ObservableObject {
     
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
+    lazy var conversationManager = ConversationManager(dataManager: dataManager, sessionViewModel: sessionViewModel)
     
     // MARK: - Initialization
     
@@ -44,33 +52,32 @@ class AppCoordinator: ObservableObject {
         Task {
             // Initial setup
             await sessionViewModel.checkAuthenticationState()
-            
+
             // Determine initial view
             updateCurrentView()
-            
-            // Mark as ready
-            isReady = true
-            
+
+            // Add delay for authenticated users to show loading screen
+            if sessionViewModel.isAuthenticated {
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds for data loading
+                dataLoaded = true
+            } else {
+                // Non-authenticated users skip loading screen
+                isReady = true
+            }
+
             // Observe session changes
             observeSessionChanges()
         }
     }
-    
-    private func setupNotificationObservers() {
-        // Process pending Siri intents when app becomes active
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                await self?.dataManager.processPendingSiriIntents()
-            }
-        }
+
+    /// Called when user taps Start button on loading screen
+    func userTappedStart() {
+        userStartedApp = true
+        isReady = true
     }
     
-    deinit {
-        NotificationCenter.default.removeObserver(self)
+    private func setupNotificationObservers() {
+        // App lifecycle observers can be added here if needed
     }
     
     private func updateCurrentView() {
@@ -80,6 +87,10 @@ class AppCoordinator: ObservableObject {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
             currentView = .main
+            // Load conversations when entering main app (userId is obtained from sessionViewModel)
+            Task {
+                await conversationManager.loadConversations()
+            }
         } else if sessionViewModel.shouldShowAuthFlow {
             currentView = .onboarding
         } else if sessionViewModel.shouldShowInitialSetup {
@@ -144,8 +155,8 @@ class AppCoordinator: ObservableObject {
     var currentViewContent: some View {
         switch currentView {
         case .loading:
-            LoadingView()
-        
+            AppLoadingView(isDataReady: dataLoaded, onStart: { self.userTappedStart() })
+
         case .onboarding:
             OnboardingCoordinatorView()
                 .environmentObject(onboardingViewModel)
@@ -156,6 +167,7 @@ class AppCoordinator: ObservableObject {
             RootView()
                 .environmentObject(dataManager)
                 .environmentObject(sessionViewModel)
+                .environmentObject(conversationManager)
                 .environmentObject(self)
         }
     }
@@ -169,9 +181,11 @@ enum AppView {
     case main
 }
 
-enum MainLayerViewType {
+enum MainLayerViewType: Hashable {
     case chat
     case settings
+    case currencyConverter
+    case overview
 }
 
 // MARK: - Coordinator Views
@@ -249,23 +263,3 @@ struct OnboardingCoordinatorView: View {
     }
 }
 
-// MARK: - Loading View
-
-struct LoadingView: View {
-    var body: some View {
-        ZStack {
-            Color(UIColor.systemBackground)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(1.5)
-                
-                Text("Loading...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-}

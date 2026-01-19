@@ -16,7 +16,6 @@ struct ExpenseTrackerRegularView: View {
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
-    @EnvironmentObject var budgetViewModel: BudgetViewModel
     @EnvironmentObject var incomeViewModel: IncomeViewModel
     @State private var showingIncomeDetail = false
     
@@ -296,48 +295,9 @@ struct ExpenseTrackerRegularView: View {
     }
     
     private func calculateBudgetManagementScore() -> Int {
-        // Use actual budgets if available, otherwise return minimal score
-        let activeBudgets = budgetViewModel.activeBudgets
-        
-        if activeBudgets.isEmpty {
-            // Return 1% to indicate budgets aren't set up without tanking overall score
-            return 1
-        } else {
-            return calculateRealBudgetScore(for: activeBudgets)
-        }
-    }
-    
-    // MARK: - Budget Score Helper Methods
-    
-    private func calculateRealBudgetScore(for budgets: [Budget]) -> Int {
-        // Calculate base score from budgets within limit
-        let budgetsWithinLimit = budgets.filter { $0.currentSpent <= $0.amount }
-        let basePercentage = (Double(budgetsWithinLimit.count) / Double(budgets.count)) * 100
-        
-        // Calculate deductions for over-budget items
-        let totalDeductions = budgets
-            .filter { $0.currentSpent > $0.amount }
-            .reduce(0) { total, budget in
-                total + calculateBudgetOverageDeduction(budget: budget)
-            }
-        
-        // Return final score (minimum 0)
-        return max(0, Int(basePercentage) - totalDeductions)
-    }
-    
-    private func calculateBudgetOverageDeduction(budget: Budget) -> Int {
-        let overagePercentage = ((budget.currentSpent - budget.amount) / budget.amount) * 100
-        
-        switch overagePercentage {
-        case 0...10:
-            return 5
-        case 10...25:
-            return 10
-        case 25...50:
-            return 15
-        default:
-            return 20
-        }
+        // Budgets have been replaced with Challenges - return minimal score
+        // Challenge adherence is tracked separately in ChallengeViewModel
+        return 1
     }
     
     private func calculateSavingsRateScore() -> Int {
@@ -465,10 +425,9 @@ extension Comparable {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    
+
     ExpenseTrackerRegularView(
         billAmount: 1500,
         currentExpenseAmount: 2800,
@@ -481,7 +440,6 @@ extension Comparable {
     .environmentObject(profileViewModel)
     .environmentObject(sessionViewModel)
     .environmentObject(billViewModel)
-    .environmentObject(budgetViewModel)
     .environmentObject(incomeViewModel)
     .preferredColorScheme(.light)
 }
