@@ -22,9 +22,11 @@ class DataManager: ObservableObject {
     // Financial Data
     @Published var expenses: [Expense] = []
     @Published var income: [Income] = []
-    @Published var budgets: [Budget] = []
+    @Published var challenges: [Challenge] = []
     @Published var categories: [Category] = []
     @Published var bills: [Bill] = []
+    @Published var pendingTransactions: [PendingTransaction] = []
+    @Published var monthlyStats: [MonthlyStats] = []
     
     // Psychology Data
     @Published var moneyPersonality: MoneyPersonality?
@@ -50,18 +52,6 @@ class DataManager: ObservableObject {
     // Set the model context (called from view)
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-
-        // Process any pending Siri intents
-        Task {
-            await SharedDataService.shared.processPendingIntents(dataManager: self)
-        }
-    }
-    
-    // MARK: - Siri Integration
-    
-    /// Process pending Siri intents (call this when app becomes active)
-    func processPendingSiriIntents() async {
-        await SharedDataService.shared.processPendingIntents(dataManager: self)
     }
     
     // MARK: - User Profile Methods
@@ -154,14 +144,16 @@ class DataManager: ObservableObject {
         // Fetch all data concurrently (with encryption support)
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask { try await self.fetchExpensesWithEncryption(userId: userId) }
-            group.addTask { try await self.fetchBudgetsWithEncryption(userId: userId) }
             group.addTask { try await self.fetchBillsWithEncryption(userId: userId) }
-            
+            group.addTask { try await self.fetchChallenges(userId: userId) }
+            group.addTask { try await self.fetchPendingTransactions(userId: userId) }
+            group.addTask { try await self.fetchMonthlyStats(userId: userId) }
+
             // These don't need encryption yet
             group.addTask { try await self.fetchIncomes(userId: userId) }
             group.addTask { try await self.fetchCategories() }
             group.addTask { try await self.fetchPsychologyData(userId: userId) }
-            
+
             // Wait for all tasks to complete
             try await group.waitForAll()
         }
@@ -188,9 +180,11 @@ class DataManager: ObservableObject {
         currentProfile = nil
         expenses.removeAll()
         income.removeAll()
-        budgets.removeAll()
+        challenges.removeAll()
         categories.removeAll()
         bills.removeAll()
+        pendingTransactions.removeAll()
+        monthlyStats.removeAll()
         moneyPersonality = nil
         financialHealthInsight = nil
         hasUnsyncedChanges = false
@@ -222,21 +216,7 @@ class DataManager: ObservableObject {
     var hasPsychologyData: Bool {
         moneyPersonality != nil || financialHealthInsight != nil
     }
-    
-    // MARK: - Widget Integration
-    
-    func forceUpdateWidgetData() {
-        print("🔄 Forcing widget data update...")
-        let monthlyIncome = currentProfile?.settings.monthlyIncome ?? 0
-        WidgetDataManager.shared.updateWidgetData(
-            bills: bills,
-            expenses: expenses,
-            monthlyIncome: monthlyIncome,
-            aiInsight: nil
-        )
-        print("✅ Widget data updated with \(bills.count) bills, \(expenses.count) expenses, and $\(monthlyIncome) monthly income")
-    }
-    
+
     // MARK: - Private Methods
     
     private func loadCachedData() {

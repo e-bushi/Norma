@@ -19,29 +19,27 @@ class ConversationManager: ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
 
+    /// Tracks message IDs that were added during the current session (should animate)
+    @Published var newlyAddedMessageIds: Set<String> = []
+
     // MARK: - Dependencies
 
     private let dataManager: DataManager
-    private var userId: String?
+    private let sessionViewModel: SessionViewModel
 
     // MARK: - Initialization
 
-    init(dataManager: DataManager) {
+    init(dataManager: DataManager, sessionViewModel: SessionViewModel) {
         self.dataManager = dataManager
-    }
-
-    // MARK: - Configuration
-
-    func configure(userId: String) {
-        self.userId = userId
+        self.sessionViewModel = sessionViewModel
     }
 
     // MARK: - Conversation Loading
 
     /// Load all conversations for the current user
     func loadConversations() async {
-        guard let userId = userId else {
-            print("❌ ConversationManager: No userId configured")
+        guard let userId = sessionViewModel.currentUser?.userId else {
+            print("❌ ConversationManager: No userId found in sessionViewModel.currentUser")
             return
         }
 
@@ -51,10 +49,7 @@ class ConversationManager: ObservableObject {
         do {
             conversations = try await dataManager.fetchAllConversations(userId: userId)
 
-            // If no current conversation selected and we have conversations, select the most recent
-            if currentConversation == nil, let first = conversations.first {
-                selectConversation(first)
-            }
+            // Don't auto-select a conversation - app should start with empty state (new conversation)
 
             print("✅ ConversationManager: Loaded \(conversations.count) conversations")
         } catch {
@@ -69,8 +64,8 @@ class ConversationManager: ObservableObject {
 
     /// Create a new conversation and set it as current
     func createNewConversation() -> ChatConversation {
-        guard let userId = userId else {
-            fatalError("ConversationManager: No userId configured")
+        guard let userId = sessionViewModel.currentUser?.userId else {
+            fatalError("ConversationManager: No userId found in sessionViewModel.currentUser")
         }
 
         let newConversation = ChatConversation(
@@ -81,11 +76,12 @@ class ConversationManager: ObservableObject {
 
         currentConversation = newConversation
         currentMessages = []
+        newlyAddedMessageIds = []  // Fresh conversation
 
         // Add to local list (will be persisted on first message)
         conversations.insert(newConversation, at: 0)
 
-        print("✅ ConversationManager: Created new conversation: \(newConversation.id)")
+        print("✅ ConversationManager: Created new conversation: \(newConversation.id ?? "new (no id yet)")")
         return newConversation
     }
 
@@ -95,21 +91,30 @@ class ConversationManager: ObservableObject {
     func selectConversation(_ conversation: ChatConversation) {
         currentConversation = conversation
         currentMessages = conversation.messages
+        newlyAddedMessageIds = []  // Clear - historical messages should not animate
 
-        print("✅ ConversationManager: Selected conversation: \(conversation.id)")
+        print("✅ ConversationManager: Selected conversation: \(conversation.id ?? "new")")
     }
 
     // MARK: - Message Management
 
     /// Append a message to the current conversation and auto-save
+    /// If no conversation exists, creates a new one automatically
     func appendMessage(_ message: ChatMessage) async {
+        // Auto-create conversation if none exists
+        if currentConversation == nil {
+            print("📝 ConversationManager: No current conversation, creating new one")
+            _ = createNewConversation()
+        }
+
         guard var conversation = currentConversation else {
-            print("❌ ConversationManager: No current conversation to append message to")
+            print("❌ ConversationManager: Failed to create conversation for message")
             return
         }
 
         // Add message locally
         currentMessages.append(message)
+        newlyAddedMessageIds.insert(message.id)  // Track as new - should animate
         conversation.messages = currentMessages
         currentConversation = conversation
 
@@ -121,6 +126,8 @@ class ConversationManager: ObservableObject {
 
     /// Save the current conversation to the backend
     func saveCurrentConversation() async {
+        print("🔍 [ConversationManager] saveCurrentConversation() called")
+
         guard var conversation = currentConversation else {
             print("❌ ConversationManager: No current conversation to save")
             return
@@ -129,37 +136,70 @@ class ConversationManager: ObservableObject {
         // Sync messages
         conversation.messages = currentMessages
 
+        print("🔍 [ConversationManager] Preparing to save conversation:")
+        print("🔍 [ConversationManager] - ID: \(conversation.id ?? "nil (new)")")
+        print("🔍 [ConversationManager] - User ID: \(conversation.userId)")
+        print("🔍 [ConversationManager] - Title: \(conversation.title ?? "nil")")
+        print("🔍 [ConversationManager] - Message count: \(conversation.messages.count)")
+        for (index, msg) in conversation.messages.enumerated() {
+            print("🔍 [ConversationManager]   Message \(index): role=\(msg.role.rawValue), content=\(String(msg.content.prefix(50)))...")
+            print("🔍 [ConversationManager]   - hasUIComponent: \(msg.uiComponent != nil)")
+            print("🔍 [ConversationManager]   - hasAnthropicContent: \(msg.anthropicContent != nil)")
+        }
+
         do {
-            // Check if this is a new conversation (not yet persisted)
-            let existingConversation = try await dataManager.fetchConversation(conversationId: conversation.id)
+            // Check if this is a new conversation (id is nil means not yet persisted)
+            if let conversationId = conversation.id {
+                // Has an ID - check if it exists in database
+                print("🔍 [ConversationManager] Checking if conversation exists in database...")
+                let existingConversation = try await dataManager.fetchConversation(conversationId: conversationId)
+                print("🔍 [ConversationManager] Existing conversation found: \(existingConversation != nil)")
 
-            if existingConversation != nil {
-                // Update existing
-                let updated = try await dataManager.updateConversation(conversation)
-                currentConversation = updated
+                if existingConversation != nil {
+                    // Update existing
+                    print("🔍 [ConversationManager] Updating existing conversation...")
+                    let updated = try await dataManager.updateConversation(conversation)
+                    currentConversation = updated
 
-                // Update in list
-                if let index = conversations.firstIndex(where: { $0.id == updated.id }) {
-                    conversations[index] = updated
+                    // Update in list
+                    if let index = conversations.firstIndex(where: { $0.id == updated.id }) {
+                        conversations[index] = updated
+                    }
+                    print("✅ [ConversationManager] Update successful")
+                } else {
+                    // ID exists but not in database - create new
+                    print("🔍 [ConversationManager] Creating new conversation (ID not found in database)...")
+                    let created = try await dataManager.createConversation(conversation)
+                    currentConversation = created
+
+                    // Update in list
+                    if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+                        conversations[index] = created
+                    }
+                    print("✅ [ConversationManager] Create successful")
                 }
             } else {
-                // Create new
+                // No ID - definitely a new conversation, let Supabase generate the ID
+                print("🔍 [ConversationManager] Creating new conversation (no ID, Supabase will generate)...")
                 let created = try await dataManager.createConversation(conversation)
                 currentConversation = created
 
-                // Update in list
-                if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+                // Find the local conversation (by matching first in list since it was just inserted)
+                // and replace with the created version that has the server-generated ID
+                if let index = conversations.firstIndex(where: { $0.id == nil || $0.id == conversation.id }) {
                     conversations[index] = created
                 }
+                print("✅ [ConversationManager] Create successful, ID: \(created.id ?? "nil")")
             }
 
-            // Re-sort conversations by updatedAt
-            conversations.sort { $0.updatedAt > $1.updatedAt }
+            // Re-sort conversations by updatedAt (handle optional)
+            conversations.sort { ($0.updatedAt ?? "") > ($1.updatedAt ?? "") }
 
             print("✅ ConversationManager: Saved conversation with \(conversation.messages.count) messages")
         } catch {
             self.error = error
             print("❌ ConversationManager: Failed to save conversation: \(error.localizedDescription)")
+            print("❌ ConversationManager: Full error: \(error)")
         }
     }
 
@@ -167,14 +207,25 @@ class ConversationManager: ObservableObject {
 
     /// Delete a conversation permanently
     func deleteConversation(_ conversation: ChatConversation) async {
+        guard let conversationId = conversation.id else {
+            // No ID means it was never persisted - just remove locally
+            conversations.removeAll { $0.id == nil && $0.userId == conversation.userId }
+            if currentConversation?.id == nil {
+                currentConversation = nil
+                currentMessages = []
+            }
+            print("✅ ConversationManager: Removed local-only conversation")
+            return
+        }
+
         do {
-            try await dataManager.deleteConversation(conversationId: conversation.id)
+            try await dataManager.deleteConversation(conversationId: conversationId)
 
             // Remove from local list
-            conversations.removeAll { $0.id == conversation.id }
+            conversations.removeAll { $0.id == conversationId }
 
             // If we deleted the current conversation, clear it
-            if currentConversation?.id == conversation.id {
+            if currentConversation?.id == conversationId {
                 currentConversation = nil
                 currentMessages = []
 
@@ -184,7 +235,7 @@ class ConversationManager: ObservableObject {
                 }
             }
 
-            print("✅ ConversationManager: Deleted conversation: \(conversation.id)")
+            print("✅ ConversationManager: Deleted conversation: \(conversationId)")
         } catch {
             self.error = error
             print("❌ ConversationManager: Failed to delete conversation: \(error.localizedDescription)")
@@ -275,6 +326,7 @@ class ConversationManager: ObservableObject {
     func clearCurrentConversation() {
         currentConversation = nil
         currentMessages = []
+        newlyAddedMessageIds = []
     }
 
     /// Get display title for a conversation
@@ -293,7 +345,8 @@ class ConversationManager: ObservableObject {
     /// Format relative timestamp for display
     func relativeTimestamp(for conversation: ChatConversation) -> String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: conversation.updatedAt) else {
+        guard let updatedAt = conversation.updatedAt,
+              let date = formatter.date(from: updatedAt) else {
             return ""
         }
 

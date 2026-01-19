@@ -8,12 +8,12 @@
 import Foundation
 
 struct ChatConversation: Identifiable, Codable {
-    let id: String              // UUID - primary key for multi-conversation support
+    var id: String?             // UUID - primary key (optional for insert, Supabase generates)
     let userId: String
     var title: String?          // AI-generated from first exchange
     var messages: [ChatMessage]
-    var createdAt: String       // ISO8601 timestamp
-    var updatedAt: String       // ISO8601 timestamp
+    var createdAt: String?      // ISO8601 timestamp (optional, Supabase generates)
+    var updatedAt: String?      // ISO8601 timestamp (optional, Supabase generates)
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,12 +25,12 @@ struct ChatConversation: Identifiable, Codable {
     }
 
     init(
-        id: String = UUID().uuidString,
+        id: String? = nil,
         userId: String,
         title: String? = nil,
         messages: [ChatMessage] = [],
-        createdAt: String = ISO8601DateFormatter().string(from: Date()),
-        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+        createdAt: String? = nil,
+        updatedAt: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -38,6 +38,45 @@ struct ChatConversation: Identifiable, Codable {
         self.messages = messages
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+}
+
+/// Struct for inserting new conversations - excludes server-generated fields
+struct ChatConversationInsert: Codable {
+    let userId: String
+    var title: String?
+    var messages: [ChatMessage]
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case title
+        case messages
+    }
+
+    init(from conversation: ChatConversation) {
+        // Note: user_id is UUID type in Supabase, so case doesn't matter
+        self.userId = conversation.userId
+        self.title = conversation.title
+        self.messages = conversation.messages
+    }
+}
+
+/// Struct for updating conversations - only includes mutable fields
+struct ChatConversationUpdate: Codable {
+    var title: String?
+    var messages: [ChatMessage]
+    var updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case messages
+        case updatedAt = "updated_at"
+    }
+
+    init(from conversation: ChatConversation) {
+        self.title = conversation.title
+        self.messages = conversation.messages
+        self.updatedAt = ISO8601DateFormatter().string(from: Date())
     }
 }
 

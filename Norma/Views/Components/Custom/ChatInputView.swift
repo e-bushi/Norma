@@ -13,16 +13,18 @@ struct ChatInputView: View {
     let onSend: () -> Void
     let onVoiceInput: () -> Void
     let billsTotal: Double
-    let budgetCount: Int
+    let activeChallenge: Challenge?
     let monthlySpend: Double
 
     @State private var showBills = false
-    @State private var showBudgets = false
+    @State private var showChallenge = false
     @State private var showExpenses = false
     @State private var visibleCapsules: Int = 0
     @State private var isExpanded: Bool = true
     @State private var pressedCapsule: String? = nil
+    @State private var isKeyboardVisible: Bool = false
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @EnvironmentObject var challengeViewModel: ChallengeViewModel
 
     private var currentMonthAbbreviation: String {
         let formatter = DateFormatter()
@@ -66,7 +68,7 @@ struct ChatInputView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "doc.text.fill")
                                         .font(.system(size: 12))
-                                    Text("Bills: \(profileViewModel.formatCurrency(billsTotal))")
+                                    Text("Bills: \(profileViewModel.formatCurrencyTruncated(billsTotal))")
                                         .font(.normaFinancial(14))
                                         .lineLimit(1)
                                         .fixedSize()
@@ -90,19 +92,26 @@ struct ChatInputView: View {
                             .offset(x: visibleCapsules > 0 ? 0 : -30)
                             .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
 
-                            // Budgets tag
+                            // Challenge tag
                             Button {
                                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                 impactFeedback.impactOccurred()
-                                showBudgets = true
+                                showChallenge = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "chart.pie.fill")
+                                    Image(systemName: "target")
                                         .font(.system(size: 12))
-                                    Text("Budgets: \(budgetCount)")
-                                        .font(.normaFinancial(14))
-                                        .lineLimit(1)
-                                        .fixedSize()
+                                    if let challenge = activeChallenge {
+                                        Text("\(profileViewModel.formatCurrencyTruncated(challenge.amountRemaining)) left . \(challenge.shortDaysRemaining)")
+                                            .font(.normaFinancial(14))
+                                            .lineLimit(1)
+                                            .fixedSize()
+                                    } else {
+                                        Text("No Challenge")
+                                            .font(.normaFinancial(14))
+                                            .lineLimit(1)
+                                            .fixedSize()
+                                    }
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -133,7 +142,7 @@ struct ChatInputView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "creditcard.fill")
                                     .font(.system(size: 12))
-                                Text("\(currentMonthAbbreviation). Spend: \(profileViewModel.formatCurrency(monthlySpend))")
+                                Text("\(currentMonthAbbreviation). Spend: \(profileViewModel.formatCurrencyTruncated(monthlySpend))")
                                     .font(.normaFinancial(14))
                                     .lineLimit(1)
                                     .fixedSize()
@@ -203,20 +212,32 @@ struct ChatInputView: View {
                 RoundedRectangle(cornerRadius: 28)
                     .fill(.clear)
                     .glassEffect(in: RoundedRectangle(cornerRadius: 28))
-                    .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28)
                     .stroke(Color.gray.opacity(0.22), lineWidth: 1)
             )
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, isKeyboardVisible ? 12 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isKeyboardVisible)
         }
-        .padding(.top, 16)
+        .padding(.top, 12)
         .onAppear {
             // Animate capsules appearing
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 visibleCapsules = 3
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isKeyboardVisible = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isKeyboardVisible = false
             }
         }
         .background(
@@ -246,8 +267,10 @@ struct ChatInputView: View {
         .sheet(isPresented: $showBills) {
             BillHomeView()
         }
-        .sheet(isPresented: $showBudgets) {
-            MyBudgetView()
+        .sheet(isPresented: $showChallenge) {
+            ChallengesView()
+                .environmentObject(challengeViewModel)
+                .environmentObject(profileViewModel)
         }
         .sheet(isPresented: $showExpenses) {
             IncomeAndExpenseView()
@@ -282,7 +305,15 @@ struct SendButtonStyle: ButtonStyle {
         onSend: { print("Send tapped") },
         onVoiceInput: { print("Voice input tapped") },
         billsTotal: 1234.56,
-        budgetCount: 3,
+        activeChallenge: Challenge(
+            userId: "user",
+            amountTotal: 500,
+            amountRemaining: 247,
+            currency: "USD",
+            startDate: Date(),
+            endDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date(),
+            status: .active
+        ),
         monthlySpend: 2567.89
     )
     .background(Color("NormaBackground"))

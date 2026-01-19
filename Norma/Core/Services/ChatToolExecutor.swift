@@ -12,12 +12,12 @@ import Foundation
 class ChatToolExecutor {
     private let billViewModel: BillViewModel
     private let expenseViewModel: ExpenseViewModel
-    private let budgetViewModel: BudgetViewModel
+    private let challengeViewModel: ChallengeViewModel
 
-    init(billViewModel: BillViewModel, expenseViewModel: ExpenseViewModel, budgetViewModel: BudgetViewModel) {
+    init(billViewModel: BillViewModel, expenseViewModel: ExpenseViewModel, challengeViewModel: ChallengeViewModel) {
         self.billViewModel = billViewModel
         self.expenseViewModel = expenseViewModel
-        self.budgetViewModel = budgetViewModel
+        self.challengeViewModel = challengeViewModel
     }
 
     // MARK: - Main Executor
@@ -43,8 +43,8 @@ class ChatToolExecutor {
             return await executeShowBills(input: input)
         case "show_expenses_tool":
             return await executeShowExpenses(input: input)
-        case "show_budgets_tool":
-            return await executeShowBudgets(input: input)
+        case "show_challenge_tool":
+            return await executeShowChallenge()
         default:
             return ("Error: Unknown tool '\(name)'", nil)
         }
@@ -97,6 +97,12 @@ class ChatToolExecutor {
             status: status,
             isMostCritical: isFirstBill ? true : nil
         )
+
+        // Check for first bill added via chat milestone
+        let isFirst = await RewardMilestoneTracker.shared.checkAndMarkFirstTime(.firstBillAddedViaChat)
+        if isFirst {
+            RewardQueueManager.shared.enqueue(.firstBillViaChat(billName: name))
+        }
 
         return "Successfully created bill '\(name)' for $\(String(format: "%.2f", amount)). Frequency is set to Monthly and status is \(status == .overdue ? "Overdue" : "Scheduled")."
     }
@@ -367,34 +373,16 @@ class ChatToolExecutor {
         return ("Displaying \(expensesToShow.count) expense\(expensesToShow.count == 1 ? "" : "s")", .expenseCards(expensesToShow, currency: currency))
     }
 
-    private func executeShowBudgets(input: [String: Any]) async -> (String, UIComponent?) {
-        print("🔍 executeShowBudgets called with input: \(input)")
-        print("📊 Available budgets: \(budgetViewModel.budgets.count)")
+    private func executeShowChallenge() async -> (String, UIComponent?) {
+        print("🔍 executeShowChallenge called")
 
-        let budgetIds = input["budget_ids"] as? [String]
-
-        let budgetsToShow: [Budget]
-        if let ids = budgetIds, !ids.isEmpty {
-            // Filter by specific IDs
-            print("📋 Looking for specific budget IDs: \(ids)")
-            budgetsToShow = budgetViewModel.budgets.filter { budget in
-                guard let budgetId = budget.id else { return false }
-                return ids.contains(budgetId)
-            }
-        } else {
-            // No IDs provided - show ALL budgets
-            print("📋 No IDs provided, showing all budgets")
-            budgetsToShow = budgetViewModel.budgets
+        guard let challenge = challengeViewModel.activeChallenge else {
+            return ("You don't have an active challenge right now. One will be generated when you open the Challenges screen.", nil)
         }
 
-        print("✅ Showing \(budgetsToShow.count) budgets")
+        print("✅ Showing active challenge with \(challengeViewModel.formatCurrency(challenge.amountRemaining)) remaining")
 
-        if budgetsToShow.isEmpty {
-            return ("You don't have any budgets set up yet. Would you like to create one?", nil)
-        }
-
-        // TODO: Get currency from user profile settings
-        let currency = "USD"
-        return ("Displaying \(budgetsToShow.count) budget\(budgetsToShow.count == 1 ? "" : "s")", .budgetCards(budgetsToShow, currency: currency))
+        let currency = challenge.currency
+        return ("Here's your current challenge", .challengeCard(challenge, currency: currency))
     }
 }

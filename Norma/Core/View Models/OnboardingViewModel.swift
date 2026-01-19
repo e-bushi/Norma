@@ -104,14 +104,13 @@ class OnboardingViewModel: ObservableObject {
         do {
             _ = try await supabaseService.signIn(email: email, password: password)
 
-            // For login, just authenticate and go to main app
+            // For login, authenticate and handle success
+            // This stores credentials in shared keychain for Share Extension
+            await sessionViewModel.handleAuthenticationSuccess()
+
             // Returning users have already completed onboarding
-            sessionViewModel.isAuthenticated = true
             sessionViewModel.hasCompletedOnboarding = true
             sessionViewModel.hasCompletedInitialSetup = true
-
-            // Fetch the profile in the background (for display purposes)
-            await sessionViewModel.fetchUserProfile()
 
             isLoading = false
 
@@ -629,7 +628,7 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
-    /// Transfer bills, budgets, and expenses from preview mode to the real account
+    /// Transfer bills and expenses from preview mode to the real account
     private func transferPreviewModeData(userId: String) async {
         guard previewModeViewModel.hasUserDataToTransfer else {
             print("📦 No preview mode data to transfer")
@@ -640,7 +639,6 @@ class OnboardingViewModel: ObservableObject {
 
         // Get the data ready for transfer (with real userId)
         let billsToTransfer = previewModeViewModel.getUserBillsForTransfer(withUserId: userId)
-        let budgetsToTransfer = previewModeViewModel.getUserBudgetsForTransfer(withUserId: userId)
         let expensesToTransfer = previewModeViewModel.getUserExpensesForTransfer(withUserId: userId)
 
         // Save bills
@@ -650,16 +648,6 @@ class OnboardingViewModel: ObservableObject {
                 print("✅ Transferred bill: \(bill.name)")
             } catch {
                 print("❌ Failed to transfer bill \(bill.name): \(error)")
-            }
-        }
-
-        // Save budgets
-        for budget in budgetsToTransfer {
-            do {
-                _ = try await supabaseService.createBudget(budget)
-                print("✅ Transferred budget: \(budget.name)")
-            } catch {
-                print("❌ Failed to transfer budget \(budget.name): \(error)")
             }
         }
 

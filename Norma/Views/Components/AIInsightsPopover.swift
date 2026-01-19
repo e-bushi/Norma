@@ -13,7 +13,6 @@ struct AIInsightsPopover: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var budgetViewModel: BudgetViewModel
 
     @State private var appeared = false
     @State private var isGenerating = false
@@ -206,16 +205,9 @@ struct AIInsightsPopover: View {
                 // Monthly spending
                 let totalMonthlySpend = expenseViewModel.totalExpenses
 
-                // Budgets
-                let budgetCount = budgetViewModel.budgets.count
-                let averageBudgetUtilization: Double = {
-                    guard budgetCount > 0 else { return 0 }
-                    let totalUtilization = budgetViewModel.budgets.reduce(0.0) { total, budget in
-                        guard budget.amount > 0 else { return total }
-                        return total + (budget.currentSpent / budget.amount)
-                    }
-                    return totalUtilization / Double(budgetCount)
-                }()
+                // Budgets replaced with Challenges - using placeholder values
+                let budgetCount = 0
+                let averageBudgetUtilization: Double = 0
 
                 // Arc state (simplified)
                 let arcState: String = {
@@ -312,5 +304,4 @@ struct AIInsightsPopover: View {
     .environmentObject(sessionViewModel)
     .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-    .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }

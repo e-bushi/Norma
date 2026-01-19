@@ -22,7 +22,7 @@ struct BillHomeView: View {
     @State private var scrollTimer: Timer?
     @State private var showAddOptions = false
     @State private var showCreateBill = false
-    
+
     private var currentMonth: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM"
@@ -157,18 +157,18 @@ struct BillHomeView: View {
         // Simulate days with expense activity
         let activeDays = [2, 5, 7, 10, 12, 15, 17, 20, 22, 25, 27]
         let billAmount: Double = 1545.49
-        
+
         var runningTotal = billAmount
-        
+
         return activeDays.map { day in
             // Daily expense amount varies
             let dailyExpense = Double.random(in: 40...180)
-            
+
             let lowAmount = runningTotal
             let highAmount = runningTotal + dailyExpense
-            
+
             runningTotal = highAmount
-            
+
             return ExpenseChartDataPoint(
                 day: day,
                 highAmount: highAmount,
@@ -185,15 +185,13 @@ struct BillHomeView: View {
     let billViewModel = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let incomeViewModel = IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    let budgetViewModel = BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    
+
     return BillHomeView()
         .environmentObject(sessionViewModel)
         .environmentObject(billViewModel)
         .environmentObject(expenseViewModel)
         .environmentObject(incomeViewModel)
-        .environmentObject(budgetViewModel)
         .environmentObject(profileViewModel)
         .preferredColorScheme(.light)
 }

@@ -11,269 +11,206 @@ struct LandingPageView: View {
     @Binding var showSignUp: Bool
     @Binding var showSignIn: Bool
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
-    
+
     // Animation states
-    @State private var titleScale: CGFloat = 0.5
+    @State private var coinVisible = false
+    @State private var orbitCoinVisibility: [Bool] = Array(repeating: false, count: 8)
+    @State private var startHovering = false
+    @State private var titleScale: CGFloat = 0.8
     @State private var titleOpacity = 0.0
-    @State private var descriptionOpacity = 0.0
-    @State private var buttonsOpacity = 0.0
-    @State private var contentShouldBlur = true
-    @State private var contentScale: CGFloat = 0.8
-    @State private var typedSubtitle = ""
-    @State private var typedDescription = ""
+    @State private var titleOffset: CGFloat = -20
+    @State private var subtitleOpacity = 0.0
+    @State private var subtitleScale: CGFloat = 0.9
+    @State private var talkButtonOpacity = 0.0
+    @State private var talkButtonOffset: CGFloat = 30
+    @State private var signInOpacity = 0.0
+    @State private var signInOffset: CGFloat = 20
 
-    // Text animation states
-    @State private var textAppearAnimation = false
-    @State private var currentPage = 0
-    @State private var peekOffset: CGFloat = 0
-
-    private let fullSubtitle = "Know what you can really afford"
-    
-    // Content for each page
-    private let pageContent = [
-        (title: "See Where It Goes", description: "Your spending by category. No guesswork."),
-        (title: "Never Miss a Bill", description: "Every due date, right where you need it."),
-        (title: "Quick Expense Logging", description: "Track purchases in seconds. Ask Norma to log it."),
-        (title: "Ask Before You Buy", description: "Should I buy this? Just ask. I'll tell you if it's smart.")
+    // Orbiting coins (all except royalty)
+    private let orbitingCoins: [CoinTier] = [
+        .starter, .basic, .silver, .tealSteel, .gold, .skyBeige, .pinkPanther, .opal
     ]
-    
+
+    // Haptic generator
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Header with Norma title and slogan
-                VStack(spacing: 8) {
+            ZStack {
+                VStack(spacing: 4) {
+                    // Norma title
                     Text("Norma")
-                        .font(.normaTitle(48))
+                        .font(.normaTitle(64))
                         .foregroundColor(.primary)
                         .scaleEffect(titleScale)
                         .opacity(titleOpacity)
+                        .offset(y: titleOffset)
+                        .padding(.top, 32)
+                        .padding(.bottom, 0)
 
-                    Text(typedSubtitle)
+                    // Subtitle - plain text
+                    Text("Financial clarity for wherever you call home")
                         .font(.normaSubheadline(18))
                         .foregroundColor(.secondary)
-                        .opacity(descriptionOpacity)
-                }
-                .padding(.top, 32)
-                .padding(.bottom, 20)
-
-                VStack(spacing: 20) {
-                    // Mock views section - Swipeable horizontal layout
-                    TabView(selection: $currentPage) {
-                        // Mini Budget Disclosure View
-                        MiniBudgetDisclosureView(appeared: currentPage == 0 && titleOpacity > 0)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .tag(0)
-
-                        // Mini Expense Calendar View
-                        MiniExpenseCalendarView(appeared: currentPage == 1 && titleOpacity > 0)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .tag(1)
-
-                        // Mini Expense Disclosure View
-                        MiniExpenseDisclosureView(appeared: currentPage == 2 && titleOpacity > 0)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .tag(2)
-
-                        // Mini Chat View
-                        MiniChatView(appeared: currentPage == 3 && titleOpacity > 0)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .tag(3)
-                    }
-                    .offset(x: peekOffset)
-                    .frame(height: 320)
-                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                    .opacity(titleOpacity)
-                    .onChange(of: currentPage) {
-                        triggerTextAnimation()
-                    }
-
-                    // Animated title and description
-                    VStack(spacing: 12) {
-                        Text(pageContent[currentPage].title)
-                            .font(.normaTitle(24))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .offset(x: textAppearAnimation ? 0 : -20)
-                            .scaleEffect(textAppearAnimation ? 1 : 0.95)
-                            .opacity(textAppearAnimation ? 1 : 0)
-                            .animation(
-                                .spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0.3)
-                                .delay(0.1),
-                                value: textAppearAnimation
-                            )
-
-                        Text(typedDescription)
-                            .font(.normaInput(16))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(nil)
-                            .opacity(textAppearAnimation ? 1 : 0)
-                    }
-                    .padding(.horizontal, 32)
-
-                    // Custom page indicator dots
-                    HStack(spacing: 8) {
-                        ForEach(0..<4, id: \.self) { index in
-                            Circle()
-                                .fill(currentPage == index ? Color("NormaPastelTeal") : Color.gray.opacity(0.3))
-                                .frame(width: 8, height: 8)
-                                .scaleEffect(currentPage == index ? 1.2 : 1.0)
-                                .animation(.easeInOut(duration: 0.3), value: currentPage)
-                        }
-                    }
+                        .multilineTextAlignment(.center)
+                        .scaleEffect(subtitleScale)
+                        .opacity(subtitleOpacity)
+                        .padding(.horizontal, 32)
 
                     Spacer()
-                }
-                .padding(.top, 4)
-                .fluidBlur(isActive: contentShouldBlur)
-                .scaleEffect(contentScale)
-            
-            // Bottom buttons
-            VStack(spacing: 16) {
-                // Talk to Norma button
-                Button(action: {
-                    onboardingViewModel.currentStep = .previewMode
-                }) {
-                    Text("Talk to Norma now")
-                        .font(.normaHeadline(16))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color("NormaPastelTeal"),
-                                            Color("NormaPastelTeal").opacity(0.8)
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
+
+                    // Coin orbit system with TimelineView for smooth hover
+                    TimelineView(.animation(paused: !startHovering)) { timeline in
+                        let time = startHovering ? timeline.date.timeIntervalSinceReferenceDate : 0
+
+                        ZStack {
+                            // Orbiting smaller coins with hover effect
+                            ForEach(Array(orbitingCoins.enumerated()), id: \.element.id) { index, coin in
+                                let angleOffset = (360.0 / Double(orbitingCoins.count)) * Double(index)
+                                let isVisible = index < orbitCoinVisibility.count && orbitCoinVisibility[index]
+                                // Each coin hovers with a phase offset for wave effect
+                                let phaseOffset = Double(index) * 0.4
+                                let individualHover = sin(time * 1.5 + phaseOffset) * 6
+
+                                ZStack {
+                                    // Glow effect behind coin
+                                    Circle()
+                                        .fill(coin.glowColor.opacity(0.15))
+                                        .frame(width: 50, height: 50)
+                                        .blur(radius: 12)
+
+                                    StaticCoin3DView(fileName: coin.fileName)
+                                        .frame(width: 44, height: 44)
+                                }
+                                .offset(
+                                    x: cos(angleOffset * .pi / 180) * 120,
+                                    y: sin(angleOffset * .pi / 180) * 120 + individualHover
                                 )
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
+                                .scaleEffect(isVisible ? 1 : 0)
+                                .opacity(isVisible ? 1 : 0)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isVisible)
+                            }
 
-                // Sign in link
-                HStack(spacing: 4) {
-                    Text("Already have an account?")
-                        .font(.normaInput(14))
-                        .foregroundColor(.secondary)
+                            // Center royalty coin with glow
+                            ZStack {
+                                // Glow effect behind royalty coin
+                                Circle()
+                                    .fill(CoinTier.royalty.glowColor.opacity(0.12))
+                                    .frame(width: 180, height: 180)
+                                    .blur(radius: 30)
 
-                    Button(action: {
-                        showSignIn = true
-                        showSignUp = false
-                        onboardingViewModel.currentStep = .authentication
-                    }) {
-                        Text("Sign in here")
-                            .font(.normaHeadline(14))
-                            .foregroundColor(.primary)
-                            .underline()
+                                MotionCoin3DView(fileName: "norma-coin-royalty")
+                                    .frame(width: 160, height: 160)
+                            }
+                            .scaleEffect(coinVisible ? 1 : 0.3)
+                            .opacity(coinVisible ? 1 : 0)
+                        }
                     }
+                    .frame(width: 300, height: 300)
+
+                    Spacer()
+
+                    // Bottom buttons
+                    VStack(spacing: 16) {
+                        // Talk to Norma button with glass effect
+                        Button(action: {
+                            onboardingViewModel.currentStep = .previewMode
+                        }) {
+                            Text("Talk to Norma now")
+                                .font(.normaHeadline(16))
+                                .foregroundColor(Color("NormaPastelTeal"))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelTeal").opacity(0.4))
+                                        .glassEffect(in: Capsule())
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .opacity(talkButtonOpacity)
+                        .offset(y: talkButtonOffset)
+
+                        // Sign in link
+                        HStack(spacing: 4) {
+                            Text("Already have an account?")
+                                .font(.normaInput(14))
+                                .foregroundColor(.secondary)
+
+                            Button(action: {
+                                showSignIn = true
+                                showSignUp = false
+                                onboardingViewModel.currentStep = .authentication
+                            }) {
+                                Text("Sign in here")
+                                    .font(.normaHeadline(14))
+                                    .foregroundColor(.primary)
+                                    .underline()
+                            }
+                        }
+                        .opacity(signInOpacity)
+                        .offset(y: signInOffset)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 34)
                 }
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 34)
-            .opacity(buttonsOpacity)
             }
             .background(Color("NormaBackground"))
         }
         .onAppear {
-            // Single clean entrance for content
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                contentScale = 1.0
+            // Prepare haptic generator
+            impactGenerator.prepare()
+
+            // Coin pops in first
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
+                coinVisible = true
             }
 
-            // Title with soft pop
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
-                titleScale = 1.0
-                titleOpacity = 1.0
-            }
-
-            // Start typing subtitle after title appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.easeIn(duration: 0.3)) {
-                    descriptionOpacity = 1.0
-                }
-                startTypingAnimation()
-            }
-
-            // Buttons fade in
-            withAnimation(.easeOut(duration: 0.5).delay(0.7)) {
-                buttonsOpacity = 1.0
-            }
-
-            // Initial text animation for page content
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                    textAppearAnimation = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    startDescriptionTyping()
-                }
-            }
-
-            // Swipe hint animation - peek to show next card
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    peekOffset = -75
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.3)) {
-                        peekOffset = 0
+            // Stagger orbiting coins with haptics - use withAnimation for proper sync
+            let staggerDelay = 0.1
+            let startDelay = 0.3
+            for index in 0..<orbitingCoins.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + startDelay + (Double(index) * staggerDelay)) {
+                    impactGenerator.impactOccurred()
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        orbitCoinVisibility[index] = true
                     }
                 }
             }
-        }
-    }
-    
-    // Helper method to trigger text animation on page change
-    private func triggerTextAnimation() {
-        // Reset animation state
-        typedDescription = ""
-        withAnimation(.easeOut(duration: 0.1)) {
-            textAppearAnimation = false
-        }
 
-        // Small delay to ensure the state reset is processed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                textAppearAnimation = true
+            // Start continuous hover animation after all coins appear
+            let totalHoverDelay = startDelay + (Double(orbitingCoins.count) * staggerDelay) + 0.3
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalHoverDelay) {
+                startHovering = true
             }
 
-            // Start description typing after title appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                startDescriptionTyping()
+            // Title drops in with spring
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.75).delay(0.2)) {
+                titleScale = 1.0
+                titleOpacity = 1.0
+                titleOffset = 0
             }
-        }
-    }
 
-    // Typing animation for subtitle
-    private func startTypingAnimation() {
-        typedSubtitle = ""
-        let characters = Array(fullSubtitle)
-
-        for (index, character) in characters.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.05) {
-                typedSubtitle.append(character)
+            // Subtitle fades in and scales up
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4)) {
+                subtitleOpacity = 1.0
+                subtitleScale = 1.0
             }
-        }
-    }
 
-    // Typing animation for description
-    private func startDescriptionTyping() {
-        typedDescription = ""
-        let description = pageContent[currentPage].description
-        let characters = Array(description)
+            // Talk button slides up
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.6)) {
+                talkButtonOpacity = 1.0
+                talkButtonOffset = 0
+            }
 
-        for (index, character) in characters.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.03) {
-                typedDescription.append(character)
+            // Sign in slides up last
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.75)) {
+                signInOpacity = 1.0
+                signInOffset = 0
             }
         }
     }

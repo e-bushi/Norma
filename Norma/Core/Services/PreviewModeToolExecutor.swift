@@ -34,14 +34,10 @@ class PreviewModeToolExecutor {
             return handleCreateBill(input: input)
         case "create_expense":
             return await handleCreateExpense(input: input)
-        case "create_budget":
-            return await handleCreateBudget(input: input)
         case "show_bills_tool":
             return handleShowBills(input: input)
         case "show_expenses_tool":
             return handleShowExpenses(input: input)
-        case "show_budgets_tool":
-            return handleShowBudgets(input: input)
         case "show_save_progress_modal":
             return handleShowSaveProgressModal(input: input)
         case "show_days":
@@ -292,46 +288,6 @@ class PreviewModeToolExecutor {
         return ("Expense '\(name)' created successfully for \(amount)", uiComponent)
     }
 
-    private func handleCreateBudget(input: [String: Any]) async -> (String, UIComponent?) {
-        guard let name = input["name"] as? String,
-              let amount = input["amount"] as? Double else {
-            return ("Missing required fields for budget creation", nil)
-        }
-
-        let calendar = Calendar.current
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!
-        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
-
-        let budget = Budget(
-            id: UUID().uuidString,
-            userId: "preview-mode-user",
-            name: name,
-            amount: amount,
-            categoryId: input["category_id"] as? String,
-            startDate: startOfMonth,
-            endDate: endOfMonth,
-            isActive: true,
-            currentSpent: 0,
-            alertThreshold: 0.8,
-            notes: input["notes"] as? String
-        )
-
-        previewModeViewModel.addBudget(budget)
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
-        formatter.maximumFractionDigits = 0
-        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
-
-        let uiComponent = UIComponent.actionConfirmation(
-            icon: "chart.pie.fill",
-            message: "Norma created a budget: \(name) - \(formattedAmount)",
-            color: "NormaPastelPurple"
-        )
-        return ("Budget '\(name)' created successfully for \(amount)", uiComponent)
-    }
-
     // MARK: - Show Tools
 
     private func handleShowBills(input: [String: Any]) -> (String, UIComponent?) {
@@ -382,30 +338,6 @@ class PreviewModeToolExecutor {
         return ("Showing \(expenses.count) expense(s)", uiComponent)
     }
 
-    private func handleShowBudgets(input: [String: Any]) -> (String, UIComponent?) {
-        let budgetIdsString = input["budget_ids"] as? String ?? ""
-
-        // If budget_ids is empty, show all budgets
-        let budgets: [Budget]
-        if budgetIdsString.trimmingCharacters(in: .whitespaces).isEmpty {
-            budgets = previewModeViewModel.budgets
-        } else {
-            let budgetIds = budgetIdsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            budgets = previewModeViewModel.budgets.filter { budget in
-                guard let budgetId = budget.id else { return false }
-                return budgetIds.contains(budgetId)
-            }
-        }
-
-        if budgets.isEmpty {
-            return ("No budgets found", nil)
-        }
-
-        let currency = previewModeViewModel.userCurrency ?? "USD"
-        let uiComponent = UIComponent.budgetCards(budgets, currency: currency)
-        return ("Showing \(budgets.count) budget(s)", uiComponent)
-    }
-
     // MARK: - Modal Tools
 
     private func handleShowSaveProgressModal(input: [String: Any]) -> (String, UIComponent?) {
@@ -423,12 +355,10 @@ class PreviewModeToolExecutor {
         }
 
         let bills = previewModeViewModel.bills
-        let budgets = previewModeViewModel.budgets
 
         // Calculate daily burn
         let totalMonthlyBills = ArcCalculationService.calculateMonthlyBillsTotal(bills: bills)
-        let totalMonthlyBudgets = ArcCalculationService.calculateBudgetsTotal(budgets: budgets)
-        let dailyBurn = (totalMonthlyBills + totalMonthlyBudgets) / 30.0
+        let dailyBurn = totalMonthlyBills / 30.0
 
         // Calculate days
         let days = dailyBurn > 0 ? Int(floor(freedomFund / dailyBurn)) : 0
@@ -457,13 +387,11 @@ class PreviewModeToolExecutor {
             }
 
             let bills = previewModeViewModel.bills
-            let budgets = previewModeViewModel.budgets
 
             // Calculate arcs as decimal to show fractional progress
             displayArcCount = ArcCalculationService.calculateArcsDecimal(
                 freedomFund: freedomFund,
-                bills: bills,
-                budgets: budgets
+                bills: bills
             )
         }
 

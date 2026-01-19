@@ -31,14 +31,41 @@ class SessionViewModel: ObservableObject {
     
     // MARK: - Services
     private let dataManager: DataManager
-    
+    private var authStateTask: Task<Void, Never>?
+
     // MARK: - Initialization
-    
+
     init(dataManager: DataManager) {
         self.dataManager = dataManager
-        
+
         Task {
             await checkAuthenticationState()
+        }
+
+        // Start listening for auth state changes (token refreshes)
+        startAuthStateListener()
+    }
+
+    deinit {
+        authStateTask?.cancel()
+    }
+
+    // MARK: - Auth State Listener
+
+    private func startAuthStateListener() {
+        authStateTask = Task { [weak dataManager] in
+            guard let dataManager = dataManager else { return }
+
+            for await authChange in dataManager.supabaseService.authStateChanges {
+                guard !Task.isCancelled else { break }
+
+                // Update keychain whenever we get a new token
+                if let session = authChange.session {
+                    let userId = session.user.id.uuidString
+                    let tokenStored = SharedKeychainHelper.storeAuthToken(session.accessToken, for: userId)
+                    print("🔄 Auth state change (\(authChange.event)) - keychain token updated: \(tokenStored)")
+                }
+            }
         }
     }
     
@@ -74,8 +101,37 @@ class SessionViewModel: ObservableObject {
             await fetchUserProfile()
         }
 
+        // Store credentials in shared keychain for Share Extension
+        if let userId = currentUser?.userId {
+            let userIdStored = SharedKeychainHelper.storeUserId(userId)
+            print("🔑 Shared keychain - userId stored: \(userIdStored)")
+
+            if let token = dataManager.supabaseService.currentSession?.accessToken {
+                let tokenStored = SharedKeychainHelper.storeAuthToken(token, for: userId)
+                print("🔑 Shared keychain - authToken stored: \(tokenStored)")
+            } else {
+                print("⚠️ Shared keychain - no accessToken available to store")
+            }
+        } else {
+            print("⚠️ Shared keychain - no userId available to store")
+        }
+
         // Check if user has completed initial setup
         await checkInitialSetupStatus()
+
+        // Load reward milestones for this user
+        if let userId = currentUser?.userId {
+            await RewardMilestoneTracker.shared.loadMilestones(for: userId, dataManager: dataManager)
+
+            // Configure RewardQueueManager for backend sync
+            RewardQueueManager.shared.configure(
+                supabaseService: dataManager.supabaseService,
+                userId: userId
+            )
+
+            // Fetch any pending rewards that weren't shown (e.g., app crashed, reinstall)
+            await RewardQueueManager.shared.fetchAndQueuePendingRewards()
+        }
 
         print("🔐 Auth success - isAuthenticated: \(isAuthenticated), hasCompletedOnboarding: \(hasCompletedOnboarding), hasCompletedInitialSetup: \(hasCompletedInitialSetup), currentUser: \(currentUser?.name ?? "nil")")
     }
@@ -86,11 +142,19 @@ class SessionViewModel: ObservableObject {
         shouldShowOnboarding = true
         hasCompletedOnboarding = false
         hasCompletedInitialSetup = false
+
+        // Clear shared keychain data for Share Extension
+        SharedKeychainHelper.clearAllSharedData()
     }
     
     func logout() async {
         do {
             try await dataManager.signOut()
+
+            // Clear reward tracking state
+            RewardMilestoneTracker.shared.clearUser()
+            RewardQueueManager.shared.clearQueue()
+
             await handleNoAuthentication()
         } catch {
             showError(error.localizedDescription)
@@ -129,7 +193,131 @@ class SessionViewModel: ObservableObject {
             showError("Failed to update profile")
         }
     }
-    
+
+    /// Update user profile with arc change detection
+    /// If arc count increased, queues arc reward celebration
+    /// - Parameters:
+    ///   - profile: Updated profile with new freedom fund
+    ///   - bills: Current bills array for arc calculation
+    func updateUserProfileWithArcCheck(_ profile: Profile, bills: [Bill]) async {
+        // Calculate previous arc count before update
+        let previousFreedomFund = currentUser?.settings.freedomFund ?? 0
+        let previousArcCount = ArcCalculationService.calculateArcs(freedomFund: previousFreedomFund, bills: bills)
+
+        // Calculate new arc count
+        let newArcCount = ArcCalculationService.calculateArcs(freedomFund: profile.settings.freedomFund, bills: bills)
+
+        // Update the profile
+        currentUser = profile
+        do {
+            try await dataManager.updateUserProfile(profile)
+
+            // Check if arcs increased
+            if newArcCount > previousArcCount {
+                let coinTier = CoinTierService.currentCoinTier(for: newArcCount)
+                let reward = Reward.arcEarned(
+                    newArcCount: newArcCount,
+                    previousArcCount: previousArcCount,
+                    coinTier: coinTier
+                )
+                RewardQueueManager.shared.enqueue(reward)
+
+                // Update last known arc count
+                RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
+
+                print("🏆 Arc reward queued: \(previousArcCount) → \(newArcCount) arcs")
+            }
+        } catch {
+            showError("Failed to update profile")
+        }
+    }
+
+    /// Check for arc increase after bill changes (delete/reduce)
+    /// - Parameters:
+    ///   - bills: Updated bills array after change
+    func checkArcIncreaseAfterBillChange(bills: [Bill]) {
+        guard let profile = currentUser else { return }
+
+        let previousArcCount = RewardMilestoneTracker.shared.getLastArcCount()
+        let newArcCount = ArcCalculationService.calculateArcs(freedomFund: profile.settings.freedomFund, bills: bills)
+
+        if newArcCount > previousArcCount && previousArcCount > 0 {
+            let coinTier = CoinTierService.currentCoinTier(for: newArcCount)
+            let reward = Reward.arcEarned(
+                newArcCount: newArcCount,
+                previousArcCount: previousArcCount,
+                coinTier: coinTier
+            )
+            RewardQueueManager.shared.enqueue(reward)
+
+            // Update last known arc count
+            RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
+
+            print("🏆 Arc reward queued (bill change): \(previousArcCount) → \(newArcCount) arcs")
+        }
+    }
+
+    // MARK: - Freedom Fund Management
+
+    /// Deduct bill amount from freedom fund when a bill is paid
+    /// Shows appropriate toast notification based on the result
+    /// - Parameters:
+    ///   - amount: The bill amount to deduct
+    ///   - bills: Current bills array for arc calculation
+    func deductFreedomFundForBillPayment(amount: Double, bills: [Bill]) async {
+        guard var profile = currentUser else { return }
+
+        let currency = profile.settings.currency
+        let currentFreedomFund = profile.settings.freedomFund
+
+        // Case 1: Freedom fund is empty or zero - prompt to add funds
+        if currentFreedomFund <= 0 {
+            ToastManager.shared.show(.freedomFundEmpty())
+            print("💰 Freedom fund is empty - showing prompt to add funds")
+            return
+        }
+
+        // Calculate new freedom fund (minimum 0, can't go negative)
+        let newFreedomFund = max(0, currentFreedomFund - amount)
+        let actualDeduction = currentFreedomFund - newFreedomFund
+
+        // Update profile with new freedom fund
+        profile.settings.freedomFund = newFreedomFund
+        profile.freedomFund = newFreedomFund
+        currentUser = profile
+
+        do {
+            try await dataManager.updateUserProfile(profile)
+
+            // Calculate new arc count
+            let newArcCount = ArcCalculationService.calculateArcs(freedomFund: newFreedomFund, bills: bills)
+
+            // Update last known arc count
+            RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
+
+            // Case 2: Freedom fund is now depleted (reached 0)
+            if newFreedomFund == 0 {
+                ToastManager.shared.show(.freedomFundDepleted(amount: actualDeduction, currency: currency))
+                print("💰 Freedom fund depleted: -\(actualDeduction) → 0 remaining")
+            }
+            // Case 3: Normal deduction with remaining balance
+            else {
+                ToastManager.shared.show(.freedomFundDeducted(
+                    amount: actualDeduction,
+                    arcsRemaining: newArcCount,
+                    currency: currency
+                ))
+                print("💰 Freedom fund deducted: -\(actualDeduction) → \(newFreedomFund) remaining (\(newArcCount) arcs)")
+            }
+
+        } catch {
+            print("❌ Failed to update freedom fund: \(error)")
+            // Revert local change on failure
+            currentUser?.settings.freedomFund = currentFreedomFund
+            currentUser?.freedomFund = currentFreedomFund
+        }
+    }
+
     // MARK: - Setup and Onboarding
     
     func checkInitialSetupStatus() async {

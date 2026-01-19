@@ -15,7 +15,7 @@ struct MainChatView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var budgetViewModel: BudgetViewModel
+    @EnvironmentObject private var challengeViewModel: ChallengeViewModel
     @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @StateObject private var speechService = SpeechToTextService.shared
@@ -28,9 +28,9 @@ struct MainChatView: View {
     // Paywall state - commented out for later
     // @State private var showPaywall = false
 
-    @State private var showFinancialContext = false
     @State private var showIncomeEdit = false
     @State private var showArcDetail = false
+    @State private var showPendingTransactions = false
     @State private var navBarCapsulesVisible = false
     @State private var showIncomeDropdown = false
 
@@ -81,6 +81,10 @@ struct MainChatView: View {
         }
     }
 
+    private var pendingCount: Int {
+        dataManager.getPendingTransactionsCount()
+    }
+
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -93,7 +97,7 @@ struct MainChatView: View {
         ChatToolExecutor(
             billViewModel: billViewModel,
             expenseViewModel: expenseViewModel,
-            budgetViewModel: budgetViewModel
+            challengeViewModel: challengeViewModel
         )
     }
 
@@ -106,16 +110,21 @@ struct MainChatView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
+                        // Dismiss dropdown when tapping on chat content
+                        if showIncomeDropdown {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showIncomeDropdown = false
+                            }
+                        }
                     }
 
-                // Input area overlays at bottom (hidden when modals are open)
-                if !showIncomeEdit && !showArcDetail {
+                // Input area overlays at bottom (hidden when income edit modal is open)
+                if !showIncomeEdit {
                     inputArea
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showIncomeEdit)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showArcDetail)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -151,80 +160,48 @@ struct MainChatView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    ZStack(alignment: .center) {
-                        // Title row - tappable dropdown trigger
-                        Button {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIncomeDropdown.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text("Norma")
-                                    .font(.custom(FontFamily.Rubik.semiBold, size: 22))
-                                    .foregroundColor(.primary)
-
-                                Text("Pro")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color("NormaPastelPurple").opacity(0.8))
-                                    )
-
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                                    .rotationEffect(.degrees(showIncomeDropdown ? 180 : 0))
-                            }
+                    // Title row - tappable dropdown trigger
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showIncomeDropdown.toggle()
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Norma")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 22))
+                                .foregroundColor(.primary)
 
-                        // Income capsule dropdown - centered below title
-                        if showIncomeDropdown {
-                            Button {
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                impactFeedback.impactOccurred()
-                                showIncomeEdit = true
-                            } label: {
-                                Text(monthlyIncome > 0 ? "Income: \(formatCurrency(monthlyIncome))" : "Set Income")
-                                    .font(.normaFinancial(12))
-                                    .foregroundColor(Color("NormaPastelTeal"))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color("NormaPastelTeal").opacity(0.15))
-                                            .glassEffect(in: Capsule())
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
-                                    )
-                            }
-                            .buttonStyle(CapsulePressStyle())
-                            .padding(.top, 56)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.5).combined(with: .opacity),
-                                removal: .scale(scale: 0.5).combined(with: .opacity)
-                            ))
+                            Text("Pro")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelPurple").opacity(0.8))
+                                )
+
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showIncomeDropdown ? 180 : 0))
                         }
                     }
-                    .frame(height: 90)
+                    .buttonStyle(.plain)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    // Arc count capsule
                     Button {
                         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                         impactFeedback.impactOccurred()
                         showArcDetail = true
                     } label: {
                         HStack(spacing: 4) {
-                            NavBarCoin3DView()
+                            NavBarCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
+                                .id(CoinTierService.currentCoinFileName(for: arcCount))
                                 .frame(width: 20, height: 20)
 
                             Text("x \(arcCount)")
@@ -261,24 +238,91 @@ struct MainChatView: View {
         //         .presentationDragIndicator(.visible)
         // }
         .overlay {
-            if showFinancialContext {
-                AIInsightsPopover(isPresented: $showFinancialContext)
-            }
-        }
-        .overlay {
             if showIncomeEdit {
                 IncomeEditPopover(isPresented: $showIncomeEdit)
             }
         }
-        .overlay {
-            if showArcDetail {
-                ArcDetailPopover(
-                    isPresented: $showArcDetail,
-                    arcCount: arcCount,
-                    freedomFund: freedomFund,
-                    totalMonthlyBills: totalMonthlyBills,
-                    currency: currency
-                )
+        .sheet(isPresented: $showPendingTransactions) {
+            PendingTransactionsSheet()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPendingTransactions"))) { _ in
+            showPendingTransactions = true
+        }
+        .sheet(isPresented: $showArcDetail) {
+            ArcCountView(
+                arcCount: arcCount,
+                freedomFund: freedomFund,
+                totalMonthlyBills: totalMonthlyBills,
+                currency: currency
+            )
+        }
+        .overlay(alignment: .top) {
+            // Dropdown capsules that appear below nav bar when title is tapped
+            if showIncomeDropdown {
+                VStack(spacing: 0) {
+                    // Spacer to push dropdown below nav bar
+                    Color.clear
+                        .frame(height: 56)
+
+                    // Dropdown content
+                    HStack(spacing: 12) {
+                        // Income capsule
+                        Button {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showIncomeDropdown = false
+                            }
+                            showIncomeEdit = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "dollarsign.circle.fill")
+                                    .font(.system(size: 15))
+
+                                Text(formatCurrency(monthlyIncome))
+                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                            }
+                            .foregroundColor(Color("NormaPastelTeal"))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(Color("NormaPastelTeal").opacity(0.15))
+                                    .glassEffect(in: Capsule())
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                            )
+                        }
+                        .buttonStyle(CapsulePressStyle())
+
+                        // Pending capsule (always show)
+                        PendingCapsule(count: pendingCount) {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showIncomeDropdown = false
+                            }
+                            showPendingTransactions = true
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+                }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
+                .zIndex(100)
             }
         }
     }
@@ -291,9 +335,7 @@ struct MainChatView: View {
     @ViewBuilder
     private var chatContent: some View {
         if messages.isEmpty && !isLoading {
-            ChatEmptyStateView(onFlowerTap: {
-                showFinancialContext = true
-            })
+            ChatEmptyStateView(arcCount: arcCount)
         } else {
             ScrollViewReader { proxy in
                 GeometryReader { outerGeometry in
@@ -301,7 +343,10 @@ struct MainChatView: View {
                         VStack(spacing: 0) {
                             LazyVStack(spacing: 20) {
                                 ForEach(messages) { message in
-                                    ChatBubbleView(message: message)
+                                    ChatBubbleView(
+                                        message: message,
+                                        shouldAnimate: conversationManager.newlyAddedMessageIds.contains(message.id)
+                                    )
                                         .id(message.id)
                                         .transition(.asymmetric(
                                             insertion: .scale(scale: 0.8).combined(with: .opacity),
@@ -404,8 +449,8 @@ struct MainChatView: View {
                 onSend: sendMessage,
                 onVoiceInput: startVoiceInput,
                 billsTotal: billViewModel.bills.reduce(0) { $0 + $1.amount },
-                budgetCount: budgetViewModel.budgets.count,
-                monthlySpend: expenseViewModel.totalExpenses
+                activeChallenge: challengeViewModel.activeChallenge,
+                monthlySpend: expenseViewModel.currentMonthExpenses
             )
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isRecording)
@@ -503,7 +548,7 @@ struct MainChatView: View {
                 freedomFund: freedomFund,
                 bills: billViewModel.bills,
                 expenses: expenseViewModel.expenses,
-                budgets: budgetViewModel.budgets
+                challenge: challengeViewModel.activeChallenge
             )
 
             print("📋 System Prompt:")
@@ -556,7 +601,7 @@ struct MainChatView: View {
                     freedomFund: freedomFund,
                     bills: billViewModel.bills,
                     expenses: expenseViewModel.expenses,
-                    budgets: budgetViewModel.budgets
+                    challenge: challengeViewModel.activeChallenge
                 )
 
                 print("🤖 Requesting final AI response...")
@@ -696,7 +741,7 @@ struct MainChatView: View {
             freedomFund: freedomFund,
             bills: billViewModel.bills,
             expenses: expenseViewModel.expenses,
-            budgets: budgetViewModel.budgets
+            challenge: challengeViewModel.activeChallenge
         )
 
         do {
@@ -781,7 +826,7 @@ struct MainChatView: View {
 #Preview {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
-    let conversationManager = ConversationManager(dataManager: dataManager)
+    let conversationManager = ConversationManager(dataManager: dataManager, sessionViewModel: sessionViewModel)
 
     MainChatView(isMenuOpen: .constant(false))
         .environmentObject(dataManager)
@@ -789,6 +834,6 @@ struct MainChatView: View {
         .environmentObject(conversationManager)
         .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-        .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .preferredColorScheme(.dark)
 }

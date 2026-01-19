@@ -13,7 +13,8 @@ struct MainLayerView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var budgetViewModel: BudgetViewModel
+    @EnvironmentObject private var challengeViewModel: ChallengeViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
 
     @State private var isMenuOpen = false
     @State private var dragOffset: CGFloat = 0
@@ -142,7 +143,6 @@ struct MainLayerView: View {
                 .environmentObject(dataManager)
                 .environmentObject(billViewModel)
                 .environmentObject(expenseViewModel)
-                .environmentObject(budgetViewModel)
 
         case .settings:
             NavigationStack {
@@ -154,6 +154,17 @@ struct MainLayerView: View {
         case .currencyConverter:
             NavigationStack {
                 CurrencyConverterView(isMenuOpen: $isMenuOpen)
+            }
+
+        case .overview:
+            NavigationStack {
+                FinancialOverviewView(isMenuOpen: $isMenuOpen)
+                    .environmentObject(sessionViewModel)
+                    .environmentObject(dataManager)
+                    .environmentObject(billViewModel)
+                    .environmentObject(expenseViewModel)
+                    .environmentObject(challengeViewModel)
+                    .environmentObject(profileViewModel)
             }
         }
     }

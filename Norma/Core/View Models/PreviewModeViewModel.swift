@@ -14,7 +14,6 @@ class PreviewModeViewModel: ObservableObject {
     // MARK: - Published Properties
 
     @Published var bills: [Bill] = []
-    @Published var budgets: [Budget] = []
     @Published var expenses: [Expense] = []
 
     // Onboarding data
@@ -26,7 +25,6 @@ class PreviewModeViewModel: ObservableObject {
 
     // Preview mode completion tracking
     @Published var hasAddedBill = false
-    @Published var hasAddedBudget = false
     @Published var hasAddedExpense = false
     @Published var showCompletionModal = false
 
@@ -39,7 +37,7 @@ class PreviewModeViewModel: ObservableObject {
     // MARK: - Computed Properties
 
     var isPreviewModeComplete: Bool {
-        hasAddedBill && hasAddedBudget && hasAddedExpense
+        hasAddedBill && hasAddedExpense
     }
 
     var totalBills: Double {
@@ -50,13 +48,8 @@ class PreviewModeViewModel: ObservableObject {
         expenses.reduce(0) { $0 + $1.amount }
     }
 
-    var budgetCount: Int {
-        budgets.count
-    }
-
     // Constants for tracking initial mock data
     private let initialBillsCount = 3
-    private let initialBudgetsCount = 2
     private let initialExpensesCount = 3
 
     // Flag to track if mock data has been generated
@@ -146,37 +139,6 @@ class PreviewModeViewModel: ObservableObject {
             mockBills.append(createBill(name: name, dayOfMonth: day, amount: amount, merchant: merchant, notes: notes))
         }
 
-        // MARK: - Generate 3-4 Budgets with Varying Progress
-
-        var mockBudgets: [Budget] = []
-
-        let allBudgets: [(String, Double, Double)] = [ // (name, amount, percentUsed)
-            ("Food & Groceries", 500, Double.random(in: 0.75...0.95)), // Nearly maxed
-            ("Entertainment", 200, Double.random(in: 0.40...0.60)),     // Medium
-            ("Transportation", 300, Double.random(in: 0.20...0.35)),    // Low
-            ("Shopping", 250, Double.random(in: 0.50...0.70))           // Medium-high
-        ]
-        let budgetConfigs = Array(allBudgets.shuffled().prefix(Int.random(in: 3...4)))
-
-        for (name, baseAmount, percentUsed) in budgetConfigs {
-            let amount = convert(baseAmount)
-            let currentSpent = round(amount * percentUsed * 100) / 100
-
-            mockBudgets.append(Budget(
-                id: UUID().uuidString,
-                userId: mockUserId,
-                name: name,
-                amount: amount,
-                categoryId: nil,
-                startDate: startOfMonth,
-                endDate: endOfMonth,
-                isActive: true,
-                currentSpent: currentSpent,
-                alertThreshold: 0.8,
-                notes: "Monthly \(name.lowercased()) budget"
-            ))
-        }
-
         // MARK: - Generate Smart Expenses (Current Month Only, Up to Today)
 
         var mockExpenses: [Expense] = []
@@ -186,22 +148,19 @@ class PreviewModeViewModel: ObservableObject {
 
         // Generate 15-25 expenses spread across available days
         let expenseCount = Int.random(in: 15...25)
-        let foodBudgetId = mockBudgets.first(where: { $0.name.contains("Food") })?.id
-        let transportBudgetId = mockBudgets.first(where: { $0.name.contains("Transportation") })?.id
-        let entertainmentBudgetId = mockBudgets.first(where: { $0.name.contains("Entertainment") })?.id
 
-        let expenseTemplates: [(String, Double, Double, PaymentMethod, String?, [String])] = [
-            // (name, minAmount, maxAmount, paymentMethod, budgetType, tags)
-            ("Coffee", 3.5, 6.5, .creditCard, "Food", ["coffee", "food"]),
-            ("Lunch", 10, 18, .creditCard, "Food", ["lunch", "food"]),
-            ("Groceries", 40, 120, .creditCard, "Food", ["groceries", "food"]),
-            ("Gas", 35, 55, .debitCard, "Transportation", ["gas", "transportation"]),
-            ("Uber", 12, 25, .digitalWallet, "Transportation", ["rideshare", "transportation"]),
-            ("Movie Tickets", 15, 30, .creditCard, "Entertainment", ["movies", "entertainment"]),
-            ("Dinner Out", 40, 85, .creditCard, "Food", ["dining", "food"]),
-            ("Snacks", 5, 12, .cash, nil, ["snacks", "food"]),
-            ("Coffee Shop", 8, 15, .creditCard, "Food", ["coffee", "food"]),
-            ("Fast Food", 8, 15, .creditCard, "Food", ["fast food", "food"])
+        let expenseTemplates: [(String, Double, Double, PaymentMethod, [String])] = [
+            // (name, minAmount, maxAmount, paymentMethod, tags)
+            ("Coffee", 3.5, 6.5, .creditCard, ["coffee", "food"]),
+            ("Lunch", 10, 18, .creditCard, ["lunch", "food"]),
+            ("Groceries", 40, 120, .creditCard, ["groceries", "food"]),
+            ("Gas", 35, 55, .debitCard, ["gas", "transportation"]),
+            ("Uber", 12, 25, .digitalWallet, ["rideshare", "transportation"]),
+            ("Movie Tickets", 15, 30, .creditCard, ["movies", "entertainment"]),
+            ("Dinner Out", 40, 85, .creditCard, ["dining", "food"]),
+            ("Snacks", 5, 12, .cash, ["snacks", "food"]),
+            ("Coffee Shop", 8, 15, .creditCard, ["coffee", "food"]),
+            ("Fast Food", 8, 15, .creditCard, ["fast food", "food"])
         ]
 
         for _ in 0..<expenseCount {
@@ -212,32 +171,20 @@ class PreviewModeViewModel: ObservableObject {
             let template = expenseTemplates.randomElement()!
             let amount = randomAmount(Double.random(in: template.1...template.2), variance: 0.05)
 
-            // Link to budget if applicable
-            var budgetId: String? = nil
-            if let budgetType = template.4 {
-                if budgetType == "Food" {
-                    budgetId = foodBudgetId
-                } else if budgetType == "Transportation" {
-                    budgetId = transportBudgetId
-                } else if budgetType == "Entertainment" {
-                    budgetId = entertainmentBudgetId
-                }
-            }
-
             mockExpenses.append(Expense(
                 id: UUID().uuidString,
                 userId: mockUserId,
                 name: template.0,
                 amount: amount,
                 expenseDate: dateFormatter.string(from: expenseDate),
-                budgetId: budgetId,
+                budgetId: nil,
                 billId: nil,
                 paymentMethod: template.3,
                 isRecurring: false,
                 recurringFrequency: nil,
                 merchant: nil,
                 location: nil,
-                tags: template.5,
+                tags: template.4,
                 notes: nil
             ))
         }
@@ -253,7 +200,6 @@ class PreviewModeViewModel: ObservableObject {
 
         // Set the mock data
         bills = mockBills
-        budgets = mockBudgets
         expenses = mockExpenses
     }
 
@@ -306,11 +252,6 @@ class PreviewModeViewModel: ObservableObject {
         checkForCompletion()
     }
 
-    func addBudget(_ budget: Budget) {
-        budgets.append(budget)
-        checkForCompletion()
-    }
-
     func addExpense(_ expense: Expense) {
         expenses.append(expense)
         checkForCompletion()
@@ -318,10 +259,6 @@ class PreviewModeViewModel: ObservableObject {
 
     func removeBill(_ bill: Bill) {
         bills.removeAll { $0.id == bill.id }
-    }
-
-    func removeBudget(_ budget: Budget) {
-        budgets.removeAll { $0.id == budget.id }
     }
 
     func removeExpense(_ expense: Expense) {
@@ -333,21 +270,14 @@ class PreviewModeViewModel: ObservableObject {
     private func checkForCompletion() {
         // Check if user has added their own items (beyond the initial mock data)
         let userBillsCount = bills.count - initialBillsCount
-        let userBudgetsCount = budgets.count - initialBudgetsCount
         let userExpensesCount = expenses.count - initialExpensesCount
 
         print("🔍 [Completion] Bills: \(bills.count) total, \(userBillsCount) user-added (initial: \(initialBillsCount))")
-        print("🔍 [Completion] Budgets: \(budgets.count) total, \(userBudgetsCount) user-added (initial: \(initialBudgetsCount))")
         print("🔍 [Completion] Expenses: \(expenses.count) total, \(userExpensesCount) user-added (initial: \(initialExpensesCount))")
 
         if userBillsCount > 0 && !hasAddedBill {
             hasAddedBill = true
             print("🔍 [Completion] Marked hasAddedBill = true")
-        }
-
-        if userBudgetsCount > 0 && !hasAddedBudget {
-            hasAddedBudget = true
-            print("🔍 [Completion] Marked hasAddedBudget = true")
         }
 
         if userExpensesCount > 0 && !hasAddedExpense {
@@ -364,10 +294,8 @@ class PreviewModeViewModel: ObservableObject {
 
     func reset() {
         bills.removeAll()
-        budgets.removeAll()
         expenses.removeAll()
         hasAddedBill = false
-        hasAddedBudget = false
         hasAddedExpense = false
         showCompletionModal = false
         hasMockData = false
@@ -378,10 +306,8 @@ class PreviewModeViewModel: ObservableObject {
     // Clear mock data but keep name and currency for real onboarding
     func clearMockData() {
         bills.removeAll()
-        budgets.removeAll()
         expenses.removeAll()
         hasAddedBill = false
-        hasAddedBudget = false
         hasAddedExpense = false
         showCompletionModal = false
         hasMockData = false
@@ -409,23 +335,6 @@ class PreviewModeViewModel: ObservableObject {
         }
     }
 
-    /// Get budgets ready for transfer to a real account (excludes mock data in preview mode)
-    func getUserBudgetsForTransfer(withUserId userId: String) -> [Budget] {
-        // In real onboarding mode, ALL budgets are user-added (no mock data exists)
-        // In preview mode, only transfer budgets beyond the initial mock data count
-        let userBudgets: [Budget]
-        if isRealOnboarding {
-            userBudgets = budgets
-        } else {
-            userBudgets = Array(budgets.dropFirst(initialBudgetsCount))
-        }
-        return userBudgets.map { budget in
-            var updatedBudget = budget
-            updatedBudget.userId = userId
-            return updatedBudget
-        }
-    }
-
     /// Get expenses ready for transfer to a real account (excludes mock data in preview mode)
     func getUserExpensesForTransfer(withUserId userId: String) -> [Expense] {
         // In real onboarding mode, ALL expenses are user-added (no mock data exists)
@@ -447,12 +356,11 @@ class PreviewModeViewModel: ObservableObject {
     var hasUserDataToTransfer: Bool {
         // In real onboarding mode, any data is user data
         if isRealOnboarding {
-            return !bills.isEmpty || !budgets.isEmpty || !expenses.isEmpty
+            return !bills.isEmpty || !expenses.isEmpty
         }
         // In preview mode, count data beyond mock data
         let userBillsCount = bills.count - initialBillsCount
-        let userBudgetsCount = budgets.count - initialBudgetsCount
         let userExpensesCount = expenses.count - initialExpensesCount
-        return userBillsCount > 0 || userBudgetsCount > 0 || userExpensesCount > 0
+        return userBillsCount > 0 || userExpensesCount > 0
     }
 }

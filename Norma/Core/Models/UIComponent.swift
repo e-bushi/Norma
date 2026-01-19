@@ -10,7 +10,7 @@ import Foundation
 enum UIComponent: Codable, Equatable {
     case billCards([Bill], currency: String)
     case expenseCards([Expense], currency: String)
-    case budgetCards([Budget], currency: String)
+    case challengeCard(Challenge, currency: String)
     case actionConfirmation(icon: String, message: String, color: String)
     case toolActivity(String)
     case arcDisplay(Double)
@@ -21,7 +21,7 @@ enum UIComponent: Codable, Equatable {
         case type
         case bills
         case expenses
-        case budgets
+        case challenge
         case currency
         case icon
         case message
@@ -43,10 +43,10 @@ enum UIComponent: Codable, Equatable {
             let expenses = try container.decode([Expense].self, forKey: .expenses)
             let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
             self = .expenseCards(expenses, currency: currency)
-        case "budgetCards":
-            let budgets = try container.decode([Budget].self, forKey: .budgets)
+        case "challengeCard":
+            let challenge = try container.decode(Challenge.self, forKey: .challenge)
             let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
-            self = .budgetCards(budgets, currency: currency)
+            self = .challengeCard(challenge, currency: currency)
         case "actionConfirmation":
             let icon = try container.decode(String.self, forKey: .icon)
             let message = try container.decode(String.self, forKey: .message)
@@ -78,9 +78,9 @@ enum UIComponent: Codable, Equatable {
             try container.encode("expenseCards", forKey: .type)
             try container.encode(expenses, forKey: .expenses)
             try container.encode(currency, forKey: .currency)
-        case .budgetCards(let budgets, let currency):
-            try container.encode("budgetCards", forKey: .type)
-            try container.encode(budgets, forKey: .budgets)
+        case .challengeCard(let challenge, let currency):
+            try container.encode("challengeCard", forKey: .type)
+            try container.encode(challenge, forKey: .challenge)
             try container.encode(currency, forKey: .currency)
         case .actionConfirmation(let icon, let message, let color):
             try container.encode("actionConfirmation", forKey: .type)

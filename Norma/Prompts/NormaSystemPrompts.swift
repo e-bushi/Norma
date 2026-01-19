@@ -66,7 +66,7 @@ struct NormaSystemPrompts {
         """
     }
     
-    static func generalChatPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    static func generalChatPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], challenge: Challenge?) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
@@ -109,10 +109,21 @@ struct NormaSystemPrompts {
             "- id: \(expense.id ?? "unknown"), \(expense.name): \(currency) \(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
         }.joined(separator: "\n")
 
-        // Format budgets
-        let budgetsList = budgets.map { budget in
-            "- id: \(budget.id ?? "unknown"), \(budget.name): \(currency) \(String(format: "%.2f", budget.amount)), spent: \(currency) \(String(format: "%.2f", budget.currentSpent))"
-        }.joined(separator: "\n")
+        // Format active challenge
+        let challengeInfo: String
+        if let challenge = challenge {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            challengeInfo = """
+            - Status: \(challenge.status.rawValue)
+            - Total budget: \(currency) \(String(format: "%.2f", challenge.amountTotal))
+            - Remaining: \(currency) \(String(format: "%.2f", challenge.amountRemaining))
+            - Period: \(dateFormatter.string(from: challenge.startDate)) to \(dateFormatter.string(from: challenge.endDate))
+            - Days remaining: \(challenge.daysRemaining)
+            """
+        } else {
+            challengeInfo = "No active challenge"
+        }
 
         return """
         You are Norma, a friendly financial companion who helps users make smart spending decisions.
@@ -128,8 +139,8 @@ struct NormaSystemPrompts {
         USER'S RECENT EXPENSES (last 20):
         \(expensesList.isEmpty ? "No expenses tracked yet" : expensesList)
 
-        USER'S BUDGETS:
-        \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
+        USER'S ACTIVE CHALLENGE:
+        \(challengeInfo)
 
         USER'S FINANCIAL CONTEXT:
         - Monthly income (after taxes): \(currency) \(String(format: "%.2f", monthlyIncome))
@@ -234,8 +245,9 @@ struct NormaSystemPrompts {
         - merchant, tags: Optional fields
 
         VISUAL DISPLAY TOOLS:
-        - Use show_bills_tool, show_expenses_tool, or show_budgets_tool when users want to SEE their data
-        - Pass the relevant IDs from the USER'S BILLS/EXPENSES/BUDGETS sections above
+        - Use show_bills_tool, show_expenses_tool, or show_challenge_tool when users want to SEE their data
+        - Pass the relevant IDs from the USER'S BILLS/EXPENSES sections above
+        - Use show_challenge_tool to display the user's active spending challenge visually
         - CRITICAL: When you use a show_*_tool, DO NOT list items in your text response. Cards display automatically. Just provide brief context or insights.
 
         Remember to be Norma - helpful, friendly, and focused on making finance management stress-free!
@@ -492,7 +504,7 @@ struct NormaSystemPrompts {
         }
     }
 
-    static func previewModePrompt(userName: String? = nil, currency: String? = nil, bills: [Bill], expenses: [Expense], budgets: [Budget]) -> String {
+    static func previewModePrompt(userName: String? = nil, currency: String? = nil, bills: [Bill], expenses: [Expense]) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
@@ -522,10 +534,6 @@ struct NormaSystemPrompts {
 
         let expensesList = expenses.prefix(20).map { expense in
             "- id: \(expense.id ?? "unknown"), \(expense.name): \(currencySymbol) \(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
-        }.joined(separator: "\n")
-
-        let budgetsList = budgets.map { budget in
-            "- id: \(budget.id ?? "unknown"), \(budget.name): \(currencySymbol) \(String(format: "%.2f", budget.amount)), spent: \(currencySymbol) \(String(format: "%.2f", budget.currentSpent))"
         }.joined(separator: "\n")
 
         // Build the prompt based on onboarding state
@@ -560,9 +568,9 @@ struct NormaSystemPrompts {
 
                I'm here to help you make **smart spending decisions before you buy**. I've loaded some sample financial data so you can explore what I can do.
 
-               **Are you thinking about buying anything today?** That's where I really shine - helping you figure out if a purchase makes sense based on your bills, budgets, and spending patterns.
+               **Are you thinking about buying anything today?** That's where I really shine - helping you figure out if a purchase makes sense based on your bills and spending patterns.
 
-               You can also ask me to show your bills, recent expenses, or budgets if you want to explore the data first!"
+               You can also ask me to show your bills or recent expenses if you want to explore the data first!"
 
                - **GOAL**: Get them to ask a "Should I buy..." question as their FIRST real interaction with you
 
@@ -625,9 +633,6 @@ struct NormaSystemPrompts {
             USER'S RECENT EXPENSES (last 20):
             \(expensesList.isEmpty ? "No expenses yet" : expensesList)
 
-            USER'S BUDGETS:
-            \(budgetsList.isEmpty ? "No budgets yet" : budgetsList)
-
             YOUR PERSONALITY:
             - Warm, encouraging, and enthusiastic
             - Like a trusted friend who's good with money
@@ -646,7 +651,7 @@ struct NormaSystemPrompts {
 
             When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful, contextual advice based on:
             - Their current bills and upcoming obligations
-            - Their budget status and spending patterns
+            - Their spending patterns
             - Their overall financial picture
 
             **PROACTIVE ENGAGEMENT**: If the conversation feels stale or users seem unsure what to ask:
@@ -655,15 +660,15 @@ struct NormaSystemPrompts {
             - Reference their data: "I see you have a Netflix bill coming up - want to review your subscriptions?"
 
             VISUAL DISPLAY TOOLS:
-            - Use show_bills_tool, show_expenses_tool, or show_budgets_tool when users want to SEE their data
+            - Use show_bills_tool or show_expenses_tool when users want to SEE their data
             - Pass the relevant IDs from the data above
             - CRITICAL: When you use a show_*_tool, DO NOT list items in your text response. Cards display automatically.
 
             PREVIEW MODE GUIDANCE:
             - This is SAMPLE DATA for exploration
             - Focus on answering their pre-purchase questions
-            - If they ask to see bills, expenses, or budgets, use the show tools
-            - DO NOT proactively suggest adding bills, expenses, or budgets
+            - If they ask to see bills or expenses, use the show tools
+            - DO NOT proactively suggest adding bills or expenses
             - Let them explore naturally and ask questions about purchases
 
             Remember: Make them fall in love with asking you for financial advice BEFORE making purchases!
@@ -761,13 +766,11 @@ struct NormaSystemPrompts {
 
         GUIDELINES:
         - Be conversational, like a well-traveled friend giving advice
-        - Pick 2-4 specific examples that make sense for this amount and destination
+        - Pick 1-2 specific examples that make sense for this amount and destination
         - Choose examples natural to that place (safari in South Africa, tapas in Spain, street food in Thailand, ski passes in Switzerland)
-        - Include a relative value comparison when helpful ("your dollar stretches 40% further here" or "think of it as spending $X back home")
-        - Vary your structure - don't always start or end the same way
-        - Keep it under 100 words - punchy and useful
+        - Keep it under 40 words - short and punchy
         - NO bullet points, NO emoji, NO rigid categories
-        - Be honest about expensive places too ("Switzerland is pricey...")
+        - Be honest about expensive places too
 
         Write your insight now:
         """

@@ -24,7 +24,7 @@ struct ChatToolsProvider {
             getExpenseSummaryTool(),
             getShowBillsTool(),
             getShowExpensesTool(),
-            getShowBudgetsTool(),
+            getShowChallengeTool(),
             getShowSaveProgressModalTool(),
             getShowDaysTool(),
             getShowArcCountTool(),
@@ -290,18 +290,13 @@ struct ChatToolsProvider {
         )
     }
 
-    static func getShowBudgetsTool() -> AnthropicTool {
+    static func getShowChallengeTool() -> AnthropicTool {
         AnthropicTool(
-            name: "show_budgets_tool",
-            description: "Display budget cards visually in the UI. Call without parameters to show ALL budgets, or pass specific budget_ids to filter. Use this when the user wants to SEE their budgets.",
+            name: "show_challenge_tool",
+            description: "Display the user's active spending challenge visually in the UI. Shows the remaining budget amount and days left in the current challenge. Use this when the user wants to see their challenge status.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
-                properties: [
-                    "budget_ids": AnthropicToolProperty(
-                        type: "array",
-                        description: "Optional: Array of budget UUID strings to display specific budgets. Omit to show ALL budgets."
-                    )
-                ],
+                properties: [:],
                 required: []
             )
         )

@@ -14,6 +14,7 @@ extension SupabaseService {
 
     /// Fetch all conversations for a user, sorted by most recently updated
     func fetchAllConversations(userId: String) async throws -> [ChatConversation] {
+        // Note: user_id is UUID type, so case doesn't matter
         let response: [ChatConversation] = try await from("chat_conversations")
             .select()
             .eq("user_id", value: userId)
@@ -37,31 +38,100 @@ extension SupabaseService {
 
     /// Create a new conversation
     func createConversation(_ conversation: ChatConversation) async throws -> ChatConversation {
-        let response: ChatConversation = try await from("chat_conversations")
-            .insert(conversation)
-            .select()
-            .single()
-            .execute()
-            .value
+        print("🔍 [SupabaseService] Creating conversation...")
+        print("🔍 [SupabaseService] User ID in conversation: \(conversation.userId)")
+        print("🔍 [SupabaseService] Authenticated user (currentUser): \(currentUser != nil ? "EXISTS" : "NIL")")
+        print("🔍 [SupabaseService] Authenticated user ID (UUID): \(currentUser?.id.uuidString ?? "nil")")
+        print("🔍 [SupabaseService] Authenticated user ID (lowercase): \(currentUser?.id.uuidString.lowercased() ?? "nil")")
+        print("🔍 [SupabaseService] Current session exists: \(currentSession != nil ? "YES" : "NO")")
+        print("🔍 [SupabaseService] IDs match (exact): \(conversation.userId == currentUser?.id.uuidString)")
+        print("🔍 [SupabaseService] IDs match (case-insensitive): \(conversation.userId.lowercased() == currentUser?.id.uuidString.lowercased())")
+        print("🔍 [SupabaseService] Title: \(conversation.title ?? "nil")")
+        print("🔍 [SupabaseService] Message count: \(conversation.messages.count)")
 
-        return response
+        // Use ChatConversationInsert to exclude server-generated fields (id, created_at, updated_at)
+        let insertData = ChatConversationInsert(from: conversation)
+
+        // Debug: Try encoding to see what will be sent
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let jsonData = try encoder.encode(insertData)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("🔍 [SupabaseService] INSERT JSON (using ChatConversationInsert - no id/created_at/updated_at):")
+                print("--- BEGIN JSON ---")
+                print(jsonString)
+                print("--- END JSON ---")
+            }
+        } catch {
+            print("❌ [SupabaseService] JSON encoding failed: \(error)")
+            throw error
+        }
+
+        // Insert using ChatConversationInsert (excludes id, created_at, updated_at - Supabase generates them)
+        do {
+            let response: ChatConversation = try await from("chat_conversations")
+                .insert(insertData)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            print("✅ [SupabaseService] Successfully created conversation: \(response.id ?? "nil")")
+            return response
+        } catch {
+            print("❌ [SupabaseService] Create conversation failed: \(error)")
+            print("❌ [SupabaseService] Error details: \(String(describing: error))")
+            throw error
+        }
     }
 
     /// Update an existing conversation (messages, title, updatedAt)
     func updateConversation(_ conversation: ChatConversation) async throws -> ChatConversation {
-        // Create updated conversation with current timestamp
-        var updatedConversation = conversation
-        updatedConversation.updatedAt = ISO8601DateFormatter().string(from: Date())
+        guard let conversationId = conversation.id else {
+            throw NSError(domain: "SupabaseService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Cannot update conversation without ID"])
+        }
 
-        let response: ChatConversation = try await from("chat_conversations")
-            .update(updatedConversation)
-            .eq("id", value: conversation.id)
-            .select()
-            .single()
-            .execute()
-            .value
+        // Create update struct (only mutable fields - excludes id, user_id, created_at)
+        let updateData = ChatConversationUpdate(from: conversation)
 
-        return response
+        print("🔍 [SupabaseService] Updating conversation...")
+        print("🔍 [SupabaseService] Conversation ID: \(conversationId)")
+        print("🔍 [SupabaseService] Message count: \(updateData.messages.count)")
+        print("🔍 [SupabaseService] Title: \(updateData.title ?? "nil")")
+
+        // Debug: Try encoding to verify data structure
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let jsonData = try encoder.encode(updateData)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("🔍 [SupabaseService] UPDATE JSON (only mutable fields):")
+                print("--- BEGIN JSON ---")
+                print(String(jsonString.prefix(1000)))
+                print("--- END JSON ---")
+            }
+        } catch {
+            print("❌ [SupabaseService] JSON encoding failed for update: \(error)")
+            throw error
+        }
+
+        do {
+            let response: ChatConversation = try await from("chat_conversations")
+                .update(updateData)
+                .eq("id", value: conversationId)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            print("✅ [SupabaseService] Successfully updated conversation: \(response.id ?? "nil")")
+            return response
+        } catch {
+            print("❌ [SupabaseService] Update conversation failed: \(error)")
+            print("❌ [SupabaseService] Error details: \(String(describing: error))")
+            throw error
+        }
     }
 
     /// Delete a conversation permanently by ID
@@ -69,46 +139,6 @@ extension SupabaseService {
         try await from("chat_conversations")
             .delete()
             .eq("id", value: conversationId)
-            .execute()
-    }
-
-    // MARK: - Legacy Methods (for backward compatibility)
-
-    /// Fetch chat conversation for a user (returns most recent)
-    @available(*, deprecated, message: "Use fetchAllConversations instead")
-    func fetchChatConversation(userId: String) async throws -> ChatConversation? {
-        let conversations = try await fetchAllConversations(userId: userId)
-        return conversations.first
-    }
-
-    /// Save or update chat conversation
-    @available(*, deprecated, message: "Use createConversation or updateConversation instead")
-    func saveChatConversation(_ conversation: ChatConversation) async throws -> ChatConversation {
-        // Check if conversation exists by ID
-        let existing = try await fetchConversation(conversationId: conversation.id)
-
-        if existing != nil {
-            return try await updateConversation(conversation)
-        } else {
-            return try await createConversation(conversation)
-        }
-    }
-
-    /// Clear chat conversation for a user
-    @available(*, deprecated, message: "Use deleteConversation instead")
-    func clearChatConversation(userId: String) async throws {
-        let conversations = try await fetchAllConversations(userId: userId)
-        for conversation in conversations {
-            try await deleteConversation(conversationId: conversation.id)
-        }
-    }
-
-    /// Delete chat conversation by userId
-    @available(*, deprecated, message: "Use deleteConversation(conversationId:) instead")
-    func deleteChatConversation(userId: String) async throws {
-        try await from("chat_conversations")
-            .delete()
-            .eq("user_id", value: userId)
             .execute()
     }
 }

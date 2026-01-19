@@ -180,24 +180,20 @@ extension DataManager {
     /// Migrate all user data to encrypted format
     func migrateAllDataToEncryption() async throws {
         print("📍 [DEBUG] DataManager.migrateAllDataToEncryption: Starting...")
-        
+
         do {
             print("📍 [DEBUG] Migrating expenses...")
             try await migrateExpensesToEncryption()
             print("✅ [DEBUG] Expenses migrated")
-            
-            print("📍 [DEBUG] Migrating budgets...")
-            try await migrateBudgetsToEncryption()
-            print("✅ [DEBUG] Budgets migrated")
-            
+
             print("📍 [DEBUG] Migrating bills...")
             try await migrateBillsToEncryption()
             print("✅ [DEBUG] Bills migrated")
-            
+
             print("📍 [DEBUG] Migrating profile settings...")
             try await migrateProfileSettingsToEncryption()
             print("✅ [DEBUG] Profile settings migrated")
-            
+
             print("✅ Successfully migrated all data to encrypted format")
         } catch {
             print("❌ [DEBUG] Migration failed at some point: \(error)")

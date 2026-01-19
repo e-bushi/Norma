@@ -33,6 +33,7 @@ struct PreviewModeChatView: View {
     @GestureState private var isUserScrolling = false
     @State private var flowState: String? = nil // "In flow", "Stagnant", or "Drifting"
     @State private var visibleNavCapsules: Int = 0
+    @State private var newlyAddedMessageIds: Set<String> = []
 
     private let maxSpacerHeight: CGFloat = 600
     private let maxToolChainDepth: Int = 2 // Prevent infinite tool call loops
@@ -79,8 +80,7 @@ struct PreviewModeChatView: View {
         guard let freedomFund = previewModeViewModel.userFreedomFund else { return 0 }
         return ArcCalculationService.calculateArcs(
             freedomFund: freedomFund,
-            bills: previewModeViewModel.bills,
-            budgets: previewModeViewModel.budgets
+            bills: previewModeViewModel.bills
         )
     }
 
@@ -277,7 +277,10 @@ struct PreviewModeChatView: View {
                     VStack(spacing: 0) {
                         LazyVStack(spacing: 20) {
                             ForEach(messages.filter { $0.isVisible }) { message in
-                                ChatBubbleView(message: message)
+                                ChatBubbleView(
+                                    message: message,
+                                    shouldAnimate: newlyAddedMessageIds.contains(message.id)
+                                )
                                     .id(message.id)
                                     .transition(.asymmetric(
                                         insertion: .scale(scale: 0.8).combined(with: .opacity),
@@ -421,8 +424,7 @@ struct PreviewModeChatView: View {
                     userName: previewModeViewModel.userName,
                     currency: previewModeViewModel.userCurrency,
                     bills: previewModeViewModel.bills,
-                    expenses: previewModeViewModel.expenses,
-                    budgets: previewModeViewModel.budgets
+                    expenses: previewModeViewModel.expenses
                 )
             }
 
@@ -441,6 +443,7 @@ struct PreviewModeChatView: View {
                 await MainActor.run {
                     isLoading = false
                     let aiMessage = ChatMessage(role: .assistant, content: text)
+                    newlyAddedMessageIds.insert(aiMessage.id)
                     messages.append(aiMessage)
                 }
 
@@ -502,8 +505,7 @@ struct PreviewModeChatView: View {
                         userName: previewModeViewModel.userName,
                         currency: previewModeViewModel.userCurrency,
                         bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses,
-                        budgets: previewModeViewModel.budgets
+                        expenses: previewModeViewModel.expenses
                     )
                 }
 
@@ -536,11 +538,13 @@ struct PreviewModeChatView: View {
                             print("🎨 Flow state set in nav bar: \(state)")
                             // Don't attach to message - it's shown in nav bar only
                             let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                            newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
                         } else {
                             // Normal UI components attach to message
                             print("🎨 Attaching UI component: \(String(describing: uiComponent))")
                             let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
+                            newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
                         }
                         print("✅ Message appended to chat")
@@ -553,6 +557,7 @@ struct PreviewModeChatView: View {
                         if let component = uiComponent {
                             print("🎨 Appending message with UI component despite unexpected response")
                             let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                            newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
                         }
                     }
@@ -611,11 +616,6 @@ struct PreviewModeChatView: View {
                 return "Creating expense: \(expenseName)..."
             }
             return "Creating expense..."
-        case "create_budget":
-            if let budgetName = input["name"] as? String {
-                return "Creating budget: \(budgetName)..."
-            }
-            return "Creating budget..."
         default:
             return "Processing..."
         }
@@ -675,8 +675,7 @@ struct PreviewModeChatView: View {
                 userName: previewModeViewModel.userName,
                 currency: previewModeViewModel.userCurrency,
                 bills: previewModeViewModel.bills,
-                expenses: previewModeViewModel.expenses,
-                budgets: previewModeViewModel.budgets
+                expenses: previewModeViewModel.expenses
             )
         }
 
@@ -707,11 +706,13 @@ struct PreviewModeChatView: View {
                         print("🎨 Flow state set in nav bar: \(state)")
                         // Don't attach to message - it's shown in nav bar only
                         let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
+                        newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
                     } else {
                         // Normal UI components attach to message
                         print("🎨 Attaching UI component: \(String(describing: uiComponent ?? previousUIComponent))")
                         let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
+                        newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
                     }
                     print("✅ Message appended to chat")
@@ -724,6 +725,7 @@ struct PreviewModeChatView: View {
                     if let component = uiComponent ?? previousUIComponent {
                         print("🎨 Appending message with previous UI component despite unexpected response")
                         let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
+                        newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
                     }
                 }
@@ -785,8 +787,7 @@ struct PreviewModeChatView: View {
                         userName: previewModeViewModel.userName,
                         currency: previewModeViewModel.userCurrency,
                         bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses,
-                        budgets: previewModeViewModel.budgets
+                        expenses: previewModeViewModel.expenses
                     )
                 }
 
@@ -807,6 +808,7 @@ struct PreviewModeChatView: View {
 
                     if case .text(let text) = response {
                         let greetingMessage = ChatMessage(role: .assistant, content: text)
+                        newlyAddedMessageIds.insert(greetingMessage.id)
                         messages.append(greetingMessage)
                     }
                 }
@@ -984,7 +986,7 @@ struct PreviewModeCompletionModal: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("You've completed preview mode by adding a bill, budget, and expense!")
+            Text("You've completed preview mode by adding a bill and expense!")
                 .normaBody()
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)

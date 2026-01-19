@@ -38,6 +38,16 @@ class ExpenseViewModel: ObservableObject {
     @Published var totalExpenses: Double = 0
     @Published var monthlyAverage: Double = 0
     @Published var topCategories: [(category: Category, amount: Double)] = []
+
+    /// Returns total expenses for the current calendar month only
+    var currentMonthExpenses: Double {
+        let calendar = Calendar.current
+        let now = Date()
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        let end = calendar.date(byAdding: .month, value: 1, to: start) ?? now
+        let currentMonthRange = DateInterval(start: start, end: end)
+        return dataManager.getTotalExpenses(for: currentMonthRange)
+    }
     
     // MARK: - Dependencies
     
@@ -85,9 +95,6 @@ class ExpenseViewModel: ObservableObject {
         totalExpenses = dataManager.getTotalExpenses(for: selectedDateRange)
         
         updateStatistics()
-        
-        // Update widget data
-        updateWidgetData()
     }
     
     func refreshExpenses() async {
@@ -169,11 +176,6 @@ class ExpenseViewModel: ObservableObject {
         do {
             try await dataManager.addExpenseWithEncryption(newExpense)
 
-            // If expense is linked to a budget, update budget's currentSpent
-            if let budgetId = budgetId {
-                try await dataManager.updateBudgetSpent(budgetId: budgetId, amountChange: amount)
-            }
-
             loadExpenses()
             showAddExpense = false
             isLoading = false
@@ -190,27 +192,7 @@ class ExpenseViewModel: ObservableObject {
         clearError()
 
         do {
-            // Get the old expense to check if budgetId changed
-            let oldExpense = expenses.first { $0.id == expense.id }
-            let oldBudgetId = oldExpense?.budgetId
-            let newBudgetId = expense.budgetId
-
-            // Update the expense
             try await dataManager.updateExpense(expense)
-
-            // Update budget currentSpent if budgetId changed
-            if oldBudgetId != newBudgetId {
-                // Remove amount from old budget
-                if let oldBudgetId = oldBudgetId {
-                    try await dataManager.updateBudgetSpent(budgetId: oldBudgetId, amountChange: -expense.amount)
-                }
-
-                // Add amount to new budget
-                if let newBudgetId = newBudgetId {
-                    try await dataManager.updateBudgetSpent(budgetId: newBudgetId, amountChange: expense.amount)
-                }
-            }
-
             loadExpenses()
         } catch {
             showError("Failed to update expense: \(error.localizedDescription)")
@@ -224,11 +206,6 @@ class ExpenseViewModel: ObservableObject {
         clearError()
 
         do {
-            // If expense was linked to a budget, subtract from currentSpent
-            if let budgetId = expense.budgetId {
-                try await dataManager.updateBudgetSpent(budgetId: budgetId, amountChange: -expense.amount)
-            }
-
             try await dataManager.deleteExpense(expense)
             loadExpenses()
         } catch {
@@ -236,28 +213,6 @@ class ExpenseViewModel: ObservableObject {
         }
 
         isLoading = false
-    }
-    
-    // MARK: - Quick Expense
-    
-    func addQuickExpense(amount: Double, budgetId: String) async -> Bool {
-        guard let budget = dataManager.budgets.first(where: { $0.id == budgetId }) else {
-            showError("Invalid budget")
-            return false
-        }
-        
-        // Format today's date as ISO8601 string for expense_date in local timezone
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.timeZone = TimeZone.current
-        let todayString = dateFormatter.string(from: Date())
-        
-        return await addExpense(
-            name: budget.name,
-            amount: amount,
-            expenseDate: todayString,
-            budgetId: budgetId,
-            paymentMethod: .debitCard
-        )
     }
     
     // MARK: - Filtering and Searching
@@ -351,29 +306,6 @@ class ExpenseViewModel: ObservableObject {
             count: count,
             average: average,
             period: period
-        )
-    }
-    
-    // MARK: - Widget Integration
-    
-    private func updateWidgetData() {
-        // Get all expenses and bills from DataManager
-        let allExpenses = dataManager.expenses
-        let bills = dataManager.bills
-        let monthlyIncome = dataManager.currentProfile?.settings.monthlyIncome ?? 0
-        
-        // Get currency information
-        let currencyCode = dataManager.currentProfile?.settings.currency ?? "USD"
-        let currencySymbol = CurrencyData.getCurrency(for: currencyCode).symbol
-        
-        // Update widget with current data
-        WidgetDataManager.shared.updateWidgetData(
-            bills: bills,
-            expenses: allExpenses,
-            monthlyIncome: monthlyIncome,
-            currencyCode: currencyCode,
-            currencySymbol: currencySymbol,
-            aiInsight: nil
         )
     }
     

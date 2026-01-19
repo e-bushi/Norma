@@ -9,12 +9,13 @@ import SwiftUI
 
 struct ChatBubbleView: View {
     let message: ChatMessage
+    var shouldAnimate: Bool = false
 
     var body: some View {
         if message.role == .user {
             UserMessageBubble(content: message.content)
         } else {
-            AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight)
+            AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight, shouldAnimate: shouldAnimate)
         }
     }
 }

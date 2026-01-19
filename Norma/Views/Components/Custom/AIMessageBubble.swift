@@ -30,6 +30,7 @@ struct AIMessageBubble: View {
     let content: String
     let uiComponent: UIComponent?
     let revealDirection: TextRevealDirection
+    let shouldAnimate: Bool
 
     @State private var visibleWordCount = 0
     @State private var showCards = false
@@ -65,10 +66,11 @@ struct AIMessageBubble: View {
         return false
     }
 
-    init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight) {
+    init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight, shouldAnimate: Bool = false) {
         self.content = content
         self.uiComponent = uiComponent
         self.revealDirection = revealDirection
+        self.shouldAnimate = shouldAnimate
     }
 
     var body: some View {
@@ -82,8 +84,8 @@ struct AIMessageBubble: View {
                 case .expenseCards(let expenses, let currency):
                     MiniExpenseCardView(expenses: expenses, currency: currency)
                         .transition(.opacity.combined(with: .scale))
-                case .budgetCards(let budgets, let currency):
-                    MiniBudgetCardView(budgets: budgets, currency: currency)
+                case .challengeCard(let challenge, let currency):
+                    MiniChallengeCardView(challenge: challenge, currency: currency)
                         .transition(.opacity.combined(with: .scale))
                 case .actionConfirmation(let icon, let message, let colorName):
                     ActionConfirmationCard(icon: icon, message: message, colorName: colorName)
@@ -111,22 +113,28 @@ struct AIMessageBubble: View {
                             .foregroundColor(Color("NormaText"))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .onAppear {
-                                // Only animate once per message
+                                // Only animate once per message, and only for new messages
                                 if !hasAnimated {
                                     hasAnimated = true
 
-                                    // Show cards immediately if present
-                                    if uiComponent != nil {
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            showCards = true
-                                        }
-                                        // Start text animation after a brief delay
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    if shouldAnimate {
+                                        // New message - show with animation
+                                        if uiComponent != nil {
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                showCards = true
+                                            }
+                                            // Start text animation after a brief delay
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                                startWordRevealAnimation()
+                                            }
+                                        } else {
+                                            // No UI component, start text animation immediately
                                             startWordRevealAnimation()
                                         }
                                     } else {
-                                        // No UI component, start text animation immediately
-                                        startWordRevealAnimation()
+                                        // Historical message - show instantly without animation
+                                        visibleWordCount = words.count
+                                        showCards = true
                                     }
                                 } else {
                                     // If already animated, show full text and cards immediately
@@ -140,12 +148,16 @@ struct AIMessageBubble: View {
                         .frame(width: UIScreen.main.bounds.width * 0.02)
                 }
             } else {
-                // For tool activity messages, just show the cards immediately
+                // For tool activity messages, show the cards (with or without animation based on shouldAnimate)
                 EmptyView()
                     .onAppear {
                         if !hasAnimated {
                             hasAnimated = true
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            if shouldAnimate {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    showCards = true
+                                }
+                            } else {
                                 showCards = true
                             }
                         } else {

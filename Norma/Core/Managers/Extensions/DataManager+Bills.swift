@@ -23,14 +23,6 @@ extension DataManager {
             await cacheBills(fetchedBills)
             
             print("Fetched \(fetchedBills.count) bills from server")
-            
-            // Update widget data
-            WidgetDataManager.shared.updateWidgetData(
-                bills: bills,
-                expenses: expenses,
-                monthlyIncome: currentProfile?.settings.monthlyIncome ?? 0,
-                aiInsight: nil
-            )
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch bills from server: \(error). Loading from cache...")
@@ -368,13 +360,6 @@ extension DataManager {
                 await cacheBills(decryptedBills)
                 
                 print("Fetched and decrypted \(decryptedBills.count) bills from server")
-                
-                // Update widget data
-                WidgetDataManager.shared.updateWidgetData(
-                    bills: bills,
-                    expenses: expenses,
-                    aiInsight: nil
-                )
             } else {
                 // Use legacy path
                 try await fetchBills(userId: userId)
@@ -523,16 +508,6 @@ extension DataManager {
             do {
                 try await fetchBillsWithEncryption(userId: userId)
                 print("✅ Bills loaded: \(bills.count) bills")
-                
-                // Update widget data after loading bills
-                await MainActor.run {
-                    let expenses = self.expenses
-                    WidgetDataManager.shared.updateWidgetData(
-                        bills: self.bills,
-                        expenses: expenses,
-                        aiInsight: nil
-                    )
-                }
             } catch {
                 print("Failed to load cached bills: \(error)")
             }

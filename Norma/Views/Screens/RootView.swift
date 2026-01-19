@@ -14,6 +14,8 @@ struct RootView: View {
     @EnvironmentObject var appCoordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
 
+    @ObservedObject private var rewardQueue = RewardQueueManager.shared
+
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
             MainLayerView()
@@ -31,14 +33,16 @@ struct RootView: View {
                     await sessionViewModel.fetchUserProfile()
                     // Then fetch financial data
                     try await dataManager.fetchAllFinancialData()
-                    // Force update widget data after loading
-                    await MainActor.run {
-                        dataManager.forceUpdateWidgetData()
-                    }
                 } catch {
                     print("Failed to load financial data: \(error)")
                 }
             }
+        }
+        .sheet(isPresented: $rewardQueue.isShowingCelebration) {
+            RewardCelebrationView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .interactiveDismissDisabled()
         }
     }
 }
@@ -49,26 +53,26 @@ struct ViewModelContainer<Content: View>: View {
     let dataManager: DataManager
     let sessionViewModel: SessionViewModel
     let content: Content
-    
+
     @StateObject private var billViewModel: BillViewModel
     @StateObject private var expenseViewModel: ExpenseViewModel
     @StateObject private var incomeViewModel: IncomeViewModel
-    @StateObject private var budgetViewModel: BudgetViewModel
+    @StateObject private var challengeViewModel: ChallengeViewModel
     @StateObject private var profileViewModel: ProfileViewModel
-    
+
     init(dataManager: DataManager, sessionViewModel: SessionViewModel, @ViewBuilder content: () -> Content) {
         self.dataManager = dataManager
         self.sessionViewModel = sessionViewModel
         self.content = content()
-        
+
         // Initialize view models with proper dependencies
         self._billViewModel = StateObject(wrappedValue: BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._expenseViewModel = StateObject(wrappedValue: ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._incomeViewModel = StateObject(wrappedValue: IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-        self._budgetViewModel = StateObject(wrappedValue: BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        self._challengeViewModel = StateObject(wrappedValue: ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._profileViewModel = StateObject(wrappedValue: ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     }
-    
+
     var body: some View {
         content
             .environmentObject(dataManager)
@@ -76,11 +80,12 @@ struct ViewModelContainer<Content: View>: View {
             .environmentObject(billViewModel)
             .environmentObject(expenseViewModel)
             .environmentObject(incomeViewModel)
-            .environmentObject(budgetViewModel)
+            .environmentObject(challengeViewModel)
             .environmentObject(profileViewModel)
             .onAppear {
-                // Set up BudgetViewModel dependency after view appears
-                budgetViewModel.setExpenseViewModel(expenseViewModel)
+                // Set up ChallengeViewModel dependencies
+                challengeViewModel.setExpenseViewModel(expenseViewModel)
+                challengeViewModel.setBillViewModel(billViewModel)
             }
     }
 }

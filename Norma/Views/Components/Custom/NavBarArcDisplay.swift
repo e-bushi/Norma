@@ -21,8 +21,17 @@ struct NavBarArcDisplay: View {
         } else {
             // Show single coin with multiplier in glass capsule
             HStack(spacing: 4) {
-                NavBarCoin3DView()
-                    .frame(width: coinSize, height: coinSize)
+                // Wrapped in CrossfadeView for smooth transition when tier changes
+                // initialDelay of 0.5s lets the view settle before crossfade can occur
+                CrossfadeView(
+                    key: CoinTierService.currentCoinFileName(for: arcCount),
+                    duration: 0.45,
+                    initialDelay: 0.5
+                ) { fileName in
+                    NavBarCoin3DView(fileName: fileName)
+                        .id(fileName)
+                        .frame(width: coinSize, height: coinSize)
+                }
 
                 Text("x \(arcCount)")
                     .font(.normaFinancial(12))
@@ -61,6 +70,7 @@ struct NavBarArcDisplay: View {
 
 /// Compact 3D coin view for navigation bar
 struct NavBarCoin3DView: UIViewRepresentable {
+    var fileName: String = "norma-coin"
 
     func makeUIView(context: Context) -> SCNView {
         let scnView = SCNView()
@@ -85,8 +95,8 @@ struct NavBarCoin3DView: UIViewRepresentable {
     }
 
     private func loadScene(into scnView: SCNView) -> Bool {
-        guard let url = Bundle.main.url(forResource: "norma-coin", withExtension: "usdz") else {
-            print("⚠️ NavBarCoin3DView: Could not find norma-coin.usdz")
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: "usdz") else {
+            print("⚠️ NavBarCoin3DView: Could not find \(fileName).usdz")
             return false
         }
 

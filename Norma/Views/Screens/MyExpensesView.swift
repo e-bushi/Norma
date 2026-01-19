@@ -8,26 +8,35 @@
 import SwiftUI
 
 struct MyExpensesView: View {
+    // Optional preset date for filtering
+    let presetDate: Date?
+
     // Environment objects
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
-    
+
     // Filter options for the list
     @State private var selectedFilter: ExpenseFilter = .all
-    
+
     // Selected date for the day picker
-    @State private var selectedDate: Date = Date()
-    @State private var showAllDates: Bool = true
-    
+    @State private var selectedDate: Date
+    @State private var showAllDates: Bool
+
     // Animation state
     @State private var headerAppeared = false
-    
+
     // Sheet presentation
     @State private var showNormaChatView = false
-    
+
     // Task Management
     @State private var refreshTask: Task<Void, Never>?
+
+    init(presetDate: Date? = nil) {
+        self.presetDate = presetDate
+        _selectedDate = State(initialValue: presetDate ?? Date())
+        _showAllDates = State(initialValue: presetDate == nil)
+    }
     
     var body: some View {
         NavigationStack {

@@ -11,6 +11,7 @@ import Foundation
 struct BillDueDateCalendarView: View {
     @State private var selectedDate: Date = Date()
     @State private var currentMonth: Date = Date()
+    @State private var billItemStates: [Bool] = []
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var billViewModel: BillViewModel
@@ -19,6 +20,9 @@ struct BillDueDateCalendarView: View {
 
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
+
+    // Haptic feedback
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
 
     // Dictionary to track bills per day
     var billsPerDay: [Date: [Double]] = [:]
@@ -34,6 +38,33 @@ struct BillDueDateCalendarView: View {
         billViewModel.activeBills.reduce(0) { $0 + $1.amount }
     }
 
+    // Numeric animation state
+    @State private var hasAppeared = false
+
+    private var displayedTotal: Double {
+        hasAppeared ? billAmountTotal : 0
+    }
+
+    private var billsForSelectedDate: [Bill] {
+        let calendar = Calendar.current
+        return billViewModel.activeBills.filter { bill in
+            calendar.isDate(bill.dueDate, inSameDayAs: selectedDate)
+        }
+    }
+
+    private func animateBillsStaggered() {
+        billItemStates = Array(repeating: false, count: billsForSelectedDate.count)
+        for i in 0..<billsForSelectedDate.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.08) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    if i < billItemStates.count {
+                        billItemStates[i] = true
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             // Header section matching ExpenseCalendarView style
@@ -43,46 +74,33 @@ struct BillDueDateCalendarView: View {
                     .foregroundColor(.secondary)
                     .tracking(1.2)
 
-                // Summary stats - redesigned with larger number
+                // Summary stats - redesigned with larger number and glow
                 VStack(spacing: 8) {
-                    Text(profileViewModel.formatCurrency(billAmountTotal))
-                        .font(.normaHeadline(48))
+                    Text(profileViewModel.formatCurrency(displayedTotal))
+                        .font(.normaHeadline(72))
                         .foregroundColor(.primary)
+                        .shadow(color: Color("NormaPastelCoral").opacity(0.25), radius: 20, y: 4)
+                        .contentTransition(.numericText())
                     Text("Total of all bills combined")
                         .font(.normaInput(13))
                         .foregroundColor(.secondary)
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            hasAppeared = true
+                        }
+                    }
                 }
             }
 
             // Calendar container
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: colorScheme == .dark ? [
-                                Color(red: 0.160, green: 0.128, blue: 0.102),
-                                Color(red: 0.180, green: 0.145, blue: 0.118)
-                            ] : [
-                                Color(UIColor.systemBackground),
-                                Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .fill(Color.gray.opacity(0.03))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.gray.opacity(0.2),
-                                        Color.gray.opacity(0.05)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
+                            .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
                     )
 
                 VStack(spacing: 20) {
@@ -110,6 +128,8 @@ struct BillDueDateCalendarView: View {
                                     billTotal: billsPerDay[date.startOfDay]?.reduce(0, +) ?? 0
                                 )
                                 .onTapGesture {
+                                    impactGenerator.impactOccurred()
+
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         selectedDate = date
                                     }
@@ -126,7 +146,61 @@ struct BillDueDateCalendarView: View {
                 }
                 .padding(.vertical, 20)
             }
+
+            // Selected day bills section
+            if !billsForSelectedDate.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Bills Due")
+                        .font(.normaInput(14))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+
+                    VStack(spacing: 8) {
+                        ForEach(Array(billsForSelectedDate.enumerated()), id: \.element.id) { index, bill in
+                            BillRowView(bill: bill)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.clear)
+                                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.15), lineWidth: 0.5)
+                                )
+                                .opacity(index < billItemStates.count && billItemStates[index] ? 1 : 0)
+                                .offset(x: index < billItemStates.count && billItemStates[index] ? 0 : -20)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .onAppear {
+                    animateBillsStaggered()
+                }
+            } else {
+                VStack(spacing: 8) {
+                    Text("No bills due")
+                        .font(.normaInput(14))
+                        .foregroundColor(.secondary)
+                    Text(selectedDateFormatted)
+                        .font(.normaInput(12))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .transition(.opacity)
+            }
         }
+        .onChange(of: selectedDate) { _, _ in
+            animateBillsStaggered()
+        }
+    }
+
+    private var selectedDateFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy"
+        return formatter.string(from: selectedDate)
     }
 
     // Extract all the dates for the current month's calendar view (including leading/trailing days)
@@ -233,6 +307,10 @@ struct BillDayCell: View {
                 } else if billCount > 0 {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color("NormaPastelTeal").opacity(0.05))
+
+                    // Pastel pink outline for days with bills due
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color("NormaPastelPink").opacity(0.6), lineWidth: 1.5)
                 }
             }
         )

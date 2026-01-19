@@ -15,14 +15,11 @@ struct ExpenseDetailView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var dataManager: DataManager
-    @EnvironmentObject private var budgetViewModel: BudgetViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
     @State private var showEditExpenseSheet = false
     @State private var showDeleteConfirmation = false
-    @State private var showLinkToBudgetSheet = false
     @State private var showLinkToBillSheet = false
-    @State private var showLinkedBudgetCard = false
     @State private var showLinkedBillCard = false
     
     private var expenseDate: Date {
@@ -43,11 +40,6 @@ struct ExpenseDetailView: View {
     private var linkedBill: Bill? {
         guard let billId = currentExpense.billId else { return nil }
         return billViewModel.bills.first { $0.id == billId }
-    }
-
-    private var linkedBudget: Budget? {
-        guard let budgetId = currentExpense.budgetId else { return nil }
-        return budgetViewModel.budgets.first { $0.id == budgetId }
     }
     
     private var paymentMethodIcon: String {
@@ -116,16 +108,7 @@ struct ExpenseDetailView: View {
             }
             .onAppear {
                 // Set initial state for linked items
-                showLinkedBudgetCard = linkedBudget != nil
                 showLinkedBillCard = linkedBill != nil
-            }
-            .onChange(of: currentExpense.budgetId) { oldValue, newValue in
-                // Animate when budget gets linked (from nil to having a value)
-                if oldValue == nil && newValue != nil {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                        showLinkedBudgetCard = true
-                    }
-                }
             }
             .onChange(of: currentExpense.billId) { oldValue, newValue in
                 // Animate when bill gets linked (from nil to having a value)
@@ -140,12 +123,6 @@ struct ExpenseDetailView: View {
             EditExpenseView(expense: expense)
                 .environmentObject(expenseViewModel)
                 .environmentObject(billViewModel)
-        }
-        .sheet(isPresented: $showLinkToBudgetSheet) {
-            LinkToBudgetView(expense: expense)
-                .environmentObject(expenseViewModel)
-                .environmentObject(dataManager)
-                .environmentObject(budgetViewModel)
         }
         .sheet(isPresented: $showLinkToBillSheet) {
             LinkToBillView(expense: expense)
@@ -301,47 +278,8 @@ struct ExpenseDetailView: View {
     
     @ViewBuilder
     private var linkedItemsView: some View {
-        if linkedBudget != nil || linkedBill != nil {
+        if linkedBill != nil {
             VStack(spacing: 12) {
-                if let budget = linkedBudget, showLinkedBudgetCard {
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(Color.green.opacity(0.1))
-                            .frame(width: 30, height: 30)
-                            .overlay(
-                                Image(systemName: "target")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.green)
-                            )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Linked to Budget")
-                                .font(.normaHeadline(10))
-                                .foregroundColor(.secondary)
-                            Text(budget.name)
-                                .font(.normaHeadline(12))
-                                .foregroundColor(.primary)
-                        }
-
-                        Spacer()
-
-                        Text(profileViewModel.formatCurrency(budget.amount))
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundColor(.green)
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.03))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                            )
-                    )
-                    .scaleEffect(showLinkedBudgetCard ? 1.0 : 0.8)
-                    .opacity(showLinkedBudgetCard ? 1.0 : 0.0)
-                }
-
                 if let bill = linkedBill, showLinkedBillCard {
                     HStack(spacing: 12) {
                         Circle()
@@ -386,27 +324,6 @@ struct ExpenseDetailView: View {
     
     private var actionButtonsView: some View {
         VStack(spacing: 12) {
-            // Link to Budget button
-            if linkedBudget == nil {
-                Button(action: {
-                    showLinkToBudgetSheet = true
-                }) {
-                    HStack {
-                        Image(systemName: "link")
-                            .font(.system(size: 16))
-                        Text("Link to Budget")
-                            .font(.normaHeadline(16))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.green.opacity(0.1))
-                    )
-                    .foregroundColor(.green)
-                }
-            }
-
             // Link to Bill button
             if linkedBill == nil {
                 Button(action: {
@@ -594,7 +511,6 @@ struct EditExpenseView: View {
         .environmentObject(expenseViewModel)
         .environmentObject(billViewModel)
         .environmentObject(dataManager)
-        .environmentObject(BudgetViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }
 
