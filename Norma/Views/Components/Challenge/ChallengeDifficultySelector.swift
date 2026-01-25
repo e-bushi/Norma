@@ -13,6 +13,10 @@ struct ChallengeDifficultySelector: View {
     let streakMultiplier: Double
     let onStartChallenge: () -> Void
 
+    @State private var displayedPoints: Int = 0
+    @State private var displayedStreak: Double = 0
+    @State private var hasAppeared = false
+
     private var pointsWithBonus: Int {
         Int(Double(selectedDifficulty.pointReward) * streakMultiplier)
     }
@@ -30,6 +34,10 @@ struct ChallengeDifficultySelector: View {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                             selectedDifficulty = difficulty
                         }
+                        // Animate points change
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            displayedPoints = Int(Double(difficulty.pointReward) * streakMultiplier)
+                        }
                     }
                 }
             }
@@ -40,7 +48,7 @@ struct ChallengeDifficultySelector: View {
                     onStartChallenge()
                 } label: {
                     Text("Start Challenge")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 17))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -52,12 +60,13 @@ struct ChallengeDifficultySelector: View {
 
                 // Points and streak info as pill badges
                 HStack(spacing: 12) {
-                    // Points pill
+                    // Points pill with glass effect
                     HStack(spacing: 6) {
                         Image(systemName: "star.fill")
                             .font(.system(size: 13))
-                        Text("\(pointsWithBonus) points")
-                            .font(.system(size: 14, weight: .medium))
+                        Text("\(displayedPoints) points")
+                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                            .contentTransition(.numericText())
                     }
                     .foregroundColor(selectedDifficulty.color)
                     .padding(.horizontal, 14)
@@ -65,15 +74,17 @@ struct ChallengeDifficultySelector: View {
                     .background(
                         Capsule()
                             .fill(selectedDifficulty.color.opacity(0.12))
+                            .glassEffect(in: Capsule())
                     )
 
-                    // Streak pill (only if multiplier > 1)
+                    // Streak pill with glass effect (only if multiplier > 1)
                     if streakMultiplier > 1 {
                         HStack(spacing: 6) {
                             Image(systemName: "flame.fill")
                                 .font(.system(size: 13))
-                            Text("\(streakMultiplier, specifier: "%.1f")x streak")
-                                .font(.system(size: 14, weight: .medium))
+                            Text("\(displayedStreak, specifier: "%.1f")x streak")
+                                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                .contentTransition(.numericText())
                         }
                         .foregroundColor(Color("NormaPastelCoral"))
                         .padding(.horizontal, 14)
@@ -81,7 +92,28 @@ struct ChallengeDifficultySelector: View {
                         .background(
                             Capsule()
                                 .fill(Color("NormaPastelCoral").opacity(0.12))
+                                .glassEffect(in: Capsule())
                         )
+                    }
+                }
+            }
+        }
+        .onAppear {
+            guard !hasAppeared else { return }
+            hasAppeared = true
+
+            // Animate points from 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    displayedPoints = pointsWithBonus
+                }
+            }
+
+            // Animate streak from 0 (if applicable)
+            if streakMultiplier > 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        displayedStreak = streakMultiplier
                     }
                 }
             }
@@ -103,7 +135,7 @@ struct DifficultyCard: View {
 
             // Name
             Text(difficulty.displayName)
-                .font(.system(size: 15, weight: .medium))
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
                 .foregroundColor(isSelected ? .primary : .secondary)
         }
         .frame(maxWidth: .infinity)

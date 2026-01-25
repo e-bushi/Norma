@@ -45,6 +45,9 @@ class ChatToolExecutor {
             return await executeShowExpenses(input: input)
         case "show_challenge_tool":
             return await executeShowChallenge()
+        case "schedule_reminder":
+            let result = await executeScheduleReminder(input: input)
+            return (result, nil)
         default:
             return ("Error: Unknown tool '\(name)'", nil)
         }
@@ -384,5 +387,106 @@ class ChatToolExecutor {
 
         let currency = challenge.currency
         return ("Here's your current challenge", .challengeCard(challenge, currency: currency))
+    }
+
+    private func executeScheduleReminder(input: [String: Any]) async -> String {
+        print("🔔 executeScheduleReminder called with input: \(input)")
+
+        guard let title = input["title"] as? String,
+              let message = input["message"] as? String,
+              let remindAtString = input["remind_at"] as? String else {
+            return "Error: Missing required information (title, message, and remind_at are required)"
+        }
+
+        // Parse the ISO8601 date string
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        var remindAt: Date?
+        remindAt = dateFormatter.date(from: remindAtString)
+
+        // Try without fractional seconds if that fails
+        if remindAt == nil {
+            dateFormatter.formatOptions = [.withInternetDateTime]
+            remindAt = dateFormatter.date(from: remindAtString)
+        }
+
+        // Try a simpler format as fallback
+        if remindAt == nil {
+            let simpleDateFormatter = DateFormatter()
+            simpleDateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            remindAt = simpleDateFormatter.date(from: remindAtString)
+        }
+
+        guard let finalRemindAt = remindAt else {
+            return "Error: Invalid date format. Please use ISO8601 format (YYYY-MM-DDTHH:mm:ss)"
+        }
+
+        // Check if the date is in the future
+        guard finalRemindAt > Date() else {
+            return "Error: The reminder time must be in the future"
+        }
+
+        // Parse reminder type
+        let reminderTypeString = input["reminder_type"] as? String ?? "general"
+        let reminderType: NotificationService.ReminderType
+        switch reminderTypeString.lowercased() {
+        case "bill":
+            reminderType = .bill
+        case "budget":
+            reminderType = .budget
+        case "goal":
+            reminderType = .goal
+        default:
+            reminderType = .general
+        }
+
+        // Parse recurrence
+        let recurrenceString = input["recurrence"] as? String ?? "none"
+        let recurrence: NotificationService.Recurrence
+        switch recurrenceString.lowercased() {
+        case "daily":
+            recurrence = .daily
+        case "weekly":
+            recurrence = .weekly
+        case "monthly":
+            recurrence = .monthly
+        default:
+            recurrence = .none
+        }
+
+        // Schedule the reminder
+        let result = await NotificationService.shared.scheduleAIReminder(
+            title: title,
+            message: message,
+            remindAt: finalRemindAt,
+            reminderType: reminderType,
+            recurrence: recurrence
+        )
+
+        switch result {
+        case .success:
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            let formattedDate = formatter.string(from: finalRemindAt)
+            let recurrenceText: String
+            switch recurrence {
+            case .none:
+                recurrenceText = ""
+            case .daily:
+                recurrenceText = " (repeats daily)"
+            case .weekly:
+                recurrenceText = " (repeats weekly)"
+            case .monthly:
+                recurrenceText = " (repeats monthly)"
+            }
+            return "Successfully scheduled reminder '\(title)' for \(formattedDate)\(recurrenceText)"
+        case .failure(let error):
+            if let notificationError = error as? NotificationError {
+                return "Error: \(notificationError.localizedDescription)"
+            }
+            return "Error: Failed to schedule reminder - \(error.localizedDescription)"
+        }
     }
 }

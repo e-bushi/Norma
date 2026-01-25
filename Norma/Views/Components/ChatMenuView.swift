@@ -71,14 +71,6 @@ struct ChatMenuView: View {
                     }
                 })
 
-                compactMenuItem(icon: "chart.pie", title: "Overview", action: {
-                    // Navigate to financial overview
-                    mainLayerView = .overview
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isMenuOpen = false
-                    }
-                })
-
                 compactMenuItem(icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90", title: "Purchasing Power", action: {
                     // Navigate to currency converter
                     mainLayerView = .currencyConverter

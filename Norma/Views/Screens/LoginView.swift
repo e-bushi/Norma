@@ -40,6 +40,7 @@ struct LoginView: View {
     @State private var loadingScale = 0.8
     @State private var loadingOpacity = 0.0
     @State private var isAppleSignInLoading = false
+    @State private var isGoogleSignInLoading = false
 
     var body: some View {
         NavigationStack {
@@ -261,6 +262,41 @@ struct LoginView: View {
                     .padding(.top, 8)
                     .opacity(buttonOpacity)
 
+                    // Sign in with Google button
+                    Button(action: {
+                        handleGoogleSignIn()
+                    }) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+
+                            HStack(spacing: 12) {
+                                if isGoogleSignInLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    GoogleLogoView()
+                                        .frame(width: 20, height: 20)
+                                    Text("Sign in with Google")
+                                        .font(.normaHeadline(16))
+                                }
+                            }
+                            .foregroundColor(.black.opacity(0.87))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                    }
+                    .disabled(isGoogleSignInLoading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                    .opacity(buttonOpacity)
+
                     Spacer()
                         .frame(height: 40)
                 }
@@ -448,6 +484,70 @@ struct LoginView: View {
                     let notificationFeedback = UINotificationFeedbackGenerator()
                     notificationFeedback.notificationOccurred(.error)
                 }
+            }
+        }
+    }
+
+    private func handleGoogleSignIn() {
+        // Clear any previous errors
+        withAnimation {
+            showError = false
+        }
+
+        isGoogleSignInLoading = true
+
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+
+        Task {
+            let success = await onboardingViewModel.signInWithGoogle(fromPreviewMode: false)
+
+            await MainActor.run {
+                isGoogleSignInLoading = false
+
+                if success {
+                    isAuthenticated = true
+                } else {
+                    // Error is shown by OnboardingViewModel via alert
+                    let notificationFeedback = UINotificationFeedbackGenerator()
+                    notificationFeedback.notificationOccurred(.error)
+                }
+            }
+        }
+    }
+}
+
+// Google logo view - uses image asset if available, otherwise draws a stylized "G"
+struct GoogleLogoView: View {
+    var body: some View {
+        if let uiImage = UIImage(named: "GoogleLogo") {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFit()
+        } else {
+            // Fallback: Draw a simple Google-style "G"
+            ZStack {
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                Color(red: 0.91, green: 0.26, blue: 0.21), // Red
+                                Color(red: 0.98, green: 0.74, blue: 0.18), // Yellow
+                                Color(red: 0.20, green: 0.66, blue: 0.33), // Green
+                                Color(red: 0.26, green: 0.52, blue: 0.96), // Blue
+                                Color(red: 0.91, green: 0.26, blue: 0.21)  // Red again
+                            ]),
+                            center: .center,
+                            startAngle: .degrees(0),
+                            endAngle: .degrees(360)
+                        ),
+                        lineWidth: 3
+                    )
+
+                Text("G")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96))
             }
         }
     }

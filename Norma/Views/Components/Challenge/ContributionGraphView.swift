@@ -7,11 +7,15 @@
 
 import SwiftUI
 
-/// A GitHub-style contribution graph showing daily challenge performance across multiple months
+/// A GitHub-style contribution graph showing daily challenge performance organized by quarters
 struct ContributionGraphView: View {
     let dayResults: [DayResult]
-    var monthsToDisplay: Int = 3
+    var quartersToDisplay: Int = 1  // How many quarters to show
     var selectedDate: Date? = nil  // Triggers wave animation when changed
+    var currentStreak: Int = 0
+    var challengeRemaining: Double = 0
+    var daysRemaining: Int = 0
+    var formatCurrency: ((Double) -> String)? = nil
 
     // Constants
     private let cellSize: CGFloat = 14
@@ -29,6 +33,13 @@ struct ContributionGraphView: View {
     private let waveSpeed: CGFloat = 35.0  // Units per second
     private let waveDuration: TimeInterval = 0.8  // Total animation duration
 
+    // Quarter data structure
+    private struct QuarterData: Identifiable {
+        let id = UUID()
+        let name: String  // e.g., "Jan - Mar"
+        let months: [MonthData]
+    }
+
     // Month data structure
     private struct MonthData: Identifiable {
         let id = UUID()
@@ -36,10 +47,34 @@ struct ContributionGraphView: View {
         let weeks: [[DayResult?]]
     }
 
-    // Generate data for all months to display
-    private var monthsData: [MonthData] {
+    // Quarter month ranges
+    private static let quarterMonths: [[Int]] = [
+        [1, 2, 3],   // Q1: Jan, Feb, Mar
+        [4, 5, 6],   // Q2: Apr, May, Jun
+        [7, 8, 9],   // Q3: Jul, Aug, Sep
+        [10, 11, 12] // Q4: Oct, Nov, Dec
+    ]
+
+    private static let quarterNames: [String] = [
+        "Jan - Mar",
+        "Apr - Jun",
+        "Jul - Sep",
+        "Oct - Dec"
+    ]
+
+    // Get the quarter index (0-3) for a given month (1-12)
+    private func quarterIndex(for month: Int) -> Int {
+        return (month - 1) / 3
+    }
+
+    // Generate data organized by quarters
+    private var quartersData: [QuarterData] {
         let calendar = Calendar.current
         let today = Date()
+        let currentMonth = calendar.component(.month, from: today)
+        let currentYear = calendar.component(.year, from: today)
+        let currentQuarter = quarterIndex(for: currentMonth)
+
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
 
@@ -53,68 +88,127 @@ struct ContributionGraphView: View {
             resultsByDate[key] = result
         }
 
-        var allMonths: [MonthData] = []
+        var allQuarters: [QuarterData] = []
 
-        // Generate data for each month (going backwards from current month)
-        for monthOffset in (0..<monthsToDisplay).reversed() {
-            guard let targetMonth = calendar.date(byAdding: .month, value: -monthOffset, to: today),
-                  let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: targetMonth)),
-                  let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) else {
-                continue
+        // Generate data for each quarter (going backwards from current quarter)
+        for quarterOffset in (0..<quartersToDisplay).reversed() {
+            var targetQuarter = currentQuarter - quarterOffset
+            var targetYear = currentYear
+
+            // Handle wrapping to previous year
+            while targetQuarter < 0 {
+                targetQuarter += 4
+                targetYear -= 1
             }
 
-            let monthName = monthNameFormatter.string(from: monthStart)
-            let startWeekday = calendar.component(.weekday, from: monthStart)
-            let daysInMonth = calendar.component(.day, from: monthEnd)
+            let quarterName = Self.quarterNames[targetQuarter]
+            let monthsInQuarter = Self.quarterMonths[targetQuarter]
 
-            var weeks: [[DayResult?]] = []
-            var currentWeek: [DayResult?] = []
+            var monthsData: [MonthData] = []
 
-            // Add empty cells for days before month starts
-            for _ in 1..<startWeekday {
-                currentWeek.append(nil)
-            }
+            for monthNumber in monthsInQuarter {
+                var components = DateComponents()
+                components.year = targetYear
+                components.month = monthNumber
+                components.day = 1
 
-            // Add each day of the month
-            for day in 1...daysInMonth {
-                if let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
-                    let key = dateFormatter.string(from: date)
-                    let result = resultsByDate[key]
+                guard let monthStart = calendar.date(from: components),
+                      let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) else {
+                    continue
+                }
 
-                    // Only include days up to today
-                    if date <= today {
-                        currentWeek.append(result ?? DayResult(
-                            date: date,
-                            dailyCap: 0,
-                            amountSpent: 0,
-                            wasUnderCap: false,
-                            pointsEarned: 0,
-                            streakAfter: 0
-                        ))
-                    } else {
-                        currentWeek.append(nil) // Future day
+                let monthName = monthNameFormatter.string(from: monthStart)
+                let startWeekday = calendar.component(.weekday, from: monthStart)
+                let daysInMonth = calendar.component(.day, from: monthEnd)
+
+                var weeks: [[DayResult?]] = []
+                var currentWeek: [DayResult?] = []
+
+                // Add empty cells for days before month starts
+                for _ in 1..<startWeekday {
+                    currentWeek.append(nil)
+                }
+
+                // Add each day of the month
+                for day in 1...daysInMonth {
+                    if let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
+                        let key = dateFormatter.string(from: date)
+                        let result = resultsByDate[key]
+
+                        // Only include days up to today
+                        if date <= today {
+                            currentWeek.append(result ?? DayResult(
+                                date: date,
+                                dailyCap: 0,
+                                amountSpent: 0,
+                                wasUnderCap: false,
+                                pointsEarned: 0,
+                                streakAfter: 0
+                            ))
+                        } else {
+                            currentWeek.append(nil) // Future day
+                        }
+                    }
+
+                    // Start new week on Sunday
+                    if currentWeek.count == 7 {
+                        weeks.append(currentWeek)
+                        currentWeek = []
                     }
                 }
 
-                // Start new week on Sunday
-                if currentWeek.count == 7 {
+                // Add remaining days of last week
+                if !currentWeek.isEmpty {
+                    while currentWeek.count < 7 {
+                        currentWeek.append(nil)
+                    }
                     weeks.append(currentWeek)
-                    currentWeek = []
                 }
+
+                monthsData.append(MonthData(name: monthName, weeks: weeks))
             }
 
-            // Add remaining days of last week
-            if !currentWeek.isEmpty {
-                while currentWeek.count < 7 {
-                    currentWeek.append(nil)
-                }
-                weeks.append(currentWeek)
-            }
-
-            allMonths.append(MonthData(name: monthName, weeks: weeks))
+            allQuarters.append(QuarterData(name: quarterName, months: monthsData))
         }
 
-        return allMonths
+        return allQuarters
+    }
+
+    // Flattened months data for wave animation calculations
+    private var allMonthsFlattened: [MonthData] {
+        quartersData.flatMap { $0.months }
+    }
+
+    // Current quarter display (e.g., "Q1")
+    private var currentQuarterDisplay: String {
+        let calendar = Calendar.current
+        let currentMonth = calendar.component(.month, from: Date())
+        let quarter = quarterIndex(for: currentMonth) + 1
+        return "Q\(quarter)"
+    }
+
+    // Next month after current quarter (4th month)
+    private var nextMonthName: String {
+        let calendar = Calendar.current
+        let currentMonth = calendar.component(.month, from: Date())
+        let currentQuarter = quarterIndex(for: currentMonth)
+
+        // Get the first month of the next quarter
+        let nextQuarter = (currentQuarter + 1) % 4
+        let nextMonthNumber = Self.quarterMonths[nextQuarter][0]
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+
+        var components = DateComponents()
+        components.month = nextMonthNumber
+        components.day = 1
+        components.year = Calendar.current.component(.year, from: Date())
+
+        if let date = calendar.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return ""
     }
 
     // MARK: - Wave Animation Helpers
@@ -136,7 +230,7 @@ struct ContributionGraphView: View {
 
         var globalCol = 0
 
-        for monthData in monthsData {
+        for monthData in allMonthsFlattened {
             for (weekIndex, week) in monthData.weeks.enumerated() {
                 for (dayIndex, dayResult) in week.enumerated() {
                     if let result = dayResult {
@@ -180,14 +274,38 @@ struct ContributionGraphView: View {
         return CGFloat(elapsed) * waveSpeed
     }
 
+    private var daysText: String {
+        daysRemaining == 1 ? "day" : "days"
+    }
+
+    private var formattedChallengeRemaining: String {
+        formatCurrency?(challengeRemaining) ?? "$\(Int(challengeRemaining))"
+    }
+
+    private var streakDayText: String {
+        currentStreak == 1 ? "day" : "days"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with legend
+            // Header with label, quarter capsule, and legend
             HStack {
                 Text("SPENDING")
                     .font(.normaInput(12))
                     .foregroundColor(.secondary)
                     .tracking(1.5)
+
+                // Quarter indicator capsule
+                Text(currentQuarterDisplay)
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .foregroundColor(Color("NormaPastelTeal"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color("NormaPastelTeal").opacity(0.12))
+                            .glassEffect(in: Capsule())
+                    )
 
                 Spacer()
 
@@ -232,9 +350,9 @@ struct ContributionGraphView: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: cellSpacing * 2) {
-                            ForEach(Array(monthsData.enumerated()), id: \.element.id) { monthIndex, monthData in
+                            ForEach(Array(allMonthsFlattened.enumerated()), id: \.element.id) { monthIndex, monthData in
                                 // Calculate base column for this month
-                                let baseCol = monthsData.prefix(monthIndex).reduce(0) { $0 + $1.weeks.count }
+                                let baseCol = allMonthsFlattened.prefix(monthIndex).reduce(0) { $0 + $1.weeks.count }
 
                                 VStack(alignment: .leading, spacing: cellSpacing) {
                                     // Month label
@@ -274,6 +392,10 @@ struct ContributionGraphView: View {
                                                         RoundedRectangle(cornerRadius: 3)
                                                             .fill(Color.gray.opacity(0.1))
                                                             .frame(width: cellSize, height: cellSize)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 3)
+                                                                    .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                                                            )
                                                     }
                                                 }
                                             }
@@ -281,8 +403,61 @@ struct ContributionGraphView: View {
                                     }
                                 }
                             }
+
+                            // 4th month preview (next quarter's first month)
+                            VStack(alignment: .leading, spacing: cellSpacing) {
+                                // Next month label
+                                Text(nextMonthName.uppercased())
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                                    .frame(height: 14)
+
+                                // Placeholder cells (first week preview)
+                                HStack(spacing: cellSpacing) {
+                                    VStack(spacing: cellSpacing) {
+                                        ForEach(0..<7, id: \.self) { _ in
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(Color.gray.opacity(0.06))
+                                                .frame(width: cellSize, height: cellSize)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 3)
+                                                        .stroke(Color.primary.opacity(0.04), lineWidth: 0.5)
+                                                )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+            }
+
+            // Bottom row: challenge remaining (left) and streak (right)
+            HStack {
+                // Challenge remaining summary
+                if challengeRemaining > 0 && daysRemaining > 0 {
+                    HStack(spacing: 3) {
+                        Text(formattedChallengeRemaining)
+                            .font(.system(size: 11, weight: .medium))
+                        Text("left for")
+                            .font(.system(size: 11))
+                        Text("\(daysRemaining) \(daysText)")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Streak indicator
+                if currentStreak > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 10))
+                        Text("\(currentStreak) \(streakDayText) streak")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(Color("NormaPastelCoral"))
                 }
             }
         }
@@ -406,6 +581,10 @@ private struct ContributionCell: View {
         RoundedRectangle(cornerRadius: 3)
             .fill(cellColor)
             .frame(width: size, height: size)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+            )
             .scaleEffect(scale)
             .brightness(brightness)
             .shadow(color: cellColor.opacity(0.6 * Double(waveIntensity)), radius: shadowRadius, y: 2)

@@ -113,9 +113,10 @@ struct AppLoadingView: View {
                     .font(.normaSubheadline(18))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .frame(maxWidth: 200)
                     .scaleEffect(subtitleScale)
                     .opacity(subtitleOpacity)
-                    .padding(.horizontal, 32)
 
                 Spacer()
 

@@ -27,46 +27,32 @@ struct ActiveChallengeContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Hero Section - Big number at top with badges
-            ChallengeHeroView(
-                challenge: challenge,
-                stats: challengeViewModel.challengeStats,
-                totalPoints: challengeViewModel.totalPoints,
-                tierFileName: challengeViewModel.currentTier.fileName,
-                onPointsTapped: {
-                    showBirdCollection = true
-                }
-            )
+        VStack(spacing: 32) {
+            // Hero + Sentences grouped together
+            VStack(spacing: 8) {
+                // Hero Section - Today's remaining budget
+                ChallengeHeroView(
+                    challenge: challenge,
+                    stats: challengeViewModel.challengeStats,
+                    totalPoints: challengeViewModel.totalPoints,
+                    tierFileName: challengeViewModel.currentTier.fileName,
+                    todaysCap: challengeViewModel.todaysDailyCap,
+                    todaysRemaining: challengeViewModel.todaysDailyCap - challengeViewModel.todaySpending,
+                    onPointsTapped: {
+                        showBirdCollection = true
+                    }
+                )
+
+                // Contextual sentences - cap change info
+                ChallengeContextSentences(
+                    capChange: challengeViewModel.capChange,
+                    isPastFirstDay: challengeViewModel.isPastFirstDayOfChallenge,
+                    formatCurrency: { profileViewModel.formatCurrency($0) }
+                )
+            }
             .scaleEffect(heroAppeared ? 1 : 0.95)
             .opacity(heroAppeared ? 1 : 0)
             .offset(y: heroAppeared ? 0 : 20)
-
-            // Stats Row (conversational inline SF symbols)
-            // Uses todaysDailyCap which is fixed for the day (doesn't change with transactions)
-            ChallengeStatsRow(
-                currentStreak: challengeViewModel.currentStreak,
-                formattedDailyCap: profileViewModel.formatCurrency(challengeViewModel.todaysDailyCap),
-                formattedTodaySpent: profileViewModel.formatCurrency(challengeViewModel.todaySpending),
-                formattedRemaining: profileViewModel.formatCurrency(abs(challengeViewModel.todaysDailyCap - challengeViewModel.todaySpending)),
-                isOverBudget: challengeViewModel.todaySpending > challengeViewModel.todaysDailyCap
-            )
-            .scaleEffect(statsAppeared ? 1 : 0.97)
-            .opacity(statsAppeared ? 1 : 0)
-            .offset(y: statsAppeared ? 0 : 15)
-
-            // Cap Trend Indicator - shows if cap went up or down from banking/overspending
-            // Only show from day 2 onwards (no previous spending behavior on day 1)
-            if challengeViewModel.isPastFirstDayOfChallenge && abs(challengeViewModel.capChange) > 0.01 {
-                CapTrendIndicator(
-                    capChange: challengeViewModel.capChange,
-                    initialCap: challengeViewModel.initialDailyCap,
-                    formatCurrency: { profileViewModel.formatCurrency($0) }
-                )
-                .scaleEffect(statsAppeared ? 1 : 0.97)
-                .opacity(statsAppeared ? 1 : 0)
-                .offset(y: statsAppeared ? 0 : 15)
-            }
 
             // Contribution Graph - GitHub-style monthly view (with skeleton while loading)
             Group {
@@ -76,7 +62,11 @@ struct ActiveChallengeContent: View {
                 } else {
                     ContributionGraphView(
                         dayResults: challengeViewModel.currentMonthResults,
-                        selectedDate: selectedDay?.date
+                        selectedDate: selectedDay?.date,
+                        currentStreak: challengeViewModel.currentStreak,
+                        challengeRemaining: challenge.amountRemaining,
+                        daysRemaining: challenge.daysRemaining,
+                        formatCurrency: { profileViewModel.formatCurrency($0) }
                     )
                     .transition(.opacity)
                 }
@@ -85,14 +75,14 @@ struct ActiveChallengeContent: View {
             .opacity(graphAppeared ? 1 : 0)
             .offset(y: graphAppeared ? 0 : 15)
 
-            // Mini Calendar (2 weeks view)
+            // Combined Calendar + Stats View
             VStack(alignment: .leading, spacing: 12) {
                 Text("CHALLENGE DAYS")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                     .tracking(1.5)
 
-                ChallengeMiniCalendar(
+                ChallengeDayCalendarView(
                     challenge: challenge,
                     challengeDays: challengeViewModel.getChallengeDays(),
                     selectedDay: $selectedDay
@@ -104,7 +94,7 @@ struct ActiveChallengeContent: View {
 
             // Transactions for selected day
             if let day = selectedDay {
-                ChallengeTransactionsView(
+                ChallengeExpenseList(
                     selectedDay: day,
                     expenses: challengeViewModel.getExpenses(for: day.date)
                 )
@@ -145,6 +135,54 @@ struct ActiveChallengeContent: View {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4)) {
             transactionsAppeared = true
         }
+    }
+}
+
+// MARK: - Challenge Context Sentences
+
+/// Contextual sentences showing cap change info
+private struct ChallengeContextSentences: View {
+    let capChange: Double
+    let isPastFirstDay: Bool
+    let formatCurrency: (Double) -> String
+
+    private var showCapChange: Bool {
+        isPastFirstDay && abs(capChange) > 0.01
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // Cap change sentence (or day 1 encouragement)
+            if showCapChange {
+                if capChange > 0 {
+                    (Text("Today's cap is ")
+                        .foregroundColor(.primary)
+                    + Text(formatCurrency(capChange))
+                        .foregroundColor(Color("NormaPastelTeal"))
+                    + Text(" higher than previous days.")
+                        .foregroundColor(.primary))
+                        .font(.custom(FontFamily.Rubik.medium, size: 22))
+                        .lineSpacing(10)
+                } else {
+                    (Text("Today's cap is ")
+                        .foregroundColor(.primary)
+                    + Text(formatCurrency(abs(capChange)))
+                        .foregroundColor(Color("NormaPastelCoral"))
+                    + Text(" lower than previous days.")
+                        .foregroundColor(.primary))
+                        .font(.custom(FontFamily.Rubik.medium, size: 22))
+                        .lineSpacing(10)
+                }
+            } else {
+                // Day 1 or no cap change - show encouragement
+                Text("Stay under your cap to boost tomorrow.")
+                    .font(.custom(FontFamily.Rubik.medium, size: 22))
+                    .foregroundColor(.primary)
+                    .lineSpacing(10)
+            }
+        }
+        .frame(maxWidth: 300)
+        .multilineTextAlignment(.center)
     }
 }
 

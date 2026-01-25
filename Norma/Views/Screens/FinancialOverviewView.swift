@@ -9,6 +9,8 @@ import SwiftUI
 
 struct FinancialOverviewView: View {
     @Binding var isMenuOpen: Bool
+    var showMenuButton: Bool = true
+    var onClose: (() -> Void)? = nil
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var billViewModel: BillViewModel
@@ -16,12 +18,14 @@ struct FinancialOverviewView: View {
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
     @EnvironmentObject var profileViewModel: ProfileViewModel
 
-    @State private var animateBalance = false
     @State private var animateBills = false
     @State private var animateStats = false
     @State private var animateChallenge = false
     @State private var animateProgress = false
     @State private var animateHistory = false
+
+    // Animated number values (start at 0, animate to real values)
+    @State private var displayedRemaining: Double = 0
 
     // MARK: - Computed Properties
 
@@ -54,9 +58,9 @@ struct FinancialOverviewView: View {
         sessionViewModel.currentUser?.settings.freedomFund ?? 0
     }
 
-    private var currentMonthName: String {
+    private var currentMonthYear: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM"
+        formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: Date())
     }
 
@@ -71,9 +75,6 @@ struct FinancialOverviewView: View {
             VStack(spacing: 24) {
                 // Main Balance Section
                 balanceSection
-                    .opacity(animateBalance ? 1 : 0)
-                    .offset(y: animateBalance ? 0 : 30)
-                    .scaleEffect(animateBalance ? 1 : 0.95)
 
                 // Bills Due Section
                 if hasUpcomingBills {
@@ -109,21 +110,22 @@ struct FinancialOverviewView: View {
             .padding(.horizontal, 20)
             .padding(.top, 20)
         }
-        .background(Color("NormaBackground"))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isMenuOpen = true
+            if showMenuButton {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            isMenuOpen = true
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 20))
+                            .foregroundColor(.primary)
                     }
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 20))
-                        .foregroundColor(.primary)
                 }
             }
 
@@ -131,10 +133,30 @@ struct FinancialOverviewView: View {
                 Text("Overview")
                     .font(.normaTitle(20))
             }
+
+            if onClose != nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        onClose?()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(Color.gray.opacity(0.15))
+                            )
+                    }
+                }
+            }
         }
         .onAppear {
             startStaggeredAnimations()
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     // MARK: - Animation
@@ -143,8 +165,9 @@ struct FinancialOverviewView: View {
         let baseDelay: Double = 0.1
         let stagger: Double = 0.08
 
+        // Animate main balance number
         withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(baseDelay)) {
-            animateBalance = true
+            displayedRemaining = remainingAfterExpenses
         }
 
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger)) {
@@ -172,17 +195,18 @@ struct FinancialOverviewView: View {
 
     private var balanceSection: some View {
         VStack(spacing: 8) {
-            // Current month name
-            Text(currentMonthName.uppercased())
+            // Current month and year
+            Text(currentMonthYear.uppercased())
                 .font(.normaFinancial(18))
                 .foregroundColor(.secondary)
                 .tracking(1.2)
 
-            // Remaining amount
-            Text(profileViewModel.formatCurrency(remainingAfterExpenses))
+            // Remaining amount with numeric animation
+            Text(profileViewModel.formatCurrency(displayedRemaining))
                 .font(.normaHeadline(72))
                 .foregroundColor(remainingAfterExpenses >= 0 ? .primary : Color("NormaPastelCoral"))
                 .shadow(color: Color("NormaPastelCoral").opacity(0.25), radius: 20, y: 4)
+                .contentTransition(.numericText())
 
             // Label
             Text("Remaining this month")
@@ -198,12 +222,14 @@ struct FinancialOverviewView: View {
     private var statsGrid: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                statCard(
+                tappableStatCard(
                     title: "Income",
                     value: profileViewModel.formatCurrency(monthlyIncome),
                     icon: "arrow.down.circle.fill",
                     color: Color("NormaPastelTeal")
-                )
+                ) {
+                    // Tap action for income
+                }
 
                 statCard(
                     title: "Bills",
@@ -221,12 +247,14 @@ struct FinancialOverviewView: View {
                     color: Color("NormaPastelCoral")
                 )
 
-                statCard(
+                tappableStatCard(
                     title: "Freedom Fund",
                     value: profileViewModel.formatCurrency(freedomFund),
                     icon: "shield.fill",
                     color: Color("NormaPastelBeige")
-                )
+                ) {
+                    // Tap action for freedom fund
+                }
             }
         }
     }
@@ -261,6 +289,45 @@ struct FinancialOverviewView: View {
                         .stroke(Color.gray.opacity(0.1), lineWidth: 1)
                 )
         )
+    }
+
+    private func tappableStatCard(title: String, value: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+            action()
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: icon)
+                        .font(.system(size: 16))
+                        .foregroundColor(color)
+
+                    Spacer()
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.normaInput(12))
+                        .foregroundColor(.secondary)
+
+                    Text(value)
+                        .font(.normaFinancial(20))
+                        .foregroundColor(.primary)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.gray.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(color.opacity(0.4), lineWidth: 1.5)
+                    )
+            )
+        }
+        .buttonStyle(StatCardPressStyle())
     }
 
     // MARK: - Challenge Section
@@ -361,6 +428,42 @@ struct FinancialOverviewView: View {
                     )
             )
         }
+    }
+}
+
+// MARK: - Financial Overview Overlay
+
+struct FinancialOverviewOverlay: View {
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            FinancialOverviewView(
+                isMenuOpen: .constant(false),
+                showMenuButton: false,
+                onClose: {
+                    isPresented = false
+                }
+            )
+        }
+        .background {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(in: Rectangle())
+                .ignoresSafeArea()
+        }
+        .persistentSystemOverlays(.hidden)
+    }
+}
+
+// MARK: - Button Style
+
+struct StatCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

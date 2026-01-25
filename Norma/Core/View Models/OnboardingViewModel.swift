@@ -43,6 +43,7 @@ class OnboardingViewModel: ObservableObject {
     private let anthropicService = AnthropicService.shared
     private let supabaseService = SupabaseService.shared
     private let appleSignInManager = AppleSignInManager()
+    private let googleSignInManager = GoogleSignInManager()
 
     // Preview mode view model - owned here to persist throughout onboarding
     var previewModeViewModel = PreviewModeViewModel()
@@ -262,7 +263,97 @@ class OnboardingViewModel: ObservableObject {
     func signInWithAppleFromPreviewMode() async {
         _ = await signInWithApple(fromPreviewMode: true)
     }
-    
+
+    // MARK: - Google Sign In Methods
+
+    /// Sign in with Google
+    /// - Parameter fromPreviewMode: Whether this is being called from preview mode (to trigger data transfer)
+    /// - Returns: True if sign-in was successful
+    func signInWithGoogle(fromPreviewMode: Bool = false) async -> Bool {
+        isLoading = true
+        clearError()
+
+        do {
+            // Step 1: Get Google credentials
+            print("🔵 Step 1: Getting Google credentials...")
+            let googleResult = try await googleSignInManager.signIn()
+            print("🔵 Step 1 complete: Got idToken, name: \(googleResult.fullName ?? "nil"), email: \(googleResult.email ?? "nil")")
+
+            // Step 2: Sign in with Supabase using the Google ID token
+            print("🔵 Step 2: Signing in with Supabase...")
+            let session = try await supabaseService.signInWithGoogle(
+                idToken: googleResult.idToken,
+                accessToken: googleResult.accessToken,
+                firstName: googleResult.firstName,
+                lastName: googleResult.lastName
+            )
+            print("🔵 Step 2 complete: Supabase session created, user: \(session.user.id)")
+
+            // Step 3: Store name if available (for profile creation)
+            if let fullName = googleResult.fullName {
+                collectedData.name = fullName
+                previewModeViewModel.userName = fullName  // Sync to previewModeViewModel for profile save
+                print("🔵 Step 3: Stored name from Google: \(fullName)")
+            } else if let userName = previewModeViewModel.userName {
+                // Fall back to preview mode name
+                collectedData.name = userName
+                print("🔵 Step 3: Using preview mode name: \(userName)")
+            }
+
+            // Store email if available
+            if let email = googleResult.email {
+                self.email = email
+            }
+
+            // Step 4: Notify SessionViewModel of successful authentication
+            print("🔵 Step 4: Handling auth success...")
+            await sessionViewModel.handleAuthenticationSuccess()
+            print("🔵 Step 4 complete")
+
+            // Step 5: If from preview mode, save profile and transfer data
+            if fromPreviewMode {
+                print("🔵 Step 5: Saving profile from preview mode...")
+                await saveProfileDataFromPreviewMode()
+                print("🔵 Step 5 complete")
+            }
+
+            isLoading = false
+
+            // For returning users who have completed onboarding, go to main app
+            if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
+                print("🔵 Returning user - navigating to main app")
+                currentStep = .complete
+            } else {
+                // New users: navigate to notifications step (skip verification since Google already verified)
+                print("🔵 New user - navigating to notifications")
+                currentStep = .notifications
+            }
+
+            return true
+
+        } catch {
+            isLoading = false
+            print("🔵 ❌ Google Sign In error: \(error)")
+
+            // Don't show error for user cancellation
+            if let authError = error as? AuthError,
+               case .googleSignInError(let message) = authError,
+               message.contains("canceled") {
+                // User canceled - just return false without showing error
+                print("🔵 User canceled sign in")
+                return false
+            }
+
+            showError(error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Sign in with Google specifically from preview mode (handles data transfer)
+    func signInWithGoogleFromPreviewMode() async {
+        _ = await signInWithGoogle(fromPreviewMode: true)
+    }
+
     // MARK: - Chat Methods
     
     func startConversation() async {

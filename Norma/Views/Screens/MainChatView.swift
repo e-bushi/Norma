@@ -16,6 +16,7 @@ struct MainChatView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var challengeViewModel: ChallengeViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @StateObject private var speechService = SpeechToTextService.shared
@@ -31,6 +32,9 @@ struct MainChatView: View {
     @State private var showIncomeEdit = false
     @State private var showArcDetail = false
     @State private var showPendingTransactions = false
+    @State private var showFinancialOverview = false
+    @State private var showRemindersSheet = false
+    @State private var reminderCount: Int = 0
     @State private var navBarCapsulesVisible = false
     @State private var showIncomeDropdown = false
 
@@ -91,6 +95,13 @@ struct MainChatView: View {
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "\(currency) \(Int(amount))"
+    }
+
+    private func loadReminderCount() async {
+        let reminders = await NotificationService.shared.getPendingAIReminders()
+        await MainActor.run {
+            reminderCount = reminders.count
+        }
     }
 
     private var toolExecutor: ChatToolExecutor {
@@ -245,6 +256,27 @@ struct MainChatView: View {
         .sheet(isPresented: $showPendingTransactions) {
             PendingTransactionsSheet()
         }
+        .sheet(isPresented: $showRemindersSheet) {
+            RemindersSheet(isPresented: $showRemindersSheet)
+        }
+        .onChange(of: showIncomeDropdown) { _, isShowing in
+            if isShowing {
+                Task {
+                    await loadReminderCount()
+                }
+            }
+        }
+        .onChange(of: showRemindersSheet) { _, isShowing in
+            if !isShowing {
+                // Refresh count after sheet closes (user may have deleted reminders)
+                Task {
+                    await loadReminderCount()
+                }
+            }
+        }
+        .task {
+            await loadReminderCount()
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPendingTransactions"))) { _ in
             showPendingTransactions = true
         }
@@ -256,6 +288,10 @@ struct MainChatView: View {
                 currency: currency
             )
         }
+        .fullScreenCover(isPresented: $showFinancialOverview) {
+            FinancialOverviewOverlay(isPresented: $showFinancialOverview)
+                .presentationBackground(.clear)
+        }
         .overlay(alignment: .top) {
             // Dropdown capsules that appear below nav bar when title is tapped
             if showIncomeDropdown {
@@ -266,38 +302,25 @@ struct MainChatView: View {
 
                     // Dropdown content
                     HStack(spacing: 12) {
-                        // Income capsule
-                        Button {
+                        // Reminders capsule (first)
+                        RemindersCapsule(count: reminderCount) {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                showIncomeDropdown = false
+                            }
+                            showRemindersSheet = true
+                        }
+
+                        // Overview capsule
+                        OverviewCapsule {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                             impactFeedback.impactOccurred()
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 showIncomeDropdown = false
                             }
-                            showIncomeEdit = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "dollarsign.circle.fill")
-                                    .font(.system(size: 15))
-
-                                Text(formatCurrency(monthlyIncome))
-                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
-                            }
-                            .foregroundColor(Color("NormaPastelTeal"))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelTeal").opacity(0.15))
-                                    .glassEffect(in: Capsule())
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
-                            )
+                            showFinancialOverview = true
                         }
-                        .buttonStyle(CapsulePressStyle())
 
-                        // Pending capsule (always show)
+                        // Pending capsule
                         PendingCapsule(count: pendingCount) {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 showIncomeDropdown = false

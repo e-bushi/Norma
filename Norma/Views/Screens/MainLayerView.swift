@@ -143,6 +143,8 @@ struct MainLayerView: View {
                 .environmentObject(dataManager)
                 .environmentObject(billViewModel)
                 .environmentObject(expenseViewModel)
+                .environmentObject(challengeViewModel)
+                .environmentObject(profileViewModel)
 
         case .settings:
             NavigationStack {
