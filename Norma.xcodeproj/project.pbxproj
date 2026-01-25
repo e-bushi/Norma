@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		F61702382EA4DF3400630882 /* swiftgen.yml in Resources */ = {isa = PBXBuildFile; fileRef = F61702372EA4DF3400630882 /* swiftgen.yml */; };
+		F621C38A2F2213B900570F11 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = F621C3892F2213B900570F11 /* GoogleSignIn */; };
+		F621C38C2F2213B900570F11 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = F621C38B2F2213B900570F11 /* GoogleSignInSwift */; };
 		F63FE8C52EFFDD0B00072022 /* NormaShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F63FE8BB2EFFDD0B00072022 /* NormaShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F63FE8CE2EFFE19300072022 /* SharedKeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63FE8CC2EFFE19300072022 /* SharedKeychainHelper.swift */; };
 		F63FE8CF2EFFE19400072022 /* SharedKeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63FE8CC2EFFE19300072022 /* SharedKeychainHelper.swift */; };
@@ -139,7 +141,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F621C38C2F2213B900570F11 /* GoogleSignInSwift in Frameworks */,
 				F699D0FE2EF4264D006EA178 /* PostHog in Frameworks */,
+				F621C38A2F2213B900570F11 /* GoogleSignIn in Frameworks */,
 				F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */,
 				F6938D312E0B2B6100C98852 /* Supabase in Frameworks */,
 			);
@@ -241,6 +245,8 @@
 				F6938D302E0B2B6100C98852 /* Supabase */,
 				F64F88152E3BECD3002D2FC5 /* RevenueCat */,
 				F699D0FD2EF4264D006EA178 /* PostHog */,
+				F621C3892F2213B900570F11 /* GoogleSignIn */,
+				F621C38B2F2213B900570F11 /* GoogleSignInSwift */,
 			);
 			productName = Norma;
 			productReference = F6638D402DCD6C3F009D95C3 /* Norma.app */;
@@ -331,6 +337,7 @@
 				F6938D2F2E0B2B6100C98852 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				F699D0FC2EF4264D006EA178 /* XCRemoteSwiftPackageReference "posthog-ios" */,
+				F621C3882F2213B900570F11 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F6638D412DCD6C3F009D95C3 /* Products */;
@@ -795,6 +802,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F621C3882F2213B900570F11 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 		F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
@@ -822,6 +837,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F621C3892F2213B900570F11 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F621C3882F2213B900570F11 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		F621C38B2F2213B900570F11 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F621C3882F2213B900570F11 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
 		F64F88152E3BECD3002D2FC5 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;

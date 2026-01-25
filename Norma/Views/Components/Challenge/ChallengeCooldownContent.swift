@@ -32,11 +32,11 @@ struct ChallengeCooldownContent: View {
             // Title & subtitle
             VStack(spacing: 12) {
                 Text("See You Tomorrow")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.custom(FontFamily.Rubik.bold, size: 32))
                     .foregroundColor(.primary)
 
                 Text("New challenges unlock daily.")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.custom(FontFamily.Rubik.regular, size: 17))
                     .foregroundColor(.secondary)
             }
             .multilineTextAlignment(.center)
@@ -81,7 +81,7 @@ struct ChallengeCooldownContent: View {
                 showBirdCollection = true
             } label: {
                 Text("View Collection")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 17))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -126,7 +126,7 @@ struct StatPill: View {
             Image(systemName: icon)
                 .font(.system(size: 13))
             Text("\(value) \(label)")
-                .font(.system(size: 14, weight: .medium))
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
         }
         .foregroundColor(color)
         .padding(.horizontal, 14)

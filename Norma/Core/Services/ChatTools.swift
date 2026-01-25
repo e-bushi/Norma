@@ -28,7 +28,8 @@ struct ChatToolsProvider {
             getShowSaveProgressModalTool(),
             getShowDaysTool(),
             getShowArcCountTool(),
-            getShowFlowStateTool()
+            getShowFlowStateTool(),
+            getScheduleReminderTool()
         ]
     }
 
@@ -356,6 +357,39 @@ struct ChatToolsProvider {
                     )
                 ],
                 required: ["flow_state"]
+            )
+        )
+    }
+
+    static func getScheduleReminderTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "schedule_reminder",
+            description: "Schedule a local notification reminder for the user. Use this when the user asks to be reminded about something, wants a notification at a specific time, or when you think a reminder would be helpful (e.g., 'remind me to check my subscriptions tomorrow', 'set a reminder for rent next week'). Supports both one-time and recurring reminders. The notification will appear on their device at the specified time even if the app is closed. Recurring reminders only use 1 notification slot, making them efficient for regular check-ins.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "title": AnthropicToolProperty(
+                        type: "string",
+                        description: "The notification title (short, attention-grabbing)"
+                    ),
+                    "message": AnthropicToolProperty(
+                        type: "string",
+                        description: "The notification body message with more details"
+                    ),
+                    "remind_at": AnthropicToolProperty(
+                        type: "string",
+                        description: "When to send the reminder in ISO8601 format (YYYY-MM-DDTHH:mm:ss). For relative times like 'tomorrow at 9am' or 'in 2 hours', calculate the actual date/time. For recurring reminders, this is the first occurrence."
+                    ),
+                    "reminder_type": AnthropicToolProperty(
+                        type: "string",
+                        description: "Category of reminder: 'bill', 'budget', 'goal', 'general'. Defaults to 'general' if not specified."
+                    ),
+                    "recurrence": AnthropicToolProperty(
+                        type: "string",
+                        description: "How often to repeat: 'none' (one-time, default), 'daily' (every day at same time), 'weekly' (same day/time each week), 'monthly' (same day each month). Use for things like 'remind me every Friday to review spending'."
+                    )
+                ],
+                required: ["title", "message", "remind_at"]
             )
         )
     }

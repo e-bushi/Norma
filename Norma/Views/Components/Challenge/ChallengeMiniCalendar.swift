@@ -7,6 +7,163 @@
 
 import SwiftUI
 
+// MARK: - Combined Calendar + Stats View
+
+/// Combined view showing day stats above the calendar
+struct ChallengeDayCalendarView: View {
+    let challenge: Challenge
+    let challengeDays: [ChallengeDay]
+    @Binding var selectedDay: ChallengeDay?
+    @EnvironmentObject var profileViewModel: ProfileViewModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Stats header for selected day
+            if let day = selectedDay {
+                DayStatsHeader(selectedDay: day)
+            }
+
+            // Calendar grid
+            ChallengeMiniCalendar(
+                challenge: challenge,
+                challengeDays: challengeDays,
+                selectedDay: $selectedDay
+            )
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.gray.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - Day Stats Header
+
+/// Compact stats header showing spent, cap, and status for selected day
+struct DayStatsHeader: View {
+    let selectedDay: ChallengeDay
+    @EnvironmentObject var profileViewModel: ProfileViewModel
+
+    private var dateText: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: selectedDay.date)
+    }
+
+    private var statusColor: Color {
+        guard selectedDay.dailyCap != nil else { return .secondary }
+        return selectedDay.isOverBudget ? Color("NormaPastelCoral") : Color("NormaPastelGreen")
+    }
+
+    private var statusIcon: String {
+        guard selectedDay.dailyCap != nil else { return "circle.dashed" }
+        return selectedDay.isOverBudget ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+    }
+
+    private var statusText: String {
+        guard let cap = selectedDay.dailyCap else { return "No cap set" }
+        let difference = abs(cap - selectedDay.spending)
+        let formattedDiff = profileViewModel.formatCurrency(difference)
+        if selectedDay.isOverBudget {
+            return "\(formattedDiff) over"
+        } else {
+            return "\(formattedDiff) under"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Date header row
+            HStack {
+                Text(dateText.uppercased())
+                    .font(.normaInput(11))
+                    .foregroundColor(.secondary)
+                    .tracking(1.2)
+                Spacer()
+                if selectedDay.isToday {
+                    Text("TODAY")
+                        .font(.normaInput(10))
+                        .foregroundColor(Color("NormaPastelCoral"))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color("NormaPastelCoral").opacity(0.15))
+                        )
+                }
+            }
+
+            // Summary stats row
+            HStack(spacing: 0) {
+                // Total Spent
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("SPENT")
+                        .font(.normaInput(10))
+                        .foregroundColor(.secondary)
+                        .tracking(0.8)
+                    Text(profileViewModel.formatCurrency(selectedDay.spending))
+                        .font(.normaFinancial(18))
+                        .foregroundColor(.primary)
+                        .contentTransition(.numericText())
+                }
+
+                Spacer()
+
+                // Daily Cap
+                if let cap = selectedDay.dailyCap {
+                    VStack(alignment: .center, spacing: 4) {
+                        Text("CAP")
+                            .font(.normaInput(10))
+                            .foregroundColor(.secondary)
+                            .tracking(0.8)
+                        Text(profileViewModel.formatCurrency(cap))
+                            .font(.normaFinancial(18))
+                            .foregroundColor(.secondary)
+                            .contentTransition(.numericText())
+                    }
+
+                    Spacer()
+
+                    // Status
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("STATUS")
+                            .font(.normaInput(10))
+                            .foregroundColor(.secondary)
+                            .tracking(0.8)
+                        HStack(spacing: 4) {
+                            Image(systemName: statusIcon)
+                                .font(.system(size: 12))
+                            Text(statusText)
+                                .font(.normaInput(14))
+                                .contentTransition(.numericText())
+                        }
+                        .foregroundColor(statusColor)
+                    }
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedDay.spending)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedDay.dailyCap)
+        }
+        .padding(16)
+        .background(
+            Rectangle()
+                .fill(selectedDay.isToday ? statusColor.opacity(0.05) : Color.clear)
+        )
+        .overlay(
+            Rectangle()
+                .fill(selectedDay.isToday ? statusColor.opacity(0.2) : Color.gray.opacity(0.1))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+}
+
+// MARK: - Mini Calendar
+
 /// Mini calendar view showing 2 weeks centered around the challenge
 struct ChallengeMiniCalendar: View {
     let challenge: Challenge
@@ -105,14 +262,6 @@ struct ChallengeMiniCalendar: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.gray.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
-                )
-        )
     }
 }
 
@@ -274,6 +423,74 @@ struct MiniCalendarCell: View {
             ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 45.50, dailyCap: 100.00)
         ],
         selectedDay: .constant(ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 45.50, dailyCap: 100.00))
+    )
+    .padding(20)
+    .background(Color("NormaBackground"))
+    .environmentObject(ProfileViewModel(
+        dataManager: DataManager(),
+        sessionViewModel: SessionViewModel(dataManager: DataManager())
+    ))
+}
+
+#Preview("Combined Calendar + Stats") {
+    ChallengeDayCalendarView(
+        challenge: Challenge(
+            id: "preview",
+            userId: "user",
+            amountTotal: 500,
+            amountRemaining: 200,
+            currency: "USD",
+            startDate: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
+            endDate: Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date(),
+            status: .active,
+            difficulty: .hard,
+            durationDays: 5
+        ),
+        challengeDays: [
+            ChallengeDay(
+                date: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
+                isToday: false,
+                isPast: true,
+                spending: 80.00,
+                dailyCap: 100.00
+            ),
+            ChallengeDay(
+                date: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
+                isToday: false,
+                isPast: true,
+                spending: 120.00,
+                dailyCap: 100.00
+            ),
+            ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 45.50, dailyCap: 100.00)
+        ],
+        selectedDay: .constant(ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 45.50, dailyCap: 100.00))
+    )
+    .padding(20)
+    .background(Color("NormaBackground"))
+    .environmentObject(ProfileViewModel(
+        dataManager: DataManager(),
+        sessionViewModel: SessionViewModel(dataManager: DataManager())
+    ))
+}
+
+#Preview("Combined Calendar - Over Budget") {
+    ChallengeDayCalendarView(
+        challenge: Challenge(
+            id: "preview",
+            userId: "user",
+            amountTotal: 500,
+            amountRemaining: 200,
+            currency: "USD",
+            startDate: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
+            endDate: Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date(),
+            status: .active,
+            difficulty: .hard,
+            durationDays: 5
+        ),
+        challengeDays: [
+            ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 125.50, dailyCap: 100.00)
+        ],
+        selectedDay: .constant(ChallengeDay(date: Date(), isToday: true, isPast: false, spending: 125.50, dailyCap: 100.00))
     )
     .padding(20)
     .background(Color("NormaBackground"))

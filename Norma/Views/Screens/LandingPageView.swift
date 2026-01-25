@@ -53,9 +53,9 @@ struct LandingPageView: View {
                         .font(.normaSubheadline(18))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: 260)
                         .scaleEffect(subtitleScale)
                         .opacity(subtitleOpacity)
-                        .padding(.horizontal, 32)
 
                     Spacer()
 

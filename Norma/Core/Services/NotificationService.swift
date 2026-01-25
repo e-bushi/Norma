@@ -9,6 +9,24 @@ import Foundation
 import UserNotifications
 import SwiftUI
 
+/// Errors that can occur during notification scheduling
+enum NotificationError: LocalizedError {
+    case permissionDenied
+    case invalidDate
+    case schedulingFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            return "Notification permissions not granted. Please enable notifications in Settings."
+        case .invalidDate:
+            return "The reminder time must be in the future."
+        case .schedulingFailed(let reason):
+            return "Failed to schedule notification: \(reason)"
+        }
+    }
+}
+
 @MainActor
 class NotificationService: NSObject, ObservableObject {
     static let shared = NotificationService()
@@ -23,8 +41,10 @@ class NotificationService: NSObject, ObservableObject {
     
     // MARK: - Notification Categories
     private let billReminderCategory = "BILL_REMINDER"
+    private let aiReminderCategory = "AI_REMINDER"
     private let markPaidAction = "MARK_PAID"
     private let snoozeAction = "SNOOZE"
+    private let dismissAction = "DISMISS"
     
     // MARK: - Initialization
     override init() {
@@ -63,21 +83,34 @@ class NotificationService: NSObject, ObservableObject {
             title: "Mark as Paid",
             options: [.authenticationRequired]
         )
-        
+
         let snoozeAction = UNNotificationAction(
             identifier: snoozeAction,
             title: "Remind Later",
             options: []
         )
-        
+
+        let dismissAction = UNNotificationAction(
+            identifier: dismissAction,
+            title: "Dismiss",
+            options: [.destructive]
+        )
+
         let billCategory = UNNotificationCategory(
             identifier: billReminderCategory,
             actions: [markPaidAction, snoozeAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
-        
-        notificationCenter.setNotificationCategories([billCategory])
+
+        let aiReminderCategory = UNNotificationCategory(
+            identifier: aiReminderCategory,
+            actions: [snoozeAction, dismissAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        notificationCenter.setNotificationCategories([billCategory, aiReminderCategory])
     }
     
     // MARK: - Bill Reminder Scheduling
@@ -182,6 +215,119 @@ class NotificationService: NSObject, ObservableObject {
         return Calendar.current.date(from: components)
     }
     
+    // MARK: - AI-Triggered Reminder Scheduling
+
+    /// Enum for reminder types
+    enum ReminderType: String {
+        case bill = "bill"
+        case budget = "budget"
+        case goal = "goal"
+        case general = "general"
+    }
+
+    /// Enum for recurrence patterns
+    enum Recurrence: String {
+        case none = "none"
+        case daily = "daily"
+        case weekly = "weekly"
+        case monthly = "monthly"
+    }
+
+    /// Schedule a reminder notification triggered by the AI assistant
+    /// - Parameters:
+    ///   - title: The notification title
+    ///   - message: The notification body message
+    ///   - remindAt: The date/time when the notification should fire (first occurrence for recurring)
+    ///   - reminderType: The category of reminder (for analytics and routing)
+    ///   - recurrence: How often to repeat (none, daily, weekly, monthly)
+    /// - Returns: A result indicating success or failure with error message
+    func scheduleAIReminder(
+        title: String,
+        message: String,
+        remindAt: Date,
+        reminderType: ReminderType = .general,
+        recurrence: Recurrence = .none
+    ) async -> Result<String, Error> {
+        guard isNotificationsEnabled else {
+            return .failure(NotificationError.permissionDenied)
+        }
+
+        // Ensure the reminder is in the future
+        guard remindAt > Date() else {
+            return .failure(NotificationError.invalidDate)
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = .default
+        content.categoryIdentifier = aiReminderCategory
+        content.userInfo = [
+            "reminderType": reminderType.rawValue,
+            "scheduledAt": Date().timeIntervalSince1970,
+            "source": "ai_assistant",
+            "recurrence": recurrence.rawValue
+        ]
+
+        // Create appropriate date components based on recurrence
+        let trigger = createTrigger(for: remindAt, recurrence: recurrence)
+
+        let identifier = "ai_reminder_\(UUID().uuidString)"
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+        do {
+            try await notificationCenter.add(request)
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            let recurrenceText = recurrence == .none ? "" : " (\(recurrence.rawValue))"
+            print("Scheduled AI reminder '\(title)' for \(formatter.string(from: remindAt))\(recurrenceText)")
+            return .success(identifier)
+        } catch {
+            print("Failed to schedule AI reminder: \(error)")
+            return .failure(error)
+        }
+    }
+
+    /// Create the appropriate notification trigger based on recurrence
+    private func createTrigger(for date: Date, recurrence: Recurrence) -> UNCalendarNotificationTrigger {
+        let calendar = Calendar.current
+        var dateComponents: DateComponents
+
+        switch recurrence {
+        case .none:
+            // One-time: use full date/time
+            dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            return UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+
+        case .daily:
+            // Daily: only hour and minute (fires every day at this time)
+            dateComponents = calendar.dateComponents([.hour, .minute], from: date)
+            return UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+
+        case .weekly:
+            // Weekly: weekday + hour + minute (fires same day each week)
+            dateComponents = calendar.dateComponents([.weekday, .hour, .minute], from: date)
+            return UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+
+        case .monthly:
+            // Monthly: day of month + hour + minute (fires same day each month)
+            dateComponents = calendar.dateComponents([.day, .hour, .minute], from: date)
+            return UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        }
+    }
+
+    /// Cancel a specific AI reminder by its identifier
+    func cancelAIReminder(identifier: String) {
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+    }
+
+    /// Get all pending AI-scheduled reminders
+    func getPendingAIReminders() async -> [UNNotificationRequest] {
+        let requests = await notificationCenter.pendingNotificationRequests()
+        return requests.filter { $0.identifier.hasPrefix("ai_reminder_") }
+    }
+
     // MARK: - Notification Management
     func cancelNotifications(for bill: Bill) async {
         let identifiers = await getPendingNotificationIdentifiers(for: bill)

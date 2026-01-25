@@ -70,27 +70,27 @@ extension DataManager {
             
             // Update cache with server version
             await updateCachedBill(createdBill)
-            
+
         } catch {
             print("⚠️ [DEBUG] DataManager.addBill: Supabase sync failed (offline mode): \(error)")
             // Mark as needing sync later
             hasUnsyncedChanges = true
         }
-        
+
         print("✅ [DEBUG] DataManager.addBill: Method completed - Added bill: \(bill.name)")
     }
     
     func updateBill(_ bill: Bill) async throws {
         let updatedBill = try await supabaseService.updateBill(bill)
-        
+
         if let index = bills.firstIndex(where: { $0.id == bill.id }) {
             bills[index] = updatedBill
             hasUnsyncedChanges = true
         }
-        
+
         // Update cache
         await updateCachedBill(updatedBill)
-        
+
         print("Updated bill: \(bill.name)")
     }
     
@@ -98,14 +98,14 @@ extension DataManager {
         guard let billId = bill.id else {
             throw NSError(domain: "DataManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Bill ID is required for deletion"])
         }
-        
+
         try await supabaseService.deleteBill(billId)
         bills.removeAll { $0.id == bill.id }
         hasUnsyncedChanges = true
-        
+
         // Remove from cache
         await deleteCachedBill(billId)
-        
+
         print("Deleted bill: \(bill.name)")
     }
     
@@ -415,7 +415,7 @@ extension DataManager {
                 
                 // Update cache with server version
                 await updateCachedBill(displayBill)
-                
+
                 print("✅ [DEBUG] Created encrypted bill successfully")
             } catch {
                 print("⚠️ [DEBUG] Failed to sync encrypted bill (offline mode): \(error)")
@@ -452,10 +452,10 @@ extension DataManager {
                 bills[index] = displayBill
                 hasUnsyncedChanges = true
             }
-            
+
             // Update cache
             await updateCachedBill(displayBill)
-            
+
             print("Updated encrypted bill: \(bill.name)")
         } else {
             // Use legacy path

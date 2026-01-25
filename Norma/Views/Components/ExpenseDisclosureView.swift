@@ -19,7 +19,13 @@ struct ExpenseDisclosureView: View {
     @State private var selectedExpense: Expense? = nil
     @State private var itemStates: [Bool] = []
     @EnvironmentObject var profileViewModel: ProfileViewModel
+    @EnvironmentObject var expenseViewModel: ExpenseViewModel
     @Environment(\.colorScheme) var colorScheme
+
+    // Multi-select state
+    @State private var isEditMode = false
+    @State private var selectedExpenseIds: Set<String> = []
+    @State private var isDeleting = false
 
     private let maxExpensesToShow = 5
     
@@ -48,9 +54,29 @@ struct ExpenseDisclosureView: View {
     private var displayedExpenses: [Expense] {
         Array(filteredExpenses.prefix(maxExpensesToShow))
     }
-    
+
     private var totalExpenseAmount: Double {
         filteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+
+    // Selection computed properties
+    private var selectedExpenses: [Expense] {
+        filteredExpenses.filter { expense in
+            guard let id = expense.id else { return false }
+            return selectedExpenseIds.contains(id)
+        }
+    }
+
+    private var selectedAmount: Double {
+        selectedExpenses.reduce(0) { $0 + $1.amount }
+    }
+
+    private var allDisplayedSelected: Bool {
+        !displayedExpenses.isEmpty &&
+        displayedExpenses.allSatisfy { expense in
+            guard let id = expense.id else { return false }
+            return selectedExpenseIds.contains(id)
+        }
     }
 
     private var selectedDateText: String {
@@ -76,6 +102,65 @@ struct ExpenseDisclosureView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Selection Methods
+
+    private func isExpenseSelected(_ expense: Expense) -> Bool {
+        guard let id = expense.id else { return false }
+        return selectedExpenseIds.contains(id)
+    }
+
+    private func toggleSelection(_ expense: Expense) {
+        guard let id = expense.id else { return }
+
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+
+        if selectedExpenseIds.contains(id) {
+            selectedExpenseIds.remove(id)
+        } else {
+            selectedExpenseIds.insert(id)
+        }
+    }
+
+    private func toggleSelectAll() {
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+
+        if allDisplayedSelected {
+            selectedExpenseIds.removeAll()
+        } else {
+            selectedExpenseIds = Set(displayedExpenses.compactMap { $0.id })
+        }
+    }
+
+    private func deleteSelectedExpenses() {
+        guard !selectedExpenses.isEmpty else { return }
+
+        isDeleting = true
+
+        Task {
+            for expense in selectedExpenses {
+                await expenseViewModel.deleteExpense(expense)
+            }
+
+            await MainActor.run {
+                isDeleting = false
+                selectedExpenseIds.removeAll()
+                isEditMode = false
+
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            }
+        }
+    }
+
+    private func exitEditMode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isEditMode = false
+            selectedExpenseIds.removeAll()
         }
     }
 
@@ -220,17 +305,54 @@ struct ExpenseDisclosureView: View {
                 }
             } else {
                 VStack(spacing: 0) {
+                    // Header with Edit button
+                    HStack {
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                if isEditMode {
+                                    exitEditMode()
+                                } else {
+                                    isEditMode = true
+                                }
+                            }
+                        } label: {
+                            Text(isEditMode ? "Done" : "Edit")
+                                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                .foregroundColor(Color("NormaPastelCoral"))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color("NormaPastelCoral").opacity(0.1))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.bottom, 12)
+
                     // Expense items
                     VStack(spacing: 16) {
                         ForEach(Array(displayedExpenses.enumerated()), id: \.element.id) { index, expense in
-                            Button(action: {
-                                selectedExpense = expense
-                            }) {
-                                ExpenseRowView(expense: expense)
+                            if isEditMode {
+                                SelectableExpenseRow(
+                                    expense: expense,
+                                    isSelected: isExpenseSelected(expense),
+                                    onToggle: { toggleSelection(expense) }
+                                )
+                                .opacity(index < itemStates.count && itemStates[index] ? 1 : 0)
+                                .offset(x: index < itemStates.count && itemStates[index] ? 0 : -20)
+                            } else {
+                                Button(action: {
+                                    selectedExpense = expense
+                                }) {
+                                    ExpenseRowView(expense: expense)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .opacity(index < itemStates.count && itemStates[index] ? 1 : 0)
+                                .offset(x: index < itemStates.count && itemStates[index] ? 0 : -20)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .opacity(index < itemStates.count && itemStates[index] ? 1 : 0)
-                            .offset(x: index < itemStates.count && itemStates[index] ? 0 : -20)
                         }
                     }
                     .padding(16)
@@ -243,8 +365,15 @@ struct ExpenseDisclosureView: View {
                             )
                     )
 
-                    // See all button
-                    if filteredExpenses.count > maxExpensesToShow {
+                    // Floating action bar when in edit mode
+                    if isEditMode {
+                        expenseEditActionBar
+                            .padding(.top, 16)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    // See all button (hidden in edit mode)
+                    if !isEditMode && filteredExpenses.count > maxExpensesToShow {
                         Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 showingAllExpenses.toggle()
@@ -287,6 +416,177 @@ struct ExpenseDisclosureView: View {
             ExpenseDetailView(expense: expense)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Floating Action Bar
+
+    private var expenseEditActionBar: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                // Select All / Deselect All
+                Button {
+                    toggleSelectAll()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: allDisplayedSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 13, weight: .medium))
+                        Text(allDisplayedSelected ? "Deselect" : "Select All")
+                            .font(.custom(FontFamily.Rubik.medium, size: 13))
+                    }
+                    .foregroundColor(Color("NormaPastelCoral"))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color("NormaPastelCoral").opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color("NormaPastelCoral").opacity(0.25), lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Selected count
+                if !selectedExpenseIds.isEmpty {
+                    Text("\(selectedExpenseIds.count) selected")
+                        .font(.custom(FontFamily.Rubik.regular, size: 13))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Delete button - full width
+            Button {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+                deleteSelectedExpenses()
+            } label: {
+                HStack(spacing: 8) {
+                    if isDeleting {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+
+                    if selectedExpenseIds.isEmpty {
+                        Text("Select expenses to delete")
+                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    } else {
+                        Text("Delete \(selectedExpenseIds.count)")
+                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+
+                        Text("•")
+                            .font(.system(size: 10))
+                            .opacity(0.6)
+
+                        Text(profileViewModel.formatCurrency(selectedAmount))
+                            .font(.custom(FontFamily.Rubik.regular, size: 14))
+                            .opacity(0.9)
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(selectedExpenseIds.isEmpty ?
+                              Color.gray.opacity(0.4) :
+                              Color.red.opacity(0.85))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedExpenseIds.isEmpty || isDeleting)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.clear)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 20))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.3),
+                            Color.gray.opacity(0.1)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.5
+                )
+        )
+        .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
+    }
+}
+
+// MARK: - Selectable Expense Row
+
+struct SelectableExpenseRow: View {
+    let expense: Expense
+    let isSelected: Bool
+    let onToggle: () -> Void
+    @EnvironmentObject var profileViewModel: ProfileViewModel
+
+    private var timeAgoText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        let dateFormatter = ISO8601DateFormatter()
+        guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else {
+            return "Unknown"
+        }
+        return formatter.localizedString(for: expenseDate, relativeTo: Date())
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Checkbox
+            Button(action: onToggle) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 24))
+                    .foregroundColor(isSelected ? Color("NormaPastelCoral") : Color.gray.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+
+            // Category icon
+            Circle()
+                .fill(Color("NormaPastelCoral").opacity(0.15))
+                .frame(width: 34, height: 34)
+                .overlay(
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("NormaPastelCoral"))
+                )
+
+            // Expense info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(expense.name)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Text(timeAgoText)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Amount
+            Text(profileViewModel.formatCurrency(expense.amount))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(.primary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onToggle()
         }
     }
 }
@@ -357,8 +657,9 @@ struct ExpenseRowView: View {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
     let profileViewModel = ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+    let expenseViewModel = ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
     @State var showNormaChat = false
-    
+
     return ScrollView {
         VStack {
             Text("With Expenses")
@@ -391,4 +692,5 @@ struct ExpenseRowView: View {
         }
     }
     .environmentObject(profileViewModel)
+    .environmentObject(expenseViewModel)
 }

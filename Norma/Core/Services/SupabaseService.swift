@@ -94,6 +94,35 @@ class SupabaseService {
 
         return session
     }
+
+    /// Sign in with Google using ID token and access token
+    /// - Parameters:
+    ///   - idToken: The identity token from Google Sign In
+    ///   - accessToken: The access token from Google Sign In
+    ///   - firstName: User's first name
+    ///   - lastName: User's last name
+    /// - Returns: Session containing the authenticated user
+    func signInWithGoogle(idToken: String, accessToken: String, firstName: String? = nil, lastName: String? = nil) async throws -> Session {
+        let session = try await client.auth.signInWithIdToken(
+            credentials: .init(
+                provider: .google,
+                idToken: idToken,
+                accessToken: accessToken
+            )
+        )
+
+        // Update user metadata with name if available
+        if let firstName = firstName, !firstName.isEmpty {
+            _ = try? await client.auth.update(user: UserAttributes(
+                data: [
+                    "first_name": .string(firstName),
+                    "last_name": .string(lastName ?? "")
+                ]
+            ))
+        }
+
+        return session
+    }
 }
 
 // MARK: - Additional Methods
@@ -190,6 +219,7 @@ enum AuthError: LocalizedError {
     case invalidCode
     case supabaseError(String)
     case appleSignInError(String)
+    case googleSignInError(String)
     case unknownError
 
     var errorDescription: String? {
@@ -204,6 +234,8 @@ enum AuthError: LocalizedError {
             return message
         case .appleSignInError(let message):
             return "Apple Sign In failed: \(message)"
+        case .googleSignInError(let message):
+            return "Google Sign In failed: \(message)"
         case .unknownError:
             return "An unknown error occurred. Please try again."
         }

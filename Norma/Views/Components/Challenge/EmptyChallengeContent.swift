@@ -73,11 +73,11 @@ struct StartJourneyContent: View {
             // Text content
             VStack(spacing: 12) {
                 Text("Challenge Yourself")
-                    .font(.system(size: 32, weight: .bold, design: .default))
+                    .font(.custom(FontFamily.Rubik.bold, size: 32))
                     .foregroundColor(.primary)
 
                 Text("Stay within budget. Earn rewards.")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.custom(FontFamily.Rubik.regular, size: 17))
                     .foregroundColor(.secondary)
             }
             .multilineTextAlignment(.center)
