@@ -361,8 +361,25 @@ class ChallengeViewModel: ObservableObject {
                         previousStats: stats,
                         updatedStats: result.updatedStats
                     )
+
+                    // Increment monthly challenge completion count
+                    if let userId = sessionViewModel.currentUser?.userId {
+                        do {
+                            try await dataManager.incrementChallengesCompleted(userId: userId)
+                            print("✅ DEBUG: Incremented monthly challenges completed count")
+                        } catch {
+                            print("⚠️ DEBUG: Failed to increment monthly challenges: \(error)")
+                        }
+                    }
                 } else if result.challengeFailed {
                     challengeState = .failed
+
+                    // Track challenge failed
+                    let overBudgetAmount = abs(min(0, challenge.amountRemaining))
+                    AnalyticsService.shared.track(.challengeFailed(
+                        difficulty: challenge.difficulty.rawValue,
+                        overBudgetAmount: overBudgetAmount
+                    ))
                 }
 
                 loadChallenge()
@@ -467,6 +484,15 @@ class ChallengeViewModel: ObservableObject {
         updatedStats: ChallengeStats
     ) async {
         print("🎉 DEBUG: queueChallengeCompletionRewards called with pointsEarned: \(pointsEarned)")
+
+        // Track challenge completed
+        let underBudgetAmount = max(0, challenge.amountRemaining)
+        AnalyticsService.shared.track(.challengeCompleted(
+            difficulty: challenge.difficulty.rawValue,
+            pointsEarned: pointsEarned,
+            underBudgetAmount: underBudgetAmount
+        ))
+
         var rewardsToQueue: [Reward] = []
 
         // 1. Check for first challenge completed (one-time milestone)
@@ -484,6 +510,9 @@ class ChallengeViewModel: ObservableObject {
         // 3. Check for streak extension (show if streak > 1)
         if updatedStats.currentStreak > 1 {
             rewardsToQueue.append(.streakExtended(newStreak: updatedStats.currentStreak))
+
+            // Track streak extended
+            AnalyticsService.shared.track(.streakExtended(streakDays: updatedStats.currentStreak))
         }
 
         // 4. Check for streak milestones (5, 10, 25, 50, 100 days)
@@ -506,6 +535,9 @@ class ChallengeViewModel: ObservableObject {
                 tier: newTier,
                 totalPoints: updatedStats.totalPoints
             ))
+
+            // Track tier unlocked
+            AnalyticsService.shared.track(.tierUnlocked(tier: newTier.displayName, totalPoints: updatedStats.totalPoints))
         }
 
         // Queue all rewards at once
@@ -617,6 +649,13 @@ class ChallengeViewModel: ObservableObject {
 
             // Run daily calculations to populate stats and contribution graph
             await runDailyCalculations()
+
+            // Track challenge started
+            AnalyticsService.shared.track(.challengeStarted(
+                difficulty: difficulty.rawValue,
+                amount: challengeAmount,
+                durationDays: challengeDuration
+            ))
 
             // Check for first challenge started milestone
             let isFirstStart = await RewardMilestoneTracker.shared.checkAndMarkFirstTime(.firstChallengeStarted)

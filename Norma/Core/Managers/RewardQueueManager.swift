@@ -79,6 +79,9 @@ class RewardQueueManager: ObservableObject {
         rewardQueue.append(reward)
         pendingRewardCount = rewardQueue.count
 
+        // Track reward earned
+        AnalyticsService.shared.track(.rewardEarned(type: reward.type.rawValue, points: reward.metadata?.pointsEarned ?? 0))
+
         // Persist to backend in background
         persistRewardToBackend(reward)
 
@@ -244,6 +247,9 @@ class RewardQueueManager: ObservableObject {
         // Show the reward
         currentReward = nextReward
         isShowingCelebration = true
+
+        // Track reward viewed
+        AnalyticsService.shared.track(.rewardViewed(type: nextReward.type.rawValue))
     }
 
     /// Persist a reward to the backend pending_rewards table

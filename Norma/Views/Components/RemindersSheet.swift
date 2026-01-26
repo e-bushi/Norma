@@ -38,19 +38,29 @@ struct RemindersSheet: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 6) {
                         Text("Money Tasks")
                             .font(.custom(FontFamily.Rubik.semiBold, size: 17))
-                        Text("\(reminders.count) of 64 slots used")
-                            .font(.custom(FontFamily.Rubik.regular, size: 12))
-                            .foregroundColor(.secondary)
+
+                        // Segmented progress bar (8 segments, 8 slots each)
+                        HStack(spacing: 3) {
+                            ForEach(0..<8, id: \.self) { segment in
+                                let slotsPerSegment = 8
+                                let segmentStart = segment * slotsPerSegment
+                                let fillRatio = min(1.0, max(0.0, Double(reminders.count - segmentStart) / Double(slotsPerSegment)))
+
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(fillRatio > 0 ? Color("NormaPastelTeal") : Color.secondary.opacity(0.2))
+                                    .frame(width: 12, height: 6)
+                            }
+                        }
                     }
                 }
             }
-            .alert("About Task Slots", isPresented: $showInfoAlert) {
+            .alert("A little heads up", isPresented: $showInfoAlert) {
                 Button("Got it", role: .cancel) { }
             } message: {
-                Text("iOS limits apps to 64 pending notifications. This is a system-wide limit.\n\nRecurring tasks only use 1 slot, making them efficient for regular reminders like weekly budget check-ins.")
+                Text("I can keep track of 64 reminders for you at a time. Pro tip: recurring ones only count as one — perfect for weekly check-ins!")
             }
         }
         .presentationDetents([.medium])
@@ -84,7 +94,7 @@ struct RemindersSheet: View {
             ForEach(reminders, id: \.identifier) { reminder in
                 ReminderRow(reminder: reminder)
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 24, bottom: 8, trailing: 24))
             }
             .onDelete(perform: deleteReminders)
         }
@@ -167,29 +177,29 @@ struct ReminderRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: isRecurring ? "repeat" : "bell.fill")
-                .font(.system(size: 16))
+                .font(.system(size: 18))
                 .foregroundColor(Color("NormaPastelCoral"))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .background(
                     Circle()
                         .fill(Color("NormaPastelCoral").opacity(0.15))
                 )
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
                     Text(reminder.content.title)
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
                     if isRecurring {
                         Text(recurrenceText)
-                            .font(.custom(FontFamily.Rubik.medium, size: 10))
+                            .font(.custom(FontFamily.Rubik.medium, size: 11))
                             .foregroundColor(Color("NormaPastelCoral"))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
                             .background(
                                 Capsule()
                                     .fill(Color("NormaPastelCoral").opacity(0.15))
@@ -198,13 +208,13 @@ struct ReminderRow: View {
                 }
 
                 Text(formattedDate)
-                    .font(.custom(FontFamily.Rubik.regular, size: 13))
+                    .font(.custom(FontFamily.Rubik.regular, size: 15))
                     .foregroundColor(.secondary)
             }
 
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 }
 

@@ -37,7 +37,15 @@ class OnboardingViewModel: ObservableObject {
     // Collected Data
     @Published var collectedData = UserOnboardingData()
     @Published var howDidYouHear: String?
-    
+
+    // Extended Onboarding Responses
+    @Published var bankAccountFeeling: String = ""
+    @Published var controlVision: String = ""
+    @Published var moneyWorry: String = ""
+    @Published var moneyTiming: String = ""
+    @Published var moneyPersonality: String = ""
+    @Published var userWhy: String = ""
+
     // MARK: - Dependencies
     private let sessionViewModel: SessionViewModel
     private let anthropicService = AnthropicService.shared
@@ -68,6 +76,9 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func completeOnboarding() {
+        // Track onboarding completed
+        AnalyticsService.shared.track(.onboardingCompleted(durationSeconds: 0))
+
         sessionViewModel.completeOnboarding()
     }
     
@@ -76,31 +87,43 @@ class OnboardingViewModel: ObservableObject {
     func signUp(email: String, password: String, fullName: String) async throws {
         isLoading = true
         clearError()
-        
+
+        // Track sign up started
+        AnalyticsService.shared.track(.signUpStarted(method: .email))
+
         // Split name into first and last name (simple approach)
         let nameParts = fullName.split(separator: " ")
         let firstName = String(nameParts.first ?? "")
         let lastName = nameParts.count > 1 ? String(nameParts[1...].joined(separator: " ")) : ""
-        
-        _ = try await supabaseService.signUp(
-            email: email, 
-            password: password, 
-            firstName: firstName, 
-            lastName: lastName
-        )
-        
-        // Store email, password, and name for later use
-        self.email = email
-        self.temporaryPassword = password // Store password for encryption setup
-        collectedData.name = fullName
-        
-        isLoading = false
-        currentStep = .verification
+
+        do {
+            _ = try await supabaseService.signUp(
+                email: email,
+                password: password,
+                firstName: firstName,
+                lastName: lastName
+            )
+
+            // Store email, password, and name for later use
+            self.email = email
+            self.temporaryPassword = password // Store password for encryption setup
+            collectedData.name = fullName
+
+            isLoading = false
+            currentStep = .verification
+        } catch {
+            isLoading = false
+            AnalyticsService.shared.track(.signUpFailed(method: .email, error: error.localizedDescription))
+            throw error
+        }
     }
     
     func signIn(email: String, password: String) async -> Bool {
         isLoading = true
         clearError()
+
+        // Track sign in started
+        AnalyticsService.shared.track(.signInStarted(method: .email))
 
         do {
             _ = try await supabaseService.signIn(email: email, password: password)
@@ -115,6 +138,9 @@ class OnboardingViewModel: ObservableObject {
 
             isLoading = false
 
+            // Track sign in completed
+            AnalyticsService.shared.track(.signInCompleted(method: .email))
+
             print("🔑 Login complete - navigating to main app")
             currentStep = .complete
 
@@ -122,6 +148,7 @@ class OnboardingViewModel: ObservableObject {
 
         } catch {
             isLoading = false
+            AnalyticsService.shared.track(.signInFailed(method: .email, error: error.localizedDescription))
             showError(error.localizedDescription)
             return false
         }
@@ -130,38 +157,46 @@ class OnboardingViewModel: ObservableObject {
     func verifyCode(email: String, code: String) async throws {
         isLoading = true
         clearError()
-        
-        _ = try await supabaseService.verifyOTP(email: email, code: code)
-        
-        // Notify SessionViewModel of successful authentication
-        await sessionViewModel.handleAuthenticationSuccess()
-        
-        // Automatically set up encryption for new users
-        if let password = temporaryPassword {
-            do {
-                print("🔐 Setting up encryption for new user...")
-                let recoveryPhrase = try await sessionViewModel.setupEncryptionForNewUser(password: password)
-                
-                // Store recovery phrase securely
-                if let userId = sessionViewModel.currentUser?.userId {
-                    let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
-                    userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
-                    print("✅ Encryption setup complete for new user")
+
+        do {
+            _ = try await supabaseService.verifyOTP(email: email, code: code)
+
+            // Track sign up completed (verification is the final step of email sign up)
+            AnalyticsService.shared.track(.signUpCompleted(method: .email))
+
+            // Notify SessionViewModel of successful authentication
+            await sessionViewModel.handleAuthenticationSuccess()
+
+            // Automatically set up encryption for new users
+            if let password = temporaryPassword {
+                do {
+                    print("🔐 Setting up encryption for new user...")
+                    let recoveryPhrase = try await sessionViewModel.setupEncryptionForNewUser(password: password)
+
+                    // Store recovery phrase securely
+                    if let userId = sessionViewModel.currentUser?.userId {
+                        let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
+                        userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
+                        print("✅ Encryption setup complete for new user")
+                    }
+
+                    // Clear temporary password for security
+                    temporaryPassword = nil
+
+                } catch {
+                    print("❌ Failed to setup encryption for new user: \(error)")
+                    // Don't block the onboarding flow - user can continue without encryption
+                    temporaryPassword = nil
                 }
-                
-                // Clear temporary password for security
-                temporaryPassword = nil
-                
-            } catch {
-                print("❌ Failed to setup encryption for new user: \(error)")
-                // Don't block the onboarding flow - user can continue without encryption
-                temporaryPassword = nil
             }
+
+            isVerified = true
+            isLoading = false
+            // Don't update currentStep here - let the view handle navigation after transition
+        } catch {
+            isLoading = false
+            throw error
         }
-        
-        isVerified = true
-        isLoading = false
-        // Don't update currentStep here - let the view handle navigation after transition
     }
     
     func proceedToWelcome() {
@@ -182,6 +217,9 @@ class OnboardingViewModel: ObservableObject {
     func signInWithApple(fromPreviewMode: Bool = false) async -> Bool {
         isLoading = true
         clearError()
+
+        // Track sign in started
+        AnalyticsService.shared.track(.signInStarted(method: .apple))
 
         do {
             // Step 1: Get Apple credentials
@@ -229,6 +267,9 @@ class OnboardingViewModel: ObservableObject {
 
             isLoading = false
 
+            // Track sign in completed
+            AnalyticsService.shared.track(.signInCompleted(method: .apple))
+
             // For returning users who have completed onboarding, go to main app
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🍎 Returning user - navigating to main app")
@@ -254,6 +295,7 @@ class OnboardingViewModel: ObservableObject {
                 return false
             }
 
+            AnalyticsService.shared.track(.signInFailed(method: .apple, error: error.localizedDescription))
             showError(error.localizedDescription)
             return false
         }
@@ -272,6 +314,9 @@ class OnboardingViewModel: ObservableObject {
     func signInWithGoogle(fromPreviewMode: Bool = false) async -> Bool {
         isLoading = true
         clearError()
+
+        // Track sign in started
+        AnalyticsService.shared.track(.signInStarted(method: .google))
 
         do {
             // Step 1: Get Google credentials
@@ -319,6 +364,9 @@ class OnboardingViewModel: ObservableObject {
 
             isLoading = false
 
+            // Track sign in completed
+            AnalyticsService.shared.track(.signInCompleted(method: .google))
+
             // For returning users who have completed onboarding, go to main app
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🔵 Returning user - navigating to main app")
@@ -344,6 +392,7 @@ class OnboardingViewModel: ObservableObject {
                 return false
             }
 
+            AnalyticsService.shared.track(.signInFailed(method: .google, error: error.localizedDescription))
             showError(error.localizedDescription)
             return false
         }
@@ -764,6 +813,24 @@ enum OnboardingStep: CaseIterable {
     case welcome
     case authentication
     case verification
+
+    // Emotional/Personal Section (8 screens)
+    case feelingsCheck        // "How do you feel when you check your bank account?"
+    case controlVision        // "What would change if you felt in control?"
+    case moneyWorries         // "What keeps you up at night about money?"
+    case moneyTiming          // "When do you usually think about money?"
+    case moneyPersonality     // "Pick your money personality"
+    case yourWhy              // "What's your why?"
+    case imagination          // "Imagine 3 months from now..."
+    case encouragement        // "You're already ahead"
+
+    // Feature Showcase (5 screens)
+    case featureScreenshot    // Screenshot → Send to Norma
+    case featureMoneyTasks    // Money tasks via chat
+    case featurePurchasingPower // Purchasing Power insights
+    case featureChallenges    // Challenges & Rewards
+    case featureFreedomFund   // Freedom Fund arc
+
     case notifications
     case complete
 

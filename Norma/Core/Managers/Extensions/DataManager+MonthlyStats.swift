@@ -180,6 +180,34 @@ extension DataManager {
         }
     }
 
+    /// Refresh the current month's snapshot with latest expense data
+    /// Call this after adding expenses to keep the snapshot current
+    func refreshCurrentMonthSnapshot() async {
+        guard let userId = currentProfile?.userId else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        let end = calendar.date(byAdding: .month, value: 1, to: start) ?? now
+        let currentMonthRange = DateInterval(start: start, end: end)
+
+        let totalSpent = getTotalExpenses(for: currentMonthRange)
+        let monthlyIncome = currentProfile?.settings.monthlyIncome ?? 0
+        let discretionaryIncome = max(0, monthlyIncome - totalMonthlyBills)
+        let fundsLeftOver = discretionaryIncome - totalSpent
+
+        do {
+            try await updateCurrentMonthSpending(
+                userId: userId,
+                totalSpent: totalSpent,
+                fundsLeftOver: fundsLeftOver
+            )
+            print("Refreshed current month snapshot: spent=\(totalSpent), leftOver=\(fundsLeftOver)")
+        } catch {
+            print("Failed to refresh current month snapshot: \(error)")
+        }
+    }
+
     // MARK: - SwiftData Caching
 
     private func cacheMonthlyStats(_ statsToCache: [MonthlyStats]) async {

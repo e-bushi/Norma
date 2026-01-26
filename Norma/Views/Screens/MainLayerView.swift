@@ -49,6 +49,36 @@ struct MainLayerView: View {
                 )
         }
         .ignoresSafeArea(.keyboard)
+        .onChange(of: appCoordinator.mainLayerView) { _, newView in
+            // Track screen view
+            let screen: AnalyticsScreen
+            switch newView {
+            case .chat:
+                screen = .chat
+            case .settings:
+                screen = .settings
+            case .currencyConverter:
+                screen = .currencyConverter
+            case .overview:
+                screen = .overview
+            }
+            AnalyticsService.shared.trackScreen(screen)
+        }
+        .onAppear {
+            // Track initial screen
+            let screen: AnalyticsScreen
+            switch appCoordinator.mainLayerView {
+            case .chat:
+                screen = .chat
+            case .settings:
+                screen = .settings
+            case .currencyConverter:
+                screen = .currencyConverter
+            case .overview:
+                screen = .overview
+            }
+            AnalyticsService.shared.trackScreen(screen)
+        }
     }
 
     // MARK: - Drag Gesture

@@ -239,7 +239,85 @@ struct OnboardingCoordinatorView: View {
                     showVerifyCode: .constant(true)
                 )
                 .environmentObject(onboardingViewModel)
-            
+
+            // MARK: - Extended Onboarding: Emotional Questions (Screens 1-6)
+
+            case .feelingsCheck:
+                OnboardingQuestionView(question: .feelingsCheck) { selected in
+                    onboardingViewModel.bankAccountFeeling = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .controlVision:
+                OnboardingQuestionView(question: .controlVision) { selected in
+                    onboardingViewModel.controlVision = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .moneyWorries:
+                OnboardingQuestionView(question: .moneyWorries) { selected in
+                    onboardingViewModel.moneyWorry = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .moneyTiming:
+                OnboardingQuestionView(question: .moneyTiming) { selected in
+                    onboardingViewModel.moneyTiming = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .moneyPersonality:
+                OnboardingQuestionView(question: .moneyPersonality) { selected in
+                    onboardingViewModel.moneyPersonality = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .yourWhy:
+                OnboardingQuestionView(question: .yourWhy) { selected in
+                    onboardingViewModel.userWhy = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            // MARK: - Extended Onboarding: Visualization & Encouragement (Screens 7-8)
+
+            case .imagination:
+                OnboardingVisualizationView {
+                    onboardingViewModel.moveToNextStep()
+                }
+                .environmentObject(onboardingViewModel)
+
+            case .encouragement:
+                OnboardingEncouragementView {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            // MARK: - Extended Onboarding: Feature Showcase (Screens 9-13)
+
+            case .featureScreenshot:
+                FeatureShowcaseView(feature: .screenshot) {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .featureMoneyTasks:
+                FeatureShowcaseView(feature: .moneyTasks) {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .featurePurchasingPower:
+                FeatureShowcaseView(feature: .purchasingPower) {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .featureChallenges:
+                FeatureShowcaseView(feature: .challenges) {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .featureFreedomFund:
+                FeatureShowcaseView(feature: .freedomFund) {
+                    onboardingViewModel.moveToNextStep()
+                }
+
             case .notifications:
                 NotificationPermissionView(
                     onPermissionGranted: {
@@ -259,6 +337,16 @@ struct OnboardingCoordinatorView: View {
                 // Transition to main app
                 EmptyView()
             }
+        }
+        .onChange(of: onboardingViewModel.currentStep) { _, newStep in
+            // Track onboarding step viewed
+            let stepIndex = OnboardingStep.allCases.firstIndex(of: newStep) ?? 0
+            AnalyticsService.shared.track(.onboardingStepViewed(step: String(describing: newStep), index: stepIndex))
+        }
+        .onAppear {
+            // Track initial step on appear
+            let stepIndex = OnboardingStep.allCases.firstIndex(of: onboardingViewModel.currentStep) ?? 0
+            AnalyticsService.shared.track(.onboardingStepViewed(step: String(describing: onboardingViewModel.currentStep), index: stepIndex))
         }
     }
 }

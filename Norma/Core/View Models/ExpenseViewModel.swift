@@ -177,6 +177,20 @@ class ExpenseViewModel: ObservableObject {
             try await dataManager.addExpenseWithEncryption(newExpense)
 
             loadExpenses()
+
+            // Refresh the current month's snapshot
+            await dataManager.refreshCurrentMonthSnapshot()
+
+            // Track expense created (only for non-bill payments)
+            if billId == nil {
+                AnalyticsService.shared.track(.expenseCreated(
+                    amount: amount,
+                    paymentMethod: paymentMethod.rawValue,
+                    hasCategory: budgetId != nil,
+                    source: .manual
+                ))
+            }
+
             showAddExpense = false
             isLoading = false
             return true
@@ -194,6 +208,9 @@ class ExpenseViewModel: ObservableObject {
         do {
             try await dataManager.updateExpense(expense)
             loadExpenses()
+
+            // Track expense updated
+            AnalyticsService.shared.track(.expenseUpdated(expenseId: expense.id ?? "", field: "multiple"))
         } catch {
             showError("Failed to update expense: \(error.localizedDescription)")
         }
@@ -208,6 +225,9 @@ class ExpenseViewModel: ObservableObject {
         do {
             try await dataManager.deleteExpense(expense)
             loadExpenses()
+
+            // Track expense deleted
+            AnalyticsService.shared.track(.expenseDeleted(expenseId: expense.id ?? ""))
         } catch {
             showError("Failed to delete expense: \(error.localizedDescription)")
         }

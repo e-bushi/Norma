@@ -133,6 +133,11 @@ class SessionViewModel: ObservableObject {
             await RewardQueueManager.shared.fetchAndQueuePendingRewards()
         }
 
+        // Identify user in analytics
+        if let profile = currentUser {
+            AnalyticsService.shared.identify(profile: profile)
+        }
+
         print("🔐 Auth success - isAuthenticated: \(isAuthenticated), hasCompletedOnboarding: \(hasCompletedOnboarding), hasCompletedInitialSetup: \(hasCompletedInitialSetup), currentUser: \(currentUser?.name ?? "nil")")
     }
     
@@ -145,10 +150,16 @@ class SessionViewModel: ObservableObject {
 
         // Clear shared keychain data for Share Extension
         SharedKeychainHelper.clearAllSharedData()
+
+        // Reset analytics identity
+        AnalyticsService.shared.reset()
     }
     
     func logout() async {
         do {
+            // Track sign out before clearing state
+            AnalyticsService.shared.track(.signOut)
+
             try await dataManager.signOut()
 
             // Clear reward tracking state
@@ -162,6 +173,9 @@ class SessionViewModel: ObservableObject {
     }
     
     func deleteAccount() async throws {
+        // Track account deletion before clearing state
+        AnalyticsService.shared.track(.accountDeleted)
+
         // Delete all user data and sign out
         try await dataManager.deleteAccount()
         await handleNoAuthentication()
@@ -224,6 +238,9 @@ class SessionViewModel: ObservableObject {
 
                 // Update last known arc count
                 RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
+
+                // Track arc earned event
+                AnalyticsService.shared.track(.arcEarned(newCount: newArcCount, previousCount: previousArcCount))
 
                 print("🏆 Arc reward queued: \(previousArcCount) → \(newArcCount) arcs")
             }

@@ -154,39 +154,53 @@ class IncomeViewModel: ObservableObject {
         do {
             try await dataManager.addIncome(newIncome)
             loadIncomes()
+
+            // Track income created
+            AnalyticsService.shared.track(.incomeCreated(
+                amount: amount,
+                frequency: frequency.rawValue,
+                source: .manual
+            ))
+
             showAddIncome = false
         } catch {
             showError("Failed to add income: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
     func updateIncome(_ income: Income) async {
         isLoading = true
         clearError()
-        
+
         do {
             try await dataManager.updateIncome(income)
             loadIncomes()
+
+            // Track income updated
+            AnalyticsService.shared.track(.incomeUpdated(incomeId: income.id ?? "", field: "multiple"))
         } catch {
             showError("Failed to update income: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
     func deleteIncome(_ income: Income) async {
         isLoading = true
         clearError()
-        
+
         do {
             try await dataManager.deleteIncome(income)
             loadIncomes()
+
+            // Track income deleted
+            AnalyticsService.shared.track(.incomeDeleted(incomeId: income.id ?? ""))
         } catch {
             showError("Failed to delete income: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     

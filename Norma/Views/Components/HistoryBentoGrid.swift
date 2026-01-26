@@ -18,10 +18,9 @@ struct HistoryBentoGrid: View {
 
     private let maxMonthsToShow = 12
 
-    /// Filter out current month and sort by most recent first
-    private var historicalStats: [MonthlyStats] {
+    /// All monthly stats sorted by most recent first (includes current month)
+    private var displayStats: [MonthlyStats] {
         monthlyStats
-            .filter { !$0.isCurrentMonth }
             .sorted { $0.sortKey > $1.sortKey }
             .prefix(maxMonthsToShow)
             .map { $0 }
@@ -40,12 +39,12 @@ struct HistoryBentoGrid: View {
                 .tracking(1.5)
 
             // Grid of monthly cards
-            if historicalStats.isEmpty {
+            if displayStats.isEmpty {
                 emptyState
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(historicalStats) { stats in
-                        MonthlyHistoryCard(stats: stats)
+                    ForEach(displayStats) { stats in
+                        MonthlyHistoryCard(stats: stats, isCurrentMonth: stats.isCurrentMonth)
                     }
                 }
             }
