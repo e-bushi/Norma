@@ -214,7 +214,15 @@ class BillViewModel: ObservableObject {
             print("✅ [DEBUG] BillViewModel.addBill: dataManager.addBill completed successfully")
             loadBills()
             print("✅ [DEBUG] BillViewModel.addBill: loadBills completed")
-            
+
+            // Track bill created
+            AnalyticsService.shared.track(.billCreated(
+                amount: amount,
+                frequency: frequency.rawValue,
+                hasReminder: isReminderOn,
+                source: .manual
+            ))
+
             // Find and return the created bill
             let createdBill = bills.first { $0.name == name && $0.amount == amount && $0.userId == userId }
             isLoading = false
@@ -236,6 +244,9 @@ class BillViewModel: ObservableObject {
             try await dataManager.updateBillWithEncryption(bill)
             loadBills()
 
+            // Track bill updated
+            AnalyticsService.shared.track(.billUpdated(billId: bill.id ?? "", field: "multiple"))
+
             // Check if reducing bill amount increased arcs
             sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
@@ -253,6 +264,9 @@ class BillViewModel: ObservableObject {
             try await dataManager.deleteBill(bill)
             loadBills()
 
+            // Track bill deleted
+            AnalyticsService.shared.track(.billDeleted(billId: bill.id ?? ""))
+
             // Check if deleting bill increased arcs
             sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
@@ -269,6 +283,17 @@ class BillViewModel: ObservableObject {
         do {
             try await dataManager.markBillAsPaid(bill, paymentMethod: paymentMethod, notes: notes)
             loadBills()
+
+            // Calculate days before due
+            let calendar = Calendar.current
+            let daysBeforeDue = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
+
+            // Track bill marked as paid
+            AnalyticsService.shared.track(.billMarkedPaid(
+                amount: bill.amount,
+                paymentMethod: paymentMethod.rawValue,
+                daysBeforeDue: daysBeforeDue
+            ))
 
             // Deduct bill amount from freedom fund and show toast
             await sessionViewModel.deductFreedomFundForBillPayment(amount: bill.amount, bills: bills)
@@ -316,7 +341,7 @@ class BillViewModel: ObservableObject {
             )
             
             try await dataManager.updateBillWithEncryption(updatedBill)
-            
+
             // Delete the associated expense payment if any
             let expenses = dataManager.expenses.filter { $0.billId == bill.id }
             for expense in expenses {
@@ -325,12 +350,15 @@ class BillViewModel: ObservableObject {
                     try await dataManager.deleteExpense(expense)
                 }
             }
-            
+
             loadBills()
+
+            // Track bill marked as unpaid
+            AnalyticsService.shared.track(.billMarkedUnpaid(billId: bill.id ?? ""))
         } catch {
             showError("Failed to mark bill as unpaid: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     

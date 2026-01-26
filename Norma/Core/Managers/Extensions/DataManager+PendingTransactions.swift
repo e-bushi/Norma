@@ -118,6 +118,9 @@ extension DataManager {
         for transaction in transactions {
             try await confirmPendingTransaction(transaction, withDate: date)
         }
+
+        // Refresh snapshot once after all transactions are processed
+        await refreshCurrentMonthSnapshot()
     }
 
     /// Reject a pending transaction
