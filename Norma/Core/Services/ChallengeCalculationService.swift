@@ -91,7 +91,8 @@ struct ChallengeCalculationService {
         if lastCalculated >= calculateUpTo {
             // Even if all days calculated, challenge may not have been finalized
             // (e.g., if persistence failed or app closed before completion was processed)
-            if calculateUpTo >= endDate && challenge.status == .active {
+            // Only finalize when we're PAST the end date (the end date is the last active day)
+            if today > endDate && challenge.status == .active {
                 var finalChallenge = challenge
                 var finalStats = stats
                 var challengeCompleted = false
@@ -205,8 +206,8 @@ struct ChallengeCalculationService {
         // Update last calculated date
         currentStats.lastCalculatedDate = calculateUpTo
 
-        // Check if challenge is complete (we've processed the end date)
-        let challengeEnded = calculateUpTo >= endDate
+        // Check if challenge is complete (we're past the end date - end date is the last active day)
+        let challengeEnded = today > endDate
         var challengeCompleted = false
         var challengeFailed = false
         var completionBonusAwarded = 0

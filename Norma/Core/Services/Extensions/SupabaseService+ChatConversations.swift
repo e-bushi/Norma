@@ -141,4 +141,107 @@ extension SupabaseService {
             .eq("id", value: conversationId)
             .execute()
     }
+
+    // MARK: - Encryption Support Methods
+
+    /// Fetch all encryptable conversations for a user, sorted by most recently updated
+    func fetchEncryptableConversations(userId: String) async throws -> [EncryptableChatConversation] {
+        let response: [EncryptableChatConversation] = try await from("chat_conversations")
+            .select()
+            .eq("user_id", value: userId)
+            .order("updated_at", ascending: false)
+            .execute()
+            .value
+
+        return response
+    }
+
+    /// Fetch a single encryptable conversation by its ID
+    func fetchEncryptableConversation(conversationId: String) async throws -> EncryptableChatConversation? {
+        let response: [EncryptableChatConversation] = try await from("chat_conversations")
+            .select()
+            .eq("id", value: conversationId)
+            .execute()
+            .value
+
+        return response.first
+    }
+
+    /// Create a new encrypted conversation
+    func createEncryptableConversation(_ conversation: EncryptableChatConversation) async throws -> EncryptableChatConversation {
+        print("🔍 [SupabaseService] Creating encryptable conversation...")
+        print("🔍 [SupabaseService] User ID: \(conversation.userId)")
+        print("🔍 [SupabaseService] Is encrypted: \(conversation.isEncrypted)")
+        print("🔍 [SupabaseService] Message count: \(conversation.messages.count)")
+
+        // Use insert struct to exclude server-generated fields
+        let insertData = EncryptableChatConversationInsert(from: conversation)
+
+        do {
+            let response: EncryptableChatConversation = try await from("chat_conversations")
+                .insert(insertData)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            print("✅ [SupabaseService] Successfully created encryptable conversation: \(response.id ?? "nil")")
+            return response
+        } catch {
+            print("❌ [SupabaseService] Create encryptable conversation failed: \(error)")
+            throw error
+        }
+    }
+
+    /// Update an existing encrypted conversation
+    func updateEncryptableConversation(_ conversation: EncryptableChatConversation) async throws -> EncryptableChatConversation {
+        guard let conversationId = conversation.id else {
+            throw NSError(domain: "SupabaseService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Cannot update conversation without ID"])
+        }
+
+        let updateData = EncryptableChatConversationUpdate(from: conversation)
+
+        print("🔍 [SupabaseService] Updating encryptable conversation...")
+        print("🔍 [SupabaseService] Conversation ID: \(conversationId)")
+        print("🔍 [SupabaseService] Is encrypted: \(updateData.isEncrypted)")
+
+        do {
+            let response: EncryptableChatConversation = try await from("chat_conversations")
+                .update(updateData)
+                .eq("id", value: conversationId)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            print("✅ [SupabaseService] Successfully updated encryptable conversation: \(response.id ?? "nil")")
+            return response
+        } catch {
+            print("❌ [SupabaseService] Update encryptable conversation failed: \(error)")
+            throw error
+        }
+    }
+
+    /// Update only the encryption fields of a conversation (for migration)
+    func updateConversationEncryption(conversationId: String, encryptedTitle: String?, encryptedMessages: String) async throws {
+        let updateData = ChatConversationEncryptionUpdate(
+            encryptedTitle: encryptedTitle,
+            encryptedMessages: encryptedMessages
+        )
+
+        print("🔍 [SupabaseService] Updating conversation encryption...")
+        print("🔍 [SupabaseService] Conversation ID: \(conversationId)")
+
+        do {
+            try await from("chat_conversations")
+                .update(updateData)
+                .eq("id", value: conversationId)
+                .execute()
+
+            print("✅ [SupabaseService] Successfully updated conversation encryption: \(conversationId)")
+        } catch {
+            print("❌ [SupabaseService] Update conversation encryption failed: \(error)")
+            throw error
+        }
+    }
 }

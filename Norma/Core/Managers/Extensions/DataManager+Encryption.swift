@@ -194,6 +194,10 @@ extension DataManager {
             try await migrateProfileSettingsToEncryption()
             print("✅ [DEBUG] Profile settings migrated")
 
+            print("📍 [DEBUG] Migrating chat conversations...")
+            try await migrateConversationsToEncryption()
+            print("✅ [DEBUG] Chat conversations migrated")
+
             print("✅ Successfully migrated all data to encrypted format")
         } catch {
             print("❌ [DEBUG] Migration failed at some point: \(error)")

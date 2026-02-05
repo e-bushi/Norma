@@ -24,6 +24,13 @@ struct RootView: View {
         .onAppear {
             // Set the model context on DataManager
             dataManager.setModelContext(modelContext)
+
+            // Signal to RewardQueueManager that the view is ready
+            // This handles the case where rewards were fetched before this view was mounted
+            rewardQueue.onViewAppear()
+        }
+        .onDisappear {
+            rewardQueue.onViewDisappear()
         }
         .task(id: sessionViewModel.currentUser?.userId) {
             // Load user data when main app becomes active (only once per user session)

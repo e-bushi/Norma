@@ -23,6 +23,7 @@ struct Profile: Identifiable, Codable, Equatable {
     var painPoint: String?
 
     var settings: ProfileSettings
+    var onboardingInsights: OnboardingInsights?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -37,6 +38,7 @@ struct Profile: Identifiable, Codable, Equatable {
         case freedomFund = "freedom_fund"
         case painPoint = "pain_point"
         case settings
+        case onboardingInsights = "onboarding_insights"
     }
 
     init(
@@ -51,7 +53,8 @@ struct Profile: Identifiable, Codable, Equatable {
         monthlyIncome: Double? = nil,
         freedomFund: Double? = nil,
         painPoint: String? = nil,
-        settings: ProfileSettings = ProfileSettings()
+        settings: ProfileSettings = ProfileSettings(),
+        onboardingInsights: OnboardingInsights? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -65,6 +68,33 @@ struct Profile: Identifiable, Codable, Equatable {
         self.freedomFund = freedomFund
         self.painPoint = painPoint
         self.settings = settings
+        self.onboardingInsights = onboardingInsights
+    }
+}
+
+struct OnboardingInsights: Codable, Equatable {
+    var runwayStatus: String?
+    var nomadChallenges: String?      // comma-separated for multi-select
+    var moneyStoppedYou: String?
+    var winningLooksLike: String?     // comma-separated for multi-select
+
+    enum CodingKeys: String, CodingKey {
+        case runwayStatus = "runway_status"
+        case nomadChallenges = "nomad_challenges"
+        case moneyStoppedYou = "money_stopped_you"
+        case winningLooksLike = "winning_looks_like"
+    }
+
+    init(
+        runwayStatus: String? = nil,
+        nomadChallenges: String? = nil,
+        moneyStoppedYou: String? = nil,
+        winningLooksLike: String? = nil
+    ) {
+        self.runwayStatus = runwayStatus
+        self.nomadChallenges = nomadChallenges
+        self.moneyStoppedYou = moneyStoppedYou
+        self.winningLooksLike = winningLooksLike
     }
 }
 

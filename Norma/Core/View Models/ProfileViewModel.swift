@@ -507,19 +507,23 @@ class ProfileViewModel: ObservableObject {
     func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        
+
         if let currencyInfo = currencyInfo {
             formatter.currencyCode = currencyInfo.code
             formatter.currencySymbol = currencyInfo.symbol
             return formatter.string(from: NSNumber(value: amount)) ?? "\(currencyInfo.symbol)\(amount)"
         } else {
-            // Fallback if currencyInfo is not yet loaded
-            return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
+            // Fallback if currencyInfo is not yet loaded - use user's currency setting
+            let currencyCode = profile?.settings.currency ?? "USD"
+            let symbol = CurrencyData.getSymbol(for: currencyCode)
+            formatter.currencyCode = currencyCode
+            formatter.currencySymbol = symbol
+            return formatter.string(from: NSNumber(value: amount)) ?? "\(symbol)\(amount)"
         }
     }
-    
+
     func formatCurrencyTruncated(_ amount: Double) -> String {
-        let symbol = currencyInfo?.symbol ?? "$"
+        let symbol = currencyInfo?.symbol ?? CurrencyData.getSymbol(for: profile?.settings.currency ?? "USD")
 
         if amount < 1000 {
             // Under 1K: show whole number, add + if there were decimals

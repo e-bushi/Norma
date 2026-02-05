@@ -40,7 +40,8 @@ struct ActiveChallengeContent: View {
                     todaysRemaining: challengeViewModel.todaysDailyCap - challengeViewModel.todaySpending,
                     onPointsTapped: {
                         showBirdCollection = true
-                    }
+                    },
+                    triggerNumberAnimation: heroAppeared
                 )
 
                 // Contextual sentences - cap change info
@@ -54,23 +55,15 @@ struct ActiveChallengeContent: View {
             .opacity(heroAppeared ? 1 : 0)
             .offset(y: heroAppeared ? 0 : 20)
 
-            // Contribution Graph - GitHub-style monthly view (with skeleton while loading)
-            Group {
-                if challengeViewModel.isStatsLoading {
-                    ContributionGraphSkeleton()
-                        .transition(.opacity)
-                } else {
-                    ContributionGraphView(
-                        dayResults: challengeViewModel.currentMonthResults,
-                        selectedDate: selectedDay?.date,
-                        currentStreak: challengeViewModel.currentStreak,
-                        challengeRemaining: challenge.amountRemaining,
-                        daysRemaining: challenge.daysRemaining,
-                        formatCurrency: { profileViewModel.formatCurrency($0) }
-                    )
-                    .transition(.opacity)
-                }
-            }
+            // Contribution Graph - GitHub-style monthly view
+            ContributionGraphView(
+                dayResults: challengeViewModel.currentMonthResults,
+                selectedDate: selectedDay?.date,
+                currentStreak: challengeViewModel.currentStreak,
+                challengeRemaining: challenge.amountRemaining,
+                daysRemaining: challenge.daysRemaining,
+                formatCurrency: { profileViewModel.formatCurrency($0) }
+            )
             .scaleEffect(graphAppeared ? 1 : 0.97)
             .opacity(graphAppeared ? 1 : 0)
             .offset(y: graphAppeared ? 0 : 15)
@@ -109,31 +102,14 @@ struct ActiveChallengeContent: View {
             // Select today by default
             let days = challengeViewModel.getChallengeDays()
             selectedDay = days.first { $0.isToday } ?? days.first
-
-            // Staggered entrance animations
-            animateEntrance()
         }
-    }
-
-    private func animateEntrance() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            heroAppeared = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
-            statsAppeared = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
-            graphAppeared = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
-            calendarAppeared = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4)) {
-            transactionsAppeared = true
+        .onChange(of: heroAppeared) { _, appeared in
+            // When hero appears, trigger the graph animation shortly after
+            if appeared {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                    graphAppeared = true
+                }
+            }
         }
     }
 }

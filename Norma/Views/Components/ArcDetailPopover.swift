@@ -57,10 +57,7 @@ struct ArcDetailPopover: View {
     }
 
     private var currencySymbol: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.currencySymbol ?? "$"
+        CurrencyData.getSymbol(for: currency)
     }
 
     private func formatCurrency(_ value: Double) -> String {
@@ -268,10 +265,7 @@ struct ArcStatsRow: View {
     private var infoFont: Font { Font.custom(FontFamily.Rubik.medium, size: 14) }
 
     private var currencySymbol: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.currencySymbol ?? "$"
+        CurrencyData.getSymbol(for: currency)
     }
 
     private func formatCurrency(_ value: Double) -> String {

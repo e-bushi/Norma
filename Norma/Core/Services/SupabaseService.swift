@@ -66,6 +66,14 @@ class SupabaseService {
         return response
     }
 
+    /// Resend OTP code to the user's email
+    func resendOTP(email: String) async throws {
+        try await client.auth.resend(
+            email: email,
+            type: .signup
+        )
+    }
+
     /// Sign in with Apple using ID token
     /// - Parameters:
     ///   - idToken: The identity token from Apple Sign In

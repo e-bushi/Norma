@@ -38,13 +38,11 @@ class OnboardingViewModel: ObservableObject {
     @Published var collectedData = UserOnboardingData()
     @Published var howDidYouHear: String?
 
-    // Extended Onboarding Responses
-    @Published var bankAccountFeeling: String = ""
-    @Published var controlVision: String = ""
-    @Published var moneyWorry: String = ""
-    @Published var moneyTiming: String = ""
-    @Published var moneyPersonality: String = ""
-    @Published var userWhy: String = ""
+    // Extended Onboarding Responses (Digital Nomad focused)
+    @Published var runwayStatus: String = ""
+    @Published var nomadChallenges: String = ""
+    @Published var moneyStoppedYou: String = ""
+    @Published var winningLooksLike: String = ""
 
     // MARK: - Dependencies
     private let sessionViewModel: SessionViewModel
@@ -154,6 +152,19 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
+    func resendCode(email: String) async throws {
+        isLoading = true
+        clearError()
+
+        do {
+            try await supabaseService.resendOTP(email: email)
+            isLoading = false
+        } catch {
+            isLoading = false
+            throw error
+        }
+    }
+
     func verifyCode(email: String, code: String) async throws {
         isLoading = true
         clearError()
@@ -200,7 +211,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func proceedToWelcome() {
-        currentStep = .notifications
+        currentStep = .runwayCheck
     }
 
     /// Finalize onboarding by saving profile data from preview mode and completing
@@ -725,6 +736,14 @@ class OnboardingViewModel: ObservableObject {
                 billReminderDays: reminderDays
             )
 
+            // Create onboarding insights from question responses
+            let insights = OnboardingInsights(
+                runwayStatus: runwayStatus.isEmpty ? nil : runwayStatus,
+                nomadChallenges: nomadChallenges.isEmpty ? nil : nomadChallenges,
+                moneyStoppedYou: moneyStoppedYou.isEmpty ? nil : moneyStoppedYou,
+                winningLooksLike: winningLooksLike.isEmpty ? nil : winningLooksLike
+            )
+
             // Check if profile already exists
             if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
                 // Update existing profile
@@ -733,6 +752,7 @@ class OnboardingViewModel: ObservableObject {
                 updatedProfile.freedomFund = freedomFund
                 updatedProfile.painPoint = painPoint
                 updatedProfile.settings = settings
+                updatedProfile.onboardingInsights = insights
                 let savedProfile = try await supabaseService.updateProfile(updatedProfile)
 
                 // Update SessionViewModel with the new profile data
@@ -748,7 +768,8 @@ class OnboardingViewModel: ObservableObject {
                     monthlyIncome: monthlyIncome,
                     freedomFund: freedomFund,
                     painPoint: painPoint,
-                    settings: settings
+                    settings: settings,
+                    onboardingInsights: insights
                 )
                 let savedProfile = try await supabaseService.createProfile(newProfile)
 
@@ -762,6 +783,7 @@ class OnboardingViewModel: ObservableObject {
             await transferPreviewModeData(userId: supabaseUser.id.uuidString)
 
             print("✅ Profile data saved from preview mode")
+            print("📊 Onboarding insights: runway=\(runwayStatus), challenges=\(nomadChallenges), stopped=\(moneyStoppedYou), winning=\(winningLooksLike)")
 
         } catch {
             print("❌ Failed to save profile data from preview mode: \(error)")
@@ -810,26 +832,18 @@ class OnboardingViewModel: ObservableObject {
 enum OnboardingStep: CaseIterable {
     case landing
     case previewMode
-    case welcome
     case authentication
     case verification
 
-    // Emotional/Personal Section (8 screens)
-    case feelingsCheck        // "How do you feel when you check your bank account?"
-    case controlVision        // "What would change if you felt in control?"
-    case moneyWorries         // "What keeps you up at night about money?"
-    case moneyTiming          // "When do you usually think about money?"
-    case moneyPersonality     // "Pick your money personality"
-    case yourWhy              // "What's your why?"
-    case imagination          // "Imagine 3 months from now..."
-    case encouragement        // "You're already ahead"
+    // Personal Section (4 screens) - Digital Nomad focused
+    case runwayCheck          // "Be honest — how's your runway?"
+    case nomadChallenges      // "What's actually hard about money on the road?"
+    case moneyStoppedYou      // "Has money ever stopped you?"
+    case winningLooksLike     // "What does winning look like?"
 
-    // Feature Showcase (5 screens)
-    case featureScreenshot    // Screenshot → Send to Norma
-    case featureMoneyTasks    // Money tasks via chat
-    case featurePurchasingPower // Purchasing Power insights
-    case featureChallenges    // Challenges & Rewards
-    case featureFreedomFund   // Freedom Fund arc
+    // Final Screens (2 screens)
+    case privacy              // Your data is safe - encryption, trust
+    case welcomeJourney       // Celebration - confetti, coins, "best decision"
 
     case notifications
     case complete

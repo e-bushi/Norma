@@ -17,12 +17,13 @@ struct ChallengeHeroView: View {
     let todaysCap: Double
     let todaysRemaining: Double
     var onPointsTapped: (() -> Void)? = nil
+    var triggerNumberAnimation: Bool = false  // Controlled by parent
     @EnvironmentObject var profileViewModel: ProfileViewModel
 
-    @State private var hasAppeared = false
+    @State private var hasAnimatedNumber = false
 
     private var displayedRemaining: Double {
-        hasAppeared ? abs(todaysRemaining) : 0
+        hasAnimatedNumber ? abs(todaysRemaining) : 0
     }
 
     private var formattedTodaysRemaining: String {
@@ -71,10 +72,13 @@ struct ChallengeHeroView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    hasAppeared = true
+        .onChange(of: triggerNumberAnimation) { _, shouldAnimate in
+            if shouldAnimate && !hasAnimatedNumber {
+                // Delay slightly for visual effect
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        hasAnimatedNumber = true
+                    }
                 }
             }
         }

@@ -151,8 +151,12 @@ class RewardQueueManager: ObservableObject {
                 }
                 pendingRewardCount = rewardQueue.count
 
-                if !isProcessing && !rewardQueue.isEmpty {
+                // Only process immediately if the presenting view is already mounted.
+                // Otherwise, onViewAppear() will start processing when RootView appears.
+                if isViewMounted && !isProcessing && !rewardQueue.isEmpty {
                     processNextReward()
+                } else if !isViewMounted {
+                    print("🎁 \(rewardQueue.count) rewards queued, waiting for view to mount before presenting")
                 }
             }
 
@@ -167,9 +171,9 @@ class RewardQueueManager: ObservableObject {
         let lightFeedback = UIImpactFeedbackGenerator(style: .light)
         lightFeedback.impactOccurred()
 
-        // Mark as dismissed on backend
+        // Delete from backend now that user has seen and dismissed it
         if let pendingId = currentPendingRewardId {
-            markRewardAsDismissed(pendingId)
+            deleteRewardFromBackend(pendingId)
         }
 
         // Start animate-out
@@ -259,13 +263,15 @@ class RewardQueueManager: ObservableObject {
             return
         }
 
+        // Create the PendingReward and set the ID mapping BEFORE the async insert.
+        // This ensures processNextReward() can find the mapping immediately
+        // instead of racing against the network call.
+        let pendingReward = PendingReward.from(reward: reward, userId: userId)
+        rewardIdMapping[reward.id] = pendingReward.id
+
         Task {
             do {
-                let pendingReward = PendingReward.from(reward: reward, userId: userId)
-                let saved = try await service.insertPendingReward(pendingReward)
-                await MainActor.run {
-                    rewardIdMapping[reward.id] = saved.id
-                }
+                _ = try await service.insertPendingReward(pendingReward)
                 print("🎁 Reward persisted to backend: \(reward.type.rawValue)")
             } catch {
                 print("❌ Failed to persist reward: \(error)")
@@ -301,6 +307,20 @@ class RewardQueueManager: ObservableObject {
         }
     }
 
+    /// Delete a reward from the backend after user dismisses it
+    private func deleteRewardFromBackend(_ pendingRewardId: UUID) {
+        guard let service = supabaseService else { return }
+
+        Task {
+            do {
+                try await service.deletePendingReward(rewardId: pendingRewardId)
+                print("🎁 Reward deleted from backend: \(pendingRewardId)")
+            } catch {
+                print("❌ Failed to delete reward: \(error)")
+            }
+        }
+    }
+
     // MARK: - Computed Properties
 
     /// Whether there are more rewards after the current one
@@ -311,5 +331,39 @@ class RewardQueueManager: ObservableObject {
     /// Button text based on queue state
     var buttonText: String {
         hasMoreRewards ? "Next" : "Continue"
+    }
+
+    // MARK: - View Lifecycle Support
+
+    /// Tracks whether the presenting view is mounted
+    private var isViewMounted: Bool = false
+
+    /// Call this when the view that presents the celebration sheet appears.
+    /// If rewards were queued before the view was mounted, this starts processing them.
+    func onViewAppear() {
+        isViewMounted = true
+
+        // Process any rewards that were queued before the view was ready
+        if !isProcessing && !rewardQueue.isEmpty {
+            print("🎁 View appeared with \(rewardQueue.count) queued rewards — scheduling presentation")
+
+            // Brief delay to ensure view is fully rendered and ready for sheet presentation.
+            // Without this, SwiftUI may not present the sheet reliably since onAppear
+            // fires before the view hierarchy is fully established.
+            Task {
+                try? await Task.sleep(nanoseconds: 350_000_000) // 350ms
+                await MainActor.run {
+                    // Re-check conditions in case view disappeared or processing started
+                    if isViewMounted && !isProcessing && !rewardQueue.isEmpty {
+                        processNextReward()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Call this when the view that presents the celebration sheet disappears
+    func onViewDisappear() {
+        isViewMounted = false
     }
 }

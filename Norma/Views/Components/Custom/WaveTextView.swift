@@ -15,6 +15,7 @@ struct WaveTextView: View {
     let font: Font
     let color: Color
     let isAnimating: Bool
+    var alignment: HorizontalAlignment = .center
 
     /// Animation configuration
     private let wordDelay: Double = 0.06
@@ -29,7 +30,7 @@ struct WaveTextView: View {
     }
 
     var body: some View {
-        WaveFlowLayout(spacing: 4, lineSpacing: 6) {
+        WaveFlowLayout(spacing: 4, lineSpacing: 6, alignment: alignment) {
             ForEach(Array(words.enumerated()), id: \.offset) { index, word in
                 WaveWord(
                     word: word,
@@ -93,10 +94,13 @@ private struct WaveWord: View {
 private struct WaveFlowLayout: Layout {
     let spacing: CGFloat
     let lineSpacing: CGFloat
+    var alignment: HorizontalAlignment = .center
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let result = arrangeSubviews(proposal: proposal, subviews: subviews)
-        return result.size
+        // Use the proposed width if available so centering works correctly
+        let width = proposal.width ?? result.size.width
+        return CGSize(width: width, height: result.size.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -123,9 +127,9 @@ private struct WaveFlowLayout: Layout {
             let size = subview.sizeThatFits(.unspecified)
 
             if currentX + size.width > maxWidth && currentX > 0 {
-                // Center the current line
+                // Align the current line
                 let lineWidth = currentX - spacing
-                let offsetX = (maxWidth - lineWidth) / 2
+                let offsetX = alignmentOffset(lineWidth: lineWidth, maxWidth: maxWidth)
                 for i in lineStartIndex..<index {
                     positions[i].x += offsetX
                 }
@@ -143,9 +147,9 @@ private struct WaveFlowLayout: Layout {
             totalWidth = max(totalWidth, currentX - spacing)
         }
 
-        // Center the last line
+        // Align the last line
         let lineWidth = currentX - spacing
-        let offsetX = (maxWidth - lineWidth) / 2
+        let offsetX = alignmentOffset(lineWidth: lineWidth, maxWidth: maxWidth)
         for i in lineStartIndex..<positions.count {
             positions[i].x += offsetX
         }
@@ -154,6 +158,17 @@ private struct WaveFlowLayout: Layout {
             size: CGSize(width: totalWidth, height: currentY + lineHeight),
             positions: positions
         )
+    }
+
+    private func alignmentOffset(lineWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
+        switch alignment {
+        case .leading:
+            return 0
+        case .trailing:
+            return maxWidth - lineWidth
+        default:
+            return (maxWidth - lineWidth) / 2
+        }
     }
 }
 
