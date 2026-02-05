@@ -26,10 +26,7 @@ struct IncomeEditPopover: View {
     }
 
     private var currencySymbol: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.currencySymbol ?? "$"
+        CurrencyData.getSymbol(for: currency)
     }
 
     var body: some View {
@@ -154,10 +151,9 @@ struct IncomeEditPopover: View {
         var updatedSettings = currentUser.settings
         updatedSettings.monthlyIncome = newIncome
 
-        // Create updated profile
+        // Create updated profile (only update settings - encrypted_settings blob is source of truth)
         var updatedProfile = currentUser
         updatedProfile.settings = updatedSettings
-        updatedProfile.monthlyIncome = newIncome
 
         Task {
             await sessionViewModel.updateUserProfile(updatedProfile)

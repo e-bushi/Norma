@@ -381,10 +381,7 @@ struct FreedomFundEditSheet: View {
     }
 
     private var currencySymbol: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.currencySymbol ?? "$"
+        CurrencyData.getSymbol(for: currency)
     }
 
     var body: some View {
@@ -519,10 +516,9 @@ struct FreedomFundEditSheet: View {
         var updatedSettings = currentUser.settings
         updatedSettings.freedomFund = newFreedomFund
 
-        // Create updated profile
+        // Create updated profile (only update settings - encrypted_settings blob is source of truth)
         var updatedProfile = currentUser
         updatedProfile.settings = updatedSettings
-        updatedProfile.freedomFund = newFreedomFund
 
         Task {
             // Use arc check version to trigger rewards when arcs increase

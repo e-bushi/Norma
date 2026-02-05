@@ -129,8 +129,8 @@ class SessionViewModel: ObservableObject {
                 userId: userId
             )
 
-            // Fetch any pending rewards that weren't shown (e.g., app crashed, reinstall)
-            await RewardQueueManager.shared.fetchAndQueuePendingRewards()
+            // Note: fetchAndQueuePendingRewards() is called later by AppCoordinator
+            // after runDailyCalculations() has created any pending rewards
         }
 
         // Identify user in analytics
@@ -298,9 +298,8 @@ class SessionViewModel: ObservableObject {
         let newFreedomFund = max(0, currentFreedomFund - amount)
         let actualDeduction = currentFreedomFund - newFreedomFund
 
-        // Update profile with new freedom fund
+        // Update profile with new freedom fund (only update settings - encrypted_settings blob is source of truth)
         profile.settings.freedomFund = newFreedomFund
-        profile.freedomFund = newFreedomFund
         currentUser = profile
 
         do {
@@ -329,9 +328,8 @@ class SessionViewModel: ObservableObject {
 
         } catch {
             print("❌ Failed to update freedom fund: \(error)")
-            // Revert local change on failure
+            // Revert local change on failure (only update settings - encrypted_settings blob is source of truth)
             currentUser?.settings.freedomFund = currentFreedomFund
-            currentUser?.freedomFund = currentFreedomFund
         }
     }
 

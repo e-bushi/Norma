@@ -47,7 +47,7 @@ class ConversationManager: ObservableObject {
         error = nil
 
         do {
-            conversations = try await dataManager.fetchAllConversations(userId: userId)
+            conversations = try await dataManager.fetchAllConversationsWithEncryption(userId: userId)
 
             // Don't auto-select a conversation - app should start with empty state (new conversation)
 
@@ -152,13 +152,13 @@ class ConversationManager: ObservableObject {
             if let conversationId = conversation.id {
                 // Has an ID - check if it exists in database
                 print("🔍 [ConversationManager] Checking if conversation exists in database...")
-                let existingConversation = try await dataManager.fetchConversation(conversationId: conversationId)
+                let existingConversation = try await dataManager.fetchConversationWithEncryption(conversationId: conversationId)
                 print("🔍 [ConversationManager] Existing conversation found: \(existingConversation != nil)")
 
                 if existingConversation != nil {
                     // Update existing
                     print("🔍 [ConversationManager] Updating existing conversation...")
-                    let updated = try await dataManager.updateConversation(conversation)
+                    let updated = try await dataManager.updateConversationWithEncryption(conversation)
                     currentConversation = updated
 
                     // Update in list
@@ -169,7 +169,7 @@ class ConversationManager: ObservableObject {
                 } else {
                     // ID exists but not in database - create new
                     print("🔍 [ConversationManager] Creating new conversation (ID not found in database)...")
-                    let created = try await dataManager.createConversation(conversation)
+                    let created = try await dataManager.createConversationWithEncryption(conversation)
                     currentConversation = created
 
                     // Update in list
@@ -181,7 +181,7 @@ class ConversationManager: ObservableObject {
             } else {
                 // No ID - definitely a new conversation, let Supabase generate the ID
                 print("🔍 [ConversationManager] Creating new conversation (no ID, Supabase will generate)...")
-                let created = try await dataManager.createConversation(conversation)
+                let created = try await dataManager.createConversationWithEncryption(conversation)
                 currentConversation = created
 
                 // Find the local conversation (by matching first in list since it was just inserted)
@@ -267,7 +267,7 @@ class ConversationManager: ObservableObject {
 
         // Save to backend
         do {
-            _ = try await dataManager.updateConversation(conversation)
+            _ = try await dataManager.updateConversationWithEncryption(conversation)
             print("✅ ConversationManager: Generated title: \(title)")
         } catch {
             print("❌ ConversationManager: Failed to save title: \(error.localizedDescription)")

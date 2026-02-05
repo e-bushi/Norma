@@ -27,6 +27,7 @@ struct PreviewModeChatView: View {
     @State private var showReadyModal = false
     @State private var hasClickedReady = false
     @State private var showSaveButton = false
+    @State private var showReadyButton = false
     @State private var dynamicSpacerHeight: CGFloat = 180
     @State private var viewportHeight: CGFloat = 0
     @State private var lastMessagePosition: CGFloat = 0
@@ -44,7 +45,8 @@ struct PreviewModeChatView: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        // Use the formatter for the fallback too to get the correct symbol
+        return formatter.string(from: NSNumber(value: amount)) ?? formatter.string(from: 0) ?? "0"
     }
 
     // Animate nav bar capsules with staggered timing and haptics
@@ -184,12 +186,21 @@ struct PreviewModeChatView: View {
                     .animation(.spring(response: 0.5, dampingFraction: 0.7), value: visibleNavCapsules)
                 }
 
-                if showSaveButton {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if showSaveButton {
                         Button(action: {
                             previewModeViewModel.showSaveProgressModal = true
                         }) {
                             Text("Save")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color("NormaPastelTeal"))
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    } else if showReadyButton && !hasClickedReady {
+                        Button(action: {
+                            showReadyModal = true
+                        }) {
+                            Text("Ready?")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(Color("NormaPastelTeal"))
                         }
@@ -229,6 +240,10 @@ struct PreviewModeChatView: View {
                     // Don't dismiss modal here - let it stay open during sign-in
                     // The modal will be dismissed after successful sign-in via currentStep change
                     handleAppleSignIn()
+                },
+                onSignUpWithGoogle: {
+                    // Don't dismiss modal here - let it stay open during sign-in
+                    handleGoogleSignIn()
                 },
                 onContinueChatting: {
                     handleKeepChatting()
@@ -377,6 +392,13 @@ struct PreviewModeChatView: View {
         // Track message count
         if !hasClickedReady {
             userMessageCount += 1
+
+            // Show "I'm Ready" button after 4 messages
+            if userMessageCount >= 4 && !showReadyButton {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    showReadyButton = true
+                }
+            }
         }
 
         Task {
@@ -826,8 +848,9 @@ struct PreviewModeChatView: View {
         // Clear mock data but keep name and currency
         previewModeViewModel.clearMockData()
 
-        // Hide capsules when transitioning to real onboarding
+        // Hide capsules and ready button when transitioning to real onboarding
         showCapsules = false
+        showReadyButton = false
 
         // Clear messages
         messages.removeAll()
@@ -857,6 +880,12 @@ struct PreviewModeChatView: View {
         }
     }
 
+    private func handleGoogleSignIn() {
+        Task {
+            await onboardingViewModel.signInWithGoogleFromPreviewMode()
+        }
+    }
+
     private func flowStateColor(for state: String) -> Color {
         switch state {
         case "In flow":
@@ -875,99 +904,160 @@ struct PreviewModeChatView: View {
 struct ReadyToStartModal: View {
     let onReady: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var animateArrow = false
     @State private var animateTitle = false
-    @State private var animateContent = false
+    @State private var animateSubtitle = false
     @State private var animateButton = false
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+    private let accentColor = Color("NormaPastelTeal")
+    private let secondaryColor = Color("NormaPastelPurple")
 
-            // 3D Arrow
-            Arrow3DView()
-                .frame(width: 180, height: 180)
+    // Adjust button opacity based on color scheme for better visibility
+    private var buttonBackgroundOpacity: Double {
+        colorScheme == .light ? 0.85 : 0.25
+    }
+
+    var body: some View {
+        ZStack {
+            // Glass background with floating orbs
+            GeometryReader { geometry in
+                ZStack {
+                    Color("NormaBackground")
+
+                    LavaOrb(
+                        color: accentColor,
+                        size: 200,
+                        blur: 60,
+                        opacity: 0.15,
+                        bounds: geometry.size,
+                        speed: 5.0
+                    )
+
+                    LavaOrb(
+                        color: secondaryColor,
+                        size: 160,
+                        blur: 50,
+                        opacity: 0.12,
+                        bounds: geometry.size,
+                        speed: 6.0
+                    )
+                }
+            }
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                // 3D Arrow with glow
+                ZStack {
+                    // Glow behind arrow
+                    Circle()
+                        .fill(accentColor.opacity(0.15))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 30)
+
+                    Arrow3DView()
+                        .frame(width: 180, height: 180)
+                }
                 .scaleEffect(animateArrow ? 1.0 : 0.3)
                 .opacity(animateArrow ? 1.0 : 0.0)
 
-            Text("Let's Make This Real")
-                .font(.normaHeadline(24))
-                .multilineTextAlignment(.center)
-                .scaleEffect(animateTitle ? 1.0 : 0.8)
-                .opacity(animateTitle ? 1.0 : 0.0)
+                Spacer()
+                    .frame(height: 32)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("You've seen how I work with sample data. Now let's personalize it for you:")
+                // Title with wave animation
+                WaveTextView(
+                    text: "Let's make this real",
+                    font: .normaHeadline(32),
+                    color: .primary,
+                    isAnimating: animateTitle,
+                    alignment: .center
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+
+                Spacer()
+                    .frame(height: 16)
+
+                // Subtitle
+                Text("You've explored with sample data.\nNow let's personalize Norma for you.")
                     .normaBody()
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 32)
+                    .opacity(animateSubtitle ? 1.0 : 0.0)
+                    .offset(y: animateSubtitle ? 0 : 20)
 
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .normaBody()
-                    Text("Just a few short questions about your finances")
-                        .normaBody()
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Spacer()
+                    .frame(height: 24)
 
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .normaBody()
-                    Text("Get advice tailored specifically to you")
-                        .normaBody()
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                // Feature hints
+                VStack(spacing: 8) {
+                    Text("Just a few questions about your finances")
+                        .font(.normaHeadline(16))
+                        .foregroundColor(accentColor)
 
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .normaBody()
-                    Text("Your data is fully encrypted and private")
-                        .normaBody()
+                    Text("Your data stays encrypted and private")
+                        .normaCaption()
                         .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(.horizontal, 32)
+                .opacity(animateSubtitle ? 1.0 : 0.0)
+
+                Spacer()
+
+                // Glass-styled button with color scheme awareness
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    onReady()
+                }) {
+                    Text("Let's go")
+                        .font(.normaHeadline(16))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(accentColor.opacity(buttonBackgroundOpacity))
+                                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                        )
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+                .scaleEffect(animateButton ? 1.0 : 0.9)
+                .opacity(animateButton ? 1.0 : 0.0)
             }
-            .padding()
-            .background(Color("NormaSurface"))
-            .cornerRadius(12)
-            .padding(.horizontal, 24)
-            .offset(y: animateContent ? 0 : 20)
-            .opacity(animateContent ? 1.0 : 0.0)
-
-            Button(action: {
-                onReady()
-            }) {
-                Text("I'm Ready")
-                    .font(.normaHeadline(16))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color("NormaPastelTeal"))
-                    .cornerRadius(12)
-            }
-            .padding(.horizontal, 24)
-            .scaleEffect(animateButton ? 1.0 : 0.8)
-            .opacity(animateButton ? 1.0 : 0.0)
-
-            Spacer()
         }
-        .padding(.vertical, 32)
         .onAppear {
-            // Staggered animations
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
-                animateArrow = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
-                animateTitle = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
-                animateContent = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
-                animateButton = true
-            }
+            startAnimations()
+        }
+    }
+
+    private func startAnimations() {
+        // Arrow pops in first with haptic
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.65).delay(0.1)) {
+            animateArrow = true
+        }
+
+        // Title wave starts
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            animateTitle = true
+        }
+
+        // Subtitle fades in
+        withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
+            animateSubtitle = true
+        }
+
+        // Button slides up
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.6)) {
+            animateButton = true
         }
     }
 }
@@ -1034,148 +1124,258 @@ struct SaveProgressModal: View {
     let userName: String
     let onSignUpWithEmail: () -> Void
     let onSignUpWithApple: () -> Void
+    let onSignUpWithGoogle: () -> Void
     let onContinueChatting: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var animateArrow = false
     @State private var animateTitle = false
-    @State private var animateContent = false
+    @State private var animateSubtitle = false
     @State private var animateButtons = false
     @State private var animateDivider = false
     @State private var animateKeepChatting = false
 
+    private let accentColor = Color("NormaPastelTeal")
+    private let secondaryColor = Color("NormaPastelPurple")
+
     var body: some View {
-        VStack(spacing: 24) {
-            // 3D Arrow
-            Arrow3DView()
-                .frame(width: 180, height: 180)
-                .scaleEffect(animateArrow ? 1.0 : 0.3)
-                .opacity(animateArrow ? 1.0 : 0.0)
+        ZStack {
+            // Glass background with floating orbs
+            GeometryReader { geometry in
+                ZStack {
+                    Color("NormaBackground")
 
-            Text("Nice Work, \(userName)!")
-                .font(.normaHeadline(24))
-                .multilineTextAlignment(.center)
-                .scaleEffect(animateTitle ? 1.0 : 0.8)
-                .opacity(animateTitle ? 1.0 : 0.0)
+                    LavaOrb(
+                        color: accentColor,
+                        size: 200,
+                        blur: 60,
+                        opacity: 0.15,
+                        bounds: geometry.size,
+                        speed: 5.0
+                    )
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("You're all set up! To save your progress, create an account:")
-                    .normaBody()
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    LavaOrb(
+                        color: secondaryColor,
+                        size: 160,
+                        blur: 50,
+                        opacity: 0.12,
+                        bounds: geometry.size,
+                        speed: 6.0
+                    )
+                }
+            }
+            .ignoresSafeArea()
 
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .normaBody()
-                    Text("Your data is fully encrypted and private")
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 40)
+
+                    // 3D Arrow with glow
+                    ZStack {
+                        Circle()
+                            .fill(accentColor.opacity(0.15))
+                            .frame(width: 200, height: 200)
+                            .blur(radius: 30)
+
+                        Arrow3DView()
+                            .frame(width: 160, height: 160)
+                    }
+                    .scaleEffect(animateArrow ? 1.0 : 0.3)
+                    .opacity(animateArrow ? 1.0 : 0.0)
+
+                    Spacer(minLength: 24)
+
+                    // Title with wave animation
+                    WaveTextView(
+                        text: "Nice work, \(userName)!",
+                        font: .normaHeadline(32),
+                        color: .primary,
+                        isAnimating: animateTitle,
+                        alignment: .center
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+
+                    Spacer(minLength: 12)
+
+                    // Subtitle
+                    Text("You're all set up. Create an account\nto save your progress.")
                         .normaBody()
                         .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding()
-            .background(Color("NormaSurface"))
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .offset(y: animateContent ? 0 : 20)
-            .opacity(animateContent ? 1.0 : 0.0)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.horizontal, 32)
+                        .opacity(animateSubtitle ? 1.0 : 0.0)
 
-            // Authentication buttons
-            VStack(spacing: 16) {
-                // Sign up with Apple button
-                Button(action: onSignUpWithApple) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "apple.logo")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(.white)
+                    Spacer(minLength: 8)
 
-                        Text("Sign up with Apple")
-                            .font(.normaHeadline(16))
-                            .foregroundColor(.white)
+                    // Privacy note
+                    Text("Your data is fully encrypted and private")
+                        .normaCaption()
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .opacity(animateSubtitle ? 1.0 : 0.0)
+
+                    Spacer(minLength: 32)
+
+                    // Authentication buttons
+                    VStack(spacing: 12) {
+                        // Sign up with Apple button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            onSignUpWithApple()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "apple.logo")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+
+                                Text("Continue with Apple")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.black)
+                            .cornerRadius(12)
+                        }
+
+                        // Sign up with Google button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            onSignUpWithGoogle()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image("google-logo")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 20, height: 20)
+
+                                Text("Continue with Google")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(.primary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color("NormaSurface"))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+                            .cornerRadius(12)
+                        }
+
+                        // Sign up with Email button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            onSignUpWithEmail()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.white)
+
+                                Text("Continue with Email")
+                                    .font(.normaHeadline(16))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(accentColor)
+                            .cornerRadius(12)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.black)
-                    .cornerRadius(12)
-                }
+                    .padding(.horizontal, 24)
+                    .scaleEffect(animateButtons ? 1.0 : 0.95)
+                    .opacity(animateButtons ? 1.0 : 0.0)
 
-                // Sign up with Email button
-                Button(action: onSignUpWithEmail) {
+                    Spacer(minLength: 20)
+
+                    // Divider with "or"
                     HStack(spacing: 12) {
-                        Image(systemName: "envelope.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-
-                        Text("Sign up with Email")
-                            .font(.normaHeadline(16))
-                            .foregroundColor(.white)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
+                        Text("or")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color("NormaPastelTeal"))
-                    .cornerRadius(12)
+                    .padding(.horizontal, 24)
+                    .opacity(animateDivider ? 1.0 : 0.0)
+
+                    Spacer(minLength: 16)
+
+                    // Keep chatting button with warning
+                    VStack(spacing: 8) {
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            onContinueChatting()
+                        }) {
+                            Text("Keep Chatting")
+                                .font(.normaHeadline(14))
+                                .foregroundColor(accentColor)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .background(accentColor.opacity(0.12))
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 24)
+
+                        Text("Save later or risk losing your progress")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                    .offset(y: animateKeepChatting ? 0 : 15)
+                    .opacity(animateKeepChatting ? 1.0 : 0.0)
+
+                    Spacer(minLength: 32)
                 }
             }
-            .padding(.horizontal, 24)
-            .scaleEffect(animateButtons ? 1.0 : 0.8)
-            .opacity(animateButtons ? 1.0 : 0.0)
-
-            // Divider with "or"
-            HStack(spacing: 12) {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(height: 1)
-                Text("or")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(height: 1)
-            }
-            .padding(.horizontal, 24)
-            .opacity(animateDivider ? 1.0 : 0.0)
-
-            // Keep chatting button with warning
-            VStack(spacing: 8) {
-                Button(action: onContinueChatting) {
-                    Text("Keep Chatting")
-                        .font(.normaHeadline(14))
-                        .foregroundColor(Color("NormaPastelTeal"))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color("NormaPastelTeal").opacity(0.15))
-                        .cornerRadius(10)
-                }
-                .padding(.horizontal, 24)
-
-                Text("Don't forget to save or you'll risk losing all your progress")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.7))
-                    .multilineTextAlignment(.center)
-            }
-            .offset(y: animateKeepChatting ? 0 : 15)
-            .opacity(animateKeepChatting ? 1.0 : 0.0)
         }
-        .padding(.vertical, 32)
         .onAppear {
-            // Staggered animations
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
-                animateArrow = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
-                animateTitle = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
-                animateContent = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
-                animateButtons = true
-            }
-            withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
-                animateDivider = true
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.55)) {
-                animateKeepChatting = true
-            }
+            startAnimations()
+        }
+    }
+
+    private func startAnimations() {
+        // Arrow pops in first with haptic
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.65).delay(0.1)) {
+            animateArrow = true
+        }
+
+        // Title wave starts
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            animateTitle = true
+        }
+
+        // Subtitle fades in
+        withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
+            animateSubtitle = true
+        }
+
+        // Buttons animate in
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5)) {
+            animateButtons = true
+        }
+
+        // Divider
+        withAnimation(.easeOut(duration: 0.3).delay(0.6)) {
+            animateDivider = true
+        }
+
+        // Keep chatting
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
+            animateKeepChatting = true
         }
     }
 }

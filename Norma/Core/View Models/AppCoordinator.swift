@@ -27,10 +27,13 @@ class AppCoordinator: ObservableObject {
     }
     
     // MARK: - Core Managers and ViewModels
-    
+
     let dataManager: DataManager
     let sessionViewModel: SessionViewModel
-    
+
+    // Challenge ViewModel for daily calculations during loading
+    private var challengeViewModel: ChallengeViewModel?
+
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
     lazy var conversationManager = ConversationManager(dataManager: dataManager, sessionViewModel: sessionViewModel)
@@ -58,7 +61,10 @@ class AppCoordinator: ObservableObject {
 
             // Add delay for authenticated users to show loading screen
             if sessionViewModel.isAuthenticated {
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds for data loading
+                // Run daily calculations during loading to create any pending rewards
+                await runDailyCalculationsDuringLoading()
+
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds remaining for loading
                 dataLoaded = true
             } else {
                 // Non-authenticated users skip loading screen
@@ -70,10 +76,32 @@ class AppCoordinator: ObservableObject {
         }
     }
 
+    /// Run daily challenge calculations during app loading.
+    /// This creates any pending rewards BEFORE fetchAndQueuePendingRewards() runs.
+    private func runDailyCalculationsDuringLoading() async {
+        // Create a temporary ChallengeViewModel to run calculations
+        let tempChallengeVM = ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+        self.challengeViewModel = tempChallengeVM
+
+        // Load challenge data
+        tempChallengeVM.loadChallenge()
+        await tempChallengeVM.loadChallengeStats()
+
+        // Run daily calculations - this creates rewards and persists them to backend
+        await tempChallengeVM.runDailyCalculations()
+
+        print("🎁 Daily calculations completed during loading")
+    }
+
     /// Called when user taps Start button on loading screen
     func userTappedStart() {
         userStartedApp = true
         isReady = true
+
+        // Now fetch pending rewards that were created during loading
+        Task {
+            await RewardQueueManager.shared.fetchAndQueuePendingRewards()
+        }
     }
     
     private func setupNotificationObservers() {
@@ -146,6 +174,7 @@ class AppCoordinator: ObservableObject {
     func logout() async {
         await sessionViewModel.logout()
         dataManager.clearAllData()
+        onboardingViewModel.startOnboardingFlow()
         currentView = .onboarding
     }
     
@@ -212,9 +241,6 @@ struct OnboardingCoordinatorView: View {
                     .environmentObject(sessionViewModel)
                     .environmentObject(onboardingViewModel)
 
-            case .welcome:
-                EmptyView()
-
             case .authentication:
                 if onboardingViewModel.showSignUp {
                     SignUpView(
@@ -240,81 +266,41 @@ struct OnboardingCoordinatorView: View {
                 )
                 .environmentObject(onboardingViewModel)
 
-            // MARK: - Extended Onboarding: Emotional Questions (Screens 1-6)
+            // MARK: - Extended Onboarding: Personal Questions (4 screens - Digital Nomad focused)
 
-            case .feelingsCheck:
-                OnboardingQuestionView(question: .feelingsCheck) { selected in
-                    onboardingViewModel.bankAccountFeeling = selected
+            case .runwayCheck:
+                OnboardingQuestionView(question: .runwayCheck) { selected in
+                    onboardingViewModel.runwayStatus = selected
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .controlVision:
-                OnboardingQuestionView(question: .controlVision) { selected in
-                    onboardingViewModel.controlVision = selected
+            case .nomadChallenges:
+                OnboardingQuestionView(question: .nomadChallenges) { selected in
+                    onboardingViewModel.nomadChallenges = selected
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .moneyWorries:
-                OnboardingQuestionView(question: .moneyWorries) { selected in
-                    onboardingViewModel.moneyWorry = selected
+            case .moneyStoppedYou:
+                OnboardingQuestionView(question: .moneyStoppedYou) { selected in
+                    onboardingViewModel.moneyStoppedYou = selected
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .moneyTiming:
-                OnboardingQuestionView(question: .moneyTiming) { selected in
-                    onboardingViewModel.moneyTiming = selected
+            case .winningLooksLike:
+                OnboardingQuestionView(question: .winningLooksLike) { selected in
+                    onboardingViewModel.winningLooksLike = selected
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .moneyPersonality:
-                OnboardingQuestionView(question: .moneyPersonality) { selected in
-                    onboardingViewModel.moneyPersonality = selected
+            // MARK: - Final Screens: Privacy & Welcome
+
+            case .privacy:
+                PrivacyView {
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .yourWhy:
-                OnboardingQuestionView(question: .yourWhy) { selected in
-                    onboardingViewModel.userWhy = selected
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            // MARK: - Extended Onboarding: Visualization & Encouragement (Screens 7-8)
-
-            case .imagination:
-                OnboardingVisualizationView {
-                    onboardingViewModel.moveToNextStep()
-                }
-                .environmentObject(onboardingViewModel)
-
-            case .encouragement:
-                OnboardingEncouragementView {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            // MARK: - Extended Onboarding: Feature Showcase (Screens 9-13)
-
-            case .featureScreenshot:
-                FeatureShowcaseView(feature: .screenshot) {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .featureMoneyTasks:
-                FeatureShowcaseView(feature: .moneyTasks) {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .featurePurchasingPower:
-                FeatureShowcaseView(feature: .purchasingPower) {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .featureChallenges:
-                FeatureShowcaseView(feature: .challenges) {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .featureFreedomFund:
-                FeatureShowcaseView(feature: .freedomFund) {
+            case .welcomeJourney:
+                WelcomeJourneyView {
                     onboardingViewModel.moveToNextStep()
                 }
 

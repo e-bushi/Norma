@@ -7,6 +7,8 @@
 
 import SwiftUI
 import UIKit
+import SceneKit
+import CoreMotion
 
 struct VerifyCodeView: View {
     @State private var codeDigits: [String] = Array(repeating: "", count: 6)
@@ -14,16 +16,25 @@ struct VerifyCodeView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @FocusState private var focusedField: Int?
-    
+
     @State private var iconScale = 0.8
     @State private var iconOpacity = 0.0
     @State private var titleOpacity = 0.0
     @State private var codeFieldOpacity = 0.0
     @State private var buttonOpacity = 0.0
     @State private var resendOpacity = 0.0
-    
+
     @State private var showTransition = false
-    
+    @State private var isResending = false
+    @State private var resendSuccess = false
+    @State private var resendCooldown = 0
+
+    // Welcome transition animation states
+    @State private var coinScale: CGFloat = 0.3
+    @State private var coinOpacity: Double = 0.0
+    @State private var welcomeTextOpacity: Double = 0.0
+    @State private var startWaveAnimation: Bool = false
+
     let email: String
     @Binding var isAuthenticated: Bool
     @Binding var showVerifyCode: Bool
@@ -161,17 +172,34 @@ struct VerifyCodeView: View {
                     
                     // Resend code
                     VStack(spacing: 16) {
-                        Text("Didn't receive the code?")
-                            .font(.normaInput(14))
-                            .foregroundColor(.secondary)
+                        if resendSuccess {
+                            Text("Code sent!")
+                                .font(.normaInput(14))
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Didn't receive the code?")
+                                .font(.normaInput(14))
+                                .foregroundColor(.secondary)
+                        }
 
                         Button(action: {
                             handleResendCode()
                         }) {
-                            Text("Resend code")
-                                .font(.normaHeadline(14))
-                                .foregroundColor(.primary)
+                            if isResending {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .scaleEffect(0.8)
+                            } else if resendCooldown > 0 {
+                                Text("Resend in \(resendCooldown)s")
+                                    .font(.normaHeadline(14))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("Resend code")
+                                    .font(.normaHeadline(14))
+                                    .foregroundColor(.primary)
+                            }
                         }
+                        .disabled(isResending || resendCooldown > 0)
                     }
                     .padding(.top, 24)
                     .opacity(resendOpacity)
@@ -193,32 +221,59 @@ struct VerifyCodeView: View {
                         Color("NormaBackground")
                             .ignoresSafeArea()
 
-                        VStack(spacing: 24) {
+                        VStack(spacing: 32) {
+                            Spacer()
+
+                            // Spinning royalty coin with tilt control
+                            TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
+                                .frame(width: 200, height: 200)
+                                .scaleEffect(coinScale)
+                                .opacity(coinOpacity)
+
                             // Welcome message
-                            VStack(spacing: 12) {
-                                Image(systemName: "person.crop.circle.badge.checkmark")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(.green)
-                                    .symbolEffect(.bounce, value: showTransition)
-
+                            VStack(spacing: 20) {
                                 Text("Welcome aboard!")
-                                    .font(.normaTitle(24))
+                                    .font(.normaTitle(28))
                                     .foregroundColor(.primary)
+                                    .opacity(welcomeTextOpacity)
 
-                                Text("Let's get to know you better...")
-                                    .font(.normaInput(16))
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                                    .scaleEffect(0.8)
-                                    .padding(.top, 8)
+                                WaveTextView(
+                                    text: "Next, we'll ask a few quick questions about your income and spending goals.",
+                                    font: .normaInput(16),
+                                    color: .secondary,
+                                    isAnimating: startWaveAnimation
+                                )
+                                .frame(maxWidth: .infinity)
                             }
-                            .padding(40)
+                            .padding(.horizontal, 40)
+
+                            Spacer()
+
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .scaleEffect(0.8)
+                                .opacity(startWaveAnimation ? 1.0 : 0.0)
+                                .padding(.bottom, 60)
                         }
                     }
                     .transition(.opacity)
+                    .onAppear {
+                        // Animate coin entrance
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                            coinScale = 1.0
+                            coinOpacity = 1.0
+                        }
+
+                        // Animate welcome title
+                        withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+                            welcomeTextOpacity = 1.0
+                        }
+
+                        // Start wave text animation after title appears
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            startWaveAnimation = true
+                        }
+                    }
                 }
             }
         )
@@ -307,10 +362,15 @@ struct VerifyCodeView: View {
                         showTransition = true
                     }
                     
-                    // Navigate after transition is shown
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    // Navigate after transition is shown (4 seconds to read the message)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
                         isLoading = false
                         showTransition = false
+                        // Reset animation states for potential re-use
+                        coinScale = 0.3
+                        coinOpacity = 0.0
+                        welcomeTextOpacity = 0.0
+                        startWaveAnimation = false
                         // Now trigger navigation by updating currentStep
                         onboardingViewModel.proceedToWelcome()
                     }
@@ -334,8 +394,51 @@ struct VerifyCodeView: View {
     }
     
     private func handleResendCode() {
-        // Handle resend code logic
-        print("Resending code to \(email)")
+        isResending = true
+        resendSuccess = false
+
+        Task {
+            do {
+                try await onboardingViewModel.resendCode(email: email)
+                await MainActor.run {
+                    isResending = false
+                    resendSuccess = true
+
+                    // Haptic feedback
+                    let notificationFeedback = UINotificationFeedbackGenerator()
+                    notificationFeedback.notificationOccurred(.success)
+
+                    // Start cooldown (60 seconds)
+                    resendCooldown = 60
+                    startCooldownTimer()
+
+                    // Hide success message after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        resendSuccess = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isResending = false
+                    showError = true
+                    errorMessage = "Failed to resend code. Please try again."
+
+                    // Error haptic feedback
+                    let notificationFeedback = UINotificationFeedbackGenerator()
+                    notificationFeedback.notificationOccurred(.error)
+                }
+            }
+        }
+    }
+
+    private func startCooldownTimer() {
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if resendCooldown > 0 {
+                resendCooldown -= 1
+            } else {
+                timer.invalidate()
+            }
+        }
     }
 }
 
@@ -379,12 +482,306 @@ struct CodeDigitField: View {
     }
 }
 
-#Preview {
+// MARK: - Spinning 3D Coin View (With Tilt + Auto-Spin)
+struct TiltSpinningCoin3DView: UIViewRepresentable {
+    var fileName: String = "norma-coin-royalty"
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> SCNView {
+        let scnView = SCNView()
+        scnView.backgroundColor = .clear
+        scnView.isOpaque = false
+        scnView.autoenablesDefaultLighting = true
+        scnView.allowsCameraControl = false
+        scnView.isUserInteractionEnabled = false
+        scnView.antialiasingMode = .multisampling4X
+
+        if !loadScene(into: scnView, coordinator: context.coordinator) {
+            createFallbackScene(into: scnView, coordinator: context.coordinator)
+        }
+
+        context.coordinator.scnView = scnView
+        context.coordinator.startMotionUpdates()
+        context.coordinator.startSpinAnimation()
+
+        return scnView
+    }
+
+    func updateUIView(_ uiView: SCNView, context: Context) {
+        // No updates needed
+    }
+
+    static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
+        coordinator.stopMotionUpdates()
+    }
+
+    private func loadScene(into scnView: SCNView, coordinator: Coordinator) -> Bool {
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: "usdz") else {
+            return false
+        }
+
+        guard let scene = try? SCNScene(url: url, options: [.checkConsistency: true]) else {
+            return false
+        }
+
+        scene.background.contents = UIColor.clear
+
+        // Create outer container for motion tilt
+        let motionContainer = SCNNode()
+        motionContainer.name = "motionContainer"
+
+        // Create inner container for spin animation
+        let spinContainer = SCNNode()
+        spinContainer.name = "spinContainer"
+
+        // Clone all child nodes from the loaded scene
+        for childNode in scene.rootNode.childNodes {
+            spinContainer.addChildNode(childNode.clone())
+        }
+
+        // Remove original nodes
+        scene.rootNode.childNodes.forEach { $0.removeFromParentNode() }
+
+        // Calculate bounding box and center the model
+        let (minBound, maxBound) = spinContainer.boundingBox
+        let centerX = (minBound.x + maxBound.x) / 2
+        let centerY = (minBound.y + maxBound.y) / 2
+        let centerZ = (minBound.z + maxBound.z) / 2
+        spinContainer.position = SCNVector3(-centerX, -centerY, -centerZ)
+
+        // Calculate model dimensions
+        let width = maxBound.x - minBound.x
+        let height = maxBound.y - minBound.y
+        let depth = maxBound.z - minBound.z
+        let maxDimension = max(width, max(height, depth))
+
+        // Add spin container to motion container
+        motionContainer.addChildNode(spinContainer)
+        scene.rootNode.addChildNode(motionContainer)
+
+        // Store references for updates
+        coordinator.motionContainer = motionContainer
+        coordinator.spinContainer = spinContainer
+
+        // Setup camera
+        let cameraNode = SCNNode()
+        cameraNode.camera = SCNCamera()
+        cameraNode.camera?.usesOrthographicProjection = true
+        cameraNode.camera?.orthographicScale = Double(maxDimension * 0.6)
+        cameraNode.position = SCNVector3(0, 0, maxDimension * 2)
+        scene.rootNode.addChildNode(cameraNode)
+
+        // Add ambient light for better visibility
+        let ambientLight = SCNNode()
+        ambientLight.light = SCNLight()
+        ambientLight.light?.type = .ambient
+        ambientLight.light?.intensity = 400
+        ambientLight.light?.color = UIColor.white
+        scene.rootNode.addChildNode(ambientLight)
+
+        // Add directional light for shininess
+        let directionalLight = SCNNode()
+        directionalLight.light = SCNLight()
+        directionalLight.light?.type = .directional
+        directionalLight.light?.intensity = 800
+        directionalLight.light?.color = UIColor.white
+        directionalLight.eulerAngles = SCNVector3(-Float.pi / 4, Float.pi / 4, 0)
+        scene.rootNode.addChildNode(directionalLight)
+
+        scnView.scene = scene
+        return true
+    }
+
+    private func createFallbackScene(into scnView: SCNView, coordinator: Coordinator) {
+        let fallbackScene = SCNScene()
+        fallbackScene.background.contents = UIColor.clear
+
+        let motionContainer = SCNNode()
+        motionContainer.name = "motionContainer"
+
+        let spinContainer = SCNNode()
+        spinContainer.name = "spinContainer"
+
+        let cylinder = SCNCylinder(radius: 0.5, height: 0.08)
+        cylinder.firstMaterial?.diffuse.contents = UIColor(red: 0.6, green: 0.4, blue: 0.8, alpha: 1.0)
+        cylinder.firstMaterial?.specular.contents = UIColor.white
+        let coinNode = SCNNode(geometry: cylinder)
+        coinNode.eulerAngles.x = Float.pi / 2
+
+        spinContainer.addChildNode(coinNode)
+        motionContainer.addChildNode(spinContainer)
+        fallbackScene.rootNode.addChildNode(motionContainer)
+
+        coordinator.motionContainer = motionContainer
+        coordinator.spinContainer = spinContainer
+
+        let camera = SCNNode()
+        camera.camera = SCNCamera()
+        camera.camera?.usesOrthographicProjection = true
+        camera.camera?.orthographicScale = 1.2
+        camera.position = SCNVector3(0, 0, 3)
+        fallbackScene.rootNode.addChildNode(camera)
+
+        scnView.scene = fallbackScene
+    }
+
+    // MARK: - Coordinator for Motion & Spin Updates
+    class Coordinator: NSObject {
+        var motionContainer: SCNNode?
+        var spinContainer: SCNNode?
+        var scnView: SCNView?
+        private let motionManager = CMMotionManager()
+        private let sensitivity: Float = 0.4
+        private var blendFactor: Float = 0.0
+        private var startTime: Date?
+        private var displayLink: CADisplayLink?
+        private var spinAngle: Float = 0.0
+
+        override init() {
+            super.init()
+        }
+
+        func startMotionUpdates() {
+            guard motionManager.isDeviceMotionAvailable else { return }
+
+            startTime = Date()
+
+            motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
+            motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+                guard let self = self,
+                      let motion = motion,
+                      let node = self.motionContainer else { return }
+
+                // Gradually increase blend factor over 0.8 seconds (after 0.3s delay)
+                if let startTime = self.startTime {
+                    let elapsed = Float(Date().timeIntervalSince(startTime))
+                    let delay: Float = 0.3
+                    let rampDuration: Float = 0.8
+                    if elapsed > delay {
+                        self.blendFactor = min(1.0, (elapsed - delay) / rampDuration)
+                    }
+                }
+
+                // Apply device tilt to motion container
+                let targetPitch = -Float(motion.attitude.pitch - .pi / 4) * self.sensitivity
+                let targetRoll = Float(motion.attitude.roll) * self.sensitivity * 0.5
+
+                let currentPitch = targetPitch * self.blendFactor
+                let currentRoll = targetRoll * self.blendFactor
+
+                node.eulerAngles = SCNVector3(
+                    x: currentPitch,
+                    y: currentRoll,
+                    z: 0
+                )
+            }
+        }
+
+        func startSpinAnimation() {
+            // Use display link for smooth continuous spin
+            displayLink = CADisplayLink(target: self, selector: #selector(updateSpin))
+            displayLink?.add(to: .main, forMode: .common)
+        }
+
+        @objc private func updateSpin() {
+            guard let spinContainer = spinContainer else { return }
+
+            // Spin speed: complete rotation every ~4 seconds
+            spinAngle += Float.pi / 120.0
+
+            // Apply continuous Y rotation to spin container
+            spinContainer.eulerAngles.y = spinAngle
+        }
+
+        func stopMotionUpdates() {
+            motionManager.stopDeviceMotionUpdates()
+            displayLink?.invalidate()
+            displayLink = nil
+        }
+    }
+}
+
+#Preview("Verify Code") {
     VerifyCodeView(
         email: "user@example.com",
-        isAuthenticated: .constant(false),
-        showVerifyCode: .constant(true)
+        isAuthenticated: .constant(true),
+        showVerifyCode: .constant(false)
     )
     .environmentObject(OnboardingViewModel(sessionViewModel: SessionViewModel(dataManager: DataManager())))
     .preferredColorScheme(.dark)
+}
+
+#Preview("Welcome Transition") {
+    WelcomeTransitionPreview()
+        .preferredColorScheme(.dark)
+}
+
+/// Standalone preview for the welcome transition screen
+private struct WelcomeTransitionPreview: View {
+    @State private var coinScale: CGFloat = 0.3
+    @State private var coinOpacity: Double = 0.0
+    @State private var welcomeTextOpacity: Double = 0.0
+    @State private var startWaveAnimation: Bool = false
+
+    var body: some View {
+        ZStack {
+            Color("NormaBackground")
+                .ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                Spacer()
+
+                // Spinning royalty coin with tilt control
+                TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
+                    .frame(width: 200, height: 200)
+                    .scaleEffect(coinScale)
+                    .opacity(coinOpacity)
+
+                // Welcome message
+                VStack(spacing: 20) {
+                    Text("Welcome aboard!")
+                        .font(.normaTitle(28))
+                        .foregroundColor(.primary)
+                        .opacity(welcomeTextOpacity)
+
+                    WaveTextView(
+                        text: "Next, we'll ask a few quick questions about your income and spending goals.",
+                        font: .normaInput(16),
+                        color: .secondary,
+                        isAnimating: startWaveAnimation
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 40)
+
+                Spacer()
+
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .scaleEffect(0.8)
+                    .opacity(startWaveAnimation ? 1.0 : 0.0)
+                    .padding(.bottom, 60)
+            }
+        }
+        .onAppear {
+            // Animate coin entrance
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                coinScale = 1.0
+                coinOpacity = 1.0
+            }
+
+            // Animate welcome title
+            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+                welcomeTextOpacity = 1.0
+            }
+
+            // Start wave text animation after title appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                startWaveAnimation = true
+            }
+        }
+    }
 }

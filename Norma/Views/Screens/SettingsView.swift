@@ -12,26 +12,17 @@ struct SettingsView: View {
 
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
-    @StateObject private var notificationService = NotificationService.shared
+    @EnvironmentObject var appCoordinator: AppCoordinator
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
     @State private var showDeleteAccountConfirmation = false
-    @State private var showRecoveryPhrase = false
-    @State private var showSecurityOptions = false
     @State private var showPaywall = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var hasEncryptionEnabled: Bool {
-        guard let userId = sessionViewModel.currentUser?.userId else { return false }
-        let userKeyManager = UserKeyManager(supabaseService: dataManager.supabaseService)
-        return userKeyManager.hasStoredRecoveryPhrase(for: userId)
-    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -68,11 +59,8 @@ struct SettingsView: View {
 
                             Picker("", selection: $appearanceMode) {
                                 ForEach(AppearanceMode.allCases) { mode in
-                                    HStack {
-                                        Image(systemName: mode.icon)
-                                        Text(mode.rawValue)
-                                    }
-                                    .tag(mode)
+                                    Text(mode.rawValue)
+                                        .tag(mode)
                                 }
                             }
                             .pickerStyle(.menu)
@@ -191,122 +179,6 @@ struct SettingsView: View {
                                         .foregroundColor(.primary)
                                     Spacer()
                                 }
-                            }
-                        }
-                    }
-
-                    // App Settings Section
-                    SettingsSectionView(title: "App Settings") {
-                        // Notifications row - different behavior based on permission status
-                        if notificationService.isNotificationsEnabled {
-                            NavigationLink(destination: UpcomingNotificationsView()) {
-                                HStack {
-                                    Image(systemName: "bell.fill")
-                                        .foregroundColor(Color("NormaPastelCoral"))
-                                    Text("Notifications")
-                                    Spacer()
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color("NormaPastelTeal"))
-                                        .font(.normaHeadline(13))
-                                }
-                            }
-                        } else {
-                            Button(action: {
-                                Task {
-                                    await requestNotificationPermission()
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: "bell.slash.fill")
-                                        .foregroundColor(Color("NormaPastelCoral"))
-                                    Text("Enable Notifications")
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                        .font(.normaHeadline(13))
-                                }
-                            }
-                        }
-                    }
-
-                    // Security Section
-                    SettingsSectionView(title: "Security") {
-                        if hasEncryptionEnabled {
-                            HStack {
-                                Image(systemName: "checkmark.shield.fill")
-                                    .foregroundColor(Color("NormaPastelTeal"))
-                                VStack(alignment: .leading) {
-                                    Text("Encryption Enabled")
-                                        .font(.normaHeadline(17))
-                                    Text("Your data is protected")
-                                        .font(.normaHeadline(13))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(Color("NormaPastelTeal"))
-                            }
-                            .padding(.vertical, 2)
-
-                            Button(action: {
-                                showRecoveryPhrase = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "key.fill")
-                                        .foregroundColor(Color("NormaPastelPurple"))
-                                    Text("View Recovery Phrase")
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                        .font(.normaHeadline(13))
-                                }
-                            }
-                        } else {
-                            HStack {
-                                Image(systemName: "exclamationmark.shield.fill")
-                                    .foregroundColor(Color("NormaPastelCoral"))
-                                VStack(alignment: .leading) {
-                                    Text("Encryption Disabled")
-                                        .font(.normaHeadline(17))
-                                    Text("Enable encryption to protect your data")
-                                        .font(.normaHeadline(13))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-
-                    // Data Section
-                    SettingsSectionView(title: "Data") {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundColor(Color("NormaPastelPurple"))
-                            Text("Sync Data")
-                            Spacer()
-                            if dataManager.isLoading {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                        }
-                        .onTapGesture {
-                            Task {
-                                try? await dataManager.syncAllData()
-                            }
-                        }
-
-                        if let lastSync = dataManager.lastSyncDate {
-                            HStack {
-                                Image(systemName: "clock")
-                                    .foregroundColor(.secondary)
-                                Text("Last synced")
-                                Spacer()
-                                Text(lastSync, style: .relative)
-                                    .font(.normaHeadline(13))
-                                    .foregroundColor(.secondary)
                             }
                         }
                     }
@@ -470,7 +342,7 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
                     Task {
-                        await sessionViewModel.logout()
+                        await appCoordinator.logout()
                     }
                 }
             } message: {
@@ -501,9 +373,6 @@ struct SettingsView: View {
             } message: {
                 Text("This will permanently delete your account and all associated data. This action CANNOT be undone.")
             }
-            .sheet(isPresented: $showRecoveryPhrase) {
-                RecoveryPhraseView(userId: sessionViewModel.currentUser?.userId ?? "")
-            }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
             }
@@ -521,20 +390,10 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showHelpSupport) {
                 WebViewSheet(
-                    url: "https://whop.com/norma-ai",
+                    url: "https://norma-app.userjot.com",
                     title: "Help & Support"
                 )
             }
-    }
-
-    private func requestNotificationPermission() async {
-        let granted = await notificationService.requestNotificationPermission()
-        print("🔔 Notification permission granted: \(granted)")
-
-        if !granted {
-            // If permission was denied, we could show an alert directing them to Settings
-            // But the NotificationService already handles this via the permission status
-        }
     }
 }
 

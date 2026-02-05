@@ -95,6 +95,59 @@ float coinValueNoise(float2 st) {
 // MARK: - Procedural Ripple Rings (Backup)
 // Generates visible ripple rings procedurally without needing source content.
 
+// MARK: - Scanning Line Effect
+// Creates a horizontal scanning line with a glowing trail effect.
+// Used for the screenshot scanning animation in onboarding.
+
+/// Scanning line shader - creates a glowing horizontal scan line with trail
+/// - Parameters:
+///   - pos: Current pixel position
+///   - color: Base color of the scan line
+///   - size: Size of the view
+///   - progress: Animation progress (0 to 1, top to bottom)
+///   - lineWidth: Width of the main scan line
+///   - trailLength: Length of the glowing trail behind the line
+[[stitchable]] half4 scanLine(
+    float2 pos,
+    half4 color,
+    float2 size,
+    float progress,
+    float lineWidth,
+    float trailLength
+) {
+    // Normalize Y position
+    float normalizedY = pos.y / size.y;
+
+    // Current scan line position
+    float scanY = progress;
+
+    // Distance from the scan line
+    float distFromLine = normalizedY - scanY;
+
+    // Main bright scan line
+    float lineIntensity = 1.0 - smoothstep(0.0, lineWidth / size.y, abs(distFromLine));
+
+    // Trailing glow (only above the line, fading upward)
+    float trailIntensity = 0.0;
+    if (distFromLine < 0.0 && distFromLine > -trailLength / size.y) {
+        float trailDist = -distFromLine / (trailLength / size.y);
+        trailIntensity = (1.0 - trailDist) * 0.4;
+    }
+
+    // Combine line and trail
+    float totalIntensity = max(lineIntensity, trailIntensity);
+
+    // Add subtle horizontal variation for more organic feel
+    float horizontalVar = 0.9 + 0.1 * sin(pos.x * 0.1);
+    totalIntensity *= horizontalVar;
+
+    // Edge fade (softer at horizontal edges)
+    float edgeFade = smoothstep(0.0, 0.1, pos.x / size.x) * smoothstep(0.0, 0.1, 1.0 - pos.x / size.x);
+    totalIntensity *= edgeFade;
+
+    return half4(color.rgb * half(totalIntensity), half(totalIntensity * color.a));
+}
+
 /// Procedural ripple ring generator
 [[stitchable]] half4 rippleRings(
     float2 position,

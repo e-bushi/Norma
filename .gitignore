@@ -31,3 +31,6 @@ fastlane/test_output
 ._*
 .Spotlight-V100
 .Trashes
+
+# Secrets
+.secrets

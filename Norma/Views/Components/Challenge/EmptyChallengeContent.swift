@@ -60,12 +60,19 @@ struct StartJourneyContent: View {
             Spacer()
                 .frame(height: 40)
 
-            // Hero: Large 3D Bird
-            StaticBird3DView(fileName: ChallengeTier.starter.fileName)
-                .id(ChallengeTier.starter.fileName)
-                .frame(width: 180, height: 180)
-                .scaleEffect(birdAppeared ? 1 : 0.8)
-                .opacity(birdAppeared ? 1 : 0)
+            // Hero: Large 3D Bird (user's current tier, responds to device tilt)
+            ZStack {
+                Circle()
+                    .fill(challengeViewModel.currentTier.glowColor.opacity(0.25))
+                    .frame(width: 160, height: 160)
+                    .blur(radius: 35)
+
+                MotionBird3DView(fileName: challengeViewModel.currentTier.fileName)
+                    .id(challengeViewModel.currentTier.fileName)
+                    .frame(width: 180, height: 180)
+            }
+            .scaleEffect(birdAppeared ? 1 : 0.8)
+            .opacity(birdAppeared ? 1 : 0)
 
             Spacer()
                 .frame(height: 32)
