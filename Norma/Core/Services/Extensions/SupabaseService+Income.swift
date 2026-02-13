@@ -79,7 +79,22 @@ extension SupabaseService {
             .order("next_date", ascending: true)
             .execute()
             .value
-        
+
+        return response
+    }
+
+    // MARK: - Semantic Search Support
+
+    /// Fetch specific income records by their IDs (for semantic search results)
+    func fetchIncomeByIds(_ ids: [String]) async throws -> [Income] {
+        guard !ids.isEmpty else { return [] }
+
+        let response: [Income] = try await from("income")
+            .select()
+            .in("id", values: ids)
+            .execute()
+            .value
+
         return response
     }
 }

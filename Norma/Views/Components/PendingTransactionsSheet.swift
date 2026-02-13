@@ -18,6 +18,8 @@ struct PendingTransactionsSheet: View {
     @State private var selectedTransactionIds: Set<String> = []
     @State private var isProcessing = false
     @State private var isLoading = false
+    @State private var isCalendarExpanded = false
+    @State private var showInfoAlert = false
 
     // Wave animation state
     @State private var waveAnimationStart: Date? = nil
@@ -80,25 +82,50 @@ struct PendingTransactionsSheet: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                instructionalHeader
-                calendarSection
-                dateIndicator
-                if pendingTransactions.isEmpty {
-                    emptyState
-                } else {
-                    transactionsSection
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 28) {
+                    collapsibleCalendarSection
+                    if pendingTransactions.isEmpty {
+                        emptyState
+                    } else {
+                        transactionsSectionHeader
+                        transactionsSection
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 140)
+            }
+            .background(Color("NormaBackground"))
+            .navigationTitle("Review Transactions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showInfoAlert = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(Color("NormaPastelPurple"))
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .foregroundColor(Color("NormaPastelPurple"))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 140)
-        }
-        .background(Color("NormaBackground"))
-        .safeAreaInset(edge: .bottom) {
-            if !pendingTransactions.isEmpty {
-                floatingActionBar
+            .alert("Pending Transactions", isPresented: $showInfoAlert) {
+                Button("Got it", role: .cancel) { }
+            } message: {
+                Text("These are transactions shared with Norma that haven't been confirmed yet. Pick a date, select the ones you want to keep, then tap Confirm to add them to your records.")
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !pendingTransactions.isEmpty {
+                    floatingActionBar
+                }
             }
         }
         .presentationDetents([.large])
@@ -113,25 +140,58 @@ struct PendingTransactionsSheet: View {
         }
     }
 
-    // MARK: - Instructional Header
+    // MARK: - Collapsible Calendar Section
 
-    private var instructionalHeader: some View {
-        VStack(spacing: 6) {
-            Text("Review Transactions")
-                .font(.custom(FontFamily.Rubik.medium, size: 20))
-                .foregroundColor(.primary)
+    private var collapsibleCalendarSection: some View {
+        VStack(spacing: 20) {
+            // Tappable date bar
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isCalendarExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("NormaPastelPurple"))
 
-            Text("Pick a date, select transactions, then confirm")
-                .font(.normaInput(14))
-                .foregroundColor(.secondary)
+                    Text("Date:")
+                        .font(.custom(FontFamily.Rubik.regular, size: 14))
+                        .foregroundColor(.secondary)
+
+                    Text(dateDisplayText)
+                        .font(.custom(FontFamily.Rubik.medium, size: 14))
+                        .foregroundColor(Color("NormaPastelPurple"))
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isCalendarExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.plain)
+
+            if isCalendarExpanded {
+                calendarContent
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
     }
 
-    // MARK: - Calendar Section
-
-    private var calendarSection: some View {
+    private var calendarContent: some View {
         VStack(spacing: 20) {
             // Month navigation header
             HStack {
@@ -343,21 +403,17 @@ struct PendingTransactionsSheet: View {
         }
     }
 
-    // MARK: - Date Indicator
+    // MARK: - Transactions Section Header
 
-    private var dateIndicator: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "calendar")
-                .font(.system(size: 14))
-                .foregroundColor(Color("NormaPastelPurple"))
+    private var transactionsSectionHeader: some View {
+        HStack {
+            Text("Transactions")
+                .font(.custom(FontFamily.Rubik.medium, size: 16))
+                .foregroundColor(.primary)
 
-            Text("Adding as:")
-                .font(.custom(FontFamily.Rubik.regular, size: 14))
+            Text("\(pendingTransactions.count) pending")
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
                 .foregroundColor(.secondary)
-
-            Text(dateDisplayText)
-                .font(.custom(FontFamily.Rubik.medium, size: 14))
-                .foregroundColor(Color("NormaPastelPurple"))
 
             Spacer()
         }
@@ -394,9 +450,8 @@ struct PendingTransactionsSheet: View {
 
     private var floatingActionBar: some View {
         VStack(spacing: 16) {
-            // Top row: Select All and Delete All as pill buttons
+            // Top row: Select All + count
             HStack(spacing: 10) {
-                // Select All / Deselect All
                 Button {
                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                     impactFeedback.impactOccurred()
@@ -405,7 +460,7 @@ struct PendingTransactionsSheet: View {
                     HStack(spacing: 5) {
                         Image(systemName: allSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 13, weight: .medium))
-                        Text(allSelected ? "Deselect" : "Select All")
+                        Text(allSelected ? "Deselect All" : "Select All")
                             .font(.custom(FontFamily.Rubik.medium, size: 13))
                     }
                     .foregroundColor(Color("NormaPastelPurple"))
@@ -422,32 +477,9 @@ struct PendingTransactionsSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                // Delete All
-                Button {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
-                    deleteAllTransactions()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Delete All")
-                            .font(.custom(FontFamily.Rubik.medium, size: 13))
-                    }
-                    .foregroundColor(.red.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(Color.red.opacity(0.1))
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.red.opacity(0.2), lineWidth: 0.5)
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(isProcessing)
+                Text("\(selectedTransactionIds.count) of \(pendingTransactions.count)")
+                    .font(.custom(FontFamily.Rubik.regular, size: 13))
+                    .foregroundColor(.secondary)
 
                 Spacer()
             }
@@ -640,31 +672,6 @@ struct PendingTransactionsSheet: View {
         }
     }
 
-    private func deleteAllTransactions() {
-        let transactionsToDelete = pendingTransactions
-        guard !transactionsToDelete.isEmpty else { return }
-
-        isProcessing = true
-
-        Task {
-            for transaction in transactionsToDelete {
-                do {
-                    try await dataManager.rejectPendingTransaction(transaction)
-                } catch {
-                    print("Failed to delete transaction \(transaction.id ?? "unknown"): \(error)")
-                }
-            }
-
-            await MainActor.run {
-                isProcessing = false
-                selectedTransactionIds.removeAll()
-
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-            }
-        }
-    }
-
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -787,6 +794,13 @@ private struct SelectableTransactionRow: View {
     let onToggle: () -> Void
     let onDelete: () -> Void
 
+    private var subtitleText: String? {
+        if let createdAt = transaction.createdAt {
+            return relativeTimestamp(from: createdAt)
+        }
+        return nil
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Checkbox
@@ -799,25 +813,39 @@ private struct SelectableTransactionRow: View {
 
             // Transaction info
             VStack(alignment: .leading, spacing: 2) {
-                Text(transaction.merchant ?? "Unknown")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                HStack {
+                    Text(transaction.merchant ?? "Unknown")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
 
-                if let amount = transaction.amount {
-                    Text(formatCurrency(amount))
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                    Spacer()
+
+                    if let amount = transaction.amount {
+                        Text(formatCurrency(amount))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundColor(.primary)
+                    }
+                }
+
+                if let subtitle = subtitleText {
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
 
-            Spacer()
-
             // Delete button
             Button(action: onDelete) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(.red.opacity(0.6))
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(Color.gray.opacity(0.12))
+                    )
             }
             .buttonStyle(.plain)
         }
@@ -834,6 +862,39 @@ private struct SelectableTransactionRow: View {
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
+    }
+
+    private func relativeTimestamp(from isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let date = formatter.date(from: isoString) else {
+            // Try without fractional seconds
+            let fallback = ISO8601DateFormatter()
+            fallback.formatOptions = [.withInternetDateTime]
+            guard let fallbackDate = fallback.date(from: isoString) else {
+                return "Shared recently"
+            }
+            return relativeString(from: fallbackDate)
+        }
+        return relativeString(from: date)
+    }
+
+    private func relativeString(from date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        let minutes = Int(interval / 60)
+        let hours = Int(interval / 3600)
+        let days = Int(interval / 86400)
+
+        if minutes < 1 {
+            return "Shared just now"
+        } else if minutes < 60 {
+            return "Shared \(minutes)m ago"
+        } else if hours < 24 {
+            return "Shared \(hours)h ago"
+        } else {
+            return "Shared \(days)d ago"
+        }
     }
 }
 

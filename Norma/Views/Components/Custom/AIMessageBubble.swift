@@ -34,7 +34,9 @@ struct AIMessageBubble: View {
 
     @State private var visibleWordCount = 0
     @State private var showCards = false
+    @State private var showImages = false
     @State private var hasAnimated = false
+    @State private var expandedImageName: String?
 
     private var words: [String] {
         // Split by whitespace but preserve the spaces
@@ -66,6 +68,11 @@ struct AIMessageBubble: View {
         return false
     }
 
+    private var isInstructionalImages: Bool {
+        if case .instructionalImages = uiComponent { return true }
+        return false
+    }
+
     init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight, shouldAnimate: Bool = false) {
         self.content = content
         self.uiComponent = uiComponent
@@ -75,8 +82,8 @@ struct AIMessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Cards first (if present) - shown before text
-            if let component = uiComponent, showCards {
+            // Pre-text components (cards, confirmations, etc.) — NOT instructional images
+            if let component = uiComponent, showCards, !isInstructionalImages {
                 switch component {
                 case .billCards(let bills, let currency):
                     MiniBillCardView(bills: bills, currency: currency)
@@ -97,7 +104,8 @@ struct AIMessageBubble: View {
                     ArcDisplayView(arcCount: arcCount)
                         .transition(.opacity.combined(with: .scale))
                 case .flowStateCapsule:
-                    // Flow state is displayed in nav bar, not in message bubble
+                    EmptyView()
+                case .instructionalImages:
                     EmptyView()
                 }
             }
@@ -118,28 +126,36 @@ struct AIMessageBubble: View {
                                     hasAnimated = true
 
                                     if shouldAnimate {
-                                        // New message - show with animation
-                                        if uiComponent != nil {
+                                        if isInstructionalImages {
+                                            // Images come after text — start text immediately, then show images
+                                            startWordRevealAnimation {
+                                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                    showImages = true
+                                                }
+                                            }
+                                        } else if uiComponent != nil {
+                                            // Pre-text component — show cards first, then text
                                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                                 showCards = true
                                             }
-                                            // Start text animation after a brief delay
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                                 startWordRevealAnimation()
                                             }
                                         } else {
-                                            // No UI component, start text animation immediately
+                                            // No UI component — start text animation immediately
                                             startWordRevealAnimation()
                                         }
                                     } else {
-                                        // Historical message - show instantly without animation
+                                        // Historical message — show instantly without animation
                                         visibleWordCount = words.count
                                         showCards = true
+                                        showImages = true
                                     }
                                 } else {
                                     // If already animated, show full text and cards immediately
                                     visibleWordCount = words.count
                                     showCards = true
+                                    showImages = true
                                 }
                             }
                     }
@@ -165,10 +181,66 @@ struct AIMessageBubble: View {
                         }
                     }
             }
+
+            // Post-text: Instructional images (shown AFTER text)
+            if case .instructionalImages(let imageNames) = uiComponent, showImages {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(imageNames.enumerated()), id: \.offset) { _, name in
+                            Image(name)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
+                                .onTapGesture {
+                                    expandedImageName = name
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { expandedImageName != nil },
+            set: { if !$0 { expandedImageName = nil } }
+        )) {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                if let name = expandedImageName {
+                    Image(name)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(.horizontal, 16)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    expandedImageName = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .padding(20)
+                }
+            }
+            .onTapGesture {
+                expandedImageName = nil
+            }
         }
     }
 
-    private func startWordRevealAnimation() {
+    private func startWordRevealAnimation(completion: (() -> Void)? = nil) {
         let totalWords = words.count
 
         for index in 0...totalWords {
@@ -176,6 +248,12 @@ struct AIMessageBubble: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 withAnimation(.easeOut(duration: 0.15)) {
                     visibleWordCount = index
+                }
+                // Fire completion after the last word
+                if index == totalWords, let completion = completion {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        completion()
+                    }
                 }
             }
         }

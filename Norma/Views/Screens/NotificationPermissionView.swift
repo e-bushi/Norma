@@ -20,8 +20,8 @@ struct NotificationPermissionView: View {
     @State private var isLoading = false
     @State private var hapticEngine: CHHapticEngine?
 
-    private let stepNumber = 7
-    private let totalSteps = 7
+    private let stepNumber = 9
+    private let totalSteps = 9
 
     private let accentColor = Color("NormaPastelTeal")
     private let secondaryColor = Color("NormaPastelPurple")
@@ -34,8 +34,8 @@ struct NotificationPermissionView: View {
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Progress bar
-                        OnboardingProgressBar(currentStep: stepNumber, totalSteps: totalSteps)
+                        // Step indicator
+                        OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 

@@ -108,7 +108,8 @@ struct MainChatView: View {
         ChatToolExecutor(
             billViewModel: billViewModel,
             expenseViewModel: expenseViewModel,
-            challengeViewModel: challengeViewModel
+            challengeViewModel: challengeViewModel,
+            dataManager: dataManager
         )
     }
 
@@ -129,13 +130,9 @@ struct MainChatView: View {
                         }
                     }
 
-                // Input area overlays at bottom (hidden when income edit modal is open)
-                if !showIncomeEdit {
-                    inputArea
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                // Input area overlays at bottom
+                inputArea
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showIncomeEdit)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -248,10 +245,10 @@ struct MainChatView: View {
         //         .presentationDetents([.large])
         //         .presentationDragIndicator(.visible)
         // }
-        .overlay {
-            if showIncomeEdit {
-                IncomeEditPopover(isPresented: $showIncomeEdit)
-            }
+        .sheet(isPresented: $showIncomeEdit) {
+            IncomeEditSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showPendingTransactions) {
             PendingTransactionsSheet()
@@ -276,6 +273,11 @@ struct MainChatView: View {
         }
         .task {
             await loadReminderCount()
+            // Trigger first-chat welcome after conversations have loaded
+            if conversationManager.conversations.isEmpty,
+               sessionViewModel.currentUser?.settings.hasReceivedWelcome == false {
+                await triggerFirstChatWelcome()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPendingTransactions"))) { _ in
             showPendingTransactions = true
@@ -570,7 +572,6 @@ struct MainChatView: View {
                 monthlyIncome: monthlyIncome,
                 freedomFund: freedomFund,
                 bills: billViewModel.bills,
-                expenses: expenseViewModel.expenses,
                 challenge: challengeViewModel.activeChallenge
             )
 
@@ -623,7 +624,6 @@ struct MainChatView: View {
                     monthlyIncome: monthlyIncome,
                     freedomFund: freedomFund,
                     bills: billViewModel.bills,
-                    expenses: expenseViewModel.expenses,
                     challenge: challengeViewModel.activeChallenge
                 )
 
@@ -694,6 +694,93 @@ struct MainChatView: View {
         }
     }
     
+    // MARK: - First Chat Welcome
+
+    private func triggerFirstChatWelcome() async {
+        guard let user = sessionViewModel.currentUser else { return }
+        guard !user.settings.hasReceivedWelcome else { return }
+        guard conversationManager.conversations.isEmpty else { return }
+
+        // Optimistic local update to prevent re-entry
+        var updatedUser = user
+        updatedUser.settings.hasReceivedWelcome = true
+        sessionViewModel.currentUser = updatedUser
+
+        let userName = user.name
+        let currency = user.settings.currency
+        let painPoint = user.settings.painPoint
+
+        let systemPrompt = NormaSystemPrompts.firstChatPrompt(
+            userName: userName,
+            currency: currency,
+            painPoint: painPoint
+        )
+
+        // Invisible user message to kick off the conversation
+        let triggerMessage = ChatMessage(
+            role: .user,
+            content: "[System: This is the user's first time opening the app after onboarding. Send your welcome message.]",
+            isVisible: false
+        )
+
+        let conversationHistory = [
+            AnthropicMessage(role: "user", content: .text(triggerMessage.content))
+        ]
+
+        do {
+            isLoading = true
+
+            let response = try await AnthropicService.shared.sendMessageWithTools(
+                messages: conversationHistory,
+                systemPrompt: systemPrompt,
+                tools: []
+            )
+
+            switch response {
+            case .text(let text):
+                let welcomeImages: UIComponent = .instructionalImages([
+                    "welcome-bank-screenshot",
+                    "welcome-share-sheet",
+                    "welcome-norma-icon",
+                    "welcome-review-transactions"
+                ])
+
+                let aiMessage = ChatMessage(
+                    role: .assistant,
+                    content: text,
+                    uiComponent: welcomeImages
+                )
+
+                await conversationManager.appendMessage(triggerMessage)
+                await conversationManager.appendMessage(aiMessage)
+                conversationManager.currentConversation?.title = "Welcome"
+                await conversationManager.saveCurrentConversation()
+
+                // Persist hasReceivedWelcome to Supabase
+                await sessionViewModel.updateUserProfile(updatedUser)
+
+            default:
+                // Tool use shouldn't happen (no tools passed), but handle gracefully
+                let fallbackMessage = ChatMessage(
+                    role: .assistant,
+                    content: "Welcome to Norma! Share a bank screenshot to get started — it's the fastest way to track expenses."
+                )
+                await conversationManager.appendMessage(triggerMessage)
+                await conversationManager.appendMessage(fallbackMessage)
+                conversationManager.currentConversation?.title = "Welcome"
+                await conversationManager.saveCurrentConversation()
+                await sessionViewModel.updateUserProfile(updatedUser)
+            }
+
+            isLoading = false
+        } catch {
+            print("❌ Failed to generate welcome message: \(error)")
+            isLoading = false
+            // Still mark as received so we don't retry on failure
+            await sessionViewModel.updateUserProfile(updatedUser)
+        }
+    }
+
     private func createConversationHistory() -> [AnthropicMessage] {
         return messages.map { chatMessage in
             AnthropicMessage(
@@ -763,7 +850,6 @@ struct MainChatView: View {
             monthlyIncome: monthlyIncome,
             freedomFund: freedomFund,
             bills: billViewModel.bills,
-            expenses: expenseViewModel.expenses,
             challenge: challengeViewModel.activeChallenge
         )
 

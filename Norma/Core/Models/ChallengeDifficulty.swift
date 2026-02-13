@@ -27,14 +27,14 @@ enum ChallengeDifficulty: String, Codable, CaseIterable, Identifiable {
     }
 
     /// Budget multiplier applied to the calculated challenge amount
-    /// Easy = 20% more budget (easier to complete)
-    /// Medium = standard budget
-    /// Hard = 20% less budget (harder to complete)
+    /// Easy = 20% less budget (tight)
+    /// Medium = 40% less budget (strict)
+    /// Hard = 60% less budget (extreme)
     var budgetMultiplier: Double {
         switch self {
-        case .easy: return 1.2
-        case .medium: return 1.0
-        case .hard: return 0.8
+        case .easy: return 0.8
+        case .medium: return 0.6
+        case .hard: return 0.4
         }
     }
 
@@ -68,9 +68,9 @@ enum ChallengeDifficulty: String, Codable, CaseIterable, Identifiable {
     /// Short description of what this difficulty means
     var description: String {
         switch self {
-        case .easy: return "Relaxed budget"
-        case .medium: return "Standard budget"
-        case .hard: return "Tight budget"
+        case .easy: return "Tight budget"
+        case .medium: return "Strict budget"
+        case .hard: return "Extreme budget"
         }
     }
 }

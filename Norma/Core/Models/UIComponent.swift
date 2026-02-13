@@ -15,6 +15,7 @@ enum UIComponent: Codable, Equatable {
     case toolActivity(String)
     case arcDisplay(Double)
     case flowStateCapsule(String) // "In flow", "Stagnant", or "Drifting"
+    case instructionalImages([String]) // Bundle asset names for instructional image carousel
 
     // For JSON encoding/decoding if needed
     enum CodingKeys: String, CodingKey {
@@ -28,6 +29,7 @@ enum UIComponent: Codable, Equatable {
         case color
         case arcCount
         case flowState
+        case imageNames
     }
 
     init(from decoder: Decoder) throws {
@@ -61,6 +63,9 @@ enum UIComponent: Codable, Equatable {
         case "flowStateCapsule":
             let flowState = try container.decode(String.self, forKey: .flowState)
             self = .flowStateCapsule(flowState)
+        case "instructionalImages":
+            let imageNames = try container.decode([String].self, forKey: .imageNames)
+            self = .instructionalImages(imageNames)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type")
         }
@@ -96,6 +101,9 @@ enum UIComponent: Codable, Equatable {
         case .flowStateCapsule(let flowState):
             try container.encode("flowStateCapsule", forKey: .type)
             try container.encode(flowState, forKey: .flowState)
+        case .instructionalImages(let imageNames):
+            try container.encode("instructionalImages", forKey: .type)
+            try container.encode(imageNames, forKey: .imageNames)
         }
     }
 }

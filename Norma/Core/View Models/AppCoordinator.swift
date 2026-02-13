@@ -266,6 +266,19 @@ struct OnboardingCoordinatorView: View {
                 )
                 .environmentObject(onboardingViewModel)
 
+            // MARK: - Welcome Section: Nomad Context (2 screens)
+
+            case .nomadWelcome:
+                NomadWelcomeView {
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .nomadType:
+                NomadTypeView { selected in
+                    onboardingViewModel.nomadType = selected
+                    onboardingViewModel.moveToNextStep()
+                }
+
             // MARK: - Extended Onboarding: Personal Questions (4 screens - Digital Nomad focused)
 
             case .runwayCheck:

@@ -3,100 +3,184 @@
 //  Norma
 //
 //  Created by Claude on 7/28/25.
+//  Updated: 2/7/26 - Full encryption support for sensitive profile fields
 //
 
 import Foundation
 import CryptoKit
 
-// This model represents the raw profile data from the database that may or may not be encrypted
+/// Represents profile data as stored in the database (encrypted)
+/// - `name`, `monthly_income`, `freedom_fund`, `pain_point` contain encrypted ciphertext
+/// - `settings` and `onboarding_insights` are encrypted JSON strings
+/// - Use `toProfile(using:)` to decrypt for display
 struct EncryptableProfile: Identifiable, Codable, Equatable {
     var id: String?
     let userId: String
-    let email: String
-    let name: String
+    let email: String  // Not encrypted (needed for queries)
+
+    // Encrypted fields (ciphertext strings)
+    var name: String                    // encrypted
+    var monthlyIncome: String?          // encrypted (was numeric)
+    var freedomFund: String?            // encrypted (was numeric)
+    var painPoint: String?              // encrypted
+    var settings: String?               // encrypted JSON string
+    var onboardingInsights: String?     // encrypted JSON string
+
+    // Unencrypted fields
     var createdAt: String?
     var updatedAt: String?
     var profileImageUrl: String?
-    
-    // Original settings (for backward compatibility)
-    var settings: ProfileSettings
-    
-    // Encrypted settings (new)
-    let encryptedSettings: String?
-    let settingsEncrypted: Bool?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
         case email
         case name
+        case monthlyIncome = "monthly_income"
+        case freedomFund = "freedom_fund"
+        case painPoint = "pain_point"
+        case settings
+        case onboardingInsights = "onboarding_insights"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case profileImageUrl = "profile_image_url"
-        case settings
-        case encryptedSettings = "encrypted_settings"
-        case settingsEncrypted = "settings_encrypted"
     }
-    
-    // Custom decoder to handle missing encryption fields
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
+
         id = try container.decodeIfPresent(String.self, forKey: .id)
         userId = try container.decode(String.self, forKey: .userId)
         email = try container.decode(String.self, forKey: .email)
         name = try container.decode(String.self, forKey: .name)
+        monthlyIncome = try container.decodeIfPresent(String.self, forKey: .monthlyIncome)
+        freedomFund = try container.decodeIfPresent(String.self, forKey: .freedomFund)
+        painPoint = try container.decodeIfPresent(String.self, forKey: .painPoint)
+        settings = try container.decodeIfPresent(String.self, forKey: .settings)
+        onboardingInsights = try container.decodeIfPresent(String.self, forKey: .onboardingInsights)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         profileImageUrl = try container.decodeIfPresent(String.self, forKey: .profileImageUrl)
-        settings = try container.decode(ProfileSettings.self, forKey: .settings)
-        
-        // Handle optional encryption fields
-        encryptedSettings = try container.decodeIfPresent(String.self, forKey: .encryptedSettings)
-        settingsEncrypted = try container.decodeIfPresent(Bool.self, forKey: .settingsEncrypted) ?? false
     }
-    
+
     init(
         id: String? = nil,
         userId: String,
         email: String,
         name: String,
+        monthlyIncome: String? = nil,
+        freedomFund: String? = nil,
+        painPoint: String? = nil,
+        settings: String? = nil,
+        onboardingInsights: String? = nil,
         createdAt: String? = nil,
         updatedAt: String? = nil,
-        profileImageUrl: String? = nil,
-        settings: ProfileSettings = ProfileSettings(),
-        encryptedSettings: String? = nil,
-        settingsEncrypted: Bool? = false
+        profileImageUrl: String? = nil
     ) {
         self.id = id
         self.userId = userId
         self.email = email
         self.name = name
+        self.monthlyIncome = monthlyIncome
+        self.freedomFund = freedomFund
+        self.painPoint = painPoint
+        self.settings = settings
+        self.onboardingInsights = onboardingInsights
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.profileImageUrl = profileImageUrl
-        self.settings = settings
-        self.encryptedSettings = encryptedSettings
-        self.settingsEncrypted = settingsEncrypted
     }
-    
-    // Convert to regular Profile for display (decrypting if necessary)
-    func toProfile(using masterKey: SymmetricKey?) -> Profile? {
-        let displaySettings: ProfileSettings
-        
-        if settingsEncrypted == true {
-            // Decrypt the settings
-            guard let key = masterKey,
-                  let encryptedSettings = encryptedSettings,
-                  let decryptedSettings = decryptSettings(encryptedSettings, with: key) else {
+
+    /// Decrypt and convert to Profile for display
+    /// - Parameter masterKey: The user's master encryption key
+    /// - Returns: Decrypted Profile, or nil if decryption fails
+    func toProfile(using masterKey: SymmetricKey) -> Profile? {
+        // Decrypt name (required field)
+        guard let decryptedName = EncryptionService.shared.decrypt(name, with: masterKey) else {
+            // If name doesn't look encrypted (short, not base64), use as-is (legacy data)
+            let nameToUse = isLikelyEncrypted(name) ? "" : name
+            return createProfileWithPlaintext(name: nameToUse)
+        }
+
+        // Decrypt optional numeric fields
+        let decryptedMonthlyIncome: Double? = monthlyIncome.flatMap { encrypted in
+            EncryptionService.shared.decryptAmount(encrypted, with: masterKey)
+        }
+
+        let decryptedFreedomFund: Double? = freedomFund.flatMap { encrypted in
+            EncryptionService.shared.decryptAmount(encrypted, with: masterKey)
+        }
+
+        // Decrypt optional string fields
+        let decryptedPainPoint = painPoint.flatMap { encrypted in
+            EncryptionService.shared.decrypt(encrypted, with: masterKey)
+        }
+
+        // Decrypt and parse settings JSON
+        let decryptedSettings: ProfileSettings = {
+            guard let encryptedSettings = settings,
+                  let decryptedJson = EncryptionService.shared.decrypt(encryptedSettings, with: masterKey),
+                  let jsonData = decryptedJson.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(ProfileSettings.self, from: jsonData) else {
+                return ProfileSettings()
+            }
+            return parsed
+        }()
+
+        // Decrypt and parse onboarding insights JSON
+        let decryptedOnboardingInsights: OnboardingInsights? = {
+            guard let encryptedInsights = onboardingInsights,
+                  let decryptedJson = EncryptionService.shared.decrypt(encryptedInsights, with: masterKey),
+                  let jsonData = decryptedJson.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(OnboardingInsights.self, from: jsonData) else {
                 return nil
             }
-            displaySettings = decryptedSettings
-        } else {
-            // Use plain settings
-            displaySettings = settings
-        }
-        
+            return parsed
+        }()
+
+        return Profile(
+            id: id,
+            userId: userId,
+            email: email,
+            name: decryptedName,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            profileImageUrl: profileImageUrl,
+            monthlyIncome: decryptedMonthlyIncome,
+            freedomFund: decryptedFreedomFund,
+            painPoint: decryptedPainPoint,
+            settings: decryptedSettings,
+            onboardingInsights: decryptedOnboardingInsights
+        )
+    }
+
+    /// Convert to Profile without decryption (for legacy unencrypted data)
+    /// Note: This attempts to parse settings/insights as JSON if not encrypted
+    func toProfile() -> Profile {
+        // Try to parse settings as JSON (legacy unencrypted format)
+        let parsedSettings: ProfileSettings = {
+            guard let settingsStr = settings,
+                  let jsonData = settingsStr.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(ProfileSettings.self, from: jsonData) else {
+                return ProfileSettings()
+            }
+            return parsed
+        }()
+
+        // Try to parse onboarding insights as JSON
+        let parsedInsights: OnboardingInsights? = {
+            guard let insightsStr = onboardingInsights,
+                  let jsonData = insightsStr.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(OnboardingInsights.self, from: jsonData) else {
+                return nil
+            }
+            return parsed
+        }()
+
+        // Try to parse numeric fields
+        let parsedMonthlyIncome = monthlyIncome.flatMap { Double($0) }
+        let parsedFreedomFund = freedomFund.flatMap { Double($0) }
+
         return Profile(
             id: id,
             userId: userId,
@@ -105,144 +189,35 @@ struct EncryptableProfile: Identifiable, Codable, Equatable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             profileImageUrl: profileImageUrl,
-            settings: displaySettings
+            monthlyIncome: parsedMonthlyIncome,
+            freedomFund: parsedFreedomFund,
+            painPoint: painPoint,
+            settings: parsedSettings,
+            onboardingInsights: parsedInsights
         )
     }
-    
-    // Decrypt settings from encrypted JSON string
-    private func decryptSettings(_ encryptedString: String, with key: SymmetricKey) -> ProfileSettings? {
-        guard let decryptedJSON = EncryptionService.shared.decrypt(encryptedString, with: key),
-              let jsonData = decryptedJSON.data(using: .utf8) else {
-            return nil
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(ProfileSettings.self, from: jsonData)
-        } catch {
-            print("Failed to decode decrypted settings: \(error)")
-            return nil
-        }
-    }
-}
 
-// Extension to create EncryptableProfile from regular Profile
-extension Profile {
-    func toEncryptable(encrypt: Bool = false, using masterKey: SymmetricKey? = nil) -> EncryptableProfile? {
-        if encrypt {
-            guard let key = masterKey,
-                  let encryptedSettings = encryptSettings(settings, with: key) else {
-                return nil
-            }
-            
-            return EncryptableProfile(
-                id: id,
-                userId: userId,
-                email: email,
-                name: name,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                profileImageUrl: profileImageUrl,
-                settings: settings, // Keep original for migration purposes
-                encryptedSettings: encryptedSettings,
-                settingsEncrypted: true
-            )
-        } else {
-            // Create unencrypted version
-            return EncryptableProfile(
-                id: id,
-                userId: userId,
-                email: email,
-                name: name,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                profileImageUrl: profileImageUrl,
-                settings: settings,
-                encryptedSettings: nil,
-                settingsEncrypted: false
-            )
-        }
-    }
-    
-    // Encrypt settings to JSON string
-    private func encryptSettings(_ settings: ProfileSettings, with key: SymmetricKey) -> String? {
-        do {
-            let encoder = JSONEncoder()
-            let jsonData = try encoder.encode(settings)
-            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-                return nil
-            }
-            return EncryptionService.shared.encrypt(jsonString, with: key)
-        } catch {
-            print("Failed to encode settings for encryption: \(error)")
-            return nil
-        }
-    }
-}
+    // MARK: - Private Helpers
 
-// Encrypted version of ProfileSettings for selective field encryption
-struct EncryptedProfileSettings: Codable, Equatable {
-    // Non-sensitive fields (plain)
-    var currency: String
-    var painPoint: String
-    var notificationsEnabled: Bool
-    var billReminderDays: Int
-    var monthlyBudgetAlert: Bool
-    var darkModeEnabled: Bool
-
-    // Sensitive fields (encrypted)
-    var encryptedMonthlyIncome: String
-    var encryptedFreedomFund: String
-
-    enum CodingKeys: String, CodingKey {
-        case currency
-        case painPoint = "pain_point"
-        case notificationsEnabled = "notifications_enabled"
-        case billReminderDays = "bill_reminder_days"
-        case monthlyBudgetAlert = "monthly_budget_alert"
-        case darkModeEnabled = "dark_mode_enabled"
-        case encryptedMonthlyIncome = "encrypted_monthly_income"
-        case encryptedFreedomFund = "encrypted_freedom_fund"
+    private func isLikelyEncrypted(_ value: String) -> Bool {
+        // Encrypted values are base64 strings > 50 chars
+        return value.count > 50 && value.range(of: "^[A-Za-z0-9+/=]+$", options: .regularExpression) != nil
     }
 
-    // Convert from regular ProfileSettings
-    init(from settings: ProfileSettings, using key: SymmetricKey) throws {
-        self.currency = settings.currency
-        self.painPoint = settings.painPoint
-        self.notificationsEnabled = settings.notificationsEnabled
-        self.billReminderDays = settings.billReminderDays
-        self.monthlyBudgetAlert = settings.monthlyBudgetAlert
-        self.darkModeEnabled = settings.darkModeEnabled
-
-        // Encrypt the monthly income
-        guard let encryptedIncome = EncryptionService.shared.encryptAmount(settings.monthlyIncome, with: key) else {
-            throw EncryptionError.encryptionFailed
-        }
-        self.encryptedMonthlyIncome = encryptedIncome
-
-        // Encrypt the freedom fund
-        guard let encryptedFund = EncryptionService.shared.encryptAmount(settings.freedomFund, with: key) else {
-            throw EncryptionError.encryptionFailed
-        }
-        self.encryptedFreedomFund = encryptedFund
-    }
-
-    // Convert to regular ProfileSettings
-    func toProfileSettings(using key: SymmetricKey) -> ProfileSettings? {
-        guard let monthlyIncome = EncryptionService.shared.decryptAmount(encryptedMonthlyIncome, with: key),
-              let freedomFund = EncryptionService.shared.decryptAmount(encryptedFreedomFund, with: key) else {
-            return nil
-        }
-
-        return ProfileSettings(
-            currency: currency,
-            monthlyIncome: monthlyIncome,
-            freedomFund: freedomFund,
+    private func createProfileWithPlaintext(name: String) -> Profile {
+        return Profile(
+            id: id,
+            userId: userId,
+            email: email,
+            name: name,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            profileImageUrl: profileImageUrl,
+            monthlyIncome: monthlyIncome.flatMap { Double($0) },
+            freedomFund: freedomFund.flatMap { Double($0) },
             painPoint: painPoint,
-            notificationsEnabled: notificationsEnabled,
-            billReminderDays: billReminderDays,
-            monthlyBudgetAlert: monthlyBudgetAlert,
-            darkModeEnabled: darkModeEnabled
+            settings: ProfileSettings(),
+            onboardingInsights: nil
         )
     }
 }

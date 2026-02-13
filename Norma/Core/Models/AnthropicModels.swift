@@ -134,16 +134,18 @@ struct ContentBlock: Codable {
     }
 }
 
-// Helper for encoding/decoding Any types
+/// Type-erased Codable value for flexible JSON encoding
+/// Used by both Anthropic API and Edge Function services
 struct AnyCodable: Codable {
     let value: Any
-    
+
     init(_ value: Any) {
         self.value = value
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
+
         if let bool = try? container.decode(Bool.self) {
             value = bool
         } else if let int = try? container.decode(Int.self) {
@@ -152,21 +154,37 @@ struct AnyCodable: Codable {
             value = double
         } else if let string = try? container.decode(String.self) {
             value = string
+        } else if let array = try? container.decode([AnyCodable].self) {
+            value = array.map { $0.value }
+        } else if let dict = try? container.decode([String: AnyCodable].self) {
+            value = dict.mapValues { $0.value }
         } else {
-            value = ""
+            value = NSNull()
         }
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        if let bool = value as? Bool {
+
+        switch value {
+        case let bool as Bool:
             try container.encode(bool)
-        } else if let int = value as? Int {
+        case let int as Int:
             try container.encode(int)
-        } else if let double = value as? Double {
+        case let double as Double:
             try container.encode(double)
-        } else if let string = value as? String {
+        case let string as String:
             try container.encode(string)
+        case let array as [Any]:
+            try container.encode(array.map { AnyCodable($0) })
+        case let dict as [String: Any]:
+            try container.encode(dict.mapValues { AnyCodable($0) })
+        case is NSNull:
+            try container.encodeNil()
+        case let date as Date:
+            try container.encode(ISO8601DateFormatter().string(from: date))
+        default:
+            try container.encodeNil()
         }
     }
 }

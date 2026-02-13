@@ -66,13 +66,19 @@ struct NormaSystemPrompts {
         """
     }
     
-    static func generalChatPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], challenge: Challenge?) -> String {
+    static func generalChatPrompt(
+        currency: String,
+        monthlyIncome: Double,
+        freedomFund: Double,
+        bills: [Bill],
+        challenge: Challenge?
+    ) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
         currentDateFormatter.dateFormat = "yyyy-MM-dd"
         let currentDate = currentDateFormatter.string(from: Date())
 
-        // Calculate total monthly bills
+        // Calculate total monthly bills (uses ALL bills for accurate arc calculation)
         let totalMonthlyBills = bills.reduce(0.0) { $0 + $1.amount }
 
         // Calculate arc count
@@ -104,11 +110,6 @@ struct NormaSystemPrompts {
             "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.dueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)"
         }.joined(separator: "\n")
 
-        // Format expenses
-        let expensesList = expenses.prefix(20).map { expense in
-            "- id: \(expense.id ?? "unknown"), \(expense.name): \(currency) \(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
-        }.joined(separator: "\n")
-
         // Format active challenge
         let challengeInfo: String
         if let challenge = challenge {
@@ -135,9 +136,6 @@ struct NormaSystemPrompts {
 
         USER'S BILLS:
         \(billsList.isEmpty ? "No bills yet" : billsList)
-
-        USER'S RECENT EXPENSES (last 20):
-        \(expensesList.isEmpty ? "No expenses tracked yet" : expensesList)
 
         USER'S ACTIVE CHALLENGE:
         \(challengeInfo)
@@ -243,6 +241,21 @@ struct NormaSystemPrompts {
         - expense_date: Convert to ISO8601 format with timezone
         - payment_method: One of the valid payment methods
         - merchant, tags: Optional fields
+
+        SEARCHING EXPENSES (IMPORTANT):
+        Expenses are NOT shown in this prompt. To answer ANY question about user expenses, you MUST use the search_financial_records tool.
+
+        USE THE SEARCH TOOL FOR:
+        - Any expense-related question: "What did I spend?", "How much on groceries?"
+        - Time periods: "What did I spend in January?", "last month's expenses"
+        - Categories: "food expenses", "restaurant spending", "entertainment"
+        - Merchants: "What did I spend at Whole Foods?"
+
+        HOW TO USE:
+        1. Call search_financial_records with a descriptive query (e.g., "food groceries dining")
+        2. The tool returns matching expenses with amounts and dates
+        3. Filter by date in your response if the user asked about a specific period
+        4. Sum up amounts to give totals when asked "how much"
 
         VISUAL DISPLAY TOOLS:
         - Use show_bills_tool, show_expenses_tool, or show_challenge_tool when users want to SEE their data
@@ -781,6 +794,41 @@ struct NormaSystemPrompts {
         - Be honest about expensive places too
 
         Write your insight now:
+        """
+    }
+
+    static func firstChatPrompt(
+        userName: String,
+        currency: String,
+        painPoint: String
+    ) -> String {
+        let firstName = userName.split(separator: " ").first.map(String.init) ?? userName
+
+        return """
+        You are Norma, a friendly financial companion. This is the very first message \(firstName) will see after finishing onboarding. Write a short, warm welcome message.
+
+        USER CONTEXT:
+        - Name: \(firstName)
+        - Currency: \(currency)
+        - Main goal: \(painPoint.isEmpty ? "managing finances" : painPoint)
+
+        YOUR MESSAGE MUST:
+        1. Congratulate them briefly for finishing setup (one sentence, keep it light)
+        2. Tell them the fastest way to track expenses is by sharing bank screenshots — way faster than typing everything out
+        3. Say something like "Here's how it works" (a carousel of 4 step-by-step screenshots will be shown right after this line — you don't need to describe the images themselves)
+        4. Walk them through the steps briefly:
+           - Screenshot a transaction from their bank app
+           - Tap the share button and pick the Norma icon
+           - On the share sheet, tap "Send to Norma"
+           - In about 15-20 seconds, tap the arrow icon at the top of the chat and then tap "Pending Transactions" to review and confirm
+        5. End with a short invitation to try it or ask anything
+
+        FORMATTING RULES:
+        - Use Markdown — **bold** for emphasis, bullet points for the steps
+        - 3-4 short paragraphs max — don't write a wall of text
+        - Sound like a friend showing a shortcut, not a user manual
+        - Be concise and warm
+        - Minimal emoji (1-2 max if any)
         """
     }
 }

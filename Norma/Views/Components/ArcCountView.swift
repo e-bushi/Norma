@@ -516,13 +516,187 @@ struct FreedomFundEditSheet: View {
         var updatedSettings = currentUser.settings
         updatedSettings.freedomFund = newFreedomFund
 
-        // Create updated profile (only update settings - encrypted_settings blob is source of truth)
+        // Create updated profile - update BOTH settings and direct column
         var updatedProfile = currentUser
         updatedProfile.settings = updatedSettings
+        updatedProfile.freedomFund = newFreedomFund  // Also update direct column for Edge Function
 
         Task {
             // Use arc check version to trigger rewards when arcs increase
             await sessionViewModel.updateUserProfileWithArcCheck(updatedProfile, bills: billViewModel.bills)
+
+            await MainActor.run {
+                isSaving = false
+
+                // Haptic feedback
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+
+                dismiss()
+            }
+        }
+    }
+}
+
+// MARK: - Income Edit Sheet
+struct IncomeEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+
+    @State private var incomeText: String = ""
+    @State private var isSaving = false
+    @FocusState private var isTextFieldFocused: Bool
+
+    private var currentIncome: Double {
+        sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+    }
+
+    private var currency: String {
+        sessionViewModel.currentUser?.settings.currency ?? "USD"
+    }
+
+    private var currencySymbol: String {
+        CurrencyData.getSymbol(for: currency)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(Color("NormaPastelTeal"))
+
+                    Text("Update Monthly Income")
+                        .font(.custom(FontFamily.Rubik.medium, size: 18))
+                        .foregroundColor(.primary)
+
+                    Text("Enter your monthly income after taxes")
+                        .font(.normaInput(14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+
+                // Amount input
+                HStack(spacing: 8) {
+                    Text(currencySymbol)
+                        .font(.custom(FontFamily.Rubik.medium, size: 24))
+                        .foregroundColor(.primary)
+
+                    TextField("0", text: $incomeText)
+                        .font(.custom(FontFamily.Rubik.regular, size: 24))
+                        .keyboardType(.decimalPad)
+                        .focused($isTextFieldFocused)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.gray.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            isTextFieldFocused ? Color("NormaPastelTeal") : Color.clear,
+                            lineWidth: 2
+                        )
+                )
+                .padding(.horizontal, 24)
+
+                Spacer()
+
+                // Save button
+                Button {
+                    saveChanges()
+                } label: {
+                    HStack {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Text("Save")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color("NormaPastelTeal"))
+                    )
+                    .foregroundColor(.white)
+                }
+                .disabled(isSaving)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+            .background(Color("NormaBackground"))
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Monthly Income")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                        .foregroundColor(.primary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            // Pre-populate with current value
+            if currentIncome > 0 {
+                incomeText = formatNumberWithoutCurrency(currentIncome)
+            }
+
+            // Auto-focus
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTextFieldFocused = true
+            }
+        }
+    }
+
+    private func formatNumberWithoutCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
+    }
+
+    private func parseNumber(_ text: String) -> Double {
+        let cleanedText = text.replacingOccurrences(of: ",", with: "")
+        return Double(cleanedText) ?? 0
+    }
+
+    private func saveChanges() {
+        guard let currentUser = sessionViewModel.currentUser else { return }
+
+        isSaving = true
+
+        let newIncome = parseNumber(incomeText)
+
+        // Create updated settings
+        var updatedSettings = currentUser.settings
+        updatedSettings.monthlyIncome = newIncome
+
+        // Create updated profile - encryption handled by Edge Function via updateUserProfile
+        var updatedProfile = currentUser
+        updatedProfile.settings = updatedSettings
+
+        Task {
+            await sessionViewModel.updateUserProfile(updatedProfile)
 
             await MainActor.run {
                 isSaving = false

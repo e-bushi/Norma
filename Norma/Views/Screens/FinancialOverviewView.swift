@@ -23,6 +23,8 @@ struct FinancialOverviewView: View {
     @State private var animateChallenge = false
     @State private var animateProgress = false
     @State private var animateHistory = false
+    @State private var showFreedomFundEdit = false
+    @State private var showIncomeEdit = false
 
     // Animated number values (start at 0, animate to real values)
     @State private var displayedRemaining: Double = 0
@@ -156,6 +158,16 @@ struct FinancialOverviewView: View {
         .onAppear {
             startStaggeredAnimations()
         }
+        .sheet(isPresented: $showFreedomFundEdit) {
+            FreedomFundEditSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showIncomeEdit) {
+            IncomeEditSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
@@ -228,7 +240,7 @@ struct FinancialOverviewView: View {
                     icon: "arrow.down.circle.fill",
                     color: Color("NormaPastelTeal")
                 ) {
-                    // Tap action for income
+                    showIncomeEdit = true
                 }
 
                 statCard(
@@ -253,7 +265,7 @@ struct FinancialOverviewView: View {
                     icon: "shield.fill",
                     color: Color("NormaPastelBeige")
                 ) {
-                    // Tap action for freedom fund
+                    showFreedomFundEdit = true
                 }
             }
         }

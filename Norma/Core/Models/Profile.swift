@@ -15,7 +15,6 @@ struct Profile: Identifiable, Codable, Equatable {
     var createdAt: String?
     var updatedAt: String?
     var profileImageUrl: String?
-    var howDidYouHear: String?
 
     // Direct columns for onboarding data (also in settings JSONB for backwards compatibility)
     var monthlyIncome: Double?
@@ -33,7 +32,6 @@ struct Profile: Identifiable, Codable, Equatable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case profileImageUrl = "profile_image_url"
-        case howDidYouHear = "how_did_you_hear"
         case monthlyIncome = "monthly_income"
         case freedomFund = "freedom_fund"
         case painPoint = "pain_point"
@@ -49,7 +47,6 @@ struct Profile: Identifiable, Codable, Equatable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         profileImageUrl: String? = nil,
-        howDidYouHear: String? = nil,
         monthlyIncome: Double? = nil,
         freedomFund: Double? = nil,
         painPoint: String? = nil,
@@ -63,7 +60,6 @@ struct Profile: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.profileImageUrl = profileImageUrl
-        self.howDidYouHear = howDidYouHear
         self.monthlyIncome = monthlyIncome
         self.freedomFund = freedomFund
         self.painPoint = painPoint
@@ -73,12 +69,14 @@ struct Profile: Identifiable, Codable, Equatable {
 }
 
 struct OnboardingInsights: Codable, Equatable {
+    var nomadType: String?            // slowmad, explorer, base_trips, nomad_family
     var runwayStatus: String?
     var nomadChallenges: String?      // comma-separated for multi-select
     var moneyStoppedYou: String?
     var winningLooksLike: String?     // comma-separated for multi-select
 
     enum CodingKeys: String, CodingKey {
+        case nomadType = "nomad_type"
         case runwayStatus = "runway_status"
         case nomadChallenges = "nomad_challenges"
         case moneyStoppedYou = "money_stopped_you"
@@ -86,11 +84,13 @@ struct OnboardingInsights: Codable, Equatable {
     }
 
     init(
+        nomadType: String? = nil,
         runwayStatus: String? = nil,
         nomadChallenges: String? = nil,
         moneyStoppedYou: String? = nil,
         winningLooksLike: String? = nil
     ) {
+        self.nomadType = nomadType
         self.runwayStatus = runwayStatus
         self.nomadChallenges = nomadChallenges
         self.moneyStoppedYou = moneyStoppedYou
@@ -107,6 +107,7 @@ struct ProfileSettings: Codable, Equatable {
     var billReminderDays: Int
     var monthlyBudgetAlert: Bool
     var darkModeEnabled: Bool
+    var hasReceivedWelcome: Bool
 
     enum CodingKeys: String, CodingKey {
         case currency
@@ -117,6 +118,7 @@ struct ProfileSettings: Codable, Equatable {
         case billReminderDays = "bill_reminder_days"
         case monthlyBudgetAlert = "monthly_budget_alert"
         case darkModeEnabled = "dark_mode_enabled"
+        case hasReceivedWelcome = "has_received_welcome"
     }
 
     init(
@@ -127,7 +129,8 @@ struct ProfileSettings: Codable, Equatable {
         notificationsEnabled: Bool = true,
         billReminderDays: Int = 3,
         monthlyBudgetAlert: Bool = true,
-        darkModeEnabled: Bool = false
+        darkModeEnabled: Bool = false,
+        hasReceivedWelcome: Bool = false
     ) {
         self.currency = currency
         self.monthlyIncome = monthlyIncome
@@ -137,6 +140,7 @@ struct ProfileSettings: Codable, Equatable {
         self.billReminderDays = billReminderDays
         self.monthlyBudgetAlert = monthlyBudgetAlert
         self.darkModeEnabled = darkModeEnabled
+        self.hasReceivedWelcome = hasReceivedWelcome
     }
 
     // Custom decoder to handle missing fields with default values
@@ -151,5 +155,6 @@ struct ProfileSettings: Codable, Equatable {
         billReminderDays = try container.decodeIfPresent(Int.self, forKey: .billReminderDays) ?? 3
         monthlyBudgetAlert = try container.decodeIfPresent(Bool.self, forKey: .monthlyBudgetAlert) ?? true
         darkModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
+        hasReceivedWelcome = try container.decodeIfPresent(Bool.self, forKey: .hasReceivedWelcome) ?? false
     }
 }

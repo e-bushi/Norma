@@ -169,43 +169,45 @@ class BillPeriodVerificationService: ObservableObject {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.timeZone = TimeZone.current
         let todayString = dateFormatter.string(from: Date())
-        
+
         // Reset all bills to scheduled status and update dates for new period
         for bill in billsToVerify {
             var updatedBill = bill
             updatedBill.status = .scheduled
             updatedBill.verificationDate = todayString
-            
+
             // Update dates for the new billing period
             let newDates = calculateNewPeriodDates(for: bill)
             updatedBill.dueDate = newDates.dueDate
             updatedBill.nextDueDate = newDates.nextDueDate
-            
-            try? await dataManager.updateBillWithEncryption(updatedBill)
+
+            // Update directly via Supabase (no encryption needed for these fields)
+            try? await dataManager.updateBillVerificationFields(updatedBill)
         }
-        
+
         // Clear the verification state
         clearVerificationState()
     }
-    
+
     func reviewBills(selectedBillIds: Set<String>) async {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.timeZone = TimeZone.current
         let todayString = dateFormatter.string(from: Date())
-        
+
         // Update selected bills to scheduled status and dates for new period
         for bill in billsToVerify {
             if let billId = bill.id, selectedBillIds.contains(billId) {
                 var updatedBill = bill
                 updatedBill.status = .scheduled
                 updatedBill.verificationDate = todayString
-                
+
                 // Update dates for the new billing period
                 let newDates = calculateNewPeriodDates(for: bill)
                 updatedBill.dueDate = newDates.dueDate
                 updatedBill.nextDueDate = newDates.nextDueDate
-                
-                try? await dataManager.updateBillWithEncryption(updatedBill)
+
+                // Update directly via Supabase (no encryption needed for these fields)
+                try? await dataManager.updateBillVerificationFields(updatedBill)
             } else {
                 // Remove unselected bills
                 try? await dataManager.deleteBill(bill)

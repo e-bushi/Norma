@@ -24,16 +24,9 @@ struct VerifyCodeView: View {
     @State private var buttonOpacity = 0.0
     @State private var resendOpacity = 0.0
 
-    @State private var showTransition = false
     @State private var isResending = false
     @State private var resendSuccess = false
     @State private var resendCooldown = 0
-
-    // Welcome transition animation states
-    @State private var coinScale: CGFloat = 0.3
-    @State private var coinOpacity: Double = 0.0
-    @State private var welcomeTextOpacity: Double = 0.0
-    @State private var startWaveAnimation: Bool = false
 
     let email: String
     @Binding var isAuthenticated: Bool
@@ -214,69 +207,6 @@ struct VerifyCodeView: View {
             Color("NormaBackground")
                 .ignoresSafeArea()
         )
-        .overlay(
-            Group {
-                if showTransition {
-                    ZStack {
-                        Color("NormaBackground")
-                            .ignoresSafeArea()
-
-                        VStack(spacing: 32) {
-                            Spacer()
-
-                            // Spinning royalty coin with tilt control
-                            TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
-                                .frame(width: 200, height: 200)
-                                .scaleEffect(coinScale)
-                                .opacity(coinOpacity)
-
-                            // Welcome message
-                            VStack(spacing: 20) {
-                                Text("Welcome aboard!")
-                                    .font(.normaTitle(28))
-                                    .foregroundColor(.primary)
-                                    .opacity(welcomeTextOpacity)
-
-                                WaveTextView(
-                                    text: "Next, we'll ask a few quick questions about your income and spending goals.",
-                                    font: .normaInput(16),
-                                    color: .secondary,
-                                    isAnimating: startWaveAnimation
-                                )
-                                .frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 40)
-
-                            Spacer()
-
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                                .scaleEffect(0.8)
-                                .opacity(startWaveAnimation ? 1.0 : 0.0)
-                                .padding(.bottom, 60)
-                        }
-                    }
-                    .transition(.opacity)
-                    .onAppear {
-                        // Animate coin entrance
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                            coinScale = 1.0
-                            coinOpacity = 1.0
-                        }
-
-                        // Animate welcome title
-                        withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
-                            welcomeTextOpacity = 1.0
-                        }
-
-                        // Start wave text animation after title appears
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                            startWaveAnimation = true
-                        }
-                    }
-                }
-            }
-        )
         .onAppear {
             // Focus on first field when view appears
             focusedField = 0
@@ -356,24 +286,9 @@ struct VerifyCodeView: View {
                     // Success haptic feedback
                     let notificationFeedback = UINotificationFeedbackGenerator()
                     notificationFeedback.notificationOccurred(.success)
-                    
-                    // Show transition screen immediately
-                    withAnimation(.easeIn(duration: 0.3)) {
-                        showTransition = true
-                    }
-                    
-                    // Navigate after transition is shown (4 seconds to read the message)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                        isLoading = false
-                        showTransition = false
-                        // Reset animation states for potential re-use
-                        coinScale = 0.3
-                        coinOpacity = 0.0
-                        welcomeTextOpacity = 0.0
-                        startWaveAnimation = false
-                        // Now trigger navigation by updating currentStep
-                        onboardingViewModel.proceedToWelcome()
-                    }
+
+                    isLoading = false
+                    onboardingViewModel.proceedToWelcome()
                 }
             } catch {
                 await MainActor.run {
@@ -714,74 +629,3 @@ struct TiltSpinningCoin3DView: UIViewRepresentable {
     .preferredColorScheme(.dark)
 }
 
-#Preview("Welcome Transition") {
-    WelcomeTransitionPreview()
-        .preferredColorScheme(.dark)
-}
-
-/// Standalone preview for the welcome transition screen
-private struct WelcomeTransitionPreview: View {
-    @State private var coinScale: CGFloat = 0.3
-    @State private var coinOpacity: Double = 0.0
-    @State private var welcomeTextOpacity: Double = 0.0
-    @State private var startWaveAnimation: Bool = false
-
-    var body: some View {
-        ZStack {
-            Color("NormaBackground")
-                .ignoresSafeArea()
-
-            VStack(spacing: 32) {
-                Spacer()
-
-                // Spinning royalty coin with tilt control
-                TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
-                    .frame(width: 200, height: 200)
-                    .scaleEffect(coinScale)
-                    .opacity(coinOpacity)
-
-                // Welcome message
-                VStack(spacing: 20) {
-                    Text("Welcome aboard!")
-                        .font(.normaTitle(28))
-                        .foregroundColor(.primary)
-                        .opacity(welcomeTextOpacity)
-
-                    WaveTextView(
-                        text: "Next, we'll ask a few quick questions about your income and spending goals.",
-                        font: .normaInput(16),
-                        color: .secondary,
-                        isAnimating: startWaveAnimation
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal, 40)
-
-                Spacer()
-
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(0.8)
-                    .opacity(startWaveAnimation ? 1.0 : 0.0)
-                    .padding(.bottom, 60)
-            }
-        }
-        .onAppear {
-            // Animate coin entrance
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                coinScale = 1.0
-                coinOpacity = 1.0
-            }
-
-            // Animate welcome title
-            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
-                welcomeTextOpacity = 1.0
-            }
-
-            // Start wave text animation after title appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                startWaveAnimation = true
-            }
-        }
-    }
-}
