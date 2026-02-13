@@ -13,11 +13,13 @@ class ChatToolExecutor {
     private let billViewModel: BillViewModel
     private let expenseViewModel: ExpenseViewModel
     private let challengeViewModel: ChallengeViewModel
+    private let dataManager: DataManager
 
-    init(billViewModel: BillViewModel, expenseViewModel: ExpenseViewModel, challengeViewModel: ChallengeViewModel) {
+    init(billViewModel: BillViewModel, expenseViewModel: ExpenseViewModel, challengeViewModel: ChallengeViewModel, dataManager: DataManager) {
         self.billViewModel = billViewModel
         self.expenseViewModel = expenseViewModel
         self.challengeViewModel = challengeViewModel
+        self.dataManager = dataManager
     }
 
     // MARK: - Main Executor
@@ -47,6 +49,12 @@ class ChatToolExecutor {
             return await executeShowChallenge()
         case "schedule_reminder":
             let result = await executeScheduleReminder(input: input)
+            return (result, nil)
+        case "search_financial_records":
+            let result = await executeSearchFinancialRecords(input: input)
+            return (result, nil)
+        case "convert_currency":
+            let result = await executeConvertCurrency(input: input)
             return (result, nil)
         default:
             return ("Error: Unknown tool '\(name)'", nil)
@@ -487,6 +495,113 @@ class ChatToolExecutor {
                 return "Error: \(notificationError.localizedDescription)"
             }
             return "Error: Failed to schedule reminder - \(error.localizedDescription)"
+        }
+    }
+
+    private func executeSearchFinancialRecords(input: [String: Any]) async -> String {
+        guard let query = input["query"] as? String else {
+            return "Error: Missing search query"
+        }
+
+        let recordType = (input["record_type"] as? String)?.lowercased() ?? "all"
+        // No artificial limit - Edge Function guesses based on embeddings
+        // (encrypted data can't be verified server-side, only client can decrypt)
+        // Let date filtering and semantic search handle the narrowing
+        let limit = input["limit"] as? Int  // nil = unlimited
+        let startDate = input["start_date"] as? String
+        let endDate = input["end_date"] as? String
+
+        print("🔍 [SearchTool] Searching for: \"\(query)\" (type: \(recordType), limit: \(limit), startDate: \(startDate ?? "nil"), endDate: \(endDate ?? "nil"))")
+
+        do {
+            let searchResults = try await dataManager.semanticSearch(query: query, limit: limit ?? 10000, startDate: startDate, endDate: endDate)
+
+            var resultText = ""
+
+            // Format bills if requested
+            if recordType == "all" || recordType == "bills" {
+                if searchResults.bills.isEmpty {
+                    resultText += "No matching bills found.\n\n"
+                } else {
+                    resultText += "MATCHING BILLS (\(searchResults.bills.count)):\n"
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateStyle = .medium
+                    for bill in searchResults.bills {
+                        resultText += "- \(bill.name): $\(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.dueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)\n"
+                    }
+                    resultText += "\n"
+                }
+            }
+
+            // Format expenses if requested
+            if recordType == "all" || recordType == "expenses" {
+                if searchResults.expenses.isEmpty {
+                    resultText += "No matching expenses found.\n"
+                } else {
+                    resultText += "MATCHING EXPENSES (\(searchResults.expenses.count)):\n"
+                    for expense in searchResults.expenses {
+                        resultText += "- \(expense.name): $\(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
+                        if let merchant = expense.merchant {
+                            resultText += ", merchant: \(merchant)"
+                        }
+                        resultText += "\n"
+                    }
+                }
+            }
+
+            if resultText.isEmpty {
+                return "No matching records found for '\(query)'"
+            }
+
+            print("✅ [SearchTool] Found \(searchResults.bills.count) bills, \(searchResults.expenses.count) expenses")
+            return resultText
+
+        } catch {
+            print("❌ [SearchTool] Search failed: \(error)")
+            return "Error searching records: \(error.localizedDescription)"
+        }
+    }
+
+    private func executeConvertCurrency(input: [String: Any]) async -> String {
+        guard let fromCurrency = input["from_currency"] as? String,
+              let toCurrency = input["to_currency"] as? String else {
+            return "Error: Missing required currency codes (from_currency and to_currency)"
+        }
+
+        let amount: Double
+        if let doubleAmount = input["amount"] as? Double {
+            amount = doubleAmount
+        } else if let intAmount = input["amount"] as? Int {
+            amount = Double(intAmount)
+        } else {
+            return "Error: Invalid or missing amount"
+        }
+
+        print("💱 [CurrencyTool] Converting \(amount) \(fromCurrency) to \(toCurrency)")
+
+        do {
+            let response = try await CurrencyConversionService.shared.convert(
+                amount: amount,
+                from: fromCurrency.uppercased(),
+                to: toCurrency.uppercased()
+            )
+
+            let fromSymbol = CurrencyData.getCurrency(for: fromCurrency.uppercased()).symbol
+            let toSymbol = CurrencyData.getCurrency(for: toCurrency.uppercased()).symbol
+
+            let result = """
+            CURRENCY CONVERSION:
+            \(fromSymbol)\(String(format: "%.2f", amount)) \(fromCurrency.uppercased()) = \(toSymbol)\(String(format: "%.2f", response.convertedValue)) \(toCurrency.uppercased())
+
+            Exchange Rate: 1 \(fromCurrency.uppercased()) = \(String(format: "%.4f", response.exchangeRate)) \(toCurrency.uppercased())
+            """
+
+            print("✅ [CurrencyTool] Converted: \(amount) \(fromCurrency) = \(response.convertedValue) \(toCurrency)")
+            return result
+
+        } catch {
+            print("❌ [CurrencyTool] Conversion failed: \(error)")
+            return "Error converting currency: \(error.localizedDescription)"
         }
     }
 }

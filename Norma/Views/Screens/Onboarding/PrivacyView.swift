@@ -19,8 +19,8 @@ struct PrivacyView: View {
     @State private var animateButton = false
     @State private var hapticEngine: CHHapticEngine?
 
-    private let stepNumber = 5
-    private let totalSteps = 7
+    private let stepNumber = 7
+    private let totalSteps = 9
 
     private let encryptedItems = [
         EncryptedItem(icon: "creditcard", title: "Your bills", description: "Due dates, amounts, everything"),
@@ -40,8 +40,8 @@ struct PrivacyView: View {
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Progress bar
-                        OnboardingProgressBar(currentStep: stepNumber, totalSteps: totalSteps)
+                        // Step indicator
+                        OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 

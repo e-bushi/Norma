@@ -86,10 +86,10 @@ enum OnboardingQuestion: CaseIterable {
 
     var stepNumber: Int {
         switch self {
-        case .runwayCheck: return 1
-        case .nomadChallenges: return 2
-        case .moneyStoppedYou: return 3
-        case .winningLooksLike: return 4
+        case .runwayCheck: return 3
+        case .nomadChallenges: return 4
+        case .moneyStoppedYou: return 5
+        case .winningLooksLike: return 6
         }
     }
 
@@ -153,7 +153,7 @@ struct OnboardingQuestionView: View {
     @State private var animateHero = false
     @State private var hapticEngine: CHHapticEngine?
 
-    private let totalSteps = 7
+    private let totalSteps = 9
 
     private var hasSelection: Bool {
         !selectedOptions.isEmpty
@@ -167,8 +167,8 @@ struct OnboardingQuestionView: View {
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Progress bar
-                        OnboardingProgressBar(currentStep: question.stepNumber, totalSteps: totalSteps)
+                        // Step indicator
+                        OnboardingStepIndicator(currentStep: question.stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 

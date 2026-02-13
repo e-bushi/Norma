@@ -36,7 +36,6 @@ enum AnalyticsScreen: String {
     case login = "Login"
     case verification = "Verification"
     case notificationsPermission = "Notifications Permission"
-    case howDidYouHear = "How Did You Hear"
     case normaChat = "Norma Chat"
     case onboardingComplete = "Onboarding Complete"
     case previewMode = "Preview Mode"

@@ -3,48 +3,43 @@
 //  Norma
 //
 //  Created by Claude on 7/28/25.
+//  Updated: 2/6/26 - Simplified for Edge Function encryption architecture
 //
 
 import Foundation
 import CryptoKit
 
-// This model represents the raw data from the database that may or may not be encrypted
+/// Represents expense data as stored in the database (encrypted)
+/// - `name`, `amount`, `merchant`, `location`, `notes` contain encrypted ciphertext
+/// - Use `toExpense(using:)` to decrypt for display
 struct EncryptableExpense: Identifiable, Codable {
     var id: String?
     let userId: String
-    
-    // Original fields (for backward compatibility)
-    let name: String
-    let amount: Double
-    
-    // Encrypted fields (new)
-    let encryptedName: String?
-    let encryptedAmount: String?
-    let isEncrypted: Bool
-    
-    // Other fields (remain unencrypted)
+
+    // Encrypted fields (ciphertext strings)
+    let name: String           // encrypted
+    let amount: String         // encrypted (was numeric, now text for encryption)
+    let merchant: String?      // encrypted
+    let location: String?      // encrypted
+    var notes: String?         // encrypted
+
+    // Unencrypted fields (for server-side queries)
     let expenseDate: String
     let budgetId: String?
     let billId: String?
     let paymentMethod: PaymentMethod
     let isRecurring: Bool
     var recurringFrequency: ExpenseFrequency?
-    let merchant: String?
-    let location: String?
     let tags: [String]
     var createdAt: String?
     var updatedAt: String?
-    var notes: String?
     var attachmentUrls: [String]
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
         case name
         case amount
-        case encryptedName = "encrypted_name"
-        case encryptedAmount = "encrypted_amount"
-        case isEncrypted = "is_encrypted"
         case expenseDate = "expense_date"
         case budgetId = "budget_id"
         case billId = "bill_id"
@@ -59,107 +54,81 @@ struct EncryptableExpense: Identifiable, Codable {
         case notes
         case attachmentUrls = "attachment_urls"
     }
-    
-    // Convert to regular Expense for display (decrypting if necessary)
-    func toExpense(using masterKey: SymmetricKey?) -> Expense? {
-        let displayName: String
-        let displayAmount: Double
-        
-        if isEncrypted {
-            // Decrypt the data
-            guard let key = masterKey,
-                  let encryptedName = encryptedName,
-                  let encryptedAmount = encryptedAmount,
-                  let decryptedName = EncryptionService.shared.decrypt(encryptedName, with: key),
-                  let decryptedAmount = EncryptionService.shared.decryptAmount(encryptedAmount, with: key) else {
-                return nil
-            }
-            displayName = decryptedName
-            displayAmount = decryptedAmount
-        } else {
-            // Use plain data
-            displayName = name
-            displayAmount = amount
+
+    /// Decrypt and convert to Expense for display
+    /// - Parameter masterKey: The user's master encryption key
+    /// - Returns: Decrypted Expense, or nil if decryption fails
+    func toExpense(using masterKey: SymmetricKey) -> Expense? {
+        // Decrypt sensitive fields
+        guard let decryptedName = EncryptionService.shared.decrypt(name, with: masterKey),
+              let decryptedAmount = EncryptionService.shared.decryptAmount(amount, with: masterKey) else {
+            return nil
         }
-        
+
+        // Decrypt optional fields
+        let decryptedMerchant = merchant.flatMap { EncryptionService.shared.decrypt($0, with: masterKey) }
+        let decryptedLocation = location.flatMap { EncryptionService.shared.decrypt($0, with: masterKey) }
+        let decryptedNotes = notes.flatMap { EncryptionService.shared.decrypt($0, with: masterKey) }
+
         return Expense(
             id: id,
             userId: userId,
-            name: displayName,
-            amount: displayAmount,
+            name: decryptedName,
+            amount: decryptedAmount,
             expenseDate: expenseDate,
             budgetId: budgetId,
             billId: billId,
             paymentMethod: paymentMethod,
             isRecurring: isRecurring,
             recurringFrequency: recurringFrequency,
-            merchant: merchant,
-            location: location,
+            merchant: decryptedMerchant,
+            location: decryptedLocation,
             tags: tags,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            notes: notes,
+            notes: decryptedNotes,
             attachmentUrls: attachmentUrls
         )
     }
 }
 
-// Extension to create EncryptableExpense from regular Expense
-extension Expense {
-    func toEncryptable(encrypt: Bool = false, using masterKey: SymmetricKey? = nil) -> EncryptableExpense? {
-        if encrypt {
-            guard let key = masterKey,
-                  let encryptedName = EncryptionService.shared.encrypt(name, with: key),
-                  let encryptedAmount = EncryptionService.shared.encryptAmount(amount, with: key) else {
-                return nil
-            }
-            
-            return EncryptableExpense(
-                id: id,
-                userId: userId,
-                name: name, // Keep original for migration purposes
-                amount: amount, // Keep original for migration purposes
-                encryptedName: encryptedName,
-                encryptedAmount: encryptedAmount,
-                isEncrypted: true,
-                expenseDate: expenseDate,
-                budgetId: budgetId,
-                billId: billId,
-                paymentMethod: paymentMethod,
-                isRecurring: isRecurring,
-                recurringFrequency: recurringFrequency,
-                merchant: merchant,
-                location: location,
-                tags: tags,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                notes: notes,
-                attachmentUrls: attachmentUrls
-            )
-        } else {
-            // Create unencrypted version
-            return EncryptableExpense(
-                id: id,
-                userId: userId,
-                name: name,
-                amount: amount,
-                encryptedName: nil,
-                encryptedAmount: nil,
-                isEncrypted: false,
-                expenseDate: expenseDate,
-                budgetId: budgetId,
-                billId: billId,
-                paymentMethod: paymentMethod,
-                isRecurring: isRecurring,
-                recurringFrequency: recurringFrequency,
-                merchant: merchant,
-                location: location,
-                tags: tags,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                notes: notes,
-                attachmentUrls: attachmentUrls
-            )
-        }
+extension EncryptableExpense {
+    // Initializer for creating instances directly
+    init(
+        id: String? = nil,
+        userId: String,
+        name: String,
+        amount: String,
+        expenseDate: String,
+        budgetId: String? = nil,
+        billId: String? = nil,
+        paymentMethod: PaymentMethod = .other,
+        isRecurring: Bool = false,
+        recurringFrequency: ExpenseFrequency? = nil,
+        merchant: String? = nil,
+        location: String? = nil,
+        tags: [String] = [],
+        createdAt: String? = nil,
+        updatedAt: String? = nil,
+        notes: String? = nil,
+        attachmentUrls: [String] = []
+    ) {
+        self.id = id
+        self.userId = userId
+        self.name = name
+        self.amount = amount
+        self.expenseDate = expenseDate
+        self.budgetId = budgetId
+        self.billId = billId
+        self.paymentMethod = paymentMethod
+        self.isRecurring = isRecurring
+        self.recurringFrequency = recurringFrequency
+        self.merchant = merchant
+        self.location = location
+        self.tags = tags
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.notes = notes
+        self.attachmentUrls = attachmentUrls
     }
 }

@@ -22,8 +22,8 @@ struct WelcomeJourneyView: View {
     @State private var showConfetti = false
     @State private var hapticEngine: CHHapticEngine?
 
-    private let stepNumber = 6
-    private let totalSteps = 7
+    private let stepNumber = 8
+    private let totalSteps = 9
 
     // Orbiting coins (all tiers for celebration)
     private let orbitingCoins: [CoinTier] = [
@@ -48,8 +48,8 @@ struct WelcomeJourneyView: View {
                     }
 
                     VStack(spacing: 0) {
-                        // Progress bar
-                        OnboardingProgressBar(currentStep: stepNumber, totalSteps: totalSteps)
+                        // Step indicator
+                        OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 
@@ -169,6 +169,7 @@ struct WelcomeJourneyView: View {
             }
         }
         .onAppear {
+            NomadWelcomeView.ambientHapticsActive = false
             startAnimations()
         }
     }

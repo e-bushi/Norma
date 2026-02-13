@@ -57,10 +57,14 @@ class DataManager: ObservableObject {
     // MARK: - User Profile Methods
     
     func getCurrentUserProfile() async throws -> Profile? {
-        // Check if we have a current user from Supabase
-        if let supabaseUser = supabaseService.currentUser {
+        // Use async session to ensure session is restored from storage on cold start
+        // (currentUser is synchronous and may be nil before INITIAL_SESSION event)
+        let session = try? await supabaseService.getSession()
+        let supabaseUser = session?.user ?? supabaseService.currentUser
+
+        if let supabaseUser = supabaseUser {
             // Fetch existing profile from database
-            if let existingProfile = try await fetchUserProfileWithEncryption(userId: supabaseUser.id.uuidString) {
+            if let existingProfile = try await fetchUserProfile(userId: supabaseUser.id.uuidString.lowercased()) {
                 currentProfile = existingProfile
                 // Also add to profiles array if not already there
                 if !profiles.contains(where: { $0.userId == existingProfile.userId }) {
@@ -70,7 +74,7 @@ class DataManager: ObservableObject {
             } else {
                 // Fallback: create basic profile if none exists in database
                 let profile = Profile(
-                    userId: supabaseUser.id.uuidString,
+                    userId: supabaseUser.id.uuidString.lowercased(),
                     email: supabaseUser.email ?? "",
                     name: extractNameFromUserMetadata(supabaseUser.userMetadata)
                 )
@@ -86,16 +90,7 @@ class DataManager: ObservableObject {
         return nil
     }
     
-    func fetchUserProfile(userId: String) async throws {
-        isLoading = true
-        defer { isLoading = false }
-        
-        // Implement profile fetching from Supabase
-        // let profile = try await supabaseService.fetchProfile(userId: userId)
-        // currentProfile = profile
-        
-        print("Fetching user profile for: \(userId)")
-    }
+    // Note: fetchUserProfile is implemented in DataManager+Encryption.swift
     
     func signOut() async throws {
         try await supabaseService.signOut()
@@ -114,23 +109,33 @@ class DataManager: ObservableObject {
         // Update local state immediately
         currentProfile = profile
         hasUnsyncedChanges = true
-        
-        // Sync to remote
-        let updatedProfile = try await updateUserProfileWithEncryption(profile)
-        currentProfile = updatedProfile
-        
-        print("Updated user profile")
-    }
-    
-    func createUserProfile(_ profile: Profile) async throws {
-        // Create profile in remote database
-        let createdProfile = try await createUserProfileWithEncryption(profile)
-        
-        // Update local state with the created profile (includes ID from database)
-        currentProfile = createdProfile
+
+        guard let masterKey = getCurrentMasterKey() else {
+            throw EncryptionError.noEncryptionKeys
+        }
+
+        try await supabaseService.edgeFunctionService.updateProfile(profile, encryptionKey: masterKey)
+        print("Updated user profile (encrypted)")
+
         hasUnsyncedChanges = false
-        
-        print("Created user profile")
+    }
+
+    func createUserProfile(_ profile: Profile) async throws {
+        // Use the profile's userId directly to look up the master key,
+        // since currentProfile is nil for brand new users
+        let keyManager = UserKeyManager(supabaseService: supabaseService)
+        guard let masterKey = keyManager.getCurrentMasterKey(for: profile.userId) else {
+            throw EncryptionError.noEncryptionKeys
+        }
+
+        let profileId = try await supabaseService.edgeFunctionService.createProfile(profile, encryptionKey: masterKey)
+
+        // Update local state with the created profile ID
+        var createdProfile = profile
+        createdProfile.id = profileId
+        currentProfile = createdProfile
+
+        hasUnsyncedChanges = false
     }
     
     // MARK: - Financial Data Methods

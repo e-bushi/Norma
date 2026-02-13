@@ -12,9 +12,18 @@ struct ChatEmptyStateView: View {
 
     @State private var visibleWords: Int = 0
     @State private var coinVisible: Bool = false
+    @State private var timezonesVisible: Bool = false
+    @State private var showTimezoneSelection: Bool = false
+
+    @ObservedObject private var timezoneManager = TimezoneManager.shared
 
     private let words = ["How", "can", "I", "help", "with", "your", "finances?"]
     private let coinSize: CGFloat = 120
+    private let capsuleColors: [Color] = [
+        Color("NormaPastelTeal"),
+        Color("NormaPastelPurple"),
+        Color("NormaPastelCoral")
+    ]
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,31 +72,102 @@ struct ChatEmptyStateView: View {
                     .fixedSize()
                 }
                 .padding(.horizontal, 40)
-                .onAppear {
-                    coinVisible = false
-                    visibleWords = 0
 
-                    // Coin pops in first
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        coinVisible = true
+                // Timezone button
+                if timezoneManager.selectedTimezones.isEmpty {
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        showTimezoneSelection = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 12))
+                            Text("Add World Clocks")
+                                .font(.normaFinancial(14))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                        .foregroundColor(Color("NormaPastelTeal"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color("NormaPastelTeal").opacity(0.15))
+                                .glassEffect(in: Capsule())
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                        )
                     }
-                    // Words follow shortly after
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        visibleWords = words.count
+                    .buttonStyle(CapsulePressStyle())
+                    .padding(.top, 16)
+                    .opacity(timezonesVisible ? 1 : 0)
+                    .scaleEffect(timezonesVisible ? 1 : 0.3)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: timezonesVisible)
+                } else {
+                    VStack(spacing: 12) {
+                        // First row: up to 2 timezones
+                        HStack(spacing: 10) {
+                            ForEach(Array(timezoneManager.selectedTimezones.prefix(2).enumerated()), id: \.element.id) { index, timezone in
+                                TimezoneCapsuleView(timezone: timezone, color: capsuleColors[index]) {
+                                    showTimezoneSelection = true
+                                }
+                            }
+                        }
+
+                        // Second row: 3rd timezone if exists
+                        if timezoneManager.selectedTimezones.count > 2 {
+                            TimezoneCapsuleView(timezone: timezoneManager.selectedTimezones[2], color: capsuleColors[2]) {
+                                showTimezoneSelection = true
+                            }
+                        }
                     }
-                }
-                .onDisappear {
-                    coinVisible = false
-                    visibleWords = 0
+                    .padding(.top, 16)
+                    .opacity(timezonesVisible ? 1 : 0)
+                    .scaleEffect(timezonesVisible ? 1 : 0.3)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: timezonesVisible)
                 }
             }
             .frame(width: geometry.size.width)
-            .position(x: geometry.size.width / 2, y: (geometry.size.height / 2) - 80)
+            .position(x: geometry.size.width / 2, y: (geometry.size.height / 2) - 60)
+            .onAppear {
+                coinVisible = false
+                visibleWords = 0
+                timezonesVisible = false
+
+                // Coin pops in first
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    coinVisible = true
+                }
+                // Words follow shortly after
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    visibleWords = words.count
+                }
+                // Timezones appear last
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    timezonesVisible = true
+                }
+            }
+            .onDisappear {
+                coinVisible = false
+                visibleWords = 0
+                timezonesVisible = false
+            }
+        }
+        .sheet(isPresented: $showTimezoneSelection) {
+            TimezoneSelectionView()
         }
     }
+
 }
 
 #Preview {
-    ChatEmptyStateView(arcCount: 3)
-        .background(Color("NormaBackground"))
+    ZStack {
+        Color("NormaBackground")
+            .ignoresSafeArea()
+
+        ChatEmptyStateView(arcCount: 3)
+    }
 }

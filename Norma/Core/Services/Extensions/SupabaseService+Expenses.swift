@@ -146,4 +146,19 @@ extension SupabaseService {
             .eq("id", value: expenseId)
             .execute()
     }
+
+    // MARK: - Semantic Search Support
+
+    /// Fetch specific expenses by their IDs (for semantic search results)
+    func fetchExpensesByIds(_ ids: [String]) async throws -> [EncryptableExpense] {
+        guard !ids.isEmpty else { return [] }
+
+        let response: [EncryptableExpense] = try await from("expenses")
+            .select()
+            .in("id", values: ids)
+            .execute()
+            .value
+
+        return response
+    }
 }

@@ -268,163 +268,105 @@ extension DataManager {
     }
     
     // MARK: - Expense Methods (Encryption Support)
-    
+
     /// Fetch expenses with decryption support
+    /// Data is stored encrypted in the database; we decrypt locally using the master key
     func fetchExpensesWithEncryption(userId: String) async throws {
         do {
-            let hasEncryption = await hasEncryptionEnabled()
-            
-            if hasEncryption {
-                let masterKey = getCurrentMasterKey()
-                let encryptableExpenses = try await supabaseService.fetchEncryptableExpenses(userId: userId)
-                
-                // Convert to regular expenses, decrypting if necessary
-                let decryptedExpenses = encryptableExpenses.compactMap { encryptable in
-                    encryptable.toExpense(using: masterKey)
-                }
-                
-                expenses = decryptedExpenses
-                
-                // Cache expenses in SwiftData
-                await cacheExpenses(decryptedExpenses)
-                
-                print("Fetched and decrypted \(decryptedExpenses.count) expenses from server")
-            } else {
-                // Use legacy path
-                try await fetchExpenses(userId: userId)
+            guard let masterKey = getCurrentMasterKey() else {
+                throw EncryptionError.noEncryptionKeys
             }
+
+            // Fetch encrypted expenses from Supabase
+            let encryptableExpenses = try await supabaseService.fetchEncryptableExpenses(userId: userId)
+
+            // Decrypt locally for display
+            let decryptedExpenses = encryptableExpenses.compactMap { encryptable in
+                encryptable.toExpense(using: masterKey)
+            }
+
+            expenses = decryptedExpenses
+
+            // Cache decrypted expenses in SwiftData for offline access
+            await cacheExpenses(decryptedExpenses)
+
+            print("Fetched and decrypted \(decryptedExpenses.count) expenses from server")
         } catch {
             // If fetch fails (offline), load from cache
             print("Failed to fetch expenses from server: \(error). Loading from cache...")
-            // Note: SwiftData cache loading handled elsewhere
-            
+
             // If we have cached data, don't throw the error
             if !expenses.isEmpty {
                 print("Loaded \(expenses.count) expenses from cache")
             } else {
-                // Re-throw if we have no cached data
                 throw error
             }
         }
     }
-    
-    /// Create expense with encryption support if enabled
+
+    /// Create expense via Edge Function (encrypts server-side)
     func addExpenseWithEncryption(_ expense: Expense) async throws {
         print("🔍 [DEBUG] DataManager.addExpenseWithEncryption called for: \(expense.name)")
-        
-        let hasEncryption = await hasEncryptionEnabled()
-        
-        if hasEncryption, let masterKey = getCurrentMasterKey() {
-            // Create expense with temporary ID for offline usage
-            var expenseToAdd = expense
-            if expenseToAdd.id == nil {
-                expenseToAdd.id = UUID().uuidString
-            }
-            
-            // Add to local state first
-            expenses.append(expenseToAdd)
-            
-            // Cache locally
-            await cacheExpenses([expenseToAdd])
-            
-            do {
-                // Create encrypted version
-                guard let encryptableExpense = expenseToAdd.toEncryptable(encrypt: true, using: masterKey) else {
-                    throw EncryptionError.encryptionFailed
-                }
-                
-                print("🔍 [DEBUG] About to call supabaseService.createEncryptableExpense")
-                print("🔍 [DEBUG] EncryptableExpense: \(encryptableExpense)")
-                
-                let createdEncryptable = try await supabaseService.createEncryptableExpense(encryptableExpense)
-                
-                // Convert back to regular expense for display
-                guard let displayExpense = createdEncryptable.toExpense(using: masterKey) else {
-                    throw EncryptionError.decryptionFailed
-                }
-                
-                // Update the local expense with the server version
-                if let index = expenses.firstIndex(where: { $0.id == expenseToAdd.id }) {
-                    expenses[index] = displayExpense
-                }
-                
-                // Update cache with server version
-                await updateCachedExpense(displayExpense)
-                
-                print("✅ [DEBUG] Created encrypted expense successfully")
-            } catch {
-                print("⚠️ [DEBUG] Failed to sync encrypted expense (offline mode): \(error)")
-                hasUnsyncedChanges = true
-            }
-        } else {
-            // Use legacy non-encrypted path
-            try await addExpense(expense)
-        }
-    }
-    
-    /// Update expense with encryption support
-    func updateExpenseWithEncryption(_ expense: Expense) async throws {
-        let hasEncryption = await hasEncryptionEnabled()
-        
-        if hasEncryption, let masterKey = getCurrentMasterKey() {
-            // Create encrypted version
-            guard let encryptableExpense = expense.toEncryptable(encrypt: true, using: masterKey) else {
-                throw EncryptionError.encryptionFailed
-            }
-            
-            let updatedEncryptable = try await supabaseService.updateEncryptableExpense(encryptableExpense)
-            
-            // Convert back to regular expense for display
-            guard let displayExpense = updatedEncryptable.toExpense(using: masterKey) else {
-                throw EncryptionError.decryptionFailed
-            }
-            
-            if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
-                expenses[index] = displayExpense
-                hasUnsyncedChanges = true
-            }
-            
-            // Update cache
-            await updateCachedExpense(displayExpense)
-            
-            print("Updated encrypted expense: \(expense.name)")
-        } else {
-            // Use legacy path
-            try await updateExpense(expense)
-        }
-    }
-    
-    /// Migrate existing expenses to encrypted format
-    func migrateExpensesToEncryption() async throws {
-        guard let userId = currentProfile?.userId,
-              let masterKey = getCurrentMasterKey() else {
+
+        guard let masterKey = getCurrentMasterKey() else {
             throw EncryptionError.noEncryptionKeys
         }
-        
-        // Fetch all unencrypted expenses
-        let allExpenses = expenses
-        var migratedCount = 0
-        
-        for expense in allExpenses {
-            // Skip if already encrypted (would need to track this)
-            if let encryptableExpense = expense.toEncryptable(encrypt: true, using: masterKey) {
-                do {
-                    try await supabaseService.updateExpenseEncryption(
-                        expenseId: expense.id ?? "",
-                        encryptedName: encryptableExpense.encryptedName ?? "",
-                        encryptedAmount: encryptableExpense.encryptedAmount ?? ""
-                    )
-                    migratedCount += 1
-                } catch {
-                    print("Failed to migrate expense \(expense.id ?? ""): \(error)")
-                }
-            }
+
+        // Create expense with temporary ID for offline usage
+        var expenseToAdd = expense
+        if expenseToAdd.id == nil {
+            expenseToAdd.id = UUID().uuidString
         }
-        
-        print("Migrated \(migratedCount) expenses to encrypted format")
-        
-        // Refresh to get encrypted versions
-        try await fetchExpensesWithEncryption(userId: userId)
+
+        // Add to local state first (offline-first approach)
+        expenses.append(expenseToAdd)
+
+        // Cache locally for offline access
+        await cacheExpenses([expenseToAdd])
+
+        do {
+            // Send to Edge Function for encryption and storage
+            let createdId = try await supabaseService.edgeFunctionService.createExpense(expenseToAdd, encryptionKey: masterKey)
+
+            // Update local expense with server ID
+            var createdExpense = expenseToAdd
+            createdExpense.id = createdId
+
+            if let index = expenses.firstIndex(where: { $0.id == expenseToAdd.id }) {
+                expenses[index] = createdExpense
+            }
+
+            // Update cache with server version
+            await updateCachedExpense(createdExpense)
+
+            print("✅ [DEBUG] Created encrypted expense via Edge Function: \(createdId)")
+        } catch {
+            print("⚠️ [DEBUG] Failed to sync expense via Edge Function (offline mode): \(error)")
+            hasUnsyncedChanges = true
+        }
+    }
+
+    /// Update expense via Edge Function (encrypts server-side)
+    func updateExpenseWithEncryption(_ expense: Expense) async throws {
+        guard let masterKey = getCurrentMasterKey() else {
+            throw EncryptionError.noEncryptionKeys
+        }
+
+        print("🔍 [DEBUG] updateExpenseWithEncryption - Expense: \(expense.name)")
+
+        // Send to Edge Function for encryption and update
+        try await supabaseService.edgeFunctionService.updateExpense(expense, encryptionKey: masterKey)
+
+        // Update local state
+        if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
+            expenses[index] = expense
+            hasUnsyncedChanges = true
+        }
+
+        // Update cache
+        await updateCachedExpense(expense)
+
+        print("Updated encrypted expense via Edge Function: \(expense.name)")
     }
     
     // MARK: - Cache Loading

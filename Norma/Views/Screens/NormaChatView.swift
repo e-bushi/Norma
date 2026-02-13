@@ -34,14 +34,13 @@ enum NormaChatContext {
         }
     }
     
-    func systemPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], expenses: [Expense], challenge: Challenge?) -> String {
+    func systemPrompt(currency: String, monthlyIncome: Double, freedomFund: Double, bills: [Bill], challenge: Challenge?) -> String {
         // All contexts now use the same comprehensive prompt
         return NormaSystemPrompts.generalChatPrompt(
             currency: currency,
             monthlyIncome: monthlyIncome,
             freedomFund: freedomFund,
             bills: bills,
-            expenses: expenses,
             challenge: challenge
         )
     }
@@ -402,7 +401,6 @@ struct NormaChatView: View {
                     monthlyIncome: monthlyIncome,
                     freedomFund: freedomFund,
                     bills: billViewModel.bills,
-                    expenses: expenseViewModel.expenses,
                     challenge: nil // No challenge support in this view yet
                 ),
                 tools: tools
@@ -445,7 +443,6 @@ struct NormaChatView: View {
                         monthlyIncome: monthlyIncome,
                         freedomFund: freedomFund,
                         bills: billViewModel.bills,
-                        expenses: expenseViewModel.expenses,
                         challenge: nil
                     ),
                     tools: tools

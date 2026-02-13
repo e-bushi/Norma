@@ -25,6 +25,9 @@ struct LandingPageView: View {
     @State private var talkButtonOffset: CGFloat = 30
     @State private var signInOpacity = 0.0
     @State private var signInOffset: CGFloat = 20
+    #if DEBUG
+    @State private var showDebugSignUp = false
+    #endif
 
     // Orbiting coins (all except royalty)
     private let orbitingCoins: [CoinTier] = [
@@ -113,6 +116,44 @@ struct LandingPageView: View {
 
                     // Bottom buttons
                     VStack(spacing: 16) {
+                        #if DEBUG
+                        Button(action: {
+                            let vm = onboardingViewModel.previewModeViewModel
+
+                            // Simulate Phase 2 data (real onboarding)
+                            vm.userName = "Chris"
+                            vm.userCurrency = "USD"
+                            vm.userIncome = 5000
+                            vm.userFreedomFund = 1000
+                            vm.userChallenge = "Staying on budget while traveling"
+                            vm.isRealOnboarding = true
+
+                            // Mock bill (Phase 2 collects at least one)
+                            let dueDate = Calendar.current.date(from: DateComponents(
+                                year: Calendar.current.component(.year, from: Date()),
+                                month: Calendar.current.component(.month, from: Date()),
+                                day: 1
+                            )) ?? Date()
+                            let bill = Bill(
+                                id: UUID().uuidString,
+                                userId: "preview-mode-user",
+                                name: "Rent",
+                                dueDate: dueDate,
+                                nextDueDate: Calendar.current.date(byAdding: .month, value: 1, to: dueDate),
+                                amount: 1200,
+                                status: .scheduled,
+                                frequency: .monthly
+                            )
+                            vm.bills.append(bill)
+
+                            showDebugSignUp = true
+                        }) {
+                            Text("Skip to Sign Up (Debug)")
+                                .font(.normaInput(14))
+                                .foregroundColor(.secondary)
+                        }
+                        #endif
+
                         // Talk to Norma button with glass effect
                         Button(action: {
                             onboardingViewModel.currentStep = .previewMode
@@ -162,6 +203,34 @@ struct LandingPageView: View {
             }
             .background(Color("NormaBackground"))
         }
+        #if DEBUG
+        .sheet(isPresented: $showDebugSignUp) {
+            SaveProgressModal(
+                userName: onboardingViewModel.previewModeViewModel.userName ?? "there",
+                onSignUpWithEmail: {
+                    showDebugSignUp = false
+                    onboardingViewModel.showSignUp = true
+                    onboardingViewModel.currentStep = .authentication
+                },
+                onSignUpWithApple: {
+                    Task {
+                        _ = await onboardingViewModel.signInWithApple(fromPreviewMode: true)
+                    }
+                },
+                onSignUpWithGoogle: {
+                    Task {
+                        _ = await onboardingViewModel.signInWithGoogle(fromPreviewMode: true)
+                    }
+                },
+                onContinueChatting: {
+                    showDebugSignUp = false
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled()
+        }
+        #endif
         .onAppear {
             // Prepare haptic generator
             impactGenerator.prepare()

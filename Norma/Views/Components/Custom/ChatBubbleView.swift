@@ -12,7 +12,9 @@ struct ChatBubbleView: View {
     var shouldAnimate: Bool = false
 
     var body: some View {
-        if message.role == .user {
+        if !message.isVisible {
+            EmptyView()
+        } else if message.role == .user {
             UserMessageBubble(content: message.content)
         } else {
             AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight, shouldAnimate: shouldAnimate)

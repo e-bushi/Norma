@@ -36,9 +36,9 @@ class OnboardingViewModel: ObservableObject {
     
     // Collected Data
     @Published var collectedData = UserOnboardingData()
-    @Published var howDidYouHear: String?
 
     // Extended Onboarding Responses (Digital Nomad focused)
+    @Published var nomadType: String = ""
     @Published var runwayStatus: String = ""
     @Published var nomadChallenges: String = ""
     @Published var moneyStoppedYou: String = ""
@@ -130,6 +130,19 @@ class OnboardingViewModel: ObservableObject {
             // This stores credentials in shared keychain for Share Extension
             await sessionViewModel.handleAuthenticationSuccess()
 
+            // Unlock encryption using the password
+            // This derives the master key and stores it in keychain for the session
+            do {
+                print("🔐 Unlocking encryption for returning user...")
+                try await sessionViewModel.unlockEncryptionForReturningUser(password: password)
+                print("✅ Encryption unlocked successfully")
+            } catch {
+                // Don't block login if encryption unlock fails
+                // User may not have encryption set up, or there may be an issue
+                print("⚠️ Failed to unlock encryption: \(error)")
+                // We'll handle this gracefully - user can still use the app
+            }
+
             // Returning users have already completed onboarding
             sessionViewModel.hasCompletedOnboarding = true
             sessionViewModel.hasCompletedInitialSetup = true
@@ -211,7 +224,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func proceedToWelcome() {
-        currentStep = .runwayCheck
+        currentStep = .nomadWelcome
     }
 
     /// Finalize onboarding by saving profile data from preview mode and completing
@@ -269,11 +282,35 @@ class OnboardingViewModel: ObservableObject {
             await sessionViewModel.handleAuthenticationSuccess()
             print("🍎 Step 4 complete")
 
-            // Step 5: If from preview mode, save profile and transfer data
+            // Step 5: Set up or unlock encryption using Apple's stable userIdentifier
+            let isNewUser = !sessionViewModel.hasCompletedOnboarding
+            if isNewUser {
+                do {
+                    print("🔐 Setting up encryption for new Apple user...")
+                    let recoveryPhrase = try await sessionViewModel.setupEncryptionForNewUser(password: appleResult.userIdentifier)
+                    if let userId = sessionViewModel.currentUser?.userId {
+                        let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
+                        userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
+                    }
+                    print("✅ Encryption setup complete for Apple user")
+                } catch {
+                    print("⚠️ Failed to setup encryption for Apple user: \(error)")
+                }
+            } else {
+                do {
+                    print("🔐 Unlocking encryption for returning Apple user...")
+                    try await sessionViewModel.unlockEncryptionForReturningUser(password: appleResult.userIdentifier)
+                    print("✅ Encryption unlocked for Apple user")
+                } catch {
+                    print("⚠️ Failed to unlock encryption for Apple user: \(error)")
+                }
+            }
+
+            // Step 6: If from preview mode, save profile and transfer data
             if fromPreviewMode {
-                print("🍎 Step 5: Saving profile from preview mode...")
+                print("🍎 Step 6: Saving profile from preview mode...")
                 await saveProfileDataFromPreviewMode()
-                print("🍎 Step 5 complete")
+                print("🍎 Step 6 complete")
             }
 
             isLoading = false
@@ -286,9 +323,9 @@ class OnboardingViewModel: ObservableObject {
                 print("🍎 Returning user - navigating to main app")
                 currentStep = .complete
             } else {
-                // New users: navigate to notifications step (skip verification since Apple already verified)
-                print("🍎 New user - navigating to notifications")
-                currentStep = .notifications
+                // New users: go through welcome + question screens (skip verification since Apple already verified)
+                print("🍎 New user - navigating to nomad welcome")
+                currentStep = .nomadWelcome
             }
 
             return true
@@ -366,11 +403,35 @@ class OnboardingViewModel: ObservableObject {
             await sessionViewModel.handleAuthenticationSuccess()
             print("🔵 Step 4 complete")
 
-            // Step 5: If from preview mode, save profile and transfer data
+            // Step 5: Set up or unlock encryption using Google's stable userIdentifier
+            let isNewUser = !sessionViewModel.hasCompletedOnboarding
+            if isNewUser {
+                do {
+                    print("🔐 Setting up encryption for new Google user...")
+                    let recoveryPhrase = try await sessionViewModel.setupEncryptionForNewUser(password: googleResult.userIdentifier)
+                    if let userId = sessionViewModel.currentUser?.userId {
+                        let userKeyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
+                        userKeyManager.storeRecoveryPhrase(recoveryPhrase, for: userId)
+                    }
+                    print("✅ Encryption setup complete for Google user")
+                } catch {
+                    print("⚠️ Failed to setup encryption for Google user: \(error)")
+                }
+            } else {
+                do {
+                    print("🔐 Unlocking encryption for returning Google user...")
+                    try await sessionViewModel.unlockEncryptionForReturningUser(password: googleResult.userIdentifier)
+                    print("✅ Encryption unlocked for Google user")
+                } catch {
+                    print("⚠️ Failed to unlock encryption for Google user: \(error)")
+                }
+            }
+
+            // Step 6: If from preview mode, save profile and transfer data
             if fromPreviewMode {
-                print("🔵 Step 5: Saving profile from preview mode...")
+                print("🔵 Step 6: Saving profile from preview mode...")
                 await saveProfileDataFromPreviewMode()
-                print("🔵 Step 5 complete")
+                print("🔵 Step 6 complete")
             }
 
             isLoading = false
@@ -383,9 +444,9 @@ class OnboardingViewModel: ObservableObject {
                 print("🔵 Returning user - navigating to main app")
                 currentStep = .complete
             } else {
-                // New users: navigate to notifications step (skip verification since Google already verified)
-                print("🔵 New user - navigating to notifications")
-                currentStep = .notifications
+                // New users: go through welcome + question screens (skip verification since Google already verified)
+                print("🔵 New user - navigating to nomad welcome")
+                currentStep = .nomadWelcome
             }
 
             return true
@@ -650,45 +711,29 @@ class OnboardingViewModel: ObservableObject {
             )
             
             // Check if profile already exists
-            if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
+            if var existingProfile = sessionViewModel.currentUser {
                 // Update existing profile
-                var updatedProfile = existingProfile
-                updatedProfile.monthlyIncome = collectedData.monthlyIncome
-                updatedProfile.freedomFund = collectedData.freedomFund
-                updatedProfile.painPoint = collectedData.painPoint
-                updatedProfile.settings = settings
-                // Update howDidYouHear if we have a value and it's not already set
-                if let howDidYouHear = self.howDidYouHear, updatedProfile.howDidYouHear == nil {
-                    updatedProfile.howDidYouHear = howDidYouHear
-                }
-                let savedProfile = try await supabaseService.updateProfile(updatedProfile)
-
-                // Update SessionViewModel with the new profile data
-                await MainActor.run {
-                    sessionViewModel.currentUser = savedProfile
-                }
+                existingProfile.monthlyIncome = collectedData.monthlyIncome
+                existingProfile.freedomFund = collectedData.freedomFund
+                existingProfile.painPoint = collectedData.painPoint
+                existingProfile.settings = settings
+                await sessionViewModel.updateUserProfile(existingProfile)
             } else {
                 // Create new profile
                 let newProfile = Profile(
-                    userId: supabaseUser.id.uuidString,
+                    userId: supabaseUser.id.uuidString.lowercased(),
                     email: supabaseUser.email ?? "",
                     name: collectedData.name,
-                    howDidYouHear: self.howDidYouHear,
                     monthlyIncome: collectedData.monthlyIncome,
                     freedomFund: collectedData.freedomFund,
                     painPoint: collectedData.painPoint,
                     settings: settings
                 )
-                let savedProfile = try await supabaseService.createProfile(newProfile)
-
-                // Update SessionViewModel with the new profile data
-                await MainActor.run {
-                    sessionViewModel.currentUser = savedProfile
-                }
+                try await sessionViewModel.createUserProfile(newProfile)
             }
 
             // Transfer preview mode data (bills, budgets, expenses) to the real account
-            await transferPreviewModeData(userId: supabaseUser.id.uuidString)
+            await transferPreviewModeData(userId: supabaseUser.id.uuidString.lowercased())
 
         } catch {
             print("Failed to save profile data: \(error)")
@@ -701,7 +746,7 @@ class OnboardingViewModel: ObservableObject {
         do {
             // Get current authenticated user
             guard let supabaseUser = supabaseService.currentUser else {
-                print("No authenticated user found for profile save")
+                print("No authenticated user found — aborting profile save")
                 return
             }
 
@@ -738,31 +783,28 @@ class OnboardingViewModel: ObservableObject {
 
             // Create onboarding insights from question responses
             let insights = OnboardingInsights(
+                nomadType: nomadType.isEmpty ? nil : nomadType,
                 runwayStatus: runwayStatus.isEmpty ? nil : runwayStatus,
                 nomadChallenges: nomadChallenges.isEmpty ? nil : nomadChallenges,
                 moneyStoppedYou: moneyStoppedYou.isEmpty ? nil : moneyStoppedYou,
                 winningLooksLike: winningLooksLike.isEmpty ? nil : winningLooksLike
             )
 
-            // Check if profile already exists
-            if let existingProfile = try await supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
-                // Update existing profile
-                var updatedProfile = existingProfile
-                updatedProfile.monthlyIncome = monthlyIncome
-                updatedProfile.freedomFund = freedomFund
-                updatedProfile.painPoint = painPoint
-                updatedProfile.settings = settings
-                updatedProfile.onboardingInsights = insights
-                let savedProfile = try await supabaseService.updateProfile(updatedProfile)
+            // Check if profile exists in the database (must have an id)
+            let hasDbProfile = sessionViewModel.currentUser?.id != nil
 
-                // Update SessionViewModel with the new profile data
-                await MainActor.run {
-                    sessionViewModel.currentUser = savedProfile
-                }
+            if hasDbProfile, var existingProfile = sessionViewModel.currentUser {
+                // Update existing profile in database
+                existingProfile.monthlyIncome = monthlyIncome
+                existingProfile.freedomFund = freedomFund
+                existingProfile.painPoint = painPoint
+                existingProfile.settings = settings
+                existingProfile.onboardingInsights = insights
+                await sessionViewModel.updateUserProfile(existingProfile)
             } else {
                 // Create new profile
                 let newProfile = Profile(
-                    userId: supabaseUser.id.uuidString,
+                    userId: supabaseUser.id.uuidString.lowercased(),
                     email: supabaseUser.email ?? "",
                     name: name,
                     monthlyIncome: monthlyIncome,
@@ -771,22 +813,14 @@ class OnboardingViewModel: ObservableObject {
                     settings: settings,
                     onboardingInsights: insights
                 )
-                let savedProfile = try await supabaseService.createProfile(newProfile)
-
-                // Update SessionViewModel with the new profile data
-                await MainActor.run {
-                    sessionViewModel.currentUser = savedProfile
-                }
+                try await sessionViewModel.createUserProfile(newProfile)
             }
 
             // Transfer preview mode data (bills, budgets, expenses) to the real account
-            await transferPreviewModeData(userId: supabaseUser.id.uuidString)
-
-            print("✅ Profile data saved from preview mode")
-            print("📊 Onboarding insights: runway=\(runwayStatus), challenges=\(nomadChallenges), stopped=\(moneyStoppedYou), winning=\(winningLooksLike)")
+            await transferPreviewModeData(userId: supabaseUser.id.uuidString.lowercased())
 
         } catch {
-            print("❌ Failed to save profile data from preview mode: \(error)")
+            print("Failed to save profile from preview mode: \(error)")
         }
     }
 
@@ -803,20 +837,20 @@ class OnboardingViewModel: ObservableObject {
         let billsToTransfer = previewModeViewModel.getUserBillsForTransfer(withUserId: userId)
         let expensesToTransfer = previewModeViewModel.getUserExpensesForTransfer(withUserId: userId)
 
-        // Save bills
+        // Save bills (encrypted via Edge Function)
         for bill in billsToTransfer {
             do {
-                _ = try await supabaseService.createBill(bill)
+                try await sessionViewModel.addBill(bill)
                 print("✅ Transferred bill: \(bill.name)")
             } catch {
                 print("❌ Failed to transfer bill \(bill.name): \(error)")
             }
         }
 
-        // Save expenses
+        // Save expenses (encrypted via Edge Function)
         for expense in expensesToTransfer {
             do {
-                _ = try await supabaseService.createExpense(expense)
+                try await sessionViewModel.addExpense(expense)
                 print("✅ Transferred expense: \(expense.name)")
             } catch {
                 print("❌ Failed to transfer expense \(expense.name): \(error)")
@@ -834,6 +868,10 @@ enum OnboardingStep: CaseIterable {
     case previewMode
     case authentication
     case verification
+
+    // Welcome Section (2 screens) - Post-auth context setting
+    case nomadWelcome         // Stats: 40M+ nomads, 65+ visas, 3-5 currencies
+    case nomadType            // What kind of nomad are you?
 
     // Personal Section (4 screens) - Digital Nomad focused
     case runwayCheck          // "Be honest — how's your runway?"

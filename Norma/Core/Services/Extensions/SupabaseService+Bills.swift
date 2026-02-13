@@ -147,4 +147,38 @@ extension SupabaseService {
             .eq("id", value: billId)
             .execute()
     }
+
+    // MARK: - Verification Support
+
+    /// Update only the unencrypted verification fields (bypasses Edge Function)
+    func updateBillVerificationFields(billId: String, status: BillStatus, verificationDate: String, dueDate: String, nextDueDate: String?) async throws {
+        var fields: [String: AnyJSON] = [
+            "status": AnyJSON.string(status.rawValue),
+            "verification_date": AnyJSON.string(verificationDate),
+            "due_date": AnyJSON.string(dueDate)
+        ]
+        if let nextDueDate = nextDueDate {
+            fields["next_due_date"] = AnyJSON.string(nextDueDate)
+        }
+
+        _ = try await from("bills")
+            .update(fields)
+            .eq("id", value: billId)
+            .execute()
+    }
+
+    // MARK: - Semantic Search Support
+
+    /// Fetch specific bills by their IDs (for semantic search results)
+    func fetchBillsByIds(_ ids: [String]) async throws -> [EncryptableBill] {
+        guard !ids.isEmpty else { return [] }
+
+        let response: [EncryptableBill] = try await from("bills")
+            .select()
+            .in("id", values: ids)
+            .execute()
+            .value
+
+        return response
+    }
 }

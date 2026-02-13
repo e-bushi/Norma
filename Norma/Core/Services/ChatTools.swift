@@ -29,7 +29,9 @@ struct ChatToolsProvider {
             getShowDaysTool(),
             getShowArcCountTool(),
             getShowFlowStateTool(),
-            getScheduleReminderTool()
+            getScheduleReminderTool(),
+            getSearchFinancialRecordsTool(),
+            getConvertCurrencyTool()
         ]
     }
 
@@ -390,6 +392,64 @@ struct ChatToolsProvider {
                     )
                 ],
                 required: ["title", "message", "remind_at"]
+            )
+        )
+    }
+
+    static func getSearchFinancialRecordsTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "search_financial_records",
+            description: "Search the user's financial records (bills, expenses) using semantic search with optional date filtering. Use this tool when you need to find specific records based on the user's question - especially for questions about past expenses, specific merchants, categories, or time periods. The search finds records by meaning, not just exact text matches. Returns matching records with full details including dates and amounts. IMPORTANT: When the user asks about a specific date or time period (e.g., 'January expenses', 'last week', 'on the 15th'), always include start_date and/or end_date parameters.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "query": AnthropicToolProperty(
+                        type: "string",
+                        description: "The search query - describe what you're looking for (e.g., 'grocery food expenses', 'Netflix subscription', 'restaurant dining')"
+                    ),
+                    "record_type": AnthropicToolProperty(
+                        type: "string",
+                        description: "Type of records to search: 'bills', 'expenses', or 'all'. Defaults to 'all' if not specified."
+                    ),
+                    "limit": AnthropicToolProperty(
+                        type: "number",
+                        description: "Maximum number of results to return (default: 50)"
+                    ),
+                    "start_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "Filter results to records on or after this date. Use ISO format YYYY-MM-DD (e.g., '2026-01-01' for January 1st). Use this for queries like 'January expenses' or 'since last week'."
+                    ),
+                    "end_date": AnthropicToolProperty(
+                        type: "string",
+                        description: "Filter results to records on or before this date. Use ISO format YYYY-MM-DD (e.g., '2026-01-31' for January 31st). Use this for queries like 'January expenses' or 'before February'."
+                    )
+                ],
+                required: ["query"]
+            )
+        )
+    }
+
+    static func getConvertCurrencyTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "convert_currency",
+            description: "Convert an amount from one currency to another using real-time exchange rates. Use this when the user asks about currency conversion, exchange rates, or wants to know how much something costs in a different currency. Returns the converted amount and current exchange rate.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [
+                    "amount": AnthropicToolProperty(
+                        type: "number",
+                        description: "The amount to convert"
+                    ),
+                    "from_currency": AnthropicToolProperty(
+                        type: "string",
+                        description: "The source currency code (e.g., 'USD', 'EUR', 'GBP', 'JPY')"
+                    ),
+                    "to_currency": AnthropicToolProperty(
+                        type: "string",
+                        description: "The target currency code (e.g., 'USD', 'EUR', 'GBP', 'JPY')"
+                    )
+                ],
+                required: ["amount", "from_currency", "to_currency"]
             )
         )
     }

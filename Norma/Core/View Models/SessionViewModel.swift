@@ -61,7 +61,7 @@ class SessionViewModel: ObservableObject {
 
                 // Update keychain whenever we get a new token
                 if let session = authChange.session {
-                    let userId = session.user.id.uuidString
+                    let userId = session.user.id.uuidString.lowercased()
                     let tokenStored = SharedKeychainHelper.storeAuthToken(session.accessToken, for: userId)
                     print("🔄 Auth state change (\(authChange.event)) - keychain token updated: \(tokenStored)")
                 }
@@ -346,9 +346,11 @@ class SessionViewModel: ObservableObject {
 
         // Check if user has completed initial financial setup
         // Only require monthlyIncome to be set - painPoint is optional for legacy users
-        let hasIncome = user.settings.monthlyIncome > 0
+        // Check both settings.monthlyIncome AND top-level monthlyIncome as fallback
+        // (settings is an encrypted JSON blob that may fail to decrypt independently)
+        let hasIncome = user.settings.monthlyIncome > 0 || (user.monthlyIncome ?? 0) > 0
 
-        print("📊 Setup check - income: \(user.settings.monthlyIncome), painPoint: '\(user.settings.painPoint)', hasIncome: \(hasIncome)")
+        print("📊 Setup check - settings.income: \(user.settings.monthlyIncome), profile.income: \(user.monthlyIncome ?? 0), painPoint: '\(user.settings.painPoint)', hasIncome: \(hasIncome)")
 
         if hasIncome {
             hasCompletedInitialSetup = true
@@ -391,11 +393,29 @@ class SessionViewModel: ObservableObject {
     }
     
     // MARK: - Encryption Support Methods
-    
+
     func setupEncryptionForNewUser(password: String) async throws -> String {
         return try await dataManager.setupEncryption(password: password)
     }
-    
+
+    /// Unlock encryption for a returning user by deriving the master key from their password
+    func unlockEncryptionForReturningUser(password: String) async throws {
+        try await dataManager.unlockEncryption(password: password)
+    }
+
+    func createUserProfile(_ profile: Profile) async throws {
+        try await dataManager.createUserProfile(profile)
+        currentUser = dataManager.currentProfile
+    }
+
+    func addBill(_ bill: Bill) async throws {
+        try await dataManager.addBillWithEncryption(bill)
+    }
+
+    func addExpense(_ expense: Expense) async throws {
+        try await dataManager.addExpenseWithEncryption(expense)
+    }
+
     var supabaseService: SupabaseService {
         return dataManager.supabaseService
     }
@@ -484,7 +504,7 @@ class SessionViewModel: ObservableObject {
         )
         
         // Check if profile already exists
-        if let existingProfile = try await dataManager.supabaseService.fetchProfile(userId: supabaseUser.id.uuidString) {
+        if let existingProfile = try await dataManager.supabaseService.fetchProfile(userId: supabaseUser.id.uuidString.lowercased()) {
             // Update existing profile
             var updatedProfile = existingProfile
             updatedProfile.settings = settings
@@ -493,7 +513,7 @@ class SessionViewModel: ObservableObject {
         } else {
             // Create new profile
             let newProfile = Profile(
-                userId: supabaseUser.id.uuidString,
+                userId: supabaseUser.id.uuidString.lowercased(),
                 email: supabaseUser.email ?? "",
                 name: data.name,
                 settings: settings

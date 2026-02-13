@@ -114,7 +114,7 @@ class BillViewModel: ObservableObject {
                 updatedBill.verificationDate = dateFormatter.string(from: today)
                 
                 do {
-                    try await dataManager.updateBillWithEncryption(updatedBill)
+                    try await dataManager.updateBillVerificationFields(updatedBill)
                 } catch {
                     print("Failed to update overdue status for bill \(bill.name): \(error)")
                 }

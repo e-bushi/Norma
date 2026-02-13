@@ -16,7 +16,7 @@ class KeychainHelper {
     
     static func storeMasterKey(_ key: SymmetricKey, for userId: String) -> Bool {
         let keyData = key.withUnsafeBytes { Data($0) }
-        let account = "\(masterKeyAccount)_\(userId)"
+        let account = "\(masterKeyAccount)_\(userId.lowercased())"
         
         // Delete any existing key first
         deleteMasterKey(for: userId)
@@ -34,7 +34,7 @@ class KeychainHelper {
     }
     
     static func getMasterKey(for userId: String) -> SymmetricKey? {
-        let account = "\(masterKeyAccount)_\(userId)"
+        let account = "\(masterKeyAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -55,7 +55,7 @@ class KeychainHelper {
     }
     
     static func deleteMasterKey(for userId: String) -> Bool {
-        let account = "\(masterKeyAccount)_\(userId)"
+        let account = "\(masterKeyAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -69,7 +69,7 @@ class KeychainHelper {
     // MARK: - Recovery Phrase Storage (Optional - for user convenience)
     
     static func storeRecoveryPhraseHint(_ hint: String, for userId: String) -> Bool {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         let hintData = hint.data(using: .utf8)!
         
         // Delete any existing hint first
@@ -88,7 +88,7 @@ class KeychainHelper {
     }
     
     static func getRecoveryPhraseHint(for userId: String) -> String? {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -110,7 +110,7 @@ class KeychainHelper {
     }
     
     static func deleteRecoveryPhraseHint(for userId: String) -> Bool {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -124,7 +124,7 @@ class KeychainHelper {
     // MARK: - Recovery Phrase Storage
     
     static func storeRecoveryPhrase(_ phrase: String, for userId: String) -> Bool {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         let phraseData = phrase.data(using: .utf8)!
         
         // Delete any existing phrase first
@@ -143,7 +143,7 @@ class KeychainHelper {
     }
     
     static func getRecoveryPhrase(for userId: String) -> String? {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -165,7 +165,7 @@ class KeychainHelper {
     }
     
     static func deleteRecoveryPhrase(for userId: String) -> Bool {
-        let account = "\(recoveryPhraseAccount)_\(userId)"
+        let account = "\(recoveryPhraseAccount)_\(userId.lowercased())"
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
