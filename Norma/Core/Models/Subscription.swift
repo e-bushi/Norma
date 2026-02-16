@@ -9,59 +9,33 @@ import Foundation
 import RevenueCat
 
 enum SubscriptionTier: String, CaseIterable {
-    case base = "norma_base"
-    case pro = "norma_pro"
-    
+    case premium = "norma_premium"
+
     var displayName: String {
-        switch self {
-        case .base:
-            return "Basic"
-        case .pro:
-            return "Pro"
-        }
+        "Premium"
     }
-    
+
     var monthlyProductId: String {
-        switch self {
-        case .base:
-            return "basic_monthly_1"  // Matches App Store Connect
-        case .pro:
-            return "pro_monthly_1"  // Keep existing Pro ID
-        }
+        "norma_monthly"
     }
-    
+
     var annualProductId: String {
-        switch self {
-        case .base:
-            return "basic_yearly_2"  // Matches App Store Connect
-        case .pro:
-            return "pro_yearly_1"  // Keep existing Pro ID
-        }
+        "norma_annual"
     }
-    
+
     var features: [String] {
-        switch self {
-        case .base:
-            return [
-                "Unlimited AI-powered bill and expense logging",
-                "Bill period verification system",
-                "Expense-to-bill linking",
-                "Basic budgeting features",
-                "Push notifications",
-                "Data encryption",
-                "Multi-currency support"
-            ]
-        case .pro:
-            return [
-                "Everything in Base Tier",
-                "Financial Mind: AI-powered personal finance analyst",
-                "Deep financial data analysis",
-                "Personalized spending insights and recommendations",
-                "Cash flow predictions",
-                "Advanced budgeting optimization",
-                "Priority customer support"
-            ]
-        }
+        [
+            "Unlimited AI-powered bill and expense logging",
+            "Bill period verification system",
+            "Expense-to-bill linking",
+            "Budgeting features",
+            "Push notifications",
+            "Data encryption",
+            "Multi-currency support",
+            "Spending challenges",
+            "AI-powered personal finance analyst",
+            "Personalized spending insights"
+        ]
     }
 }
 
@@ -72,7 +46,7 @@ struct SubscriptionStatus {
     let willRenew: Bool
     let isInTrialPeriod: Bool
     let isInIntroOfferPeriod: Bool
-    
+
     static let inactive = SubscriptionStatus(
         isActive: false,
         tier: nil,
@@ -84,14 +58,13 @@ struct SubscriptionStatus {
 }
 
 struct SubscriptionProduct {
-    let tier: SubscriptionTier
     let package: Package
     let isMonthly: Bool
-    
+
     var priceString: String {
         package.storeProduct.localizedPriceString
     }
-    
+
     var monthlyEquivalentPrice: String? {
         guard !isMonthly else { return nil }
         let monthlyPrice = (package.storeProduct.price as NSDecimalNumber).doubleValue / 12
@@ -100,9 +73,13 @@ struct SubscriptionProduct {
         formatter.locale = package.storeProduct.priceFormatter?.locale ?? Locale.current
         return formatter.string(from: NSNumber(value: monthlyPrice))
     }
-    
+
     var savingsPercentage: String? {
         guard !isMonthly else { return nil }
-        return "Save 17%"
+        let annualPrice = (package.storeProduct.price as NSDecimalNumber).doubleValue
+        let monthlyEquiv = annualPrice / 12
+        let fullMonthlyPrice = 9.99 // fallback comparison
+        let savings = ((fullMonthlyPrice - monthlyEquiv) / fullMonthlyPrice) * 100
+        return savings > 0 ? "Save \(Int(savings.rounded()))%" : nil
     }
 }

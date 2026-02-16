@@ -35,22 +35,26 @@ class KeychainHelper {
     
     static func getMasterKey(for userId: String) -> SymmetricKey? {
         let account = "\(masterKeyAccount)_\(userId.lowercased())"
-        
+        print("🔑 [DECRYPT-DEBUG] KeychainHelper.getMasterKey: querying account='\(account)'")
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: account,
             kSecReturnData as String: kCFBooleanTrue!,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        
+
         var dataTypeRef: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-        
+        print("🔑 [DECRYPT-DEBUG] KeychainHelper.getMasterKey: SecItemCopyMatching status=\(status) (0=success, -25300=notFound)")
+
         guard status == errSecSuccess,
               let keyData = dataTypeRef as? Data else {
+            print("🔑 [DECRYPT-DEBUG] KeychainHelper.getMasterKey: ❌ No key found for account='\(account)'")
             return nil
         }
-        
+
+        print("🔑 [DECRYPT-DEBUG] KeychainHelper.getMasterKey: ✅ Key found, size=\(keyData.count) bytes")
         return SymmetricKey(data: keyData)
     }
     
