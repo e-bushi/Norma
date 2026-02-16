@@ -217,7 +217,10 @@ class UserKeyManager {
     // MARK: - Get Current Master Key
     
     func getCurrentMasterKey(for userId: String) -> SymmetricKey? {
-        return KeychainHelper.getMasterKey(for: userId)
+        print("🔑 [DECRYPT-DEBUG] UserKeyManager.getCurrentMasterKey: looking up key for userId='\(userId)'")
+        let key = KeychainHelper.getMasterKey(for: userId)
+        print("🔑 [DECRYPT-DEBUG] UserKeyManager.getCurrentMasterKey: key \(key != nil ? "FOUND ✅" : "NOT FOUND ❌") for userId='\(userId)'")
+        return key
     }
 }
 

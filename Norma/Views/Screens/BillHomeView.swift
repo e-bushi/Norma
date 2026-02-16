@@ -118,37 +118,6 @@ struct BillHomeView: View {
         await incomeViewModel.refreshIncomes()
     }
     
-    func getDaysInCurrentMonth() -> Int {
-        let calendar = Calendar.current
-        let date = Date()
-        let range = calendar.range(of: .day, in: .month, for: date)!
-        return range.count
-    }
-    
-    func generateChartData() -> [ExpenseChartDataPoint] {
-        // Simulate days with expense activity
-        let activeDays = [2, 5, 7, 10, 12, 15, 17, 20, 22, 25, 27]
-        let billAmount: Double = 1545.49
-
-        var runningTotal = billAmount
-
-        return activeDays.map { day in
-            // Daily expense amount varies
-            let dailyExpense = Double.random(in: 40...180)
-
-            let lowAmount = runningTotal
-            let highAmount = runningTotal + dailyExpense
-
-            runningTotal = highAmount
-
-            return ExpenseChartDataPoint(
-                day: day,
-                highAmount: highAmount,
-                lowAmount: lowAmount,
-                dailyExpense: dailyExpense
-            )
-        }
-    }
 }
 
 #Preview {

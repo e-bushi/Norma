@@ -78,22 +78,27 @@ extension DataManager {
     /// Fetch user profile with decryption support
     /// Automatically re-encrypts plaintext profile data when a master key is available
     func fetchUserProfile(userId: String) async throws -> Profile? {
+        print("🔓 [DECRYPT-DEBUG] fetchUserProfile: START for userId='\(userId)'")
+
         guard let encryptableProfile = try await supabaseService.fetchEncryptableProfile(userId: userId) else {
-            print("⚠️ fetchUserProfile: No encryptable profile found for userId: \(userId)")
+            print("🔓 [DECRYPT-DEBUG] fetchUserProfile: ❌ No encryptable profile found in DB for userId='\(userId)'")
             return nil
         }
 
+        print("🔓 [DECRYPT-DEBUG] fetchUserProfile: Raw EncryptableProfile — name.count=\(encryptableProfile.name.count), monthlyIncome.count=\(encryptableProfile.monthlyIncome?.count ?? 0), freedomFund.count=\(encryptableProfile.freedomFund?.count ?? 0), settings.count=\(encryptableProfile.settings?.count ?? 0), painPoint.count=\(encryptableProfile.painPoint?.count ?? 0)")
+
         // Try to decrypt with master key if available
         if let masterKey = UserKeyManager(supabaseService: supabaseService).getCurrentMasterKey(for: userId) {
+            print("🔓 [DECRYPT-DEBUG] fetchUserProfile: Master key FOUND ✅ — attempting decryption...")
             if let decryptedProfile = encryptableProfile.toProfile(using: masterKey) {
-                print("✅ fetchUserProfile: Decrypted profile - name: \(decryptedProfile.name), settings.income: \(decryptedProfile.settings.monthlyIncome), profile.income: \(decryptedProfile.monthlyIncome ?? 0)")
+                print("🔓 [DECRYPT-DEBUG] fetchUserProfile: ✅ DECRYPTED — name='\(decryptedProfile.name)', settings.income=\(decryptedProfile.settings.monthlyIncome), profile.income=\(decryptedProfile.monthlyIncome ?? 0), freedomFund=\(decryptedProfile.freedomFund ?? 0)")
                 return decryptedProfile
             }
 
             // Decryption returned nil — data is likely plaintext (not yet encrypted)
             // Parse as plaintext and re-encrypt via Edge Function
             let plaintextProfile = encryptableProfile.toProfile()
-            print("🔐 Profile data appears unencrypted — re-encrypting...")
+            print("🔓 [DECRYPT-DEBUG] fetchUserProfile: Decryption returned nil — PLAINTEXT FALLBACK — name='\(plaintextProfile.name)', settings.income=\(plaintextProfile.settings.monthlyIncome), re-encrypting...")
             Task {
                 do {
                     try await supabaseService.edgeFunctionService.updateProfile(plaintextProfile, encryptionKey: masterKey)
@@ -106,8 +111,9 @@ extension DataManager {
         }
 
         // No master key available — cannot decrypt
-        print("⚠️ fetchUserProfile: No master key found in keychain for userId: \(userId)")
-        return encryptableProfile.toProfile()
+        let fallbackProfile = encryptableProfile.toProfile()
+        print("🔓 [DECRYPT-DEBUG] fetchUserProfile: ❌ NO MASTER KEY — returning plaintext fallback — name='\(fallbackProfile.name)', settings.income=\(fallbackProfile.settings.monthlyIncome), profile.income=\(fallbackProfile.monthlyIncome ?? 0)")
+        return fallbackProfile
     }
 
     // MARK: - Migration Support

@@ -220,7 +220,7 @@ struct SettingsView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundColor(Color("NormaPastelTeal"))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Pro Subscription")
+                    Text("Premium")
                         .font(.normaHeadline(17))
                     if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
                         if subscriptionManager.subscriptionStatus.willRenew {
@@ -265,7 +265,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Limited Access")
                         .font(.normaHeadline(17))
-                    Text("Unlock all features with Pro")
+                    Text("Unlock all Norma features")
                         .font(.normaHeadline(13))
                         .foregroundColor(.secondary)
                 }

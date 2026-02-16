@@ -7,107 +7,78 @@
 
 import SwiftUI
 
-struct PaywallBillingCard: View {
-    let icon: String
-    let iconColor: Color
+struct PaywallPlanCard: View {
     let title: String
     let price: String
-    let subtitle: String
     var badge: String? = nil
     let isSelected: Bool
-    let selectedTier: SubscriptionTier
     let action: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-    
+
+    private let accentColor = Color("NormaPastelPurple")
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.1))
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: icon)
-                        .font(.system(size: 18))
-                        .foregroundColor(iconColor)
-                }
-
-                // Content
+            HStack(spacing: 12) {
+                // Left: title, price, badge
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.custom(FontFamily.Rubik.medium, size: 17))
-                            .foregroundColor(.primary)
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                            .foregroundColor(.black)
 
                         if let badge = badge {
                             Text(badge)
                                 .font(.custom(FontFamily.Rubik.semiBold, size: 10))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, 3)
                                 .background(
-                                    Capsule()
-                                        .fill(Color("NormaPastelPurple"))
+                                    Capsule().fill(accentColor)
                                 )
                         }
                     }
 
-                    HStack(spacing: 4) {
-                        Text(price)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.primary)
+                    Text(price)
+                        .font(.custom(FontFamily.Rubik.regular, size: 14))
+                        .foregroundColor(.black.opacity(0.6))
+                }
 
-                        Text("•")
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
-                            .foregroundColor(.secondary)
+                Spacer()
 
-                        Text(subtitle)
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
-                            .foregroundColor(.secondary)
+                // Right: radio indicator
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? accentColor : Color.black.opacity(0.3), lineWidth: 2)
+                        .frame(width: 22, height: 22)
+
+                    if isSelected {
+                        Circle()
+                            .fill(accentColor)
+                            .frame(width: 12, height: 12)
                     }
                 }
-                
-                Spacer()
-                
-                // Selection indicator
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? selectedTier.color : .secondary)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: colorScheme == .dark ? [
-                                isSelected ? Color(red: 0.180, green: 0.145, blue: 0.118) : Color(red: 0.160, green: 0.128, blue: 0.102),
-                                isSelected ? Color(red: 0.200, green: 0.165, blue: 0.138) : Color(red: 0.180, green: 0.145, blue: 0.118)
-                            ] : [
-                                Color(UIColor.systemBackground),
-                                isSelected ? selectedTier.color.opacity(0.05) : Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        isSelected ? selectedTier.color.opacity(0.3) : Color.gray.opacity(0.2),
-                                        isSelected ? selectedTier.color.opacity(0.1) : Color.gray.opacity(0.05)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: isSelected ? 2 : 1
-                            )
-                    )
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color("NormaPastelPurple").opacity(0.15))
+                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 1)
+            )
+            
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(PlanCardButtonStyle())
+    }
+}
+
+struct PlanCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
