@@ -233,6 +233,13 @@ class OnboardingViewModel: ObservableObject {
         completeOnboarding()
     }
 
+    /// Handle preview mode completion for already-authenticated users
+    /// Saves collected data and proceeds to the welcome/question screens
+    func handleAuthenticatedPreviewModeCompletion() async {
+        await saveProfileDataFromPreviewMode()
+        currentStep = .nomadWelcome
+    }
+
     // MARK: - Apple Sign In Methods
 
     /// Sign in with Apple
@@ -322,10 +329,14 @@ class OnboardingViewModel: ObservableObject {
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🍎 Returning user - navigating to main app")
                 currentStep = .complete
-            } else {
-                // New users: go through welcome + question screens (skip verification since Apple already verified)
-                print("🍎 New user - navigating to nomad welcome")
+            } else if fromPreviewMode {
+                // New user coming from preview mode - data already collected, proceed to welcome screens
+                print("🍎 New user from preview mode - navigating to nomad welcome")
                 currentStep = .nomadWelcome
+            } else {
+                // New user who hasn't been through preview mode - send them through "Talk to Norma" first
+                print("🍎 New user - navigating to preview mode to collect info")
+                currentStep = .previewMode
             }
 
             return true
@@ -443,10 +454,14 @@ class OnboardingViewModel: ObservableObject {
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🔵 Returning user - navigating to main app")
                 currentStep = .complete
-            } else {
-                // New users: go through welcome + question screens (skip verification since Google already verified)
-                print("🔵 New user - navigating to nomad welcome")
+            } else if fromPreviewMode {
+                // New user coming from preview mode - data already collected, proceed to welcome screens
+                print("🔵 New user from preview mode - navigating to nomad welcome")
                 currentStep = .nomadWelcome
+            } else {
+                // New user who hasn't been through preview mode - send them through "Talk to Norma" first
+                print("🔵 New user - navigating to preview mode to collect info")
+                currentStep = .previewMode
             }
 
             return true

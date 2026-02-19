@@ -24,7 +24,6 @@ struct NomadWelcomeView: View {
     @State private var animateSubtitle = false
     @State private var currentStatIndex: Int = -1
     @State private var statTextOpacity: Double = 0
-    @State private var showContainer = false
     @State private var animateFooter = false
     @State private var animateButton = false
     @State private var hapticEngine: CHHapticEngine?
@@ -38,7 +37,7 @@ struct NomadWelcomeView: View {
     private let stats: [String] = [
         "40M+ digital nomads worldwide and growing",
         "65+ countries now offer remote work visas",
-        "The averagRe nomad juggles 3\u{2013}5 currencies at once",
+        "The average nomad juggles 3\u{2013}5 currencies at once",
         "14% of employed nomads work remotely without their employer knowing",
         "5% reported higher-than-expected costs in popular destinations",
         "46% earn through the creator economy with irregular income streams",
@@ -98,7 +97,7 @@ struct NomadWelcomeView: View {
 
                             // Subtitle
                             Text("A few things worth knowing while we get ready")
-                                .normaBody()
+                                .font(.normaHeadline(20))
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
@@ -107,13 +106,13 @@ struct NomadWelcomeView: View {
                             Spacer()
                                 .frame(height: 36)
 
-                            // Glass container — stays visible, text cycles inside
+                            // Cycling stats — no container
                             VStack(spacing: 16) {
                                 ZStack {
                                     if currentStatIndex >= 0 && currentStatIndex < stats.count {
                                         WaveTextView(
                                             text: stats[currentStatIndex],
-                                            font: .normaHeadline(20),
+                                            font: .normaHeadline(32),
                                             color: .primary,
                                             isAnimating: true
                                         )
@@ -123,31 +122,8 @@ struct NomadWelcomeView: View {
                                 }
                                 .frame(minHeight: 70)
 
-                                // Dot indicators
-                                HStack(spacing: 8) {
-                                    ForEach(0..<stats.count, id: \.self) { index in
-                                        Circle()
-                                            .fill(index <= currentStatIndex ? accentColor : Color.secondary.opacity(0.3))
-                                            .frame(width: 8, height: 8)
-                                            .animation(.easeInOut(duration: 0.3), value: currentStatIndex)
-                                    }
-                                }
                             }
-                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 24)
-                            .padding(.vertical, 24)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.clear)
-                                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                            )
-                            .padding(.horizontal, 24)
-                            .scaleEffect(showContainer ? 1.0 : 0.95)
-                            .opacity(showContainer ? 1.0 : 0.0)
 
                             Spacer()
                                 .frame(height: 28)
@@ -242,12 +218,7 @@ struct NomadWelcomeView: View {
             animateSubtitle = true
         }
 
-        // 3. Glass container appears
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(0.8)) {
-            showContainer = true
-        }
-
-        // 4. Start cycling stats inside the container
+        // 3. Start cycling stats
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
             showStat(at: 0)
         }
@@ -257,8 +228,8 @@ struct NomadWelcomeView: View {
         guard Self.ambientHapticsActive else { return }
         let wrappedIndex = index % stats.count
 
-        // Show footer + button after first full cycle
-        if index == stats.count && !animateFooter {
+        // Show footer + button after 3rd stat appears
+        if index == 2 && !animateFooter {
             withAnimation(.easeOut(duration: 0.6)) {
                 animateFooter = true
             }

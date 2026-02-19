@@ -266,6 +266,16 @@ struct PreviewModeChatView: View {
         .onAppear {
             showInitialGreeting()
         }
+        .onChange(of: previewModeViewModel.showSaveProgressModal) { _, showModal in
+            // If user is already authenticated (signed in before entering preview mode),
+            // skip the sign-up modal and directly save data + proceed to welcome screens
+            if showModal && sessionViewModel.isAuthenticated {
+                previewModeViewModel.showSaveProgressModal = false
+                Task {
+                    await onboardingViewModel.handleAuthenticatedPreviewModeCompletion()
+                }
+            }
+        }
         .onChange(of: previewModeViewModel.bills) { _, newValue in
             if newValue.count > 0 {
                 // Trigger capsule animation when currency is set
