@@ -61,6 +61,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F60E81132F489939003EB347 /* Exceptions for "Norma" folder in "NormaShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Services/SharedKeychainHelper.swift,
+			);
+			target = F6FD3AC02F4884910018FA82 /* NormaShareExtension */;
+		};
 		F634EF1E2E591F1A00083590 /* Exceptions for "Norma" folder in "Norma" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -82,6 +89,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				F634EF1E2E591F1A00083590 /* Exceptions for "Norma" folder in "Norma" target */,
+				F60E81132F489939003EB347 /* Exceptions for "Norma" folder in "NormaShareExtension" target */,
 			);
 			path = Norma;
 			sourceTree = "<group>";
