@@ -10,17 +10,18 @@ import Supabase
 
 class SupabaseService {
     static let shared = SupabaseService()
-    
+
+    static let supabaseURLString = "https://tafoviioqavefsyxskpo.supabase.co"
+    static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZm92aWlvcWF2ZWZzeXhza3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3Njg5MjAsImV4cCI6MjA2NjM0NDkyMH0.t-fIKOWq4i0XLcOKOJtPYiQDfKRh6xgLWMaS3u_bZ5c"
+
     private let client: SupabaseClient
 
     /// Edge Function service that shares this client's auth session
     lazy var edgeFunctionService = EdgeFunctionService(client: client)
 
     private init() {
-        let supabaseURL = URL(string: "https://tafoviioqavefsyxskpo.supabase.co")!
-        let supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZm92aWlvcWF2ZWZzeXhza3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3Njg5MjAsImV4cCI6MjA2NjM0NDkyMH0.t-fIKOWq4i0XLcOKOJtPYiQDfKRh6xgLWMaS3u_bZ5c"
-
-        self.client = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseKey)
+        let supabaseURL = URL(string: Self.supabaseURLString)!
+        self.client = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: Self.supabaseAnonKey)
     }
     
     // MARK: - Authentication

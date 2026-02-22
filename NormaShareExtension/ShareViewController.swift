@@ -300,10 +300,14 @@ class ShareViewController: UIViewController {
             return
         }
 
-        guard let userId = SharedKeychainHelper.getUserId(),
-              let authToken = SharedKeychainHelper.getAuthToken(for: userId) else {
-            statusLabel.text = "Please log in to Norma first"
+        let userId = SharedKeychainHelper.getUserId()
+        let authToken = userId.flatMap { SharedKeychainHelper.getAuthToken(for: $0) }
+
+        guard let userId, let authToken else {
+            let hasUser = userId != nil
+            statusLabel.text = hasUser ? "Session missing (user found). Re-open Norma." : "No credentials found. Please log in to Norma."
             statusLabel.textColor = .systemRed
+            print("🔴 Share ext auth: userId=\(hasUser), token=\(authToken != nil)")
             return
         }
 
@@ -318,10 +322,10 @@ class ShareViewController: UIViewController {
             self.sendButton.alpha = 0.6
         }
 
-        uploadAndProcess(imageData: imageData, authToken: authToken)
+        uploadAndProcess(imageData: imageData, authToken: authToken, userId: userId)
     }
 
-    private func uploadAndProcess(imageData: Data, authToken: String) {
+    private func uploadAndProcess(imageData: Data, authToken: String, userId: String, isRetry: Bool = false) {
         var request = URLRequest(url: edgeFunctionURL)
         request.httpMethod = "POST"
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
@@ -358,24 +362,96 @@ class ShareViewController: UIViewController {
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
-                self?.activityIndicator.stopAnimating()
-
                 if let error = error {
+                    self?.activityIndicator.stopAnimating()
                     self?.handleError("Network error: \(error.localizedDescription)")
                     return
                 }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
+                    self?.activityIndicator.stopAnimating()
                     self?.handleError("Invalid response")
                     return
                 }
 
                 if httpResponse.statusCode == 200 {
+                    self?.activityIndicator.stopAnimating()
                     self?.handleSuccess(data: data)
+                } else if httpResponse.statusCode == 401 && !isRetry {
+                    // Token expired — attempt refresh
+                    self?.statusLabel.text = "Refreshing session..."
+                    self?.attemptTokenRefreshAndRetry(imageData: imageData, userId: userId)
                 } else {
+                    self?.activityIndicator.stopAnimating()
                     self?.handleErrorResponse(data: data, statusCode: httpResponse.statusCode)
                 }
             }
+        }.resume()
+    }
+
+    // MARK: - Token Refresh
+
+    private func attemptTokenRefreshAndRetry(imageData: Data, userId: String) {
+        guard let refreshToken = SharedKeychainHelper.getRefreshToken(for: userId),
+              let config = SharedKeychainHelper.getSupabaseConfig() else {
+            activityIndicator.stopAnimating()
+            handleError("Session expired. Please open Norma to sign in again.")
+            return
+        }
+
+        refreshAccessToken(supabaseURL: config.url, anonKey: config.anonKey, refreshToken: refreshToken) { [weak self] newAccessToken, newRefreshToken in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+
+                if let newAccessToken = newAccessToken {
+                    // Store new tokens in keychain
+                    _ = SharedKeychainHelper.storeAuthToken(newAccessToken, for: userId)
+                    if let newRefreshToken = newRefreshToken {
+                        _ = SharedKeychainHelper.storeRefreshToken(newRefreshToken, for: userId)
+                    }
+
+                    // Retry upload with new token
+                    self.uploadAndProcess(imageData: imageData, authToken: newAccessToken, userId: userId, isRetry: true)
+                } else {
+                    self.activityIndicator.stopAnimating()
+                    self.handleError("Session expired. Please open Norma to sign in again.")
+                }
+            }
+        }
+    }
+
+    private func refreshAccessToken(supabaseURL: String, anonKey: String, refreshToken: String, completion: @escaping (String?, String?) -> Void) {
+        guard let url = URL(string: "\(supabaseURL)/auth/v1/token?grant_type=refresh_token") else {
+            completion(nil, nil)
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+
+        let body: [String: String] = ["refresh_token": refreshToken]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            completion(nil, nil)
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard error == nil,
+                  let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let accessToken = json["access_token"] as? String else {
+                completion(nil, nil)
+                return
+            }
+
+            let newRefreshToken = json["refresh_token"] as? String
+            completion(accessToken, newRefreshToken)
         }.resume()
     }
 

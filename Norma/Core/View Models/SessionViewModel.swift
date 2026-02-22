@@ -59,11 +59,13 @@ class SessionViewModel: ObservableObject {
             for await authChange in dataManager.supabaseService.authStateChanges {
                 guard !Task.isCancelled else { break }
 
-                // Update keychain whenever we get a new token
+                // Update keychain whenever we get a new token (store all credentials to fix race conditions)
                 if let session = authChange.session {
                     let userId = session.user.id.uuidString.lowercased()
+                    _ = SharedKeychainHelper.storeUserId(userId)
                     let tokenStored = SharedKeychainHelper.storeAuthToken(session.accessToken, for: userId)
-                    print("🔄 Auth state change (\(authChange.event)) - keychain token updated: \(tokenStored)")
+                    let refreshStored = SharedKeychainHelper.storeRefreshToken(session.refreshToken, for: userId)
+                    print("🔄 Auth state change (\(authChange.event)) - keychain updated: token=\(tokenStored), refresh=\(refreshStored)")
                 }
             }
         }
@@ -106,12 +108,22 @@ class SessionViewModel: ObservableObject {
             let userIdStored = SharedKeychainHelper.storeUserId(userId)
             print("🔑 Shared keychain - userId stored: \(userIdStored)")
 
-            if let token = dataManager.supabaseService.currentSession?.accessToken {
-                let tokenStored = SharedKeychainHelper.storeAuthToken(token, for: userId)
+            if let session = try? await dataManager.supabaseService.getSession() {
+                let tokenStored = SharedKeychainHelper.storeAuthToken(session.accessToken, for: userId)
                 print("🔑 Shared keychain - authToken stored: \(tokenStored)")
+
+                let refreshStored = SharedKeychainHelper.storeRefreshToken(session.refreshToken, for: userId)
+                print("🔑 Shared keychain - refreshToken stored: \(refreshStored)")
             } else {
-                print("⚠️ Shared keychain - no accessToken available to store")
+                print("⚠️ Shared keychain - no session available to store tokens")
             }
+
+            // Store Supabase config so share extension can refresh tokens independently
+            let configStored = SharedKeychainHelper.storeSupabaseConfig(
+                url: SupabaseService.supabaseURLString,
+                anonKey: SupabaseService.supabaseAnonKey
+            )
+            print("🔑 Shared keychain - supabase config stored: \(configStored)")
         } else {
             print("⚠️ Shared keychain - no userId available to store")
         }
