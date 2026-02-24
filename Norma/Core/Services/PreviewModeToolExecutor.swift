@@ -28,8 +28,7 @@ class PreviewModeToolExecutor {
             return handleSaveUserIncome(input: input)
         case "save_user_freedom_fund":
             return handleSaveUserFreedomFund(input: input)
-        case "save_user_challenge":
-            return handleSaveUserChallenge(input: input)
+
         case "create_bill":
             return handleCreateBill(input: input)
         case "create_expense":
@@ -46,6 +45,8 @@ class PreviewModeToolExecutor {
             return handleShowArcCount(input: input)
         case "show_flow_state":
             return handleShowFlowState(input: input)
+        case "show_arc_simulator":
+            return handleShowArcSimulator(input: input)
         default:
             return ("Tool not supported in preview mode", nil)
         }
@@ -72,16 +73,6 @@ class PreviewModeToolExecutor {
             return ("Missing currency parameter", nil)
         }
 
-        // Handle exchange_rate as either Int or Double
-        let exchangeRate: Double
-        if let rateDouble = input["exchange_rate"] as? Double {
-            exchangeRate = rateDouble
-        } else if let rateInt = input["exchange_rate"] as? Int {
-            exchangeRate = Double(rateInt)
-        } else {
-            return ("Missing or invalid exchange_rate parameter", nil)
-        }
-
         previewModeViewModel.userCurrency = currency.uppercased()
 
         let uiComponent = UIComponent.actionConfirmation(
@@ -90,13 +81,7 @@ class PreviewModeToolExecutor {
             color: "NormaPastelPurple"
         )
 
-        // Only generate mock data during preview mode, NOT during real onboarding
-        if !previewModeViewModel.isRealOnboarding {
-            previewModeViewModel.generateMockDataIfNeeded(exchangeRate: exchangeRate)
-            return ("User currency saved as '\(currency.uppercased())'. Mock financial data has been generated with exchange rate \(exchangeRate).", uiComponent)
-        } else {
-            return ("User currency saved as '\(currency.uppercased())'.", uiComponent)
-        }
+        return ("User currency saved as '\(currency.uppercased())'.", uiComponent)
     }
 
     private func handleSaveUserIncome(input: [String: Any]) -> (String, UIComponent?) {
@@ -151,21 +136,6 @@ class PreviewModeToolExecutor {
             color: "NormaPastelCoral"
         )
         return ("Freedom fund saved as \(freedomFund)", uiComponent)
-    }
-
-    private func handleSaveUserChallenge(input: [String: Any]) -> (String, UIComponent?) {
-        guard let challenge = input["challenge"] as? String else {
-            return ("Missing challenge parameter", nil)
-        }
-
-        previewModeViewModel.userChallenge = challenge
-
-        let uiComponent = UIComponent.actionConfirmation(
-            icon: "target",
-            message: "Norma noted your challenge: \(challenge)",
-            color: "NormaPastelPurple"
-        )
-        return ("User's main financial challenge saved: '\(challenge)'", uiComponent)
     }
 
     // MARK: - Create Tools
@@ -425,5 +395,27 @@ class PreviewModeToolExecutor {
 
         // Format the response
         return ("Displaying flow state: \(flowState)", uiComponent)
+    }
+
+    // MARK: - Arc Simulator
+
+    private func handleShowArcSimulator(input: [String: Any]) -> (String, UIComponent?) {
+        guard let freedomFund = previewModeViewModel.userFreedomFund else {
+            return ("Freedom fund not yet collected", nil)
+        }
+
+        let bills = previewModeViewModel.bills
+        let totalMonthlyBills = ArcCalculationService.calculateMonthlyBillsTotal(bills: bills)
+        let currentArcs = ArcCalculationService.calculateArcs(freedomFund: freedomFund, bills: bills)
+        let currency = previewModeViewModel.userCurrency ?? "USD"
+
+        let uiComponent = UIComponent.arcSimulatorCard(
+            currentArcs: currentArcs,
+            totalMonthlyBills: totalMonthlyBills,
+            freedomFund: freedomFund,
+            currency: currency
+        )
+
+        return ("Displaying arc simulator card. User has \(currentArcs) arcs with \(currency) \(String(format: "%.0f", freedomFund)) freedom fund and \(currency) \(String(format: "%.0f", totalMonthlyBills)) monthly bills.", uiComponent)
     }
 }

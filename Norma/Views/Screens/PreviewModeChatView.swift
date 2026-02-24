@@ -22,62 +22,29 @@ struct PreviewModeChatView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var scrollViewProxy: ScrollViewProxy?
-    @State private var showCapsules = false
-    @State private var userMessageCount = 0
-    @State private var showReadyModal = false
-    @State private var hasClickedReady = false
-    @State private var showSaveButton = false
-    @State private var showReadyButton = false
     @State private var dynamicSpacerHeight: CGFloat = 180
     @State private var viewportHeight: CGFloat = 0
     @State private var lastMessagePosition: CGFloat = 0
     @GestureState private var isUserScrolling = false
-    @State private var flowState: String? = nil // "In flow", "Stagnant", or "Drifting"
-    @State private var visibleNavCapsules: Int = 0
     @State private var newlyAddedMessageIds: Set<String> = []
+    @State private var showSaveModal = false
+    @State private var showCapsules = false
+    @State private var showArcSimulator = false
+    @State private var arcSimulatorData: (currentArcs: Int, totalMonthlyBills: Double, freedomFund: Double, currency: String)?
 
     private let maxSpacerHeight: CGFloat = 600
-    private let maxToolChainDepth: Int = 2 // Prevent infinite tool call loops
+    private let maxToolChainDepth: Int = 2
 
-    // Currency formatter for nav bar capsules
-    private func formatCurrency(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = previewModeViewModel.userCurrency ?? "USD"
-        formatter.maximumFractionDigits = 0
-        // Use the formatter for the fallback too to get the correct symbol
-        return formatter.string(from: NSNumber(value: amount)) ?? formatter.string(from: 0) ?? "0"
+    private var toolExecutor: PreviewModeToolExecutor {
+        PreviewModeToolExecutor(previewModeViewModel: previewModeViewModel)
     }
 
-    // Animate nav bar capsules with staggered timing and haptics
-    private func animateNavCapsules() {
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.prepare()
-
-        // Animate capsules appearing with staggered delays + haptics
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.4)) {
-            visibleNavCapsules = 1
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            impactFeedback.impactOccurred(intensity: 0.6)
-        }
-
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.6)) {
-            visibleNavCapsules = 2
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            impactFeedback.impactOccurred(intensity: 0.6)
-        }
-
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.8)) {
-            visibleNavCapsules = 3
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            impactFeedback.impactOccurred(intensity: 0.6)
-        }
+    /// All 5 onboarding data points collected — drives Save button visibility
+    private var onboardingDataComplete: Bool {
+        previewModeViewModel.onboardingDataComplete
     }
 
-    // Calculate arc count for display
+    /// Arc count for passing into the system prompt
     private var arcCount: Int {
         guard let freedomFund = previewModeViewModel.userFreedomFund else { return 0 }
         return ArcCalculationService.calculateArcs(
@@ -86,14 +53,20 @@ struct PreviewModeChatView: View {
         )
     }
 
-    private var toolExecutor: PreviewModeToolExecutor {
-        PreviewModeToolExecutor(previewModeViewModel: previewModeViewModel)
+    private var currentSystemPrompt: String {
+        NormaSystemPrompts.onboardingChatPrompt(
+            userName: previewModeViewModel.userName,
+            currency: previewModeViewModel.userCurrency,
+            hasBill: !previewModeViewModel.bills.isEmpty,
+            hasIncome: previewModeViewModel.userIncome != nil,
+            hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
+            arcCount: arcCount
+        )
     }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // Chat content fills entire space
                 chatContent
                     .background(Color("NormaBackground").ignoresSafeArea())
                     .contentShape(Rectangle())
@@ -101,7 +74,6 @@ struct PreviewModeChatView: View {
                         hideKeyboard()
                     }
 
-                // Input area overlays at bottom
                 inputArea
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -122,7 +94,7 @@ struct PreviewModeChatView: View {
                             Text("Norma")
                                 .font(.normaHeadline(20))
 
-                            Text("Preview Mode")
+                            Text("Get Started")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
@@ -132,79 +104,20 @@ struct PreviewModeChatView: View {
                                         .fill(Color("NormaPastelTeal").opacity(0.8))
                                 )
                         }
-
-                        // Three capsules row (Income, Spending Flow, Arcs)
-                        if flowState != nil {
-                            HStack(spacing: 6) {
-                                // Income capsule
-                                if let income = previewModeViewModel.userIncome {
-                                    Text("Income: \(formatCurrency(income))")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(
-                                            Capsule()
-                                                .fill(Color("NormaPastelTeal"))
-                                        )
-                                        .opacity(visibleNavCapsules > 0 ? 1 : 0)
-                                        .scaleEffect(visibleNavCapsules > 0 ? 1.0 : 0.3)
-                                }
-
-                                // Spending Flow capsule
-                                if let flowState = flowState {
-                                    Text(flowState)
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(
-                                            Capsule()
-                                                .fill(flowStateColor(for: flowState))
-                                        )
-                                        .opacity(visibleNavCapsules > 1 ? 1 : 0)
-                                        .scaleEffect(visibleNavCapsules > 1 ? 1.0 : 0.3)
-                                }
-
-                                // Arcs capsule
-                                Text("\(arcCount) arc\(arcCount == 1 ? "" : "s")")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color("NormaPastelPurple"))
-                                    )
-                                    .opacity(visibleNavCapsules > 2 ? 1 : 0)
-                                    .scaleEffect(visibleNavCapsules > 2 ? 1.0 : 0.3)
-                            }
-                            .transition(.opacity.combined(with: .scale))
-                        }
                     }
-                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: flowState)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: visibleNavCapsules)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if showSaveButton {
+                    if onboardingDataComplete {
                         Button(action: {
-                            previewModeViewModel.showSaveProgressModal = true
+                            showSaveModal = true
                         }) {
                             Text("Save")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(Color("NormaPastelTeal"))
                         }
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
-                    } else if showReadyButton && !hasClickedReady {
-                        Button(action: {
-                            showReadyModal = true
-                        }) {
-                            Text("Ready?")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color("NormaPastelTeal"))
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: onboardingDataComplete)
                     }
                 }
             }
@@ -214,35 +127,18 @@ struct PreviewModeChatView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $onboardingViewModel.previewModeViewModel.showCompletionModal) {
-            PreviewModeCompletionModal(
-                onSaveProgress: {
-                    // Handle save progress action - transition to authentication
-                    previewModeViewModel.showCompletionModal = false
-                },
-                onContinueWithoutSaving: {
-                    // Handle continue without saving
-                    previewModeViewModel.showCompletionModal = false
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $onboardingViewModel.previewModeViewModel.showSaveProgressModal) {
+        .sheet(isPresented: $showSaveModal) {
             SaveProgressModal(
                 userName: previewModeViewModel.userName ?? "there",
                 onSignUpWithEmail: {
-                    previewModeViewModel.showSaveProgressModal = false
+                    showSaveModal = false
                     onboardingViewModel.showSignUp = true
                     onboardingViewModel.currentStep = .authentication
                 },
                 onSignUpWithApple: {
-                    // Don't dismiss modal here - let it stay open during sign-in
-                    // The modal will be dismissed after successful sign-in via currentStep change
                     handleAppleSignIn()
                 },
                 onSignUpWithGoogle: {
-                    // Don't dismiss modal here - let it stay open during sign-in
                     handleGoogleSignIn()
                 },
                 onContinueChatting: {
@@ -253,39 +149,32 @@ struct PreviewModeChatView: View {
             .presentationDragIndicator(.hidden)
             .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $showReadyModal) {
-            ReadyToStartModal(
-                onReady: {
-                    handleReadyToStart()
-                }
+        .sheet(isPresented: $showArcSimulator) {
+            ArcSimulatorSheetView(
+                initialFreedomFund: arcSimulatorData?.freedomFund ?? previewModeViewModel.userFreedomFund ?? 0,
+                totalMonthlyBills: arcSimulatorData?.totalMonthlyBills ?? ArcCalculationService.calculateMonthlyBillsTotal(bills: previewModeViewModel.bills),
+                currency: arcSimulatorData?.currency ?? previewModeViewModel.userCurrency ?? "USD",
+                bills: previewModeViewModel.bills
             )
             .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-            .interactiveDismissDisabled()
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             showInitialGreeting()
         }
-        .onChange(of: previewModeViewModel.showSaveProgressModal) { _, showModal in
-            // If user is already authenticated (signed in before entering preview mode),
-            // skip the sign-up modal and directly save data + proceed to welcome screens
-            if showModal && sessionViewModel.isAuthenticated {
-                previewModeViewModel.showSaveProgressModal = false
-                Task {
-                    await onboardingViewModel.handleAuthenticatedPreviewModeCompletion()
+        .onChange(of: previewModeViewModel.bills.count) { _, count in
+            if count > 0 && !showCapsules {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    showCapsules = true
                 }
             }
         }
-        .onChange(of: previewModeViewModel.bills) { _, newValue in
-            if newValue.count > 0 {
-                // Trigger capsule animation when currency is set
-                showCapsules = true
-            }
-        }
-        .onChange(of: flowState) { oldValue, newValue in
-            // Trigger nav bar capsule animation when flow state is set
-            if oldValue == nil && newValue != nil {
-                animateNavCapsules()
+        .onChange(of: showSaveModal) { _, showModal in
+            if showModal && sessionViewModel.isAuthenticated {
+                showSaveModal = false
+                Task {
+                    await onboardingViewModel.handleAuthenticatedPreviewModeCompletion()
+                }
             }
         }
     }
@@ -304,7 +193,11 @@ struct PreviewModeChatView: View {
                             ForEach(messages.filter { $0.isVisible }) { message in
                                 ChatBubbleView(
                                     message: message,
-                                    shouldAnimate: newlyAddedMessageIds.contains(message.id)
+                                    shouldAnimate: newlyAddedMessageIds.contains(message.id),
+                                    onArcSimulatorTap: { arcs, bills, fund, currency in
+                                        arcSimulatorData = (arcs, bills, fund, currency)
+                                        showArcSimulator = true
+                                    }
                                 )
                                     .id(message.id)
                                     .transition(.asymmetric(
@@ -341,7 +234,6 @@ struct PreviewModeChatView: View {
                         }
                         .padding()
 
-                        // Dynamic spacer to push content up and leave room for input
                         Color.clear
                             .frame(height: dynamicSpacerHeight)
                             .id("bottomSpacer")
@@ -358,15 +250,12 @@ struct PreviewModeChatView: View {
                 )
                 .onPreferenceChange(LastMessagePositionKey.self) { value in
                     lastMessagePosition = value
-                    // Continuously adjust as position changes during animation
                     adjustSpacerAndScroll(proxy: proxy)
                 }
                 .onChange(of: messages.count) {
-                    // Initial adjustment when new message is added
                     adjustSpacerAndScroll(proxy: proxy)
                 }
                 .onChange(of: isLoading) {
-                    // Adjustment when loading state changes
                     adjustSpacerAndScroll(proxy: proxy)
                 }
                 .onAppear {
@@ -392,41 +281,17 @@ struct PreviewModeChatView: View {
         let userMessage = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userMessage.isEmpty else { return }
 
-        // Always add message to chat and dismiss keyboard
         let chatMessage = ChatMessage(role: .user, content: userMessage)
         messages.append(chatMessage)
 
         inputText = ""
         hideKeyboard()
 
-        // Track message count
-        if !hasClickedReady {
-            userMessageCount += 1
-
-            // Show "I'm Ready" button after 4 messages
-            if userMessageCount >= 4 && !showReadyButton {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    showReadyButton = true
-                }
-            }
-        }
-
         Task {
-            // Delay showing loading indicator to make fast responses feel instant
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            try? await Task.sleep(nanoseconds: 500_000_000)
             if !Task.isCancelled {
-                // Check if we should show the ready modal
-                if !hasClickedReady && userMessageCount >= 8 {
-                    await MainActor.run {
-                        showReadyModal = true
-                        isLoading = false
-                    }
-                    return // Don't process the message
-                }
-
                 await MainActor.run {
                     isLoading = true
-                    // Haptic feedback is now handled by ThinkingIndicator
                 }
             }
             await processUserMessage(userMessage)
@@ -437,36 +302,10 @@ struct PreviewModeChatView: View {
         do {
             let conversationHistory = createConversationHistory()
             let tools = getAllTools()
-            print("Convo history:\n\n\n\(conversationHistory)\n\n\n")
-            // Choose prompt based on whether user has clicked "I'm Ready"
-            let systemPrompt: String
-            if hasClickedReady {
-                // Real onboarding - 3 questions flow
-                systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
-                    userName: previewModeViewModel.userName ?? "there",
-                    currency: previewModeViewModel.userCurrency ?? "USD",
-                    hasIncome: previewModeViewModel.userIncome != nil,
-                    hasBill: !previewModeViewModel.bills.isEmpty,
-                    hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
-                    hasChallenge: previewModeViewModel.userChallenge != nil
-                )
-            } else {
-                // Preview mode with mock data
-                systemPrompt = NormaSystemPrompts.previewModePrompt(
-                    userName: previewModeViewModel.userName,
-                    currency: previewModeViewModel.userCurrency,
-                    bills: previewModeViewModel.bills,
-                    expenses: previewModeViewModel.expenses
-                )
-            }
-
-//            print("📋 System Prompt:")
-//            print(systemPrompt)
-            print("---\n\n")
 
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: conversationHistory,
-                systemPrompt: systemPrompt,
+                systemPrompt: currentSystemPrompt,
                 tools: tools
             )
 
@@ -481,16 +320,10 @@ struct PreviewModeChatView: View {
 
             case .toolUse(let id, let name, let input):
                 print("🔧 Tool use requested: \(name)")
-                print("📥 Tool input: \(input)")
 
                 let (toolResult, uiComponent) = await executeToolAndGetResult(toolId: id, name: name, input: input)
 
-                print("📤 Tool result: \(toolResult)")
-                print("🎨 UI Component: \(String(describing: uiComponent))")
-
-                // Save tool use and tool result to messages array
                 await MainActor.run {
-                    // Save tool use message (visible as activity indicator)
                     let activityMessage = createToolActivityMessage(name: name, input: input)
                     let toolUseMessage = ChatMessage(
                         role: .assistant,
@@ -501,10 +334,9 @@ struct PreviewModeChatView: View {
                     )
                     messages.append(toolUseMessage)
 
-                    // Save tool result message (hidden from UI, only for API conversation history)
                     let toolResultMessage = ChatMessage(
                         role: .user,
-                        content: "",  // Empty content, not displayed
+                        content: "",
                         isVisible: false,
                         anthropicContent: .toolResult(toolUseId: id, content: toolResult)
                     )
@@ -521,73 +353,25 @@ struct PreviewModeChatView: View {
                     content: .toolResult(toolUseId: id, content: toolResult)
                 ))
 
-                // Use appropriate prompt based on onboarding state
-                let finalSystemPrompt: String
-                if hasClickedReady {
-                    finalSystemPrompt = NormaSystemPrompts.realOnboardingPrompt(
-                        userName: previewModeViewModel.userName ?? "there",
-                        currency: previewModeViewModel.userCurrency ?? "USD",
-                        hasIncome: previewModeViewModel.userIncome != nil,
-                        hasBill: !previewModeViewModel.bills.isEmpty,
-                        hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
-                        hasChallenge: previewModeViewModel.userChallenge != nil
-                    )
-                } else {
-                    finalSystemPrompt = NormaSystemPrompts.previewModePrompt(
-                        userName: previewModeViewModel.userName,
-                        currency: previewModeViewModel.userCurrency,
-                        bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses
-                    )
-                }
-
-                print("🤖 Requesting final AI response...")
-
                 let finalResponse = try await AnthropicService.shared.sendMessageWithTools(
                     messages: updatedHistory,
-                    systemPrompt: finalSystemPrompt,
+                    systemPrompt: currentSystemPrompt,
                     tools: tools
                 )
 
-                print("✅ Final response received: \(finalResponse)")
-
-                // Handle chained tool calls
                 if case .toolUse(let nextId, let nextName, let nextInput) = finalResponse {
-                    print("🔧 Chained tool use detected: \(nextName) (will be depth 1)")
-                    // Process the chained tool call recursively
                     await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent, depth: 1)
                 } else if case .text(let text) = finalResponse {
                     await MainActor.run {
                         isLoading = false
-                        print("💬 Creating AI message with text: \(text)")
-
-                        // Handle flow state capsule specially - set nav bar state
-                        if let component = uiComponent,
-                           case .flowStateCapsule(let state) = component {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                flowState = state
-                            }
-                            print("🎨 Flow state set in nav bar: \(state)")
-                            // Don't attach to message - it's shown in nav bar only
-                            let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
-                            newlyAddedMessageIds.insert(aiMessage.id)
-                            messages.append(aiMessage)
-                        } else {
-                            // Normal UI components attach to message
-                            print("🎨 Attaching UI component: \(String(describing: uiComponent))")
-                            let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
-                            newlyAddedMessageIds.insert(aiMessage.id)
-                            messages.append(aiMessage)
-                        }
-                        print("✅ Message appended to chat")
+                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent)
+                        newlyAddedMessageIds.insert(aiMessage.id)
+                        messages.append(aiMessage)
                     }
                 } else {
-                    print("⚠️ Unexpected final response type (not .text or .toolUse): \(finalResponse)")
                     await MainActor.run {
                         isLoading = false
-                        // Still show the UI component if we have one from the tool
                         if let component = uiComponent {
-                            print("🎨 Appending message with UI component despite unexpected response")
                             let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
                             newlyAddedMessageIds.insert(aiMessage.id)
                             messages.append(aiMessage)
@@ -596,14 +380,13 @@ struct PreviewModeChatView: View {
                 }
 
             case .toolResult:
-                print("⚠️ Received .toolResult as response (unexpected)")
                 await MainActor.run {
                     isLoading = false
                 }
             }
 
         } catch {
-            print("❌ Error in sendUserMessage: \(error.localizedDescription)")
+            print("❌ Error in processUserMessage: \(error.localizedDescription)")
             await MainActor.run {
                 isLoading = false
                 showError(error.localizedDescription)
@@ -634,10 +417,8 @@ struct PreviewModeChatView: View {
             return "Setting your currency..."
         case "save_user_income":
             return "Saving your income..."
-        case "save_user_savings":
-            return "Saving your savings..."
-        case "save_user_challenge":
-            return "Noting your financial goal..."
+        case "save_user_freedom_fund":
+            return "Saving your freedom fund..."
         case "create_bill":
             if let billName = input["name"] as? String {
                 return "Creating bill: \(billName)..."
@@ -648,6 +429,8 @@ struct PreviewModeChatView: View {
                 return "Creating expense: \(expenseName)..."
             }
             return "Creating expense..."
+        case "show_arc_simulator":
+            return "Preparing arc simulator..."
         default:
             return "Processing..."
         }
@@ -662,12 +445,7 @@ struct PreviewModeChatView: View {
     }
 
     private func processToolUse(id: String, name: String, input: [String: Any], history: [AnthropicMessage], previousUIComponent: UIComponent?, depth: Int = 0) async {
-        print("🔧 Processing tool: \(name) (depth: \(depth))")
-        print("📥 Tool input: \(input)")
-
-        // Prevent infinite tool call loops
         if depth >= maxToolChainDepth {
-            print("⚠️ Maximum tool chain depth reached (\(maxToolChainDepth)). Stopping chain.")
             await MainActor.run {
                 isLoading = false
                 let errorMessage = ChatMessage(role: .assistant, content: "I encountered an issue processing your request. Please try again.")
@@ -678,8 +456,26 @@ struct PreviewModeChatView: View {
 
         let (toolResult, uiComponent) = await executeToolAndGetResult(toolId: id, name: name, input: input)
 
-        print("📤 Tool result: \(toolResult)")
-        print("🎨 UI Component: \(String(describing: uiComponent))")
+        // Add tool use/result to messages for conversation history
+        await MainActor.run {
+            let activityMessage = createToolActivityMessage(name: name, input: input)
+            let toolUseMessage = ChatMessage(
+                role: .assistant,
+                content: activityMessage,
+                uiComponent: .toolActivity(activityMessage),
+                isVisible: true,
+                anthropicContent: .toolUse(id: id, name: name, input: input)
+            )
+            messages.append(toolUseMessage)
+
+            let toolResultMessage = ChatMessage(
+                role: .user,
+                content: "",
+                isVisible: false,
+                anthropicContent: .toolResult(toolUseId: id, content: toolResult)
+            )
+            messages.append(toolResultMessage)
+        }
 
         var updatedHistory = history
         updatedHistory.append(AnthropicMessage(
@@ -691,71 +487,26 @@ struct PreviewModeChatView: View {
             content: .toolResult(toolUseId: id, content: toolResult)
         ))
 
-        // Use appropriate prompt based on onboarding state
-        let systemPrompt: String
-        if hasClickedReady {
-            systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
-                userName: previewModeViewModel.userName ?? "there",
-                currency: previewModeViewModel.userCurrency ?? "USD",
-                hasIncome: previewModeViewModel.userIncome != nil,
-                hasBill: !previewModeViewModel.bills.isEmpty,
-                hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
-                hasChallenge: previewModeViewModel.userChallenge != nil
-            )
-        } else {
-            systemPrompt = NormaSystemPrompts.previewModePrompt(
-                userName: previewModeViewModel.userName,
-                currency: previewModeViewModel.userCurrency,
-                bills: previewModeViewModel.bills,
-                expenses: previewModeViewModel.expenses
-            )
-        }
-
         do {
             let response = try await AnthropicService.shared.sendMessageWithTools(
                 messages: updatedHistory,
-                systemPrompt: systemPrompt,
+                systemPrompt: currentSystemPrompt,
                 tools: getAllTools()
             )
 
-            print("✅ Response received: \(response)")
-
-            // Handle chained tool calls recursively
             if case .toolUse(let nextId, let nextName, let nextInput) = response {
-                print("🔧 Another chained tool detected: \(nextName) (will be depth \(depth + 1))")
                 await processToolUse(id: nextId, name: nextName, input: nextInput, history: updatedHistory, previousUIComponent: uiComponent ?? previousUIComponent, depth: depth + 1)
             } else if case .text(let text) = response {
                 await MainActor.run {
                     isLoading = false
-                    print("💬 Creating AI message with text: \(text)")
-
-                    // Handle flow state capsule specially - set nav bar state
-                    if let component = uiComponent ?? previousUIComponent,
-                       case .flowStateCapsule(let state) = component {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                            flowState = state
-                        }
-                        print("🎨 Flow state set in nav bar: \(state)")
-                        // Don't attach to message - it's shown in nav bar only
-                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: nil)
-                        newlyAddedMessageIds.insert(aiMessage.id)
-                        messages.append(aiMessage)
-                    } else {
-                        // Normal UI components attach to message
-                        print("🎨 Attaching UI component: \(String(describing: uiComponent ?? previousUIComponent))")
-                        let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
-                        newlyAddedMessageIds.insert(aiMessage.id)
-                        messages.append(aiMessage)
-                    }
-                    print("✅ Message appended to chat")
+                    let aiMessage = ChatMessage(role: .assistant, content: text, uiComponent: uiComponent ?? previousUIComponent)
+                    newlyAddedMessageIds.insert(aiMessage.id)
+                    messages.append(aiMessage)
                 }
             } else {
-                print("⚠️ Unexpected response type received (not .text or .toolUse): \(response)")
                 await MainActor.run {
                     isLoading = false
-                    // Still append a message if we have a UI component from previous tools
                     if let component = uiComponent ?? previousUIComponent {
-                        print("🎨 Appending message with previous UI component despite unexpected response")
                         let aiMessage = ChatMessage(role: .assistant, content: "", uiComponent: component)
                         newlyAddedMessageIds.insert(aiMessage.id)
                         messages.append(aiMessage)
@@ -763,7 +514,6 @@ struct PreviewModeChatView: View {
                 }
             }
         } catch {
-            print("❌ Error in processToolUse: \(error.localizedDescription)")
             await MainActor.run {
                 isLoading = false
                 showError(error.localizedDescription)
@@ -772,7 +522,6 @@ struct PreviewModeChatView: View {
     }
 
     private func adjustSpacerAndScroll(proxy: ScrollViewProxy) {
-        // Scroll to bottom only if user is NOT manually scrolling
         if !isUserScrolling {
             scrollToBottom(proxy: proxy)
         }
@@ -780,7 +529,6 @@ struct PreviewModeChatView: View {
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.3)) {
-            // Scroll to the bottom spacer to ensure we can see the full message
             proxy.scrollTo("bottomSpacer", anchor: .bottom)
         }
     }
@@ -791,39 +539,16 @@ struct PreviewModeChatView: View {
     }
 
     private func showInitialGreeting() {
-        // Only show greeting if messages are empty (first time)
         guard messages.isEmpty else { return }
 
         Task {
-            // Add a small delay for a natural feel
-            try? await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
+            try? await Task.sleep(nanoseconds: 800_000_000)
 
             await MainActor.run {
                 isLoading = true
             }
 
             do {
-                // Get the initial greeting from Norma - use appropriate prompt
-                let systemPrompt: String
-                if hasClickedReady {
-                    systemPrompt = NormaSystemPrompts.realOnboardingPrompt(
-                        userName: previewModeViewModel.userName ?? "there",
-                        currency: previewModeViewModel.userCurrency ?? "USD",
-                        hasIncome: previewModeViewModel.userIncome != nil,
-                        hasBill: !previewModeViewModel.bills.isEmpty,
-                        hasFreedomFund: previewModeViewModel.userFreedomFund != nil,
-                        hasChallenge: previewModeViewModel.userChallenge != nil
-                    )
-                } else {
-                    systemPrompt = NormaSystemPrompts.previewModePrompt(
-                        userName: previewModeViewModel.userName,
-                        currency: previewModeViewModel.userCurrency,
-                        bills: previewModeViewModel.bills,
-                        expenses: previewModeViewModel.expenses
-                    )
-                }
-
-                // Create an empty conversation history for the initial greeting
                 let initialMessage = AnthropicMessage(
                     role: "user",
                     content: .text("Start the conversation")
@@ -831,7 +556,7 @@ struct PreviewModeChatView: View {
 
                 let response = try await AnthropicService.shared.sendMessageWithTools(
                     messages: [initialMessage],
-                    systemPrompt: systemPrompt,
+                    systemPrompt: currentSystemPrompt,
                     tools: []
                 )
 
@@ -854,34 +579,8 @@ struct PreviewModeChatView: View {
         }
     }
 
-    private func handleReadyToStart() {
-        // Clear mock data but keep name and currency
-        previewModeViewModel.clearMockData()
-
-        // Hide capsules and ready button when transitioning to real onboarding
-        showCapsules = false
-        showReadyButton = false
-
-        // Clear messages
-        messages.removeAll()
-
-        // Reset message counter and mark as ready
-        userMessageCount = 0
-        hasClickedReady = true
-        showReadyModal = false
-
-        // Show new greeting for real onboarding
-        showInitialGreeting()
-    }
-
     private func handleKeepChatting() {
-        // Close the modal
-        previewModeViewModel.showSaveProgressModal = false
-
-        // Show the save button in the toolbar with animation
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-            showSaveButton = true
-        }
+        showSaveModal = false
     }
 
     private func handleAppleSignIn() {
@@ -894,239 +593,6 @@ struct PreviewModeChatView: View {
         Task {
             await onboardingViewModel.signInWithGoogleFromPreviewMode()
         }
-    }
-
-    private func flowStateColor(for state: String) -> Color {
-        switch state {
-        case "In flow":
-            return Color.green.opacity(0.8)
-        case "Stagnant":
-            return Color.orange.opacity(0.8)
-        case "Drifting":
-            return Color.red.opacity(0.8)
-        default:
-            return Color.gray.opacity(0.8)
-        }
-    }
-
-}
-
-struct ReadyToStartModal: View {
-    let onReady: () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var animateArrow = false
-    @State private var animateTitle = false
-    @State private var animateSubtitle = false
-    @State private var animateButton = false
-
-    private let accentColor = Color("NormaPastelTeal")
-    private let secondaryColor = Color("NormaPastelPurple")
-
-    // Adjust button opacity based on color scheme for better visibility
-    private var buttonBackgroundOpacity: Double {
-        colorScheme == .light ? 0.85 : 0.25
-    }
-
-    var body: some View {
-        ZStack {
-            // Glass background with floating orbs
-            GeometryReader { geometry in
-                ZStack {
-                    Color("NormaBackground")
-
-                    LavaOrb(
-                        color: accentColor,
-                        size: 200,
-                        blur: 60,
-                        opacity: 0.15,
-                        bounds: geometry.size,
-                        speed: 5.0
-                    )
-
-                    LavaOrb(
-                        color: secondaryColor,
-                        size: 160,
-                        blur: 50,
-                        opacity: 0.12,
-                        bounds: geometry.size,
-                        speed: 6.0
-                    )
-                }
-            }
-            .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // 3D Arrow with glow
-                ZStack {
-                    // Glow behind arrow
-                    Circle()
-                        .fill(accentColor.opacity(0.15))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 30)
-
-                    Arrow3DView()
-                        .frame(width: 180, height: 180)
-                }
-                .scaleEffect(animateArrow ? 1.0 : 0.3)
-                .opacity(animateArrow ? 1.0 : 0.0)
-
-                Spacer()
-                    .frame(height: 32)
-
-                // Title with wave animation
-                WaveTextView(
-                    text: "Let's make this real",
-                    font: .normaHeadline(32),
-                    color: .primary,
-                    isAnimating: animateTitle,
-                    alignment: .center
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
-
-                Spacer()
-                    .frame(height: 16)
-
-                // Subtitle
-                Text("You've explored with sample data.\nNow let's personalize Norma for you.")
-                    .normaBody()
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .padding(.horizontal, 32)
-                    .opacity(animateSubtitle ? 1.0 : 0.0)
-                    .offset(y: animateSubtitle ? 0 : 20)
-
-                Spacer()
-                    .frame(height: 24)
-
-                // Feature hints
-                VStack(spacing: 8) {
-                    Text("Just a few questions about your finances")
-                        .font(.normaHeadline(16))
-                        .foregroundColor(accentColor)
-
-                    Text("Your data stays encrypted and private")
-                        .normaCaption()
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 32)
-                .opacity(animateSubtitle ? 1.0 : 0.0)
-
-                Spacer()
-
-                // Glass-styled button with color scheme awareness
-                Button(action: {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    onReady()
-                }) {
-                    Text("Let's go")
-                        .font(.normaHeadline(16))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(accentColor.opacity(buttonBackgroundOpacity))
-                                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
-                        )
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
-                .scaleEffect(animateButton ? 1.0 : 0.9)
-                .opacity(animateButton ? 1.0 : 0.0)
-            }
-        }
-        .onAppear {
-            startAnimations()
-        }
-    }
-
-    private func startAnimations() {
-        // Arrow pops in first with haptic
-        let impact = UIImpactFeedbackGenerator(style: .medium)
-        impact.impactOccurred()
-
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.65).delay(0.1)) {
-            animateArrow = true
-        }
-
-        // Title wave starts
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            animateTitle = true
-        }
-
-        // Subtitle fades in
-        withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
-            animateSubtitle = true
-        }
-
-        // Button slides up
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.6)) {
-            animateButton = true
-        }
-    }
-}
-
-struct PreviewModeCompletionModal: View {
-    let onSaveProgress: () -> Void
-    let onContinueWithoutSaving: () -> Void
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Congratulations!")
-                .font(.title)
-                .fontWeight(.bold)
-
-            Text("You've completed preview mode by adding a bill and expense!")
-                .normaBody()
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-
-            VStack(spacing: 12) {
-                Text("Save Your Progress")
-                    .font(.normaFinancial(16))
-
-                Text("Add an email to save your data. If you logout without saving, your conversation and data will be erased.")
-                    .normaBody()
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
-            }
-            .padding()
-            .background(Color("NormaSurface"))
-            .cornerRadius(12)
-            .padding(.horizontal)
-
-            VStack(spacing: 12) {
-                Button(action: onSaveProgress) {
-                    Text("Save Progress")
-                        .font(.normaFinancial(16))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.purple)
-                        .cornerRadius(12)
-                }
-
-                Button(action: onContinueWithoutSaving) {
-                    Text("Continue Without Saving")
-                        .normaBody()
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal)
-        }
-        .padding(.vertical, 32)
     }
 }
 
@@ -1150,7 +616,6 @@ struct SaveProgressModal: View {
 
     var body: some View {
         ZStack {
-            // Glass background with floating orbs
             GeometryReader { geometry in
                 ZStack {
                     Color("NormaBackground")
@@ -1180,7 +645,6 @@ struct SaveProgressModal: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 40)
 
-                    // 3D Arrow with glow
                     ZStack {
                         Circle()
                             .fill(accentColor.opacity(0.15))
@@ -1195,7 +659,6 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 24)
 
-                    // Title with wave animation
                     WaveTextView(
                         text: "Nice work, \(userName)!",
                         font: .normaHeadline(32),
@@ -1208,7 +671,6 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 12)
 
-                    // Subtitle
                     Text("You're all set up. Create an account\nto save your progress.")
                         .normaBody()
                         .foregroundColor(.secondary)
@@ -1219,7 +681,6 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 8)
 
-                    // Privacy note
                     Text("Your data is fully encrypted and private")
                         .normaCaption()
                         .foregroundColor(.secondary.opacity(0.7))
@@ -1227,9 +688,7 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 32)
 
-                    // Authentication buttons
                     VStack(spacing: 12) {
-                        // Sign up with Apple button
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .medium)
                             impact.impactOccurred()
@@ -1250,7 +709,6 @@ struct SaveProgressModal: View {
                             .cornerRadius(12)
                         }
 
-                        // Sign up with Google button
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .medium)
                             impact.impactOccurred()
@@ -1276,7 +734,6 @@ struct SaveProgressModal: View {
                             .cornerRadius(12)
                         }
 
-                        // Sign up with Email button
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .medium)
                             impact.impactOccurred()
@@ -1303,7 +760,6 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 20)
 
-                    // Divider with "or"
                     HStack(spacing: 12) {
                         Rectangle()
                             .fill(Color.secondary.opacity(0.2))
@@ -1320,7 +776,6 @@ struct SaveProgressModal: View {
 
                     Spacer(minLength: 16)
 
-                    // Keep chatting button with warning
                     VStack(spacing: 8) {
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .light)
@@ -1355,7 +810,6 @@ struct SaveProgressModal: View {
     }
 
     private func startAnimations() {
-        // Arrow pops in first with haptic
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.impactOccurred()
 
@@ -1363,27 +817,22 @@ struct SaveProgressModal: View {
             animateArrow = true
         }
 
-        // Title wave starts
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             animateTitle = true
         }
 
-        // Subtitle fades in
         withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
             animateSubtitle = true
         }
 
-        // Buttons animate in
         withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5)) {
             animateButtons = true
         }
 
-        // Divider
         withAnimation(.easeOut(duration: 0.3).delay(0.6)) {
             animateDivider = true
         }
 
-        // Keep chatting
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
             animateKeepChatting = true
         }

@@ -16,7 +16,7 @@ struct ChatToolsProvider {
             getSaveUserCurrencyTool(),
             getSaveUserIncomeTool(),
             getSaveUserFreedomFundTool(),
-            getSaveUserChallengeTool(),
+
             getBillCreationTool(),
             getUpdateBillTool(),
             getExpenseCreationTool(),
@@ -31,7 +31,8 @@ struct ChatToolsProvider {
             getShowFlowStateTool(),
             getScheduleReminderTool(),
             getSearchFinancialRecordsTool(),
-            getConvertCurrencyTool()
+            getConvertCurrencyTool(),
+            getShowArcSimulatorTool()
         ]
     }
 
@@ -57,7 +58,7 @@ struct ChatToolsProvider {
     static func getSaveUserCurrencyTool() -> AnthropicTool {
         AnthropicTool(
             name: "save_user_currency",
-            description: "Save the user's currency during onboarding in preview mode. This will also generate mock financial data with amounts converted using the exchange rate.",
+            description: "Save the user's currency during onboarding.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
@@ -67,10 +68,10 @@ struct ChatToolsProvider {
                     ),
                     "exchange_rate": AnthropicToolProperty(
                         type: "number",
-                        description: "The approximate USD to [currency] exchange rate based on your training data. Use 1.0 for USD."
+                        description: "Optional: The approximate USD to [currency] exchange rate. Use 1.0 for USD."
                     )
                 ],
-                required: ["currency", "exchange_rate"]
+                required: ["currency"]
             )
         )
     }
@@ -109,22 +110,6 @@ struct ChatToolsProvider {
         )
     }
 
-    static func getSaveUserChallengeTool() -> AnthropicTool {
-        AnthropicTool(
-            name: "save_user_challenge",
-            description: "Save the user's main financial challenge or worry during real onboarding.",
-            inputSchema: AnthropicToolSchema(
-                type: "object",
-                properties: [
-                    "challenge": AnthropicToolProperty(
-                        type: "string",
-                        description: "The user's biggest money worry or financial challenge"
-                    )
-                ],
-                required: ["challenge"]
-            )
-        )
-    }
 
     static func getBillCreationTool() -> AnthropicTool {
         AnthropicTool(
@@ -450,6 +435,18 @@ struct ChatToolsProvider {
                     )
                 ],
                 required: ["amount", "from_currency", "to_currency"]
+            )
+        )
+    }
+
+    static func getShowArcSimulatorTool() -> AnthropicTool {
+        AnthropicTool(
+            name: "show_arc_simulator",
+            description: "Display an interactive arc simulator card in the chat. When tapped, it opens a full-screen sheet where the user can adjust their freedom fund with a slider and watch coins appear/disappear on a 12-month timeline. Use this after all onboarding data is collected and you've teased 'I noticed something in your numbers' - when the user says 'yes show me' or expresses interest.",
+            inputSchema: AnthropicToolSchema(
+                type: "object",
+                properties: [:],
+                required: []
             )
         )
     }

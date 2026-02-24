@@ -16,6 +16,7 @@ enum UIComponent: Codable, Equatable {
     case arcDisplay(Double)
     case flowStateCapsule(String) // "In flow", "Stagnant", or "Drifting"
     case instructionalImages([String]) // Bundle asset names for instructional image carousel
+    case arcSimulatorCard(currentArcs: Int, totalMonthlyBills: Double, freedomFund: Double, currency: String)
 
     // For JSON encoding/decoding if needed
     enum CodingKeys: String, CodingKey {
@@ -30,6 +31,9 @@ enum UIComponent: Codable, Equatable {
         case arcCount
         case flowState
         case imageNames
+        case currentArcs
+        case totalMonthlyBills
+        case freedomFund
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +70,12 @@ enum UIComponent: Codable, Equatable {
         case "instructionalImages":
             let imageNames = try container.decode([String].self, forKey: .imageNames)
             self = .instructionalImages(imageNames)
+        case "arcSimulatorCard":
+            let currentArcs = try container.decode(Int.self, forKey: .currentArcs)
+            let totalMonthlyBills = try container.decode(Double.self, forKey: .totalMonthlyBills)
+            let freedomFund = try container.decode(Double.self, forKey: .freedomFund)
+            let currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+            self = .arcSimulatorCard(currentArcs: currentArcs, totalMonthlyBills: totalMonthlyBills, freedomFund: freedomFund, currency: currency)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type")
         }
@@ -104,6 +114,12 @@ enum UIComponent: Codable, Equatable {
         case .instructionalImages(let imageNames):
             try container.encode("instructionalImages", forKey: .type)
             try container.encode(imageNames, forKey: .imageNames)
+        case .arcSimulatorCard(let currentArcs, let totalMonthlyBills, let freedomFund, let currency):
+            try container.encode("arcSimulatorCard", forKey: .type)
+            try container.encode(currentArcs, forKey: .currentArcs)
+            try container.encode(totalMonthlyBills, forKey: .totalMonthlyBills)
+            try container.encode(freedomFund, forKey: .freedomFund)
+            try container.encode(currency, forKey: .currency)
         }
     }
 }

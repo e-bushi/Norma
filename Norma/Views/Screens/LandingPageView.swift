@@ -120,13 +120,11 @@ struct LandingPageView: View {
                         Button(action: {
                             let vm = onboardingViewModel.previewModeViewModel
 
-                            // Simulate Phase 2 data (real onboarding)
+                            // Simulate onboarding data
                             vm.userName = "Chris"
                             vm.userCurrency = "USD"
                             vm.userIncome = 5000
                             vm.userFreedomFund = 1000
-                            vm.userChallenge = "Staying on budget while traveling"
-                            vm.isRealOnboarding = true
 
                             // Mock bill (Phase 2 collects at least one)
                             let dueDate = Calendar.current.date(from: DateComponents(

@@ -10,6 +10,7 @@ import SwiftUI
 struct ChatBubbleView: View {
     let message: ChatMessage
     var shouldAnimate: Bool = false
+    var onArcSimulatorTap: ((Int, Double, Double, String) -> Void)?
 
     var body: some View {
         if !message.isVisible {
@@ -17,7 +18,7 @@ struct ChatBubbleView: View {
         } else if message.role == .user {
             UserMessageBubble(content: message.content)
         } else {
-            AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight, shouldAnimate: shouldAnimate)
+            AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight, shouldAnimate: shouldAnimate, onArcSimulatorTap: onArcSimulatorTap)
         }
     }
 }
