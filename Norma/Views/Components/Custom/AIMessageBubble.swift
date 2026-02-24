@@ -73,11 +73,14 @@ struct AIMessageBubble: View {
         return false
     }
 
-    init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight, shouldAnimate: Bool = false) {
+    var onArcSimulatorTap: ((Int, Double, Double, String) -> Void)?
+
+    init(content: String, uiComponent: UIComponent? = nil, revealDirection: TextRevealDirection = .leftToRight, shouldAnimate: Bool = false, onArcSimulatorTap: ((Int, Double, Double, String) -> Void)? = nil) {
         self.content = content
         self.uiComponent = uiComponent
         self.revealDirection = revealDirection
         self.shouldAnimate = shouldAnimate
+        self.onArcSimulatorTap = onArcSimulatorTap
     }
 
     var body: some View {
@@ -103,6 +106,13 @@ struct AIMessageBubble: View {
                 case .arcDisplay(let arcCount):
                     ArcDisplayView(arcCount: arcCount)
                         .transition(.opacity.combined(with: .scale))
+                case .arcSimulatorCard(let currentArcs, _, _, let currency):
+                    ArcSimulatorCardView(currentArcs: currentArcs, currency: currency) {
+                        if case .arcSimulatorCard(let arcs, let bills, let fund, let curr) = component {
+                            onArcSimulatorTap?(arcs, bills, fund, curr)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale))
                 case .flowStateCapsule:
                     EmptyView()
                 case .instructionalImages:
@@ -290,10 +300,11 @@ struct ActionConfirmationCard: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(colorName).opacity(0.12))
+                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(colorName).opacity(0.3), lineWidth: 1)
+                .stroke(Color(colorName).opacity(0.2), lineWidth: 0.5)
         )
     }
 }

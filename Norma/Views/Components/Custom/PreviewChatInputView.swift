@@ -233,12 +233,7 @@ struct PreviewChatInputView: View {
                 }
             }
         }
-        .onChange(of: viewModel.triggerCapsuleAnimation) { _, newValue in
-            if newValue {
-                // Re-animate capsules when user adds their first bill
-                animateCapsules()
-            }
-        }
+
         .background(
             VStack(spacing: 0) {
                 Rectangle()

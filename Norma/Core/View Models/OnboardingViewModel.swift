@@ -770,7 +770,7 @@ class OnboardingViewModel: ObservableObject {
             let currency = previewModeViewModel.userCurrency ?? "USD"
             let monthlyIncome = previewModeViewModel.userIncome ?? 0
             let freedomFund = previewModeViewModel.userFreedomFund ?? 0
-            let painPoint = previewModeViewModel.userChallenge ?? ""
+            let painPoint = ""
 
             // Validation warnings for missing onboarding data
             if monthlyIncome == 0 {
@@ -779,9 +779,8 @@ class OnboardingViewModel: ObservableObject {
             if freedomFund == 0 {
                 print("⚠️ WARNING: Freedom fund not collected during onboarding!")
             }
-            if painPoint.isEmpty {
-                print("⚠️ WARNING: Financial challenge not collected during onboarding!")
-            }
+
+
 
             // Default reminder days (can be customized later in settings)
             let reminderDays = 3
