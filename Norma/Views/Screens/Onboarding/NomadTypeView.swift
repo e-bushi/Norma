@@ -163,7 +163,7 @@ struct NomadTypeView: View {
                         }) {
                             Text("Continue")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(selectedType != nil ? .white : .secondary)
+                                .foregroundColor(selectedType != nil ? .primary : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(
