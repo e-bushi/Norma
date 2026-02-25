@@ -17,7 +17,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
 
         UNUserNotificationCenter.current().delegate = self
-        registerForPushNotifications()
 
         return true
     }

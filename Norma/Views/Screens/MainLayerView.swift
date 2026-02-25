@@ -31,22 +31,23 @@ struct MainLayerView: View {
             let baseOffset = isMenuOpen ? menuWidth : 0
             let totalOffset = calculateTotalOffset(baseOffset: baseOffset, menuWidth: menuWidth)
 
-            mainLayerContent
-                .offset(x: totalOffset)
-                .shadow(color: Color.black.opacity(shadowOpacity(totalOffset: totalOffset, menuWidth: menuWidth)), radius: 10)
-                .gesture(menuDragGesture(menuWidth: menuWidth))
-                .onTapGesture {
-                    if isMenuOpen {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            isMenuOpen = false
+            ZStack(alignment: .leading) {
+                ChatMenuView(isMenuOpen: $isMenuOpen, mainLayerView: $appCoordinator.mainLayerView)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+
+                mainLayerContent
+                    .offset(x: totalOffset)
+                    .shadow(color: Color.black.opacity(shadowOpacity(totalOffset: totalOffset, menuWidth: menuWidth)), radius: 10)
+                    .onTapGesture {
+                        if isMenuOpen {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                isMenuOpen = false
+                            }
                         }
                     }
-                }
-                .background(
-                    ChatMenuView(isMenuOpen: $isMenuOpen, mainLayerView: $appCoordinator.mainLayerView)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .ignoresSafeArea()
-                )
+            }
+            .gesture(menuDragGesture(menuWidth: menuWidth))
         }
         .ignoresSafeArea(.keyboard)
         .onChange(of: appCoordinator.mainLayerView) { _, newView in

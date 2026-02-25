@@ -80,10 +80,8 @@ class VoiceRecordingService: ObservableObject {
             switch AVAudioApplication.shared.recordPermission {
             case .granted:
                 hasPermission = true
-            case .denied:
+            case .denied, .undetermined:
                 hasPermission = false
-            case .undetermined:
-                requestMicrophonePermission()
             @unknown default:
                 hasPermission = false
             }
@@ -91,10 +89,8 @@ class VoiceRecordingService: ObservableObject {
             switch audioSession.recordPermission {
             case .granted:
                 hasPermission = true
-            case .denied:
+            case .denied, .undetermined:
                 hasPermission = false
-            case .undetermined:
-                requestMicrophonePermission()
             @unknown default:
                 hasPermission = false
             }

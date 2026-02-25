@@ -145,7 +145,7 @@ struct NomadWelcomeView: View {
                             }) {
                                 Text("Get started")
                                     .font(.normaHeadline(16))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 56)
                                     .background(

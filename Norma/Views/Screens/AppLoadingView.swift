@@ -23,11 +23,8 @@ struct AppLoadingView: View {
     @State private var startHovering = false
 
     // Animation states - text
-    @State private var titleScale: CGFloat = 0.8
-    @State private var titleOpacity = 0.0
-    @State private var titleOffset: CGFloat = -20
-    @State private var subtitleOpacity = 0.0
-    @State private var subtitleScale: CGFloat = 0.9
+    @State private var titleAnimating = false
+    @State private var subtitleAnimating = false
 
     // Animation states - loading/start button
     @State private var loadingOpacity = 0.0
@@ -101,22 +98,23 @@ struct AppLoadingView: View {
                 .frame(width: 300, height: 300)
 
                 // Norma title
-                Text("Norma")
-                    .font(.normaTitle(64))
-                    .foregroundColor(.primary)
-                    .scaleEffect(titleScale)
-                    .opacity(titleOpacity)
-                    .offset(y: titleOffset)
+                WaveTextView(
+                    text: "Norma",
+                    font: .normaTitle(64),
+                    color: .primary,
+                    isAnimating: titleAnimating,
+                    alignment: .center
+                )
 
                 // Subtitle
-                Text("Financial clarity for wherever you call home")
-                    .font(.normaSubheadline(18))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .frame(maxWidth: 200)
-                    .scaleEffect(subtitleScale)
-                    .opacity(subtitleOpacity)
+                WaveTextView(
+                    text: "Financial clarity for wherever you call home",
+                    font: .normaSubheadline(18),
+                    color: .secondary,
+                    isAnimating: subtitleAnimating,
+                    alignment: .center
+                )
+                .frame(maxWidth: 200)
 
                 Spacer()
 
@@ -180,11 +178,7 @@ struct AppLoadingView: View {
         .onAppear {
             startAppearanceAnimations()
         }
-        .onChange(of: isDataReady) { _, ready in
-            if ready {
-                transitionToStartButton()
-            }
-        }
+        .onChange(of: isDataReady) { _, _ in }
         .onDisappear {
             dotTimer?.invalidate()
         }
@@ -213,40 +207,40 @@ struct AppLoadingView: View {
         }
 
         // Start continuous hover animation after all coins appear
-        let totalHoverDelay = startDelay + (Double(orbitingCoins.count) * staggerDelay) + 0.3
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalHoverDelay) {
+        let coinsFinishDelay = startDelay + (Double(orbitingCoins.count) * staggerDelay) + 0.3
+        DispatchQueue.main.asyncAfter(deadline: .now() + coinsFinishDelay) {
             startHovering = true
         }
 
-        // Title drops in with spring
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.75).delay(0.2)) {
-            titleScale = 1.0
-            titleOpacity = 1.0
-            titleOffset = 0
+        // Title wave animation after coins finish
+        let titleDelay = coinsFinishDelay + 0.4
+        DispatchQueue.main.asyncAfter(deadline: .now() + titleDelay) {
+            titleAnimating = true
         }
 
-        // Subtitle fades in and scales up
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4)) {
-            subtitleOpacity = 1.0
-            subtitleScale = 1.0
+        // Subtitle wave animation after title lands
+        let subtitleDelay = titleDelay + 1.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + subtitleDelay) {
+            subtitleAnimating = true
         }
 
-        // Loading indicator slides up
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.6)) {
-            loadingOpacity = 1.0
-            loadingOffset = 0
+        // Loading indicator slides up after subtitle finishes
+        let loadingDelay = subtitleDelay + 1.2
+        DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+                loadingOpacity = 1.0
+                loadingOffset = 0
+            }
         }
 
         // Start animated dots
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay + 0.3) {
             startDotAnimation()
         }
 
-        // Check if data is already ready
-        if isDataReady {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                transitionToStartButton()
-            }
+        // Start button appears last
+        DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay + 1.5) {
+            transitionToStartButton()
         }
     }
 

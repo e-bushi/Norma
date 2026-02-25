@@ -151,7 +151,7 @@ struct WelcomeJourneyView: View {
                         }) {
                             Text("Let's go")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(

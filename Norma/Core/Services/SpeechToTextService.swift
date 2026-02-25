@@ -57,10 +57,8 @@ class SpeechToTextService: ObservableObject {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized:
             hasPermission = true
-        case .denied, .restricted:
+        case .denied, .restricted, .notDetermined:
             hasPermission = false
-        case .notDetermined:
-            requestSpeechPermission()
         @unknown default:
             hasPermission = false
         }

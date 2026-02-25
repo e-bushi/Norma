@@ -259,7 +259,7 @@ struct OnboardingQuestionView: View {
                         }) {
                             Text("Continue")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(hasSelection ? .white : .secondary)
+                                .foregroundColor(hasSelection ? .primary : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(

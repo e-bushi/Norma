@@ -10,14 +10,14 @@ import SwiftUI
 struct ChatEmptyStateView: View {
     let arcCount: Int
 
-    @State private var visibleWords: Int = 0
+    @State private var textAnimating: Bool = false
     @State private var coinVisible: Bool = false
     @State private var timezonesVisible: Bool = false
     @State private var showTimezoneSelection: Bool = false
 
     @ObservedObject private var timezoneManager = TimezoneManager.shared
 
-    private let words = ["How", "can", "I", "help", "with", "your", "finances?"]
+    private let greetingText = "How can I help with your finances?"
     private let coinSize: CGFloat = 120
     private let capsuleColors: [Color] = [
         Color("NormaPastelTeal"),
@@ -44,33 +44,13 @@ struct ChatEmptyStateView: View {
                 .opacity(coinVisible ? 1 : 0)
                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: coinVisible)
 
-                VStack(spacing: 4) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(words[0...3].enumerated()), id: \.offset) { index, word in
-                            Text(word)
-                                .font(.normaHeadline())
-                                .tracking(-1)
-                                .fixedSize()
-                                .opacity(index < visibleWords ? 1 : 0)
-                                .scaleEffect(index < visibleWords ? 1 : 0.3)
-                                .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(Double(index) * 0.1), value: visibleWords)
-                        }
-                    }
-                    .fixedSize()
-
-                    HStack(spacing: 8) {
-                        ForEach(Array(words[4...6].enumerated()), id: \.offset) { index, word in
-                            Text(word)
-                                .font(.normaHeadline())
-                                .tracking(-1)
-                                .fixedSize()
-                                .opacity((index + 4) < visibleWords ? 1 : 0)
-                                .scaleEffect((index + 4) < visibleWords ? 1 : 0.3)
-                                .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(Double(index + 4) * 0.1), value: visibleWords)
-                        }
-                    }
-                    .fixedSize()
-                }
+                WaveTextView(
+                    text: greetingText,
+                    font: .normaHeadline(),
+                    color: .primary,
+                    isAnimating: textAnimating,
+                    alignment: .center
+                )
                 .padding(.horizontal, 40)
 
                 // Timezone button
@@ -134,7 +114,7 @@ struct ChatEmptyStateView: View {
             .position(x: geometry.size.width / 2, y: (geometry.size.height / 2) - 60)
             .onAppear {
                 coinVisible = false
-                visibleWords = 0
+                textAnimating = false
                 timezonesVisible = false
 
                 // Coin pops in first
@@ -143,7 +123,7 @@ struct ChatEmptyStateView: View {
                 }
                 // Words follow shortly after
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    visibleWords = words.count
+                    textAnimating = true
                 }
                 // Timezones appear last
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -152,7 +132,7 @@ struct ChatEmptyStateView: View {
             }
             .onDisappear {
                 coinVisible = false
-                visibleWords = 0
+                textAnimating = false
                 timezonesVisible = false
             }
         }

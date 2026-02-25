@@ -303,7 +303,7 @@ struct ChatMenuView: View {
                 isMenuOpen = false
             }
         } label: {
-            HStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 Image(systemName: "bubble.left")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)

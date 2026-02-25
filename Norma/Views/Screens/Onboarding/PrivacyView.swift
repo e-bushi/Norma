@@ -108,7 +108,7 @@ struct PrivacyView: View {
                         }) {
                             Text("I feel safe")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(

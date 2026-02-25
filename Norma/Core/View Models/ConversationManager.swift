@@ -344,10 +344,19 @@ class ConversationManager: ObservableObject {
 
     /// Format relative timestamp for display
     func relativeTimestamp(for conversation: ChatConversation) -> String {
-        let formatter = ISO8601DateFormatter()
-        guard let updatedAt = conversation.updatedAt,
-              let date = formatter.date(from: updatedAt) else {
-            return ""
+        // Try updatedAt first, then fall back to createdAt
+        let dateString = conversation.updatedAt ?? conversation.createdAt
+        guard let dateString else { return "Just now" }
+
+        // Try with fractional seconds first (Supabase format), then without
+        let formatterWithFractional = ISO8601DateFormatter()
+        formatterWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let formatterBasic = ISO8601DateFormatter()
+
+        guard let date = formatterWithFractional.date(from: dateString)
+                ?? formatterBasic.date(from: dateString) else {
+            return "Just now"
         }
 
         let relativeFormatter = RelativeDateTimeFormatter()
