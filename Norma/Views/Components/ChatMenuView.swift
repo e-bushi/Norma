@@ -19,18 +19,18 @@ struct ChatMenuView: View {
     @State private var conversationToDelete: ChatConversation?
     @State private var showAllChats = false
 
-    // Display up to 6 conversations in menu
+    // Display up to 4 conversations in menu
     private var displayedConversations: [ChatConversation] {
-        Array(conversationManager.conversations.prefix(6))
+        Array(conversationManager.conversations.prefix(4))
     }
 
     // Check if there are more conversations than displayed
     private var hasMoreConversations: Bool {
-        conversationManager.conversations.count > 6
+        conversationManager.conversations.count > 4
     }
 
     private var additionalConversationsCount: Int {
-        max(0, conversationManager.conversations.count - 6)
+        max(0, conversationManager.conversations.count - 4)
     }
 
     // Get user initials from name
@@ -71,9 +71,8 @@ struct ChatMenuView: View {
                     }
                 })
 
-                compactMenuItem(icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90", title: "Purchasing Power", action: {
-                    // Navigate to currency converter
-                    mainLayerView = .currencyConverter
+                compactMenuItem(icon: "chart.line.text.clipboard", title: "Financial Overview", action: {
+                    mainLayerView = .overview
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         isMenuOpen = false
                     }
@@ -273,7 +272,7 @@ struct ChatMenuView: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.clear)

@@ -12,9 +12,6 @@ struct ChatInputView: View {
     let isLoading: Bool
     let onSend: () -> Void
     let onVoiceInput: () -> Void
-    let billsTotal: Double
-    let activeChallenge: Challenge?
-    let monthlySpend: Double
 
     @State private var showBills = false
     @State private var showChallenge = false
@@ -23,8 +20,13 @@ struct ChatInputView: View {
     @State private var isExpanded: Bool = true
     @State private var pressedCapsule: String? = nil
     @State private var isKeyboardVisible: Bool = false
+    @State private var billsTotal: Double = 0
+    @State private var monthlySpend: Double = 0
+    @State private var activeChallenge: Challenge?
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
+    @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var expenseViewModel: ExpenseViewModel
 
     private var currentMonthAbbreviation: String {
         let formatter = DateFormatter()
@@ -72,6 +74,8 @@ struct ChatInputView: View {
                                         .font(.normaFinancial(14))
                                         .lineLimit(1)
                                         .fixedSize()
+                                        .contentTransition(.numericText(value: billsTotal))
+                                        .animation(.snappy(duration: 0.4), value: billsTotal)
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -106,6 +110,8 @@ struct ChatInputView: View {
                                             .font(.normaFinancial(14))
                                             .lineLimit(1)
                                             .fixedSize()
+                                            .contentTransition(.numericText(value: challenge.amountRemaining))
+                                            .animation(.snappy(duration: 0.4), value: challenge.amountRemaining)
                                     } else {
                                         Text("No Challenge")
                                             .font(.normaFinancial(14))
@@ -146,6 +152,8 @@ struct ChatInputView: View {
                                     .font(.normaFinancial(14))
                                     .lineLimit(1)
                                     .fixedSize()
+                                    .contentTransition(.numericText(value: monthlySpend))
+                                    .animation(.snappy(duration: 0.4), value: monthlySpend)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -220,14 +228,33 @@ struct ChatInputView: View {
             )
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, isKeyboardVisible ? 12 : 0)
+            .padding(.bottom, isKeyboardVisible ? 12 : 16)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isKeyboardVisible)
         }
         .padding(.top, 12)
         .onAppear {
+            // Initialize capsule values
+            billsTotal = billViewModel.bills.reduce(0) { $0 + $1.amount }
+            monthlySpend = expenseViewModel.currentMonthExpenses
+            activeChallenge = challengeViewModel.activeChallenge
             // Animate capsules appearing
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 visibleCapsules = 3
+            }
+        }
+        .onReceive(expenseViewModel.$currentMonthExpenses) { newValue in
+            withAnimation(.snappy(duration: 0.4)) {
+                monthlySpend = newValue
+            }
+        }
+        .onReceive(billViewModel.$bills) { bills in
+            withAnimation(.snappy(duration: 0.4)) {
+                billsTotal = bills.reduce(0) { $0 + $1.amount }
+            }
+        }
+        .onReceive(challengeViewModel.$activeChallenge) { challenge in
+            withAnimation(.snappy(duration: 0.4)) {
+                activeChallenge = challenge
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -299,22 +326,18 @@ struct SendButtonStyle: ButtonStyle {
 #Preview {
     @Previewable @State var text = ""
 
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+
     return ChatInputView(
         text: $text,
         isLoading: false,
         onSend: { print("Send tapped") },
-        onVoiceInput: { print("Voice input tapped") },
-        billsTotal: 1234.56,
-        activeChallenge: Challenge(
-            userId: "user",
-            amountTotal: 500,
-            amountRemaining: 247,
-            currency: "USD",
-            startDate: Date(),
-            endDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date(),
-            status: .active
-        ),
-        monthlySpend: 2567.89
+        onVoiceInput: { print("Voice input tapped") }
     )
+    .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+    .environmentObject(ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+    .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+    .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .background(Color("NormaBackground"))
 }

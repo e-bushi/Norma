@@ -100,6 +100,7 @@ struct OnboardingInsights: Codable, Equatable {
 
 struct ProfileSettings: Codable, Equatable {
     var currency: String
+    var spendingCurrency: String?
     var monthlyIncome: Double  // After-tax monthly income
     var freedomFund: Double
     var painPoint: String
@@ -111,6 +112,7 @@ struct ProfileSettings: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case currency
+        case spendingCurrency = "spending_currency"
         case monthlyIncome = "monthly_income"
         case freedomFund = "freedom_fund"
         case painPoint = "pain_point"
@@ -123,6 +125,7 @@ struct ProfileSettings: Codable, Equatable {
 
     init(
         currency: String = "USD",
+        spendingCurrency: String? = nil,
         monthlyIncome: Double = 0,
         freedomFund: Double = 0,
         painPoint: String = "",
@@ -133,6 +136,7 @@ struct ProfileSettings: Codable, Equatable {
         hasReceivedWelcome: Bool = false
     ) {
         self.currency = currency
+        self.spendingCurrency = spendingCurrency
         self.monthlyIncome = monthlyIncome
         self.freedomFund = freedomFund
         self.painPoint = painPoint
@@ -148,6 +152,7 @@ struct ProfileSettings: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
+        spendingCurrency = try container.decodeIfPresent(String.self, forKey: .spendingCurrency)
         monthlyIncome = try container.decodeIfPresent(Double.self, forKey: .monthlyIncome) ?? 0
         freedomFund = try container.decodeIfPresent(Double.self, forKey: .freedomFund) ?? 0
         painPoint = try container.decodeIfPresent(String.self, forKey: .painPoint) ?? ""

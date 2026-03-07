@@ -220,10 +220,24 @@ class ChatToolExecutor {
         let merchant = input["merchant"] as? String
         let tags = input["tags"] as? [String] ?? []
 
+        // Normalize date to full ISO8601 format with timezone
+        let normalizedDate: String
+        let hasTimezone = expenseDateString.hasSuffix("Z") ||
+            expenseDateString.range(of: #"[+-]\d{2}:?\d{2}$"#, options: .regularExpression) != nil
+        if !expenseDateString.contains("T") {
+            // Just a date like "2026-03-01"
+            normalizedDate = expenseDateString + "T00:00:00Z"
+        } else if !hasTimezone {
+            // Has time but no timezone like "2026-03-01T12:00:00"
+            normalizedDate = expenseDateString + "Z"
+        } else {
+            normalizedDate = expenseDateString
+        }
+
         let success = await expenseViewModel.addExpense(
             name: name,
             amount: amount,
-            expenseDate: expenseDateString,
+            expenseDate: normalizedDate,
             billId: nil,
             paymentMethod: paymentMethod,
             isRecurring: false,

@@ -113,25 +113,37 @@ extension DataManager {
     
     func getExpenses(for category: Category? = nil, in dateRange: DateInterval? = nil) -> [Expense] {
         var filtered = expenses
-        
+
         if let category = category {
             filtered = filtered.filter { $0.budgetId == category.id }
         }
-        
+
         if let dateRange = dateRange {
-            let dateFormatter = ISO8601DateFormatter()
             filtered = filtered.filter { expense in
-                guard let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
+                guard let expenseDate = parseISO8601Date(expense.expenseDate) else { return false }
                 return dateRange.contains(expenseDate)
             }
         }
-        
-        let dateFormatter = ISO8601DateFormatter()
-        return filtered.sorted { 
-            guard let date1 = dateFormatter.date(from: $0.expenseDate),
-                  let date2 = dateFormatter.date(from: $1.expenseDate) else { return false }
+
+        return filtered.sorted {
+            guard let date1 = parseISO8601Date($0.expenseDate),
+                  let date2 = parseISO8601Date($1.expenseDate) else { return false }
             return date1 > date2
         }
+    }
+
+    /// Parses ISO8601 date strings flexibly, handling missing timezone suffixes
+    private func parseISO8601Date(_ dateString: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: dateString) {
+            return date
+        }
+        // Retry with "Z" appended for dates missing timezone (e.g. "2026-03-01T12:00:00")
+        if dateString.contains("T") {
+            return formatter.date(from: dateString + "Z")
+        }
+        // Try date-only format (e.g. "2026-03-01")
+        return formatter.date(from: dateString + "T00:00:00Z")
     }
     
     func getTotalExpenses(for period: DateInterval? = nil) -> Double {

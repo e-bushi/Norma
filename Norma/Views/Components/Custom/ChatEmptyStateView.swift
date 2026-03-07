@@ -14,6 +14,7 @@ struct ChatEmptyStateView: View {
     @State private var coinVisible: Bool = false
     @State private var timezonesVisible: Bool = false
     @State private var showTimezoneSelection: Bool = false
+    @State private var visibleCapsuleCount: Int = 0
 
     @ObservedObject private var timezoneManager = TimezoneManager.shared
 
@@ -53,61 +54,47 @@ struct ChatEmptyStateView: View {
                 )
                 .padding(.horizontal, 40)
 
-                // Timezone button
+                // Timezone capsules or add button
                 if timezoneManager.selectedTimezones.isEmpty {
                     Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
                         showTimezoneSelection = true
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "clock.fill")
-                                .font(.system(size: 12))
-                            Text("Add World Clocks")
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("World Clocks")
                                 .font(.normaFinancial(14))
-                                .lineLimit(1)
-                                .fixedSize()
                         }
-                        .foregroundColor(Color("NormaPastelTeal"))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(Color("NormaPastelTeal").opacity(0.15))
-                                .glassEffect(in: Capsule())
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
+                                .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
                         )
                     }
-                    .buttonStyle(CapsulePressStyle())
+                    .buttonStyle(.plain)
                     .padding(.top, 16)
                     .opacity(timezonesVisible ? 1 : 0)
                     .scaleEffect(timezonesVisible ? 1 : 0.3)
                     .animation(.spring(response: 0.5, dampingFraction: 0.7), value: timezonesVisible)
                 } else {
-                    VStack(spacing: 12) {
-                        // First row: up to 2 timezones
-                        HStack(spacing: 10) {
-                            ForEach(Array(timezoneManager.selectedTimezones.prefix(2).enumerated()), id: \.element.id) { index, timezone in
-                                TimezoneCapsuleView(timezone: timezone, color: capsuleColors[index]) {
-                                    showTimezoneSelection = true
-                                }
-                            }
-                        }
-
-                        // Second row: 3rd timezone if exists
-                        if timezoneManager.selectedTimezones.count > 2 {
-                            TimezoneCapsuleView(timezone: timezoneManager.selectedTimezones[2], color: capsuleColors[2]) {
+                    // Vertical list of timezone capsules with staggered entrance
+                    VStack(spacing: 8) {
+                        ForEach(Array(timezoneManager.selectedTimezones.prefix(3).enumerated()), id: \.element.id) { index, timezone in
+                            TimezoneCapsuleView(timezone: timezone, color: capsuleColors[index]) {
                                 showTimezoneSelection = true
                             }
+                            .opacity(visibleCapsuleCount > index ? 1 : 0)
+                            .offset(y: visibleCapsuleCount > index ? 0 : 10)
+                            .animation(
+                                .spring(response: 0.45, dampingFraction: 0.75)
+                                    .delay(Double(index) * 0.1),
+                                value: visibleCapsuleCount
+                            )
                         }
                     }
                     .padding(.top, 16)
-                    .opacity(timezonesVisible ? 1 : 0)
-                    .scaleEffect(timezonesVisible ? 1 : 0.3)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: timezonesVisible)
                 }
             }
             .frame(width: geometry.size.width)
@@ -128,12 +115,14 @@ struct ChatEmptyStateView: View {
                 // Timezones appear last
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     timezonesVisible = true
+                    visibleCapsuleCount = timezoneManager.selectedTimezones.prefix(3).count
                 }
             }
             .onDisappear {
                 coinVisible = false
                 textAnimating = false
                 timezonesVisible = false
+                visibleCapsuleCount = 0
             }
         }
         .sheet(isPresented: $showTimezoneSelection) {

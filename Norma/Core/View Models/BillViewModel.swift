@@ -50,15 +50,11 @@ class BillViewModel: ObservableObject {
     
     private let dataManager: DataManager
     private let sessionViewModel: SessionViewModel
-    @Published var verificationService: BillPeriodVerificationService
-    
     // MARK: - Initialization
     
     init(dataManager: DataManager, sessionViewModel: SessionViewModel) {
         self.dataManager = dataManager
         self.sessionViewModel = sessionViewModel
-        self.verificationService = BillPeriodVerificationService(dataManager: dataManager)
-        
         setupObservers()
         loadBills()
     }
@@ -91,8 +87,6 @@ class BillViewModel: ObservableObject {
         totalMonthlyBills = dataManager.getTotalMonthlyBills()
         nextBillDue = dataManager.getNextBillDue()
 
-        // Check for bill verification after loading
-        checkForBillVerification()
     }
     
     private func updateOverdueBills() {
@@ -122,11 +116,6 @@ class BillViewModel: ObservableObject {
         }
     }
     
-    private func checkForBillVerification() {
-        // Get expenses from dataManager to check for verification
-        let expenses = dataManager.expenses
-        verificationService.checkForNewPeriod(bills: bills, expenses: expenses)
-    }
     
     func refreshBills() async {
         // Cancel any existing refresh task

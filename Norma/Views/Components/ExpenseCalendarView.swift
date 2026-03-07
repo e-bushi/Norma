@@ -12,16 +12,16 @@ struct ExpenseCalendarView: View {
     @Binding var selectedDate: Date
     @State private var currentMonth: Date = Date()
     @EnvironmentObject var profileViewModel: ProfileViewModel
-    @EnvironmentObject var sessionViewModel: SessionViewModel
-    @EnvironmentObject var billViewModel: BillViewModel
-    @EnvironmentObject var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject var incomeViewModel: IncomeViewModel
-    @Environment(\.colorScheme) var colorScheme
 
     // Wave animation state
     @State private var waveAnimationStart: Date? = nil
     @State private var waveOriginCol: Int = 0
     @State private var waveOriginRow: Int = 0
+
+    // Long press / MiniChat state
+    @State private var showMiniChat = false
+    @State private var longPressedDate: Date? = nil
+    @State private var pressingDate: Date? = nil
 
     // Wave parameters
     private let waveWidth: CGFloat = 2.5
@@ -31,209 +31,14 @@ struct ExpenseCalendarView: View {
     // Haptic feedback
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
 
-    // Numeric animation state
-    @State private var hasAppeared = false
-    @State private var summaryItem1Appeared = false
-    @State private var summaryItem2Appeared = false
-    @State private var summaryItem3Appeared = false
-
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
-    
+
     // Dictionary to track expenses per day (for the dots)
     var expensesPerDay: [Date: [Double]] = [:]
     
-    private var totalExpensesThisMonth: Double {
-        let calendar = Calendar.current
-        let expenses = expensesPerDay.filter { date, _ in
-            calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
-        }
-        return expenses.values.flatMap { $0 }.reduce(0, +)
-    }
-
-    private var displayedTotal: Double {
-        hasAppeared ? totalExpensesThisMonth : 0
-    }
-
-    // Current month non-bill expenses
-    private var currentMonthNonBillExpenses: [Expense] {
-        let calendar = Calendar.current
-        let now = Date()
-        let currentMonthNum = calendar.component(.month, from: now)
-        let currentYear = calendar.component(.year, from: now)
-
-        return expenseViewModel.expenses.filter { expense in
-            // Exclude bill payments
-            guard expense.billId == nil else { return false }
-
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            if let date = formatter.date(from: expense.expenseDate) {
-                let expenseMonth = calendar.component(.month, from: date)
-                let expenseYear = calendar.component(.year, from: date)
-                return expenseMonth == currentMonthNum && expenseYear == currentYear
-            } else {
-                formatter.formatOptions = [.withInternetDateTime]
-                if let date = formatter.date(from: expense.expenseDate) {
-                    let expenseMonth = calendar.component(.month, from: date)
-                    let expenseYear = calendar.component(.year, from: date)
-                    return expenseMonth == currentMonthNum && expenseYear == currentYear
-                }
-            }
-            return false
-        }
-    }
-
-    // Total non-bill expenses for current month
-    private var totalNonBillExpensesThisMonth: Double {
-        currentMonthNonBillExpenses.reduce(0) { $0 + $1.amount }
-    }
-
-    // Available budget after bills (using user's set monthly income from settings)
-    private var availableAfterBills: Double {
-        let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        return monthlyIncome - billViewModel.totalBillsThisMonth
-    }
-
-    // Remaining discretionary budget
-    private var remainingDiscretionary: Double {
-        availableAfterBills - totalNonBillExpensesThisMonth
-    }
-
-    // Displayed values for numeric animation (staggered)
-    private var displayedAvailableAfterBills: Double {
-        summaryItem1Appeared ? availableAfterBills : 0
-    }
-
-    private var displayedSpent: Double {
-        summaryItem2Appeared ? totalNonBillExpensesThisMonth : 0
-    }
-
-    private var displayedRemaining: Double {
-        summaryItem3Appeared ? remainingDiscretionary : 0
-    }
-
-    private var daysWithExpenses: Int {
-        let calendar = Calendar.current
-        return expensesPerDay.filter { date, _ in
-            calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
-        }.count
-    }
-    
     var body: some View {
         VStack(spacing: 24) {
-            // Header section matching ExpenseTrackerChartView style
-            VStack(spacing: 12) {
-                Text(monthYearFormatter.string(from: currentMonth).uppercased())
-                    .font(.normaFinancial(18))
-                    .foregroundColor(.secondary)
-                    .tracking(1.2)
-
-                // Summary stats - redesigned with larger numbers and glow
-                VStack(spacing: 8) {
-                    Text(profileViewModel.formatCurrency(displayedTotal))
-                        .font(.normaHeadline(72))
-                        .foregroundColor(.primary)
-                        .shadow(color: Color("NormaPastelCoral").opacity(0.25), radius: 20, y: 4)
-                        .contentTransition(.numericText())
-                    Text("Total spent this month")
-                        .font(.normaInput(13))
-                        .foregroundColor(.secondary)
-                }
-                .onAppear {
-                    // Big number animates first
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            hasAppeared = true
-                        }
-                    }
-                    // Staggered budget summary items
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            summaryItem1Appeared = true
-                        }
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            summaryItem2Appeared = true
-                        }
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            summaryItem3Appeared = true
-                        }
-                    }
-                }
-
-                // Budget Summary
-                VStack(spacing: 16) {
-                    // Available after bills
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "banknote")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelTeal"))
-                            Text("Available after bills")
-                                .font(.normaInput(15))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Text(profileViewModel.formatCurrency(displayedAvailableAfterBills))
-                            .font(.normaFinancial(16))
-                            .foregroundColor(availableAfterBills >= 0 ? Color("NormaPastelTeal") : Color("NormaPastelCoral"))
-                            .contentTransition(.numericText())
-                    }
-
-                    // Amount spent (non-bill)
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "cart")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color("NormaPastelCoral"))
-                            Text("Spent (excl. bills)")
-                                .font(.normaInput(15))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Text(profileViewModel.formatCurrency(displayedSpent))
-                            .font(.normaFinancial(16))
-                            .foregroundColor(.primary)
-                            .contentTransition(.numericText())
-                    }
-
-                    // Remaining
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "wallet.pass")
-                                .font(.system(size: 16))
-                                .foregroundColor(remainingDiscretionary >= 0 ? Color("NormaPastelBeige") : Color("NormaPastelCoral"))
-                            Text("Remaining")
-                                .font(.normaInput(15))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Text(profileViewModel.formatCurrency(displayedRemaining))
-                            .font(.normaFinancial(16))
-                            .fontWeight(.semibold)
-                            .foregroundColor(remainingDiscretionary >= 0 ? .primary : Color("NormaPastelCoral"))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.gray.opacity(0.03))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
-                )
-                .padding(.horizontal, 8)
-                .padding(.top, 8)
-            }
-
             // Calendar container
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
@@ -283,19 +88,29 @@ struct ExpenseCalendarView: View {
                                         waveWidth: waveWidth,
                                         distanceFromOrigin: distance
                                     )
+                                    .scaleEffect(pressingDate == date ? 0.88 : 1.0)
+                                    .opacity(pressingDate == date ? 0.7 : 1.0)
+                                    .animation(.easeInOut(duration: 0.25), value: pressingDate)
                                     .onTapGesture {
-                                        // Haptic feedback
                                         impactGenerator.impactOccurred()
-
-                                        // Trigger wave animation
                                         triggerWaveAnimation(fromCol: col, fromRow: row)
 
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             selectedDate = date
                                         }
                                     }
+                                    .onLongPressGesture(minimumDuration: 0.5) {
+                                        let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+                                        mediumImpact.impactOccurred()
+                                        pressingDate = nil
+                                        longPressedDate = date
+                                        showMiniChat = true
+                                    } onPressingChanged: { pressing in
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            pressingDate = pressing ? date : nil
+                                        }
+                                    }
                                 } else {
-                                    // Empty cell for placeholders
                                     Rectangle()
                                         .foregroundColor(.clear)
                                         .frame(height: 45)
@@ -307,9 +122,27 @@ struct ExpenseCalendarView: View {
                     .padding(.vertical, 20)
                 }
             }
+
+            // Hold-to-add hint
+            HStack(spacing: 8) {
+                Image(systemName: "hand.tap")
+                    .font(.system(size: 14, weight: .medium))
+                Text("Hold a day to add an expense")
+                    .font(.normaInput(14))
+            }
+            .foregroundColor(.secondary.opacity(0.4))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .sheet(isPresented: $showMiniChat) {
+            if let date = longPressedDate {
+                MiniChatView(selectedDate: date, context: .expense)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
     }
-    
+
     // Extract all the dates for the current month's calendar view (including leading/trailing days)
     private func extractDates() -> [Date?] {
         let calendar = Calendar.current
@@ -382,11 +215,6 @@ struct ExpenseCalendarView: View {
         }
     }
 
-    private var monthYearFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter
-    }
 }
 
 // Day cell component
@@ -434,50 +262,47 @@ struct DayCell: View {
         return profileViewModel.formatCurrencyTruncated(expenseTotal)
     }
 
-    var body: some View {
-        VStack(spacing: 4) {
-            Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(cellTextColor)
+    private var showNumber: Bool {
+        isSelected || isToday || expenseCount > 0
+    }
 
-            // Expense indicator
+    var body: some View {
+        VStack(spacing: 3) {
+            if showNumber {
+                Text("\(Calendar.current.component(.day, from: date))")
+                    .font(.system(size: 14, weight: expenseCount > 0 ? .semibold : .medium, design: .rounded))
+                    .foregroundColor(cellTextColor)
+            } else {
+                Circle()
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 4, height: 4)
+            }
+
+            // Expense amount
             if expenseCount > 0 {
                 Text(formattedExpenseAmount)
-                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundColor(expenseAmountColor)
             } else {
                 Text(" ")
-                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                    .font(.system(size: 9))
             }
         }
-        .frame(height: 45)
+        .frame(height: 48)
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 0.85, green: 0.82, blue: 0.92).opacity(0.5),
-                                    Color(red: 0.88, green: 0.85, blue: 0.94).opacity(0.4)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(red: 0.75, green: 0.70, blue: 0.85).opacity(0.4), lineWidth: 1.5)
+                        .fill(Color("NormaPastelCoral"))
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color("NormaPastelCoral").opacity(0.08))
-
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color("NormaPastelCoral").opacity(0.25), lineWidth: 1)
                 } else if expenseCount > 0 {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color("NormaPastelCoral").opacity(0.05))
+                        .fill(Color.gray.opacity(0.04))
                 }
             }
         )
@@ -489,19 +314,19 @@ struct DayCell: View {
 
     private var cellTextColor: Color {
         if isSelected {
-            return .primary
+            return .white
         } else if isToday {
             return Color("NormaPastelCoral")
-        } else if !isCurrentMonth {
-            return .secondary.opacity(0.5)
-        } else {
+        } else if expenseCount > 0 {
             return .primary
+        } else {
+            return .secondary
         }
     }
 
     private var expenseAmountColor: Color {
         if isSelected {
-            return .primary.opacity(0.8)
+            return .white.opacity(0.9)
         } else {
             return Color("NormaPastelCoral").opacity(0.9)
         }
@@ -540,8 +365,12 @@ extension Date {
         expensesPerDay[twoWeeks.startOfDay] = [15000.00, 5000.00]
     }
     
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+
     return VStack {
         ExpenseCalendarView(selectedDate: .constant(Date()), expensesPerDay: expensesPerDay)
     }
     .padding()
+    .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
 }

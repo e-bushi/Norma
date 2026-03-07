@@ -21,12 +21,12 @@ struct ArcCountView: View {
     @State private var showInfoPopover = false
 
     // Staggered animation states
+    @State private var waveAnimating = false
     @State private var heroVisible = false
     @State private var arcCountVisible = false
     @State private var statsVisible = false
-    @State private var reminderVisible = false
     @State private var monthsHeaderVisible = false
-    @State private var coinVisibility: [Bool] = Array(repeating: false, count: 12)
+    @State private var coinVisibility: [Bool] = Array(repeating: false, count: 24)
 
     // Haptic generator
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
@@ -53,14 +53,26 @@ struct ArcCountView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
+    private var waveWords: [(word: String, color: Color)] {
+        var words: [(String, Color)] = []
+        words.append(("You", .primary))
+        words.append(("can", .primary))
+        words.append(("pay", .primary))
+        words.append(("\(arcCount)", Color("NormaPastelTeal")))
+        words.append((arcCount == 1 ? "month" : "months", Color("NormaPastelTeal")))
+        words.append(("of", .primary))
+        words.append(("bills.", .primary))
+        return words
+    }
+
     // Get months starting from next month
-    private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool)] {
+    private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)] {
         let calendar = Calendar.current
         let now = Date()
 
-        return (1...12).map { offset in
+        return (1...24).map { offset in
             guard let futureDate = calendar.date(byAdding: .month, value: offset, to: now) else {
-                return (name: "", shortName: "", isCovered: false)
+                return (name: "", shortName: "", isCovered: false, year: 0)
             }
 
             let formatter = DateFormatter()
@@ -70,10 +82,10 @@ struct ArcCountView: View {
             formatter.dateFormat = "MMM"
             let shortName = formatter.string(from: futureDate)
 
-            // A month is covered if its position (1-indexed) <= arcCount
+            let year = calendar.component(.year, from: futureDate)
             let isCovered = offset <= arcCount
 
-            return (name: fullName, shortName: shortName, isCovered: isCovered)
+            return (name: fullName, shortName: shortName, isCovered: isCovered, year: year)
         }
     }
 
@@ -81,192 +93,145 @@ struct ArcCountView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Hero coin with glow and progress ring
-                    VStack(spacing: 16) {
-                        ZStack {
-                            // Glow effect behind coin (color matches current tier)
-                            Circle()
-                                .fill(CoinTierService.currentCoinTier(for: arcCount).glowColor.opacity(0.10))
-                                .frame(width: 160, height: 160)
-                                .blur(radius: 30)
-                                .scaleEffect(heroVisible ? 1 : 0.5)
-                                .opacity(heroVisible ? 1 : 0)
-
-                            // Progress ring background
-                            Circle()
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 6)
-                                .frame(width: 140, height: 140)
-                                .scaleEffect(heroVisible ? 1 : 0.8)
-                                .opacity(heroVisible ? 1 : 0)
-
-                            // Progress ring foreground
-                            Circle()
-                                .trim(from: 0, to: heroVisible ? progressToNextArc : 0)
-                                .stroke(
-                                    Color("NormaPastelTeal"),
-                                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                                )
-                                .frame(width: 140, height: 140)
-                                .rotationEffect(.degrees(-90))
-
-                            // Spinning coin (proper SceneKit rotation)
-                            HeroCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
-                                .id(CoinTierService.currentCoinFileName(for: arcCount))
-                                .frame(width: 100, height: 100)
-                                .scaleEffect(heroVisible ? 1 : 0)
-                                .opacity(heroVisible ? 1 : 0)
-                        }
-
-                        // Arc count display
-                        VStack(spacing: 12) {
-                            HStack(spacing: 8) {
-                                Text("x")
-                                    .font(.normaHeadline(32))
-                                    .foregroundColor(.secondary)
-                                Text("\(arcCount)")
-                                    .font(.normaHeadline(56))
-                                    .foregroundColor(.primary)
-                            }
-
-                            // Progress capsule
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color("NormaPastelTeal"))
-                                Text("\(formatCurrency(amountToNextArc)) to next arc")
-                                    .font(.normaInput(13))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(Color.gray.opacity(0.08))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.gray.opacity(0.12), lineWidth: 0.5)
-                            )
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                    // Wave text headline
+                    ColoredWaveTextView(
+                        words: waveWords,
+                        font: .normaHeadline(64),
+                        isAnimating: waveAnimating,
+                        alignment: .leading
+                    )
                     .padding(.top, 16)
-                    .opacity(arcCountVisible ? 1 : 0)
-                    .offset(y: arcCountVisible ? 0 : 20)
+                    .onAppear { waveAnimating = true }
 
-                    // Stats section (row-based like ExpenseCalendarView)
-                    VStack(spacing: 16) {
-                        // Freedom Fund
+                    // Freedom Fund card with coin + arc count
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Header row: label + edit
                         HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: "banknote")
-                                    .font(.system(size: 16))
+                            Text("Freedom Fund")
+                                .font(.normaInput(13))
+                                .foregroundColor(.secondary.opacity(0.6))
+
+                            Spacer()
+
+                            Button {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showFreedomFundEdit = true
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary.opacity(0.4))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+
+                        // Hero amount
+                        Text(formatCurrency(freedomFund))
+                            .font(.normaHeadline(46))
+                            .foregroundColor(.primary)
+                            .minimumScaleFactor(0.7)
+                            .lineLimit(1)
+
+                        // Dashed divider
+                        DashedDividerShape()
+                            .stroke(Color.gray.opacity(0.15), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            .frame(height: 1)
+                            .padding(.vertical, 2)
+
+                        // Coin + arc count + bills info
+                        HStack(spacing: 12) {
+                            // Spinning coin with glow
+                            ZStack {
+                                Circle()
+                                    .fill(CoinTierService.currentCoinTier(for: arcCount).glowColor.opacity(0.10))
+                                    .frame(width: 48, height: 48)
+                                    .blur(radius: 10)
+
+                                HeroCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
+                                    .id(CoinTierService.currentCoinFileName(for: arcCount))
+                                    .frame(width: 36, height: 36)
+                            }
+                            .scaleEffect(heroVisible ? 1 : 0)
+                            .opacity(heroVisible ? 1 : 0)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text("\(arcCount)")
+                                        .font(.normaFinancial(16))
+                                        .foregroundColor(.primary)
+                                    Text(arcCount == 1 ? "arc" : "arcs")
+                                        .font(.normaInput(13))
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                }
+
+                                Text("\(formatCurrency(totalMonthlyBills))/mo in bills")
+                                    .font(.normaInput(12))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .opacity(arcCountVisible ? 1 : 0)
+
+                            Spacer()
+
+                            HStack(spacing: 5) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 11))
                                     .foregroundColor(Color("NormaPastelTeal"))
-                                Text("Freedom Fund")
-                                    .font(.normaInput(15))
-                                    .foregroundColor(.secondary)
+                                Text("\(formatCurrency(amountToNextArc)) to next")
+                                    .font(.normaInput(12))
+                                    .foregroundColor(Color("NormaPastelTeal"))
                             }
-                            Spacer()
-                            Text(formatCurrency(freedomFund))
-                                .font(.normaFinancial(16))
-                                .foregroundColor(Color("NormaPastelTeal"))
-                        }
-
-                        // Monthly Bills
-                        HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(Color("NormaPastelPurple"))
-                                Text("Monthly Bills")
-                                    .font(.normaInput(15))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Text(formatCurrency(totalMonthlyBills))
-                                .font(.normaFinancial(16))
-                                .foregroundColor(.primary)
-                        }
-
-                        // Arc Count
-                        HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: "shield.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(Color("NormaPastelBeige"))
-                                Text("Months Protected")
-                                    .font(.normaInput(15))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Text("\(arcCount) arcs")
-                                .font(.normaFinancial(16))
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.03))
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(.clear)
+                                .glassEffect(in: RoundedRectangle(cornerRadius: 20))
+
+                            Canvas { context, size in
+                                let origin = CGPoint(x: size.width, y: size.height)
+                                let ringCount = 6
+                                let maxRadius: CGFloat = 180
+                                let ringSpacing = maxRadius / CGFloat(ringCount)
+                                let tierColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
+
+                                for i in 1...ringCount {
+                                    let radius = CGFloat(i) * ringSpacing
+                                    let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                                    let rect = CGRect(
+                                        x: origin.x - radius,
+                                        y: origin.y - radius,
+                                        width: radius * 2,
+                                        height: radius * 2
+                                    )
+                                    context.stroke(
+                                        Path(ellipseIn: rect),
+                                        with: .color(tierColor.opacity(opacity)),
+                                        lineWidth: 1
+                                    )
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .allowsHitTesting(false)
+                        }
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.gray.opacity(0.12), lineWidth: 0.5)
                     )
                     .opacity(statsVisible ? 1 : 0)
                     .offset(y: statsVisible ? 0 : 15)
 
-                    // Remember section
-                    VStack(spacing: 8) {
-                        Text("Remember...")
-                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                            .foregroundColor(.primary)
-
-                        Text("You'll lose 1 arc each month as bills come due. Keep adding to your Freedom Fund to stay protected.")
-                            .font(.normaInput(13))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color("NormaPastelBeige").opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color("NormaPastelBeige").opacity(0.2), lineWidth: 1)
-                            )
+                    // Months covered — timeline calendar
+                    ArcTimelineCalendarView(
+                        upcomingMonths: upcomingMonths,
+                        coinVisibility: coinVisibility,
+                        monthsHeaderVisible: monthsHeaderVisible,
+                        totalMonthlyBills: totalMonthlyBills,
+                        currency: currency
                     )
-                    .opacity(reminderVisible ? 1 : 0)
-                    .offset(y: reminderVisible ? 0 : 15)
-
-                    // Months covered section
-                    VStack(spacing: 16) {
-                        Text("Months Covered")
-                            .font(.custom(FontFamily.Rubik.medium, size: 16))
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity)
-                            .opacity(monthsHeaderVisible ? 1 : 0)
-                            .offset(y: monthsHeaderVisible ? 0 : 10)
-
-                        // Month grid (3 columns x 4 rows)
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 20),
-                            GridItem(.flexible(), spacing: 20),
-                            GridItem(.flexible())
-                        ], spacing: 24) {
-                            ForEach(Array(upcomingMonths.enumerated()), id: \.offset) { index, month in
-                                ArcMonthCard(
-                                    monthName: month.shortName,
-                                    isCovered: month.isCovered,
-                                    monthNumber: index + 1,
-                                    isVisible: coinVisibility[index]
-                                )
-                            }
-                        }
-                    }
 
                     Spacer(minLength: 40)
                 }
@@ -338,19 +303,14 @@ struct ArcCountView: View {
                 statsVisible = true
             }
 
-            // Remember section fade in
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.9)) {
-                reminderVisible = true
-            }
-
             // Months header
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(1.1)) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.9)) {
                 monthsHeaderVisible = true
             }
 
             // Staggered coin grid animations with haptics
-            for index in 0..<12 {
-                let delay = 1.3 + (Double(index) * 0.08)
+            for index in 0..<24 {
+                let delay = 1.1 + (Double(index) * 0.08)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     coinVisibility[index] = true
                 }
@@ -756,6 +716,24 @@ struct ArcInfoPopover: View {
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            // Remember section
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color("NormaPastelBeige"))
+
+                Text("Remember")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(.primary)
+            }
+
+            Text("You'll lose 1 arc each month as bills come due. Keep adding to your Freedom Fund to stay protected.")
+                .font(.normaInput(14))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
         .frame(width: 300)
@@ -763,24 +741,221 @@ struct ArcInfoPopover: View {
     }
 }
 
+// MARK: - Arc Timeline Calendar
+
+struct ArcTimelineCalendarView: View {
+    let upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)]
+    let coinVisibility: [Bool]
+    let monthsHeaderVisible: Bool
+    let totalMonthlyBills: Double
+    let currency: String
+
+    private func formatCumulativeAmount(for monthNumber: Int) -> String {
+        let cumulative = totalMonthlyBills * Double(monthNumber)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: cumulative)) ?? "$\(Int(cumulative))"
+    }
+
+    // Group months by year, preserving index
+    private var yearSections: [(year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])] {
+        var sections: [(Int, [(Int, (String, String, Bool, Int))])] = []
+        var currentYear: Int? = nil
+        var currentGroup: [(Int, (String, String, Bool, Int))] = []
+
+        for i in 0..<upcomingMonths.count {
+            let month = upcomingMonths[i]
+            if month.year != currentYear {
+                if let cy = currentYear, !currentGroup.isEmpty {
+                    sections.append((cy, currentGroup))
+                }
+                currentYear = month.year
+                currentGroup = [(i, month)]
+            } else {
+                currentGroup.append((i, month))
+            }
+        }
+        if let cy = currentYear, !currentGroup.isEmpty {
+            sections.append((cy, currentGroup))
+        }
+        return sections
+    }
+
+    @State private var deckIndices: [Int: Int] = [:]
+
+    private func isYearFullyCovered(_ section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> Bool {
+        section.months.allSatisfy { $0.month.isCovered }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(yearSections.enumerated()), id: \.element.year) { sectionIndex, section in
+                let isLastSection = sectionIndex == yearSections.count - 1
+                let fullyCovers = isYearFullyCovered(section)
+
+                HStack(alignment: .top, spacing: 0) {
+                    // Timeline column — one dot per year
+                    VStack(spacing: 0) {
+                        Circle()
+                            .fill(yearDotColor(for: section))
+                            .frame(width: 10, height: 10)
+                            .padding(.top, 4)
+
+                        if !isLastSection {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.12))
+                                .frame(width: 1.5)
+                                .frame(maxHeight: .infinity)
+                        }
+                    }
+                    .frame(width: 20)
+
+                    // Year label + content
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Year header
+                        Text(String(section.year))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .opacity(monthsHeaderVisible ? 1 : 0)
+
+                        if fullyCovers {
+                            // Entire year covered — card deck
+                            ArcYearDeckView(
+                                months: section.months,
+                                currentIndex: Binding(
+                                    get: { deckIndices[section.year] ?? 0 },
+                                    set: { deckIndices[section.year] = $0 }
+                                ),
+                                coinVisibility: coinVisibility,
+                                formatAmount: formatCumulativeAmount
+                            )
+                        } else {
+                            // Individual month cards
+                            ForEach(section.months, id: \.index) { item in
+                                let globalIndex = item.index
+                                let month = item.month
+                                let isVisible = globalIndex < coinVisibility.count && coinVisibility[globalIndex]
+
+                                ArcMonthCard(
+                                    monthName: month.name,
+                                    isCovered: month.isCovered,
+                                    monthNumber: globalIndex + 1,
+                                    isVisible: isVisible,
+                                    billAmount: formatCumulativeAmount(for: globalIndex + 1)
+                                )
+                            }
+                        }
+                    }
+                    .padding(.leading, 14)
+                }
+                .padding(.bottom, isLastSection ? 0 : 24)
+            }
+        }
+    }
+
+    private func yearDotColor(for section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> Color {
+        if let firstCovered = section.months.first(where: { $0.month.isCovered }) {
+            return ArcMonthCard.stateColorForMonth(firstCovered.index + 1)
+        }
+        return Color.gray.opacity(0.25)
+    }
+}
+
+// MARK: - Arc Year Deck (Swipeable Stack for fully covered year)
+
+struct ArcYearDeckView: View {
+    let months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))]
+    @Binding var currentIndex: Int
+    let coinVisibility: [Bool]
+    let formatAmount: (Int) -> String
+
+    @State private var dragOffset: CGFloat = 0
+
+    private let peekOffset: CGFloat = 8
+    private let peekScale: CGFloat = 0.04
+
+    private var visibleCards: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))] {
+        let start = currentIndex
+        let end = min(currentIndex + 3, months.count)
+        guard start < end else { return [] }
+        return Array(months[start..<end])
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                ForEach(Array(visibleCards.enumerated().reversed()), id: \.element.index) { stackIndex, item in
+                    let isTop = stackIndex == 0
+                    let globalIndex = item.index
+                    let isVisible = globalIndex < coinVisibility.count && coinVisibility[globalIndex]
+
+                    ArcMonthCard(
+                        monthName: item.month.name,
+                        isCovered: item.month.isCovered,
+                        monthNumber: globalIndex + 1,
+                        isVisible: isVisible,
+                        billAmount: formatAmount(globalIndex + 1)
+                    )
+                    .scaleEffect(1 - CGFloat(stackIndex) * peekScale)
+                    .offset(y: -CGFloat(stackIndex) * peekOffset)
+                    .offset(x: isTop ? dragOffset : 0)
+                    .rotationEffect(isTop ? .degrees(Double(dragOffset) / 20) : .zero)
+                    .opacity(stackIndex == 2 ? 0.5 : 1)
+                    .zIndex(Double(3 - stackIndex))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentIndex)
+                }
+            }
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { value in
+                        if abs(value.translation.width) > abs(value.translation.height) {
+                            dragOffset = value.translation.width
+                        }
+                    }
+                    .onEnded { value in
+                        let threshold: CGFloat = 50
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                            if value.translation.width < -threshold && currentIndex < months.count - 1 {
+                                currentIndex += 1
+                            } else if value.translation.width > threshold && currentIndex > 0 {
+                                currentIndex -= 1
+                            }
+                            dragOffset = 0
+                        }
+                    }
+            )
+
+            // Month counter
+            if months.count > 1 {
+                Text("\(currentIndex + 1) of \(months.count)")
+                    .font(.normaInput(12))
+                    .foregroundColor(.secondary.opacity(0.4))
+                    .padding(.top, 10)
+            }
+        }
+    }
+}
+
 // MARK: - Arc Month Card
+
 struct ArcMonthCard: View {
     let monthName: String
     let isCovered: Bool
     let monthNumber: Int
     var isVisible: Bool = true
+    var billAmount: String = ""
 
-    // Get the coin tier for this specific month/arc number
     private var coinTier: CoinTier {
         CoinTierService.currentCoinTier(for: monthNumber)
     }
 
-    // Get the coin file name for this specific month/arc number
     private var coinFileName: String {
         coinTier.fileName
     }
 
-    // Unique state name for each month (progression from urgency to freedom)
     private var stateDescription: String {
         if isCovered {
             switch monthNumber {
@@ -796,105 +971,147 @@ struct ArcMonthCard: View {
             case 10: return "abundant"
             case 11: return "liberated"
             case 12: return "free"
+            case 13: return "fortified"
+            case 14: return "resilient"
+            case 15: return "unshakable"
+            case 16: return "sovereign"
+            case 17: return "powerful"
+            case 18: return "legendary"
+            case 19: return "transcendent"
+            case 20: return "infinite"
+            case 21: return "mythic"
+            case 22: return "eternal"
+            case 23: return "ascended"
+            case 24: return "untouchable"
             default: return "covered"
             }
         } else {
-            return "locked"
+            return ""
+        }
+    }
+
+    static func stateColorForMonth(_ monthNumber: Int) -> Color {
+        switch monthNumber {
+        case 1: return Color("NormaPastelCoral")
+        case 2: return Color(red: 1.0, green: 0.7, blue: 0.3)
+        case 3: return Color(red: 0.9, green: 0.75, blue: 0.4)
+        case 4: return Color(red: 0.8, green: 0.8, blue: 0.45)
+        case 5: return Color(red: 0.65, green: 0.8, blue: 0.5)
+        case 6: return Color("NormaPastelTeal")
+        case 7: return Color(red: 0.4, green: 0.75, blue: 0.8)
+        case 8: return Color(red: 0.4, green: 0.7, blue: 0.9)
+        case 9: return Color(red: 0.5, green: 0.6, blue: 0.9)
+        case 10: return Color(red: 0.6, green: 0.5, blue: 0.85)
+        case 11: return Color(red: 0.65, green: 0.4, blue: 0.8)
+        case 12: return Color(red: 0.7, green: 0.35, blue: 0.75)
+        case 13: return Color(red: 0.75, green: 0.3, blue: 0.7)
+        case 14: return Color(red: 0.6, green: 0.3, blue: 0.75)
+        case 15: return Color(red: 0.45, green: 0.35, blue: 0.8)
+        case 16: return Color(red: 0.35, green: 0.4, blue: 0.85)
+        case 17: return Color(red: 0.3, green: 0.5, blue: 0.9)
+        case 18: return Color(red: 0.25, green: 0.6, blue: 0.85)
+        case 19: return Color(red: 0.2, green: 0.65, blue: 0.75)
+        case 20: return Color(red: 0.2, green: 0.7, blue: 0.65)
+        case 21: return Color(red: 0.25, green: 0.75, blue: 0.55)
+        case 22: return Color(red: 0.3, green: 0.8, blue: 0.45)
+        case 23: return Color(red: 0.4, green: 0.85, blue: 0.4)
+        case 24: return Color(red: 0.5, green: 0.9, blue: 0.35)
+        default: return Color("NormaPastelTeal")
         }
     }
 
     private var stateColor: Color {
-        if isCovered {
-            switch monthNumber {
-            case 1: return Color("NormaPastelCoral")
-            case 2: return Color(red: 1.0, green: 0.7, blue: 0.3) // Orange
-            case 3: return Color(red: 0.9, green: 0.75, blue: 0.4) // Light orange
-            case 4: return Color(red: 0.8, green: 0.8, blue: 0.45) // Yellow
-            case 5: return Color(red: 0.65, green: 0.8, blue: 0.5) // Yellow-green
-            case 6: return Color("NormaPastelTeal")
-            case 7: return Color(red: 0.4, green: 0.75, blue: 0.8) // Teal-blue
-            case 8: return Color(red: 0.4, green: 0.7, blue: 0.9) // Blue
-            case 9: return Color(red: 0.5, green: 0.6, blue: 0.9) // Blue-purple
-            case 10: return Color(red: 0.6, green: 0.5, blue: 0.85) // Light purple
-            case 11: return Color(red: 0.65, green: 0.4, blue: 0.8) // Purple
-            case 12: return Color(red: 0.7, green: 0.35, blue: 0.75) // Deep purple
-            default: return Color("NormaPastelTeal")
-            }
-        } else {
-            return Color.secondary
-        }
+        isCovered ? Self.stateColorForMonth(monthNumber) : Color.secondary
     }
 
-    // Spring animation for coin appearance
     private var coinAnimation: Animation {
         .spring(response: 0.7, dampingFraction: 0.6)
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            if isCovered {
-                // Static 3D coin with halo effect
-                ZStack {
-                    // Glow effect behind coin (color matches tier)
+        HStack(spacing: 14) {
+            // 3D Coin
+            ZStack {
+                if isCovered {
                     Circle()
                         .fill(coinTier.glowColor.opacity(0.10))
-                        .frame(width: 80, height: 80)
-                        .blur(radius: 15)
-                        .scaleEffect(isVisible ? 1 : 0.3)
-                        .opacity(isVisible ? 1 : 0)
-                        .animation(coinAnimation, value: isVisible)
+                        .frame(width: 52, height: 52)
+                        .blur(radius: 10)
 
-                    // Static 3D coin showing the tier for this specific arc number
                     StaticCoin3DView(fileName: coinFileName)
                         .id(coinFileName)
-                        .frame(width: 64, height: 64)
-                        .scaleEffect(isVisible ? 1 : 0)
-                        .opacity(isVisible ? 1 : 0)
-                        .animation(coinAnimation, value: isVisible)
-                }
-            } else {
-                // Uncovered month shows grayed out coin with lock
-                ZStack {
-                    // Grayed out coin
+                        .frame(width: 44, height: 44)
+                } else {
                     StaticCoin3DView(fileName: coinFileName)
                         .id("\(coinFileName)-locked")
-                        .frame(width: 64, height: 64)
+                        .frame(width: 44, height: 44)
                         .saturation(0)
-                        .opacity(isVisible ? 0.4 : 0)
-                        .scaleEffect(isVisible ? 1 : 0)
-                        .animation(coinAnimation, value: isVisible)
+                        .opacity(0.3)
+                }
+            }
+            .scaleEffect(isVisible ? 1 : 0)
+            .opacity(isVisible ? 1 : 0)
+            .animation(coinAnimation, value: isVisible)
 
-                    // Lock overlay
-                    Circle()
-                        .fill(Color.black.opacity(0.3))
-                        .frame(width: 64, height: 64)
-                        .scaleEffect(isVisible ? 1 : 0)
-                        .opacity(isVisible ? 1 : 0)
-                        .animation(coinAnimation, value: isVisible)
+            // Month name + state
+            VStack(alignment: .leading, spacing: 3) {
+                Text(monthName)
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .foregroundColor(isCovered ? .primary : .secondary.opacity(0.4))
 
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white.opacity(0.8))
-                        .scaleEffect(isVisible ? 1 : 0)
-                        .opacity(isVisible ? 1 : 0)
-                        .animation(coinAnimation, value: isVisible)
+                if isCovered {
+                    Text(stateDescription)
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundColor(stateColor)
                 }
             }
 
-            // Month name and state
-            VStack(spacing: 2) {
-                Text(monthName)
-                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                    .foregroundColor(isCovered ? .primary : .secondary)
+            Spacer()
 
-                Text(stateDescription)
-                    .font(.custom(FontFamily.Rubik.regular, size: 11))
-                    .foregroundColor(stateColor)
+            // Bill amount
+            if !billAmount.isEmpty {
+                Text(billAmount)
+                    .font(.normaFinancial(16))
+                    .foregroundColor(isCovered ? .primary : .secondary.opacity(0.25))
+                    .strikethrough(!isCovered, color: .secondary.opacity(0.3))
             }
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 5)
-            .animation(coinAnimation, value: isVisible)
         }
+        .padding(14)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+                if isCovered {
+                    DiagonalLinesPattern(
+                        lineColor: stateColor,
+                        spacing: 10,
+                        lineWidth: 0.8
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .mask(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.25),
+                                .white.opacity(0.08),
+                                .clear
+                            ],
+                            startPoint: .topTrailing,
+                            endPoint: .bottomLeading
+                        )
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+        )
+        .opacity(isVisible ? 1 : 0)
+        .offset(x: isVisible ? 0 : -10)
+        .animation(coinAnimation, value: isVisible)
     }
 }
 
@@ -1004,6 +1221,51 @@ struct HeroCoin3DView: UIViewRepresentable {
         torusNode.runAction(SCNAction.repeatForever(rotation))
 
         scnView.scene = fallbackScene
+    }
+}
+
+// MARK: - Dashed Divider Shape
+
+// MARK: - Diagonal Lines Pattern
+
+private struct DiagonalLinesPattern: View {
+    var lineColor: Color = .gray
+    var spacing: CGFloat = 10
+    var lineWidth: CGFloat = 0.8
+
+    var body: some View {
+        Canvas { context, size in
+            let totalLines = Int((size.width + size.height) / spacing) + 1
+
+            for i in 0..<totalLines {
+                let offset = CGFloat(i) * spacing
+
+                var path = Path()
+                // Lines go from top-right to bottom-left
+                let startX = offset
+                let startY: CGFloat = 0
+                let endX = offset - size.height
+                let endY = size.height
+
+                path.move(to: CGPoint(x: startX, y: startY))
+                path.addLine(to: CGPoint(x: endX, y: endY))
+
+                context.stroke(
+                    path,
+                    with: .color(lineColor),
+                    lineWidth: lineWidth
+                )
+            }
+        }
+    }
+}
+
+private struct DashedDividerShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.midY))
+        return path
     }
 }
 
