@@ -129,14 +129,41 @@ struct SettingsView: View {
                 .lineSpacing(4)
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color("NormaPastelPurple").opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color("NormaPastelPurple").opacity(0.15), lineWidth: 1)
-        )
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+                DotPatternView(dotSize: 2, spacing: 14, dotOpacity: 0.15)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white, location: 0.15),
+                                .init(color: .white, location: 0.85),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: .white, location: 0.15),
+                                    .init(color: .white, location: 0.85),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var profileSection: some View {

@@ -39,15 +39,8 @@ class ExpenseViewModel: ObservableObject {
     @Published var monthlyAverage: Double = 0
     @Published var topCategories: [(category: Category, amount: Double)] = []
 
-    /// Returns total expenses for the current calendar month only
-    var currentMonthExpenses: Double {
-        let calendar = Calendar.current
-        let now = Date()
-        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
-        let end = calendar.date(byAdding: .month, value: 1, to: start) ?? now
-        let currentMonthRange = DateInterval(start: start, end: end)
-        return dataManager.getTotalExpenses(for: currentMonthRange)
-    }
+    /// Total expenses for the current calendar month only
+    @Published var currentMonthExpenses: Double = 0
     
     // MARK: - Dependencies
     
@@ -93,7 +86,14 @@ class ExpenseViewModel: ObservableObject {
         recentExpenses = dataManager.getRecentExpenses()
         expensesByCategory = dataManager.getExpensesByCategory()
         totalExpenses = dataManager.getTotalExpenses(for: selectedDateRange)
-        
+
+        // Update current month total
+        let calendar = Calendar.current
+        let now = Date()
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        let end = calendar.date(byAdding: .month, value: 1, to: start) ?? now
+        currentMonthExpenses = dataManager.getTotalExpenses(for: DateInterval(start: start, end: end))
+
         updateStatistics()
     }
     

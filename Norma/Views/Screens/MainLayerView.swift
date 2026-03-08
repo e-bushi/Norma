@@ -62,6 +62,8 @@ struct MainLayerView: View {
                 screen = .currencyConverter
             case .overview:
                 screen = .overview
+            case .moneyTasks:
+                screen = .moneyTasks
             }
             AnalyticsService.shared.trackScreen(screen)
         }
@@ -77,6 +79,8 @@ struct MainLayerView: View {
                 screen = .currencyConverter
             case .overview:
                 screen = .overview
+            case .moneyTasks:
+                screen = .moneyTasks
             }
             AnalyticsService.shared.trackScreen(screen)
         }
@@ -198,6 +202,11 @@ struct MainLayerView: View {
                     .environmentObject(expenseViewModel)
                     .environmentObject(challengeViewModel)
                     .environmentObject(profileViewModel)
+            }
+
+        case .moneyTasks:
+            NavigationStack {
+                MoneyTasksView(isMenuOpen: $isMenuOpen)
             }
         }
     }

@@ -215,6 +215,7 @@ enum MainLayerViewType: Hashable {
     case settings
     case currencyConverter
     case overview
+    case moneyTasks
 }
 
 // MARK: - Coordinator Views

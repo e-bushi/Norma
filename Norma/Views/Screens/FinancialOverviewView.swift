@@ -18,16 +18,17 @@ struct FinancialOverviewView: View {
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
     @EnvironmentObject var profileViewModel: ProfileViewModel
 
-    @State private var animateBills = false
-    @State private var animateStats = false
-    @State private var animateChallenge = false
-    @State private var animateProgress = false
-    @State private var animateHistory = false
-    @State private var showFreedomFundEdit = false
-    @State private var showIncomeEdit = false
-
-    // Animated number values (start at 0, animate to real values)
     @State private var displayedRemaining: Double = 0
+    @State private var waveAnimating: Bool = false
+    @State private var convertedAmount: Double?
+    @State private var exchangeRate: Double?
+    @State private var isConverting: Bool = false
+    @State private var showCurrencyPicker: Bool = false
+    @State private var showCoinInfo: Bool = false
+    @State private var countdownText: String = ""
+    @State private var currencySectionVisible: Bool = false
+    @State private var coinVisible: Bool = false
+    @State private var timerVisible: Bool = false
 
     // MARK: - Computed Properties
 
@@ -43,83 +44,174 @@ struct FinancialOverviewView: View {
         expenseViewModel.currentMonthExpenses
     }
 
-    private var discretionaryIncome: Double {
-        max(0, monthlyIncome - totalBills)
+    private var remainingToSpend: Double {
+        max(0, monthlyIncome - totalBills) - totalExpenses
     }
 
-    private var remainingAfterExpenses: Double {
-        discretionaryIncome - totalExpenses
+    private var currency: String {
+        sessionViewModel.currentUser?.settings.currency ?? "USD"
     }
 
-    private var spendingProgress: Double {
-        guard discretionaryIncome > 0 else { return 0 }
-        return min(1.0, totalExpenses / discretionaryIncome)
+    private var formattedAmount: String {
+        displayedRemaining.formatted(.currency(code: currency).precision(.fractionLength(0)))
     }
 
-    private var freedomFund: Double {
-        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    private var amountColor: Color {
+        remainingToSpend >= 0 ? Color("NormaPastelPurple") : Color("NormaPastelCoral")
     }
 
-    private var currentMonthYear: String {
+    /// Words for the wave animation with per-word color
+    private var waveWords: [(word: String, color: Color)] {
+        var words: [(String, Color)] = []
+        words.append(("You", .primary))
+        words.append(("have", .primary))
+        // Split formatted amount in case it has spaces (e.g. "1 234")
+        for part in formattedAmount.split(separator: " ").map(String.init) {
+            words.append((part, amountColor))
+        }
+        words.append(("left", .primary))
+        words.append(("to", .primary))
+        words.append(("spend", .primary))
+        words.append(("this", .primary))
+        words.append(("month.", .primary))
+        return words
+    }
+
+    private var spendingCurrency: String? {
+        sessionViewModel.currentUser?.settings.spendingCurrency
+    }
+
+    /// Spending pace: 0.0 = well under budget, 0.5 = on track, 1.0+ = over budget
+    private var spendingPace: Double {
+        let budget = max(0, monthlyIncome - totalBills)
+        guard budget > 0 else { return 0.5 }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let day = Double(calendar.component(.day, from: now))
+        let daysInMonth = Double(calendar.range(of: .day, in: .month, for: now)?.count ?? 30)
+
+        // Expected spend by this point in the month
+        let expectedSpend = budget * (day / daysInMonth)
+        guard expectedSpend > 0 else { return 0.5 }
+
+        // Ratio: 1.0 = spent exactly what's expected, >1 = over pace
+        let ratio = totalExpenses / expectedSpend
+
+        // Map to 0..1 range: 0.5 at ratio=1.0, 0.0 at ratio=0.0, 1.0 at ratio=2.0
+        return min(1.0, max(0.0, ratio * 0.5))
+    }
+
+    /// Coin degrades from royalty → basic as spending pace increases
+    private var paceCoinFileName: String {
+        spendingPace > 0.5 ? "norma-coin" : "norma-coin-royalty"
+    }
+
+    /// End of the current month for countdown timer
+    private var endOfMonth: Date {
+        let calendar = Calendar.current
+        let now = Date()
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        return calendar.date(byAdding: .month, value: 1, to: start) ?? now
+    }
+
+    private func formattedCountdown() -> String {
+        let remaining = max(0, endOfMonth.timeIntervalSince(Date()))
+        let days = Int(remaining) / 86400
+        let hours = (Int(remaining) % 86400) / 3600
+        let minutes = (Int(remaining) % 3600) / 60
+        let seconds = Int(remaining) % 60
+        return String(format: "%dd %02d:%02d:%02d", days, hours, minutes, seconds)
+    }
+
+    private var currentMonth: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
+        formatter.dateFormat = "MMMM"
         return formatter.string(from: Date())
     }
 
-    private var hasUpcomingBills: Bool {
-        !billViewModel.upcomingBills.filter { bill in
-            bill.calculateStatus(from: expenseViewModel.expenses) != .paid
-        }.isEmpty
+    private var currentYear: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return formatter.string(from: Date())
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Main Balance Section
-                balanceSection
+        VStack(alignment: .leading, spacing: 0) {
+            // Month / Year
+            Text("\(currentMonth) \(currentYear)".uppercased())
+                .font(.normaFinancial(20))
+                .foregroundColor(.secondary)
+                .padding(.top, 20)
 
-                // Bills Due Section
-                if hasUpcomingBills {
-                    UpcomingBillsSection()
-                        .opacity(animateBills ? 1 : 0)
-                        .offset(y: animateBills ? 0 : 25)
+            // Main statement with wave animation
+            ColoredWaveTextView(
+                words: waveWords,
+                font: .normaHeadline(64),
+                isAnimating: waveAnimating,
+                alignment: .leading
+            )
+            .padding(.top, 16)
+
+            // Spending currency conversion
+            spendingCurrencySection
+                .padding(.top, 24)
+                .opacity(currencySectionVisible ? 1 : 0)
+                .offset(y: currencySectionVisible ? 0 : 12)
+                .animation(.easeOut(duration: 0.5), value: currencySectionVisible)
+
+            Spacer()
+
+            // Spending pace coin — royalty when under budget, degrades to basic
+            VStack(spacing: 16) {
+                CrossfadeView(
+                    key: paceCoinFileName,
+                    duration: 1.5
+                ) { fileName in
+                    MotionCoin3DView(fileName: fileName)
+                        .id(fileName)
+                        .frame(width: 220, height: 220)
                 }
+                .scaleEffect(coinVisible ? 1 : 0.3)
+                .opacity(coinVisible ? 1 : 0)
+                .animation(.spring(response: 0.6, dampingFraction: 0.7), value: coinVisible)
 
-                // Stats Grid
-                statsGrid
-                    .opacity(animateStats ? 1 : 0)
-                    .offset(y: animateStats ? 0 : 25)
+                // Countdown to end of month + info
+                HStack(spacing: 8) {
+                    Button {
+                        showCoinInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
 
-                // Challenge Section
-                if let challenge = challengeViewModel.activeChallenge {
-                    challengeSection(challenge: challenge)
-                        .opacity(animateChallenge ? 1 : 0)
-                        .offset(y: animateChallenge ? 0 : 25)
+                    Text(countdownText)
+                        .font(.normaFinancial(22))
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(.snappy(duration: 0.3), value: countdownText)
+                        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+                            countdownText = formattedCountdown()
+                        }
                 }
-
-                // Spending Progress Section
-                spendingProgressSection
-                    .opacity(animateProgress ? 1 : 0)
-                    .offset(y: animateProgress ? 0 : 25)
-
-                // History Section
-                HistoryBentoGrid(monthlyStats: dataManager.monthlyStats)
-                    .opacity(animateHistory ? 1 : 0)
-                    .offset(y: animateHistory ? 0 : 25)
-
-                Spacer(minLength: 40)
+                .opacity(timerVisible ? 1 : 0)
+                .offset(y: timerVisible ? 0 : 8)
+                .animation(.easeOut(duration: 0.4), value: timerVisible)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 32)
         }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color("NormaBackground").ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showMenuButton {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             isMenuOpen = true
                         }
@@ -131,16 +223,9 @@ struct FinancialOverviewView: View {
                 }
             }
 
-            ToolbarItem(placement: .principal) {
-                Text("Overview")
-                    .font(.normaTitle(20))
-            }
-
             if onClose != nil {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
                         onClose?()
                     } label: {
                         Image(systemName: "xmark")
@@ -155,290 +240,212 @@ struct FinancialOverviewView: View {
                 }
             }
         }
-        .onAppear {
-            startStaggeredAnimations()
-        }
-        .sheet(isPresented: $showFreedomFundEdit) {
-            FreedomFundEditSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showIncomeEdit) {
-            IncomeEditSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
         .toolbarBackground(.hidden, for: .navigationBar)
-    }
-
-    // MARK: - Animation
-
-    private func startStaggeredAnimations() {
-        let baseDelay: Double = 0.1
-        let stagger: Double = 0.08
-
-        // Animate main balance number
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(baseDelay)) {
-            displayedRemaining = remainingAfterExpenses
+        .onAppear {
+            displayedRemaining = remainingToSpend
+            countdownText = formattedCountdown()
+            // Wave text starts first
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                waveAnimating = true
+            }
+            // Currency section slides up after wave text begins
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                currencySectionVisible = true
+            }
+            // Coin pops in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                coinVisible = true
+            }
+            // Timer fades in last
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                timerVisible = true
+            }
+            fetchConversion()
         }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger)) {
-            animateBills = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger * 2)) {
-            animateStats = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger * 3)) {
-            animateChallenge = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger * 4)) {
-            animateProgress = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(baseDelay + stagger * 5)) {
-            animateHistory = true
-        }
-    }
-
-    // MARK: - Balance Section
-
-    private var balanceSection: some View {
-        VStack(spacing: 8) {
-            // Current month and year
-            Text(currentMonthYear.uppercased())
-                .font(.normaFinancial(18))
-                .foregroundColor(.secondary)
-                .tracking(1.2)
-
-            // Remaining amount with numeric animation
-            Text(profileViewModel.formatCurrency(displayedRemaining))
-                .font(.normaHeadline(72))
-                .foregroundColor(remainingAfterExpenses >= 0 ? .primary : Color("NormaPastelCoral"))
-                .shadow(color: Color("NormaPastelCoral").opacity(0.25), radius: 20, y: 4)
-                .contentTransition(.numericText())
-
-            // Label
-            Text("Remaining this month")
-                .font(.normaInput(14))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-    }
-
-    // MARK: - Stats Grid
-
-    private var statsGrid: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                tappableStatCard(
-                    title: "Income",
-                    value: profileViewModel.formatCurrency(monthlyIncome),
-                    icon: "arrow.down.circle.fill",
-                    color: Color("NormaPastelTeal")
-                ) {
-                    showIncomeEdit = true
+        .sheet(isPresented: $showCurrencyPicker) {
+            SpendingCurrencyPicker(
+                currentSpendingCurrency: spendingCurrency,
+                homeCurrency: currency,
+                onSelect: { selected in
+                    updateSpendingCurrency(selected)
+                },
+                onClear: {
+                    updateSpendingCurrency(nil)
                 }
-
-                statCard(
-                    title: "Bills",
-                    value: profileViewModel.formatCurrency(totalBills),
-                    icon: "doc.text.fill",
-                    color: Color("NormaPastelPurple")
-                )
-            }
-
-            HStack(spacing: 12) {
-                statCard(
-                    title: "Spent",
-                    value: profileViewModel.formatCurrency(totalExpenses),
-                    icon: "creditcard.fill",
-                    color: Color("NormaPastelCoral")
-                )
-
-                tappableStatCard(
-                    title: "Freedom Fund",
-                    value: profileViewModel.formatCurrency(freedomFund),
-                    icon: "shield.fill",
-                    color: Color("NormaPastelBeige")
-                ) {
-                    showFreedomFundEdit = true
-                }
-            }
-        }
-    }
-
-    private func statCard(title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(color)
-
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.normaInput(12))
-                    .foregroundColor(.secondary)
-
-                Text(value)
-                    .font(.normaFinancial(20))
-                    .foregroundColor(.primary)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.gray.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                )
-        )
-    }
-
-    private func tappableStatCard(title: String, value: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: {
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
-            action()
-        }) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: icon)
-                        .font(.system(size: 16))
-                        .foregroundColor(color)
-
-                    Spacer()
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.normaInput(12))
-                        .foregroundColor(.secondary)
-
-                    Text(value)
-                        .font(.normaFinancial(20))
-                        .foregroundColor(.primary)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.gray.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(color.opacity(0.4), lineWidth: 1.5)
-                    )
             )
+            .presentationDetents([.large])
         }
-        .buttonStyle(StatCardPressStyle())
-    }
-
-    // MARK: - Challenge Section
-
-    private func challengeSection(challenge: Challenge) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("ACTIVE CHALLENGE")
-                .font(.normaInput(12))
-                .foregroundColor(.secondary)
-                .tracking(1.5)
-
-            HStack(spacing: 16) {
-                // Challenge progress circle
-                ZStack {
-                    Circle()
-                        .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 6)
-                        .frame(width: 60, height: 60)
-
-                    Circle()
-                        .trim(from: 0, to: challenge.percentageSpent)
-                        .stroke(Color("NormaPastelPurple"), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .frame(width: 60, height: 60)
-                        .rotationEffect(.degrees(-90))
-
-                    Image(systemName: "target")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color("NormaPastelPurple"))
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profileViewModel.formatCurrency(challenge.amountRemaining))
-                        .font(.normaFinancial(24))
-                        .foregroundColor(.primary)
-
-                    Text("\(challenge.daysRemaining) days remaining")
-                        .font(.normaInput(14))
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.gray.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color("NormaPastelPurple").opacity(0.2), lineWidth: 1)
-                    )
-            )
+        .alert("Your Coin", isPresented: $showCoinInfo) {
+            Button("Got it", role: .cancel) { }
+        } message: {
+            Text("Your coin starts as Royalty each month. The faster you spend, the faster it fades to a basic coin. Keep your spending in check to hold onto it all month.")
         }
     }
 
-    // MARK: - Spending Progress Section
+    // MARK: - Spending Currency Section
 
-    private var spendingProgressSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("SPENDING PROGRESS")
-                .font(.normaInput(12))
-                .foregroundColor(.secondary)
-                .tracking(1.5)
+    @ViewBuilder
+    private var spendingCurrencySection: some View {
+        if let spending = spendingCurrency, spending != currency {
+            VStack(alignment: .leading, spacing: 16) {
+                // Converted amount
+                Button {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    showCurrencyPicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        if isConverting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .tint(.secondary)
+                        } else if let converted = convertedAmount {
+                            Text("≈ \(converted.formatted(.currency(code: spending).precision(.fractionLength(0))))")
+                                .font(.normaHeadline(36))
+                                .foregroundColor(.secondary)
+                                .contentTransition(.numericText(value: converted))
+                        }
 
-            VStack(spacing: 16) {
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.gray.opacity(0.1))
-                            .frame(height: 12)
-
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(spendingProgress > 0.8 ? Color("NormaPastelCoral") : Color("NormaPastelTeal"))
-                            .frame(width: geometry.size.width * spendingProgress, height: 12)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.6))
                     }
                 }
-                .frame(height: 12)
+                .buttonStyle(.plain)
 
-                // Labels
-                HStack {
-                    Text("\(Int(spendingProgress * 100))% spent")
-                        .font(.normaInput(14))
-                        .foregroundColor(.primary)
+                // Exchange rate + daily budget
+                if let rate = exchangeRate, let converted = convertedAmount {
+                    HStack(spacing: 8) {
+                        let spendingSymbol = CurrencyData.getCurrency(for: spending).symbol
+                        let homeSymbol = CurrencyData.getCurrency(for: currency).symbol
+                        let daysLeft = daysRemainingInMonth
+                        let dailyBudget = daysLeft > 0 ? converted / Double(daysLeft) : 0
 
-                    Spacer()
+                        Text("\(homeSymbol)1 = \(spendingSymbol)\(formatRate(rate))")
+                            .font(.normaFinancial(16))
+                            .foregroundColor(.secondary.opacity(0.6))
 
-                    Text("\(profileViewModel.formatCurrency(discretionaryIncome - totalExpenses)) left")
-                        .font(.normaFinancial(14))
-                        .foregroundColor(.secondary)
+                        Text("·")
+                            .font(.normaFinancial(16))
+                            .foregroundColor(.secondary.opacity(0.3))
+
+                        Text("~\(dailyBudget.formatted(.currency(code: spending).precision(.fractionLength(0))))/day")
+                            .font(.normaFinancial(16))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.gray.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+        } else {
+            HStack(spacing: 10) {
+                // Primary currency capsule
+                HStack(spacing: 6) {
+                    Text(flagEmoji(for: currency))
+                        .font(.system(size: 14))
+                    Text(currency)
+                        .font(.normaFinancial(14))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.gray.opacity(0.1))
+                )
+
+                // Add spending currency capsule
+                Button {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    showCurrencyPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Spending currency")
+                            .font(.normaFinancial(14))
+                    }
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
                     )
-            )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Conversion
+
+    private func fetchConversion() {
+        guard let spending = spendingCurrency, spending != currency else {
+            convertedAmount = nil
+            return
+        }
+
+        isConverting = true
+        Task {
+            do {
+                let response = try await CurrencyConversionService.shared.convert(
+                    amount: max(0, displayedRemaining),
+                    from: currency,
+                    to: spending
+                )
+                await MainActor.run {
+                    withAnimation(.snappy(duration: 0.4)) {
+                        convertedAmount = response.convertedValue
+                        exchangeRate = response.exchangeRate
+                        isConverting = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isConverting = false
+                }
+                print("Currency conversion failed: \(error)")
+            }
+        }
+    }
+
+    private var daysRemainingInMonth: Int {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let range = calendar.range(of: .day, in: .month, for: now) else { return 1 }
+        let today = calendar.component(.day, from: now)
+        return max(1, range.count - today)
+    }
+
+    private func formatRate(_ rate: Double) -> String {
+        if rate >= 100 {
+            return String(format: "%.0f", rate)
+        } else if rate >= 1 {
+            return String(format: "%.2f", rate)
+        } else {
+            return String(format: "%.4f", rate)
+        }
+    }
+
+    private func flagEmoji(for code: String) -> String {
+        let base: UInt32 = 127397
+        switch code {
+        case "EUR": return "🇪🇺"
+        default:
+            let countryCode = String(code.prefix(2))
+            return countryCode.unicodeScalars.compactMap { UnicodeScalar(base + $0.value) }.map { String($0) }.joined()
+        }
+    }
+
+    private func updateSpendingCurrency(_ newCurrency: String?) {
+        guard var user = sessionViewModel.currentUser else { return }
+        user.settings.spendingCurrency = newCurrency
+        // Update session so the UI reacts immediately
+        sessionViewModel.currentUser = user
+        Task {
+            // Persist to backend
+            try? await dataManager.updateUserProfile(user)
+            fetchConversion()
         }
     }
 }
@@ -468,6 +475,211 @@ struct FinancialOverviewOverlay: View {
     }
 }
 
+// MARK: - Spending Currency Picker
+
+private struct SpendingCurrencyPicker: View {
+    let currentSpendingCurrency: String?
+    let homeCurrency: String
+    let onSelect: (String) -> Void
+    let onClear: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText: String = ""
+    @State private var visibleCount: Int = 0
+    @FocusState private var isSearchFocused: Bool
+
+    private let travelCurrencies = [
+        "EUR", "GBP", "JPY", "THB", "MXN", "BRL",
+        "KRW", "IDR", "COP", "TRY", "INR", "AED"
+    ]
+
+    private var displayCurrencies: [String] {
+        if searchText.isEmpty {
+            return Array(travelCurrencies.filter { $0 != homeCurrency }.prefix(7))
+        }
+        let query = searchText.lowercased()
+        return Array(
+            CurrencyData.currencies.keys
+                .sorted()
+                .filter { $0 != homeCurrency }
+                .filter { code in
+                    code.lowercased().contains(query) ||
+                    CurrencyData.getCurrency(for: code).name.lowercased().contains(query)
+                }
+                .prefix(7)
+        )
+    }
+
+    private func flagEmoji(for code: String) -> String {
+        let base: UInt32 = 127397
+        switch code {
+        case "EUR": return "🇪🇺"
+        default:
+            let countryCode = String(code.prefix(2))
+            return countryCode.unicodeScalars.compactMap { UnicodeScalar(base + $0.value) }.map { String($0) }.joined()
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Title + subtitle
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Spending Currency")
+                    .font(.normaHeadline(34))
+                    .foregroundColor(.primary)
+
+                Text("Choose the currency where you're spending")
+                    .font(.normaFinancial(14))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            // Search bar
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+
+                TextField("Search", text: $searchText)
+                    .font(.normaFinancial(16))
+                    .focused($isSearchFocused)
+
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.gray.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+
+            // Currency capsules
+            CurrencyCapsuleFlow(spacing: 10, lineSpacing: 10) {
+                ForEach(Array(displayCurrencies.enumerated()), id: \.element) { index, code in
+                    let isSelected = code == currentSpendingCurrency
+
+                    Button {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        onSelect(code)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(flagEmoji(for: code))
+                                .font(.system(size: 16))
+                            Text(CurrencyData.getCurrency(for: code).name)
+                                .font(.normaFinancial(15))
+                                .foregroundColor(isSelected ? Color("NormaPastelPurple") : .primary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? Color("NormaPastelPurple").opacity(0.12) : Color.gray.opacity(0.08))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(isSelected ? Color("NormaPastelPurple").opacity(0.4) : Color.clear, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(CapsulePressStyle())
+                    .opacity(index < visibleCount ? 1 : 0)
+                    .scaleEffect(index < visibleCount ? 1.0 : 0.5)
+                    .animation(
+                        .spring(response: 0.35, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                        value: visibleCount
+                    )
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+
+            // Remove option
+            if currentSpendingCurrency != nil {
+                Button {
+                    onClear()
+                    dismiss()
+                } label: {
+                    Text("Remove spending currency")
+                        .font(.normaFinancial(14))
+                        .foregroundColor(Color("NormaPastelCoral").opacity(0.8))
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+        }
+        .background(Color("NormaBackground"))
+        .onChange(of: searchText) { _, _ in
+            animateCapsules()
+        }
+        .onAppear {
+            animateCapsules()
+        }
+    }
+
+    private func animateCapsules() {
+        visibleCount = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            visibleCount = displayCurrencies.count
+        }
+    }
+}
+
+// MARK: - Capsule Flow Layout
+
+private struct CurrencyCapsuleFlow: Layout {
+    let spacing: CGFloat
+    let lineSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth && x > 0 {
+                x = 0
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+            totalWidth = max(totalWidth, x - spacing)
+        }
+
+        return (size: CGSize(width: totalWidth, height: y + lineHeight), positions: positions)
+    }
+}
 // MARK: - Button Style
 
 struct StatCardPressStyle: ButtonStyle {

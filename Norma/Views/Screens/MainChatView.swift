@@ -19,7 +19,7 @@ struct MainChatView: View {
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
-    @StateObject private var speechService = SpeechToTextService.shared
+    @StateObject private var deepgramService = DeepgramService.shared
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var showError = false
@@ -32,7 +32,6 @@ struct MainChatView: View {
     @State private var showIncomeEdit = false
     @State private var showArcDetail = false
     @State private var showPendingTransactions = false
-    @State private var showFinancialOverview = false
     @State private var showRemindersSheet = false
     @State private var reminderCount: Int = 0
     @State private var navBarCapsulesVisible = false
@@ -118,7 +117,13 @@ struct MainChatView: View {
             ZStack(alignment: .bottom) {
                 // Chat content fills entire space
                 chatContent
-                    .background(Color("NormaBackground").ignoresSafeArea())
+                    .background(
+                        ZStack {
+                            Color("NormaBackground")
+                            DotPatternView()
+                        }
+                        .ignoresSafeArea()
+                    )
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
@@ -178,7 +183,7 @@ struct MainChatView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Text("Norma")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 22))
+                                .font(.custom(FontFamily.Rubik.medium, size: 22))
                                 .foregroundColor(.primary)
 
                             Text("Pro")
@@ -256,13 +261,6 @@ struct MainChatView: View {
         .sheet(isPresented: $showRemindersSheet) {
             RemindersSheet(isPresented: $showRemindersSheet)
         }
-        .onChange(of: showIncomeDropdown) { _, isShowing in
-            if isShowing {
-                Task {
-                    await loadReminderCount()
-                }
-            }
-        }
         .onChange(of: showRemindersSheet) { _, isShowing in
             if !isShowing {
                 // Refresh count after sheet closes (user may have deleted reminders)
@@ -290,59 +288,37 @@ struct MainChatView: View {
                 currency: currency
             )
         }
-        .fullScreenCover(isPresented: $showFinancialOverview) {
-            FinancialOverviewOverlay(isPresented: $showFinancialOverview)
-                .presentationBackground(.clear)
-        }
         .overlay(alignment: .top) {
-            // Dropdown capsules that appear below nav bar when title is tapped
+            // Dropdown that appears below nav bar when title is tapped
             if showIncomeDropdown {
-                VStack(spacing: 0) {
-                    // Spacer to push dropdown below nav bar
-                    Color.clear
-                        .frame(height: 56)
-
-                    // Dropdown content
-                    HStack(spacing: 12) {
-                        // Reminders capsule (first)
-                        RemindersCapsule(count: reminderCount) {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIncomeDropdown = false
-                            }
-                            showRemindersSheet = true
+                QuickActionsHubView(
+                    onInsertText: { text in
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showIncomeDropdown = false
                         }
-
-                        // Overview capsule
-                        OverviewCapsule {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIncomeDropdown = false
-                            }
-                            showFinancialOverview = true
+                        inputText = text
+                    },
+                    onShowPendingTransactions: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showIncomeDropdown = false
                         }
-
-                        // Pending capsule
-                        PendingCapsule(count: pendingCount) {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIncomeDropdown = false
-                            }
-                            showPendingTransactions = true
-                        }
+                        showPendingTransactions = true
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.clear)
-                            .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
-                }
+                )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                )
+                .frame(maxWidth: 300)
+                .padding(.top, 56)
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .top)),
                     removal: .opacity
@@ -472,10 +448,7 @@ struct MainChatView: View {
                 text: $inputText,
                 isLoading: isLoading,
                 onSend: sendMessage,
-                onVoiceInput: startVoiceInput,
-                billsTotal: billViewModel.bills.reduce(0) { $0 + $1.amount },
-                activeChallenge: challengeViewModel.activeChallenge,
-                monthlySpend: expenseViewModel.currentMonthExpenses
+                onVoiceInput: startVoiceInput
             )
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isRecording)
@@ -499,15 +472,14 @@ struct MainChatView: View {
                     try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
                     try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
-                    // Start live transcription
-                    try self.speechService.startLiveTranscription(
+                    // Start live transcription via Deepgram
+                    try self.deepgramService.startLiveTranscription(
                         audioEngine: self.audioEngine,
                         onPartialResult: { partialText in
                             self.transcribedText = partialText
                         },
                         onFinalResult: { finalText in
                             self.transcribedText = finalText
-                            self.stopVoiceInput()
                         },
                         onError: { error in
                             print("Transcription error: \(error)")
@@ -523,9 +495,7 @@ struct MainChatView: View {
     }
 
     private func stopVoiceInput() {
-        speechService.stopTranscription()
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        deepgramService.stopTranscription()
         isRecording = false
 
         // Deactivate audio session
