@@ -378,7 +378,9 @@ struct BillDeckCardView: View {
     var onDelete: ((Bill) -> Void)? = nil
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject var billViewModel: BillViewModel
     @State private var showDeleteConfirm = false
+    @State private var isProcessing = false
 
     private var formattedAmount: String {
         profileViewModel.formatCurrency(bill.amount)
@@ -449,7 +451,7 @@ struct BillDeckCardView: View {
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
 
-            // Bottom row: due date + frequency
+            // Bottom row: due date + frequency + pay action
             HStack(spacing: 12) {
                 Label(dueDateFormatted, systemImage: "calendar")
                     .font(.normaInput(12))
@@ -470,6 +472,43 @@ struct BillDeckCardView: View {
                         .font(.normaInput(12))
                         .foregroundColor(.secondary.opacity(0.6))
                 }
+
+                Spacer()
+
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    isProcessing = true
+                    Task {
+                        if status == .paid {
+                            await billViewModel.markBillAsUnpaid(bill)
+                        } else {
+                            await billViewModel.markBillAsPaid(bill)
+                        }
+                        isProcessing = false
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        if isProcessing {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: status == .paid ? "arrow.uturn.backward" : "checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        Text(status == .paid ? "Undo" : "Mark Paid")
+                            .font(.normaInput(12))
+                    }
+                    .foregroundColor(status == .paid ? .secondary : .white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(status == .paid ? Color.secondary.opacity(0.12) : Color("NormaPastelGreen"))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(isProcessing)
             }
         }
         .padding(20)
@@ -489,7 +528,7 @@ struct BillDeckCardView: View {
 
                     for i in 1...ringCount {
                         let radius = CGFloat(i) * ringSpacing
-                        let opacity = 0.08 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                        let opacity = 0.15 * (1.0 - CGFloat(i) / CGFloat(ringCount))
                         let rect = CGRect(
                             x: origin.x - radius,
                             y: origin.y - radius,
