@@ -50,7 +50,6 @@ struct EmptyChallengeContent: View {
 
 struct StartJourneyContent: View {
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
-
     @Binding var birdAppeared: Bool
     @Binding var textAppeared: Bool
     @Binding var selectorAppeared: Bool

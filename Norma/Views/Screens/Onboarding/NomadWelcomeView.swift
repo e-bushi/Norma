@@ -50,6 +50,58 @@ struct NomadWelcomeView: View {
             // Lava lamp glass background
             NomadWelcomeBackground(accentColor: accentColor, secondaryColor: secondaryColor)
 
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 10
+                let maxRadius: CGFloat = 360
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 8
+                let maxRadius: CGFloat = 300
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.16 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(secondaryColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
             // Phase 1 — Centered "Preparing your experience" wave text
             if showPhaseOne {
                 VStack {
@@ -82,76 +134,66 @@ struct NomadWelcomeView: View {
                             Spacer()
                                 .frame(height: 32)
 
-                            // Hero — spinning royalty coin with tilt
-                            HStack {
-                                Spacer()
-                                TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
-                                    .frame(width: 180, height: 180)
-                                    .scaleEffect(animateHero ? 1.0 : 0.3)
-                                    .opacity(animateHero ? 1.0 : 0.0)
-                                Spacer()
-                            }
+                            // Hero — spinning royalty coin, centered
+                            TiltSpinningCoin3DView(fileName: "norma-coin-royalty")
+                                .frame(width: 160, height: 160)
+                                .scaleEffect(animateHero ? 1.0 : 0.3)
+                                .opacity(animateHero ? 1.0 : 0.0)
 
                             Spacer()
                                 .frame(height: 28)
 
-                            // Subtitle
-                            Text("A few things worth knowing while we get ready")
-                                .font(.normaHeadline(20))
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
+                            // "Did you know?" label
+                            Text("Did you know?")
+                                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                .foregroundColor(accentColor)
+                                .textCase(.uppercase)
+                                .tracking(1.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 24)
                                 .opacity(animateSubtitle ? 1.0 : 0.0)
 
                             Spacer()
-                                .frame(height: 36)
+                                .frame(height: 14)
 
-                            // Cycling stats — no container
-                            VStack(spacing: 16) {
-                                ZStack {
+                            // Cycling stats — left-aligned, large
+                            VStack(spacing: 0) {
+                                ZStack(alignment: .topLeading) {
                                     if currentStatIndex >= 0 && currentStatIndex < stats.count {
                                         WaveTextView(
                                             text: stats[currentStatIndex],
-                                            font: .normaHeadline(32),
+                                            font: .custom(FontFamily.Rubik.bold, size: 36),
                                             color: .primary,
-                                            isAnimating: true
+                                            isAnimating: true,
+                                            alignment: .leading
                                         )
                                         .id(currentStatIndex)
                                         .opacity(statTextOpacity)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                 }
-                                .frame(minHeight: 70)
-
+                                .frame(minHeight: 120, alignment: .topLeading)
                             }
                             .padding(.horizontal, 24)
 
                             Spacer()
                                 .frame(height: 28)
 
-                            // Footer message
-                            Text("Finally — an app that gets how you live.")
-                                .font(.normaHeadline(16))
-                                .foregroundColor(secondaryColor)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                                .opacity(animateFooter ? 1.0 : 0.0)
-
                             Spacer(minLength: 32)
 
-                            // Continue button — full-width glass style
+                            // Solid teal button
                             Button(action: {
                                 playHaptic(intensity: 0.6, sharpness: 0.5)
                                 onContinue()
                             }) {
                                 Text("Get started")
                                     .font(.normaHeadline(16))
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 56)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(accentColor.opacity(0.25))
-                                            .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                                            .fill(accentColor)
                                     )
                             }
                             .padding(.horizontal, 24)

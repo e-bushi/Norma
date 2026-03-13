@@ -13,6 +13,7 @@ struct ChallengesView: View {
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showBirdCollection = false
     @State private var showInfoPopover = false
@@ -73,7 +74,51 @@ struct ChallengesView: View {
                     )
                 }
             }
-            .background(Color("NormaBackground"))
+            .background {
+                ZStack {
+                    Color("NormaBackground")
+
+                    // Show gradient + radar when no active challenge
+                    if challengeViewModel.activeChallenge == nil && !challengeViewModel.isLoading {
+                        let tierColor = challengeViewModel.currentTier.glowColor
+
+                        LinearGradient(
+                            colors: [
+                                tierColor.opacity(colorScheme == .dark ? 0.15 : 0.12),
+                                Color("NormaBackground")
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+
+                        // Radar rings from top-left
+                        Canvas { context, size in
+                            let origin = CGPoint(x: 0, y: 0)
+                            let ringCount = 10
+                            let maxRadius: CGFloat = 360
+                            let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                            for i in 1...ringCount {
+                                let radius = CGFloat(i) * ringSpacing
+                                let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                                let rect = CGRect(
+                                    x: origin.x - radius,
+                                    y: origin.y - radius,
+                                    width: radius * 2,
+                                    height: radius * 2
+                                )
+                                context.stroke(
+                                    Path(ellipseIn: rect),
+                                    with: .color(tierColor.opacity(opacity)),
+                                    lineWidth: 1
+                                )
+                            }
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
+                .ignoresSafeArea()
+            }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)

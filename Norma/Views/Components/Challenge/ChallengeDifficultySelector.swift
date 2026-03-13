@@ -141,8 +141,31 @@ struct DifficultyCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(isSelected ? difficulty.color.opacity(0.12) : Color.secondary.opacity(0.08))
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? difficulty.color.opacity(0.12) : Color.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+                if isSelected {
+                    Canvas { context, size in
+                        let spacing: CGFloat = 10
+                        let totalLines = Int((size.width + size.height) / spacing) + 1
+
+                        for i in 0..<totalLines {
+                            let offset = CGFloat(i) * spacing
+                            var path = Path()
+                            path.move(to: CGPoint(x: offset, y: 0))
+                            path.addLine(to: CGPoint(x: offset - size.height, y: size.height))
+                            context.stroke(
+                                path,
+                                with: .color(difficulty.color.opacity(0.12)),
+                                lineWidth: 0.8
+                            )
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)

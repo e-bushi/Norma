@@ -167,7 +167,13 @@ struct SignUpView: View {
                     }
                 }
             }
-        .background(Color("NormaBackground"))
+        .background(
+            ZStack {
+                Color("NormaBackground")
+                DotGridPattern()
+            }
+            .ignoresSafeArea()
+        )
         .overlay(
             Group {
                 if isLoading {

@@ -15,6 +15,12 @@ struct PaywallView: View {
     @State private var showError = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
+    @State private var showHeader = false
+    @State private var showFeatures = false
+    @State private var showSocialProof = false
+    @State private var showPlans = false
+    @State private var showCTA = false
+    @State private var shimmerOffset: CGFloat = -1.0
 
     enum BillingOption {
         case monthly
@@ -22,89 +28,82 @@ struct PaywallView: View {
     }
 
     @State private var selectedBilling: BillingOption = .yearly
-    @State private var scrollOffset: CGFloat = 0
-    @State private var animateText = false
-    @State private var showFeatures = false
-    @State private var showPlans = false
-    @State private var showCTA = false
-    @State private var showEarlyAdopterInfo = false
 
     private let accentColor = Color("NormaPastelPurple")
 
     var body: some View {
-        ZStack {
-            // Full-bleed background image with parallax
-            Image("wow-god-is-good")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .scaleEffect(1.3)
-                .offset(y: -scrollOffset * 0.3)
+        ZStack(alignment: .topTrailing) {
+            Color("NormaBackground")
                 .ignoresSafeArea()
 
-            // Gradient overlay for readability
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.clear, location: 0.0),
-                    .init(color: Color("NormaPastelPink").opacity(0.5), location: 0.3),
-                    .init(color: Color("NormaPastelPink").opacity(0.85), location: 0.5),
-                    .init(color: Color("NormaPastelPink"), location: 0.65)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 8
+                let maxRadius: CGFloat = 320
+                let ringSpacing = maxRadius / CGFloat(ringCount)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Spacer for hero area (let background image show through)
-                    Spacer()
-                        .frame(height: 180)
-
-                    // Content below hero
-                    VStack(spacing: 24) {
-                        // Tagline
-                        taglineSection
-
-                        // Headline
-                        headlineSection
-
-                        // Feature cards
-                        featureCardsSection
-
-                        // Plan cards
-                        planCardsSection
-
-                        // CTA button
-                        ctaButton
-
-                        // Reassurance
-                        reassuranceText
-
-                        // Legal row
-                        legalRow
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
                 }
             }
-            .scrollIndicators(.hidden)
-            .scrollContentBackground(.hidden)
-            .onScrollGeometryChange(for: CGFloat.self) { geo in
-                geo.contentOffset.y
-            } action: { _, newValue in
-                scrollOffset = newValue
-            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
+            ScrollView {
+                VStack(spacing: 28) {
+                    headerSection
+
+                    featureList
+
+                    socialProofLabel
+
+                    planCardsSection
+
+                    ctaButton
+
+                    reassuranceText
+
+                    legalRow
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 60)
+                .padding(.bottom, 40)
+            }
+            .scrollIndicators(.hidden)
+
+            // Close button
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color("NormaText").opacity(0.5))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(Color("NormaCard").opacity(0.8))
+                    )
+            }
+            .padding(.top, 16)
+            .padding(.trailing, 20)
         }
         .alert("Purchase Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
             Text(subscriptionManager.purchaseError?.localizedDescription ?? "An error occurred")
-        }
-        .alert("Early Adopter Pricing", isPresented: $showEarlyAdopterInfo) {
-            Button("Got it") { }
-        } message: {
-            Text("You're one of our first users! The price you see today is the lowest it'll ever be. Once you subscribe, that rate is yours to keep — even as prices go up for new members.")
         }
         .sheet(isPresented: $showTermsOfUse) {
             WebViewSheet(
@@ -125,135 +124,119 @@ struct PaywallView: View {
                 }
                 await subscriptionManager.checkSubscriptionStatus()
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                animateText = true
+            withAnimation(.easeOut(duration: 0.45).delay(0.1)) {
+                showHeader = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            withAnimation(.easeOut(duration: 0.45).delay(0.25)) {
                 showFeatures = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            withAnimation(.easeOut(duration: 0.4).delay(0.4)) {
+                showSocialProof = true
+            }
+            withAnimation(.easeOut(duration: 0.45).delay(0.5)) {
                 showPlans = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeOut(duration: 0.45).delay(0.65)) {
                 showCTA = true
             }
-        }
-    }
-
-    // MARK: - Tagline
-
-    private var taglineSection: some View {
-        WaveTextView(
-            text: "Built for nomads, by nomads",
-            font: .custom(FontFamily.Rubik.regular, size: 16),
-            color: .black,
-            isAnimating: animateText,
-            alignment: .leading
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Headline
-
-    private var headlineSection: some View {
-        WaveTextView(
-            text: "Your Money, Under Control",
-            font: .custom(FontFamily.Rubik.bold, size: 56),
-            color: .black,
-            isAnimating: animateText,
-            alignment: .leading
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Feature Cards
-
-    private var featureCardsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                PaywallFeatureCard(
-                    icon: "brain.head.profile",
-                    iconColor: Color("NormaPastelPurple"),
-                    title: "Financial AI Companion",
-                    description: "Smart logging, insights, and answers\non tap"
-                )
-                .opacity(showFeatures ? 1 : 0)
-                .offset(x: showFeatures ? 0 : 40)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.0), value: showFeatures)
-
-                PaywallFeatureCard(
-                    icon: "shield.lefthalf.filled",
-                    iconColor: Color("NormaPastelPurple"),
-                    title: "Build Arcs of Freedom",
-                    description: "Stack arcs, cover bills, and build\nsafety"
-                )
-                .opacity(showFeatures ? 1 : 0)
-                .offset(x: showFeatures ? 0 : 40)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.08), value: showFeatures)
-
-                PaywallFeatureCard(
-                    icon: "flame.fill",
-                    iconColor: Color("NormaPastelPurple"),
-                    title: "Spending Challenges",
-                    description: "Daily caps, streaks, and birds to\ncollect"
-                )
-                .opacity(showFeatures ? 1 : 0)
-                .offset(x: showFeatures ? 0 : 40)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.16), value: showFeatures)
-
-                PaywallFeatureCard(
-                    icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90",
-                    iconColor: Color("NormaPastelPurple"),
-                    title: "Currency Tools",
-                    description: "Live rates, conversions, and local\ncontext"
-                )
-                .opacity(showFeatures ? 1 : 0)
-                .offset(x: showFeatures ? 0 : 40)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.24), value: showFeatures)
-
-                PaywallFeatureCard(
-                    icon: "bell.badge.fill",
-                    iconColor: Color("NormaPastelPurple"),
-                    title: "Never Miss a Bill",
-                    description: "Visual calendar, alerts, and due dates\ntracked"
-                )
-                .opacity(showFeatures ? 1 : 0)
-                .offset(x: showFeatures ? 0 : 40)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.32), value: showFeatures)
+            // Single CTA shimmer after content settles
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeInOut(duration: 0.8)) {
+                    shimmerOffset = 1.0
+                }
             }
-            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, -20)
-        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Header
+
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 0) {
+                Text("Norma ")
+                    .font(.custom(FontFamily.Rubik.bold, size: 52))
+                    .foregroundColor(Color("NormaText"))
+
+                Text("Pro")
+                    .font(.custom(FontFamily.Rubik.bold, size: 52))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color("NormaPastelPurple"),
+                                Color("NormaPastelCoral")
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
+
+            Text("Financial clarity for\nwherever you call home.")
+                .font(.custom(FontFamily.Rubik.medium, size: 20))
+                .foregroundColor(Color("NormaText").opacity(0.6))
+                .lineSpacing(4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 4)
+        .opacity(showHeader ? 1 : 0)
+        .offset(y: showHeader ? 0 : 16)
+    }
+
+    // MARK: - Feature List
+
+    private var featureList: some View {
+        VStack(spacing: 8) {
+            PaywallFeatureRow(
+                icon: "brain.head.profile",
+                text: "AI companion for logging & insights"
+            )
+            PaywallFeatureRow(
+                icon: "shield.lefthalf.filled",
+                text: "Build Arcs of financial safety"
+            )
+            PaywallFeatureRow(
+                icon: "flame.fill",
+                text: "Spending challenges, streaks & rewards"
+            )
+            PaywallFeatureRow(
+                icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90",
+                text: "Live currency rates and conversions"
+            )
+        }
+        .opacity(showFeatures ? 1 : 0)
+        .offset(y: showFeatures ? 0 : 16)
+    }
+
+    // MARK: - Social Proof
+
+    private var socialProofLabel: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.fill")
+                .font(.system(size: 11))
+            Text("Early adopter pricing — locked in forever")
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+        }
+        .foregroundColor(accentColor)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(showSocialProof ? 1 : 0)
+        .offset(y: showSocialProof ? 0 : 10)
     }
 
     // MARK: - Plan Cards
 
     private var planCardsSection: some View {
-        VStack(spacing: 12) {
-            Spacer().frame(height: 4)
-            Button {
-                showEarlyAdopterInfo = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock.fill")
-                        .font(.system(size: 13))
-                    Text("Early adopter pricing")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+        VStack(spacing: 10) {
+            PaywallPlanCard(
+                title: "Annual",
+                price: annualPriceText,
+                badge: annualBadgeText,
+                strikethroughPrice: annualStrikethroughText,
+                isSelected: selectedBilling == .yearly
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    selectedBilling = .yearly
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(Color("NormaPastelPurple").opacity(0.45))
-                        .glassEffect(.clear, in: Capsule())
-                )
             }
-            .buttonStyle(PlanCardButtonStyle())
-            .padding(.bottom, 4)
-            .opacity(showPlans ? 1 : 0)
-            .animation(.easeOut(duration: 0.4), value: showPlans)
 
             PaywallPlanCard(
                 title: "Monthly",
@@ -264,24 +247,9 @@ struct PaywallView: View {
                     selectedBilling = .monthly
                 }
             }
-            .opacity(showPlans ? 1 : 0)
-            .offset(y: showPlans ? 0 : 24)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showPlans)
-
-            PaywallPlanCard(
-                title: "Annual",
-                price: annualPriceText,
-                badge: annualBadgeText,
-                isSelected: selectedBilling == .yearly
-            ) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    selectedBilling = .yearly
-                }
-            }
-            .opacity(showPlans ? 1 : 0)
-            .offset(y: showPlans ? 0 : 24)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.08), value: showPlans)
         }
+        .opacity(showPlans ? 1 : 0)
+        .offset(y: showPlans ? 0 : 16)
     }
 
     // MARK: - CTA Button
@@ -300,7 +268,7 @@ struct PaywallView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(0.8)
                         Text("Loading...")
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
+                            .font(.custom(FontFamily.Rubik.regular, size: 15))
                     }
                 } else if subscriptionManager.availableProducts.isEmpty {
                     Text("Tap to retry")
@@ -317,16 +285,36 @@ struct PaywallView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(
-                Capsule()
-                    .fill(accentColor.opacity(0.45))
-                    .glassEffect(.clear, in: Capsule())
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(accentColor)
+
+                    // Shimmer overlay
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0), location: 0),
+                                    .init(color: .white.opacity(0.25), location: 0.5),
+                                    .init(color: .white.opacity(0), location: 1)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .mask(
+                            RoundedRectangle(cornerRadius: 14)
+                        )
+                        .offset(x: shimmerOffset * 200)
+                        .clipped()
+                }
             )
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .disabled(isPurchasing || subscriptionManager.isLoadingProducts)
         .buttonStyle(PaywallPressButtonStyle())
         .opacity(showCTA ? 1 : 0)
-        .scaleEffect(showCTA ? 1 : 0.9)
-        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showCTA)
+        .offset(y: showCTA ? 0 : 16)
     }
 
     // MARK: - Reassurance
@@ -334,10 +322,9 @@ struct PaywallView: View {
     private var reassuranceText: some View {
         Text("No payment now. Cancel anytime.")
             .font(.custom(FontFamily.Rubik.regular, size: 13))
-            .foregroundColor(.black.opacity(0.6))
+            .foregroundColor(Color("NormaText").opacity(0.4))
             .frame(maxWidth: .infinity)
             .opacity(showCTA ? 1 : 0)
-            .animation(.easeOut(duration: 0.4).delay(0.1), value: showCTA)
     }
 
     // MARK: - Legal Row
@@ -345,17 +332,16 @@ struct PaywallView: View {
     private var legalRow: some View {
         HStack(spacing: 12) {
             Button("Terms") { showTermsOfUse = true }
-            Text("·").foregroundColor(.black.opacity(0.4))
+            Text("·").foregroundColor(Color("NormaText").opacity(0.3))
             Button("Privacy") { showPrivacyPolicy = true }
-            Text("·").foregroundColor(.black.opacity(0.4))
+            Text("·").foregroundColor(Color("NormaText").opacity(0.3))
             Button("Restore Purchases") {
                 Task { await restorePurchases() }
             }
         }
         .font(.custom(FontFamily.Rubik.regular, size: 12))
-        .foregroundColor(.black.opacity(0.5))
+        .foregroundColor(Color("NormaText").opacity(0.4))
         .opacity(showCTA ? 1 : 0)
-        .animation(.easeOut(duration: 0.4).delay(0.2), value: showCTA)
     }
 
     // MARK: - Dynamic Pricing
@@ -369,16 +355,22 @@ struct PaywallView: View {
     }
 
     private var monthlyPriceText: String {
-        guard let product = monthlyProduct else { return "$9.99 per month, billed monthly" }
-        return "\(product.priceString) per month, billed monthly"
+        guard let product = monthlyProduct else { return "$9.99/mo" }
+        return "\(product.priceString)/mo"
     }
 
     private var annualPriceText: String {
-        guard let product = annualProduct else { return "$8.33 per month, billed annually" }
+        guard let product = annualProduct else { return "$8.33/mo, billed annually" }
         if let monthlyEquiv = product.monthlyEquivalentPrice {
-            return "\(monthlyEquiv) per month, billed annually"
+            return "\(monthlyEquiv)/mo, billed annually"
         }
-        return "\(product.priceString) per year, billed annually"
+        return "\(product.priceString)/yr"
+    }
+
+    /// The monthly price shown as a crossed-out reference on the annual card
+    private var annualStrikethroughText: String? {
+        guard let monthly = monthlyProduct else { return "$9.99/mo" }
+        return "\(monthly.priceString)/mo"
     }
 
     private var annualBadgeText: String? {
@@ -446,8 +438,8 @@ struct PaywallView: View {
 struct PaywallPressButtonStyle: ButtonStyle {
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

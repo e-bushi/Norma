@@ -23,13 +23,83 @@ struct NotificationPermissionView: View {
     private let stepNumber = 9
     private let totalSteps = 9
 
-    private let accentColor = Color("NormaPastelTeal")
+    @State private var animateStepIndicator = false
+    @State private var animateSubtitle = false
+    @State private var animateBenefits: [Bool] = [false, false, false]
+
+    private let accentColor = Color("NormaPastelPurple")
     private let secondaryColor = Color("NormaPastelPurple")
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
-            // Lava lamp glass background
-            NotificationGlassBackground(accentColor: accentColor, secondaryColor: secondaryColor)
+            // Gradient background — purple tones
+            LinearGradient(
+                colors: [
+                    colorScheme == .dark
+                        ? Color(red: 0.10, green: 0.04, blue: 0.14)
+                        : Color(red: 0.94, green: 0.90, blue: 0.98),
+                    colorScheme == .dark
+                        ? Color(red: 0.04, green: 0.02, blue: 0.06)
+                        : Color(red: 0.97, green: 0.95, blue: 0.99)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 10
+                let maxRadius: CGFloat = 360
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 8
+                let maxRadius: CGFloat = 300
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.16 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(secondaryColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
@@ -38,68 +108,74 @@ struct NotificationPermissionView: View {
                         OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
+                            .opacity(animateStepIndicator ? 1.0 : 0.0)
+                            .offset(y: animateStepIndicator ? 0 : -10)
 
                         Spacer()
-                            .frame(height: 40)
 
-                        // Hero visual - Bell with glow
-                        NotificationHeroVisual(isAnimating: animateHero, accentColor: accentColor, secondaryColor: secondaryColor)
-
-                        Spacer()
-                            .frame(height: 28)
-
-                        // Title
-                        Text("Stay on Track")
-                            .font(.normaHeadline(32))
+                        // Title — left-aligned, large
+                        Text("Stay on\ntrack.")
+                            .font(.custom(FontFamily.Rubik.bold, size: 64))
                             .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .scaleEffect(animateTitle ? 1.0 : 0.9)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .scaleEffect(animateTitle ? 1.0 : 0.95, anchor: .leading)
                             .opacity(animateTitle ? 1.0 : 0.0)
 
                         Spacer()
                             .frame(height: 12)
 
                         // Subtitle
-                        Text("Get timely reminders and never\nmiss what matters.")
-                            .normaBody()
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        Text("Timely reminders so you never\nmiss what matters.")
+                            .font(.custom(FontFamily.Rubik.regular, size: 20))
+                            .foregroundColor(Color("NormaText").opacity(0.35))
+                            .multilineTextAlignment(.leading)
                             .lineSpacing(4)
-                            .padding(.horizontal, 32)
-                            .opacity(animateTitle ? 1.0 : 0.0)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .opacity(animateSubtitle ? 1.0 : 0.0)
 
                         Spacer()
-                            .frame(height: 32)
+                            .frame(height: 18)
 
-                        // Benefits list
-                        VStack(spacing: 14) {
+                        // Benefits list — staggered
+                        VStack(spacing: 0) {
                             NotificationBenefitRow(
                                 icon: "calendar.badge.clock",
                                 title: "Bill reminders",
-                                description: "Alerts before bills are due"
+                                description: "Alerts before bills are due",
+                                accentColor: accentColor
                             )
+                            .opacity(animateBenefits[0] ? 1.0 : 0.0)
+                            .offset(x: animateBenefits[0] ? 0 : -20)
 
                             NotificationBenefitRow(
                                 icon: "chart.bar.fill",
                                 title: "Budget alerts",
-                                description: "Know when you're close to limits"
+                                description: "Know when you're close to limits",
+                                accentColor: accentColor
                             )
+                            .opacity(animateBenefits[1] ? 1.0 : 0.0)
+                            .offset(x: animateBenefits[1] ? 0 : -20)
 
                             NotificationBenefitRow(
                                 icon: "sparkles",
                                 title: "Weekly insights",
-                                description: "Your spending at a glance"
+                                description: "Your spending at a glance",
+                                accentColor: accentColor
                             )
+                            .opacity(animateBenefits[2] ? 1.0 : 0.0)
+                            .offset(x: animateBenefits[2] ? 0 : -20)
                         }
                         .padding(.horizontal, 24)
-                        .offset(y: animateContent ? 0 : 30)
-                        .opacity(animateContent ? 1.0 : 0.0)
 
-                        Spacer(minLength: 40)
+                        Spacer()
+                            .frame(height: 24)
 
                         // Buttons
                         VStack(spacing: 16) {
-                            // Enable button with glass effect
+                            // Enable button — solid purple
                             Button(action: {
                                 playHaptic(intensity: 0.7, sharpness: 0.5)
                                 requestNotificationPermission()
@@ -119,8 +195,7 @@ struct NotificationPermissionView: View {
                                 .frame(height: 56)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(accentColor.opacity(0.25))
-                                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                                        .fill(Color("NormaPastelPurple"))
                                 )
                             }
                             .disabled(isLoading)
@@ -131,13 +206,13 @@ struct NotificationPermissionView: View {
                                 onSkip()
                             }) {
                                 Text("Not Now")
-                                    .font(.normaHeadline(14))
-                                    .foregroundColor(.secondary)
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(Color("NormaText").opacity(0.35))
                             }
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
-                        .scaleEffect(animateButton ? 1.0 : 0.9)
+                        .offset(y: animateButton ? 0 : 60)
                         .opacity(animateButton ? 1.0 : 0.0)
                     }
                     .frame(minHeight: geometry.size.height)
@@ -150,35 +225,43 @@ struct NotificationPermissionView: View {
     }
 
     private func startAnimations() {
-        // Prepare haptics
         prepareHaptics()
 
-        // Hero pops in first
+        // Step indicator
+        withAnimation(.easeOut(duration: 0.4).delay(0.05)) {
+            animateStepIndicator = true
+        }
+
+        // Hero pops in
         animateHero = true
         playHaptic(intensity: 0.6, sharpness: 0.4)
 
         // Title
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            playHaptic(intensity: 0.4, sharpness: 0.3)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            playHaptic(intensity: 0.5, sharpness: 0.4)
         }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
             animateTitle = true
         }
 
-        // Content
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
-            animateContent = true
+        // Subtitle
+        withAnimation(.easeOut(duration: 0.45).delay(0.45)) {
+            animateSubtitle = true
         }
 
-        // Staggered haptics for benefit rows
-        for i in 0..<3 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35 + Double(i) * 0.08) {
+        // Benefits stagger
+        for i in 0..<animateBenefits.count {
+            let delay = 0.6 + Double(i) * 0.1
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 playHaptic(intensity: 0.3, sharpness: 0.2)
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(delay)) {
+                animateBenefits[i] = true
             }
         }
 
         // Button
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.55)) {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.1)) {
             animateButton = true
         }
     }
@@ -249,50 +332,6 @@ struct NotificationPermissionView: View {
         } catch {
             print("Haptic playback error: \(error.localizedDescription)")
         }
-    }
-}
-
-// MARK: - Notification Glass Background
-
-struct NotificationGlassBackground: View {
-    let accentColor: Color
-    let secondaryColor: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color("NormaBackground")
-
-                // Lava lamp orbs
-                LavaOrb(
-                    color: accentColor,
-                    size: 240,
-                    blur: 65,
-                    opacity: 0.14,
-                    bounds: geometry.size,
-                    speed: 5.5
-                )
-
-                LavaOrb(
-                    color: secondaryColor,
-                    size: 200,
-                    blur: 55,
-                    opacity: 0.1,
-                    bounds: geometry.size,
-                    speed: 6.5
-                )
-
-                LavaOrb(
-                    color: Color("NormaPastelPink"),
-                    size: 160,
-                    blur: 50,
-                    opacity: 0.08,
-                    bounds: geometry.size,
-                    speed: 7.5
-                )
-            }
-        }
-        .ignoresSafeArea()
     }
 }
 
@@ -402,44 +441,33 @@ struct NotificationBenefitRow: View {
     let icon: String
     let title: String
     let description: String
-
-    private let accentColor = Color("NormaPastelTeal")
+    var accentColor: Color = Color("NormaPastelTeal")
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Icon with background
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(accentColor.opacity(0.1))
-                    .frame(width: 48, height: 48)
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(accentColor)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(accentColor.opacity(0.15))
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 8))
+                )
 
-                Image(systemName: icon)
-                    .font(.system(size: 22))
-                    .foregroundColor(accentColor)
-            }
-
-            // Text
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.normaHeadline(16))
-                    .foregroundColor(.primary)
+                    .font(.custom(FontFamily.Rubik.medium, size: 17))
+                    .foregroundColor(Color("NormaText").opacity(0.7))
 
                 Text(description)
-                    .normaCaption()
-                    .foregroundColor(.secondary)
+                    .font(.custom(FontFamily.Rubik.regular, size: 14))
+                    .foregroundColor(Color("NormaText").opacity(0.35))
             }
 
             Spacer()
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color("NormaSurface").opacity(0.8))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-        )
+        .padding(.vertical, 8)
     }
 }
 

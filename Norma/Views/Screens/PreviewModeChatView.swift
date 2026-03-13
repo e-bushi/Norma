@@ -620,6 +620,8 @@ struct SaveProgressModal: View {
                 ZStack {
                     Color("NormaBackground")
 
+                    DotGridPattern()
+
                     LavaOrb(
                         color: accentColor,
                         size: 200,
@@ -714,24 +716,25 @@ struct SaveProgressModal: View {
                             impact.impactOccurred()
                             onSignUpWithGoogle()
                         }) {
-                            HStack(spacing: 12) {
-                                Image("google-logo")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
 
-                                Text("Continue with Google")
-                                    .font(.normaHeadline(16))
-                                    .foregroundColor(.primary)
+                                HStack(spacing: 12) {
+                                    GoogleLogoView()
+                                        .frame(width: 20, height: 20)
+                                    Text("Continue with Google")
+                                        .font(.normaHeadline(16))
+                                }
+                                .foregroundColor(.black.opacity(0.87))
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(Color("NormaSurface"))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                            )
-                            .cornerRadius(12)
                         }
 
                         Button(action: {

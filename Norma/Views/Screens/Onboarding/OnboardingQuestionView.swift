@@ -115,19 +115,47 @@ enum OnboardingQuestion: CaseIterable {
 
     var heroAccentColor: Color {
         switch self {
-        case .runwayCheck: return Color("NormaPastelTeal")
-        case .nomadChallenges: return Color("NormaPastelPurple")
-        case .moneyStoppedYou: return Color("NormaPastelCoral")
-        case .winningLooksLike: return Color("NormaPastelPink")
+        case .runwayCheck: return Color("NormaPastelTeal")                          // teal-steel coin
+        case .nomadChallenges: return Color(red: 0.96, green: 0.87, blue: 0.70)     // opal coin (warm brownish)
+        case .moneyStoppedYou: return Color("NormaPastelPink")                       // pink-panther coin
+        case .winningLooksLike: return Color(red: 1.0, green: 0.84, blue: 0.0)      // gold coin
         }
     }
 
     var heroSecondaryColor: Color {
         switch self {
         case .runwayCheck: return Color("NormaPastelPurple")
-        case .nomadChallenges: return Color("NormaPastelTeal")
-        case .moneyStoppedYou: return Color("NormaPastelPink")
-        case .winningLooksLike: return Color("NormaPastelTeal")
+        case .nomadChallenges: return Color(red: 0.82, green: 0.72, blue: 0.55)     // warm brown
+        case .moneyStoppedYou: return Color("NormaPastelCoral")
+        case .winningLooksLike: return Color(red: 0.96, green: 0.87, blue: 0.70)    // warm amber
+        }
+    }
+
+    /// Gradient top color matched to coin palette
+    var gradientTopColor: (dark: Color, light: Color) {
+        switch self {
+        case .runwayCheck:       // teal-steel coin
+            return (Color(red: 0.04, green: 0.14, blue: 0.16), Color(red: 0.85, green: 0.95, blue: 0.95))
+        case .nomadChallenges:   // opal coin (warm brownish)
+            return (Color(red: 0.14, green: 0.11, blue: 0.06), Color(red: 0.96, green: 0.93, blue: 0.88))
+        case .moneyStoppedYou:   // pink-panther coin
+            return (Color(red: 0.16, green: 0.06, blue: 0.10), Color(red: 0.98, green: 0.90, blue: 0.93))
+        case .winningLooksLike:  // gold coin
+            return (Color(red: 0.16, green: 0.13, blue: 0.02), Color(red: 0.98, green: 0.95, blue: 0.85))
+        }
+    }
+
+    /// Gradient bottom color matched to coin palette
+    var gradientBottomColor: (dark: Color, light: Color) {
+        switch self {
+        case .runwayCheck:       // teal-steel coin
+            return (Color(red: 0.02, green: 0.06, blue: 0.08), Color(red: 0.94, green: 0.97, blue: 0.97))
+        case .nomadChallenges:   // opal coin (warm brownish)
+            return (Color(red: 0.08, green: 0.06, blue: 0.03), Color(red: 0.97, green: 0.95, blue: 0.92))
+        case .moneyStoppedYou:   // pink-panther coin
+            return (Color(red: 0.08, green: 0.03, blue: 0.05), Color(red: 0.98, green: 0.95, blue: 0.96))
+        case .winningLooksLike:  // gold coin
+            return (Color(red: 0.08, green: 0.06, blue: 0.01), Color(red: 0.98, green: 0.97, blue: 0.92))
         }
     }
 }
@@ -161,8 +189,60 @@ struct OnboardingQuestionView: View {
 
     var body: some View {
         ZStack {
-            // Glass background with floating orbs
-            OnboardingGlassBackground(question: question)
+            // Gradient background
+            OnboardingGradientBackground(question: question)
+
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 10
+                let maxRadius: CGFloat = 360
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(question.heroAccentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 8
+                let maxRadius: CGFloat = 300
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.16 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(question.heroSecondaryColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
@@ -172,7 +252,7 @@ struct OnboardingQuestionView: View {
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 
-                        // Hero visual
+                        // Hero visual — centered
                         HStack {
                             Spacer()
                             QuestionHeroVisual(question: question, isAnimating: animateHero)
@@ -181,13 +261,13 @@ struct OnboardingQuestionView: View {
                         .padding(.top, 24)
                         .padding(.bottom, 16)
 
-                        // Question title - wave animation
+                        // Question title - wave animation, larger
                         WaveTextView(
-                        text: question.title,
-                        font: .normaHeadline(42),
-                        color: .primary,
-                        isAnimating: titleAnimating,
-                        alignment: .leading
+                            text: question.title,
+                            font: .custom(FontFamily.Rubik.bold, size: 48),
+                            color: .primary,
+                            isAnimating: titleAnimating,
+                            alignment: .leading
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
@@ -196,24 +276,23 @@ struct OnboardingQuestionView: View {
                         // Subtitle for multi-select
                         if let subtitle = question.subtitle {
                             Text(subtitle)
-                                .normaCaption()
-                                .foregroundColor(.secondary)
+                                .font(.custom(FontFamily.Rubik.regular, size: 16))
+                                .foregroundColor(Color("NormaText").opacity(0.35))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 24)
-                                .padding(.top, 8)
+                                .padding(.top, 10)
                                 .offset(y: animateSubtitle ? 0 : 20)
                                 .opacity(animateSubtitle ? 1.0 : 0.0)
                         }
 
-                        // Options list
-                        VStack(spacing: 12) {
+                        // Options — pill flow layout
+                        OptionPillFlowLayout(spacing: 10) {
                             ForEach(Array(question.options.enumerated()), id: \.element.id) { index, option in
-                                OptionRow(
-                                    option: option,
+                                OptionPill(
+                                    title: option.title,
                                     isSelected: selectedOptions.contains(option.id),
-                                    isMultiSelect: question.allowsMultipleSelection,
+                                    accentColor: question.heroAccentColor,
                                     onTap: {
-                                        // Haptic feedback on selection
                                         playSelectionHaptic()
 
                                         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
@@ -229,10 +308,10 @@ struct OnboardingQuestionView: View {
                                         }
                                     }
                                 )
-                                .offset(y: animateOptions ? 0 : 40)
+                                .scaleEffect(animateOptions ? 1.0 : 0.8)
                                 .opacity(animateOptions ? 1.0 : 0.0)
                                 .animation(
-                                    .spring(response: 0.6, dampingFraction: 0.75).delay(Double(index) * 0.06),
+                                    .spring(response: 0.5, dampingFraction: 0.75).delay(Double(index) * 0.06),
                                     value: animateOptions
                                 )
                             }
@@ -247,32 +326,24 @@ struct OnboardingQuestionView: View {
                                 .padding(.top, 16)
                                 .offset(y: animateOptions ? 0 : 20)
                                 .opacity(animateOptions ? 1.0 : 0.0)
-                                .animation(.easeOut(duration: 0.4).delay(0.5), value: animateOptions)
+                                .animation(.easeOut(duration: 0.4).delay(0.6), value: animateOptions)
                         }
 
                         Spacer(minLength: 24)
 
-                        // Continue button
+                        // Continue button — matches gradient
                         Button(action: {
                             let selected = selectedOptions.joined(separator: ",")
                             onContinue(selected)
                         }) {
                             Text("Continue")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(hasSelection ? .primary : .secondary)
+                                .foregroundColor(hasSelection ? .white : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(
-                                    Group {
-                                        if hasSelection {
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(Color("NormaPastelTeal").opacity(0.25))
-                                                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
-                                        } else {
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(Color("NormaSurface"))
-                                        }
-                                    }
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(hasSelection ? question.gradientTopColor.dark : Color("NormaSurface"))
                                 )
                         }
                         .disabled(!hasSelection)
@@ -291,36 +362,37 @@ struct OnboardingQuestionView: View {
     }
 
     private func startAnimations() {
-        // Prepare haptic engine
         prepareHaptics()
 
         // Hero visual pops in first
         animateHero = true
         playHaptic(intensity: 0.6, sharpness: 0.4)
 
-        // Title wave starts slightly after
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        // Title wave starts after hero
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             titleAnimating = true
-            playHaptic(intensity: 0.5, sharpness: 0.3)
+            playHaptic(intensity: 0.5, sharpness: 0.4)
         }
 
-        withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+        // Subtitle
+        withAnimation(.easeOut(duration: 0.45).delay(0.45)) {
             animateSubtitle = true
         }
 
-        // Options animate in with staggered haptics
-        withAnimation(.easeOut(duration: 0.5).delay(0.25)) {
+        // Options stagger in
+        withAnimation(.easeOut(duration: 0.5).delay(0.6)) {
             animateOptions = true
         }
 
-        // Staggered light haptics as each option appears
+        // Staggered haptics per option
         for index in 0..<question.options.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25 + (Double(index) * 0.06)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6 + (Double(index) * 0.1)) {
                 playHaptic(intensity: 0.3, sharpness: 0.2)
             }
         }
 
-        withAnimation(.easeOut(duration: 0.4).delay(0.5)) {
+        // Button
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.2)) {
             animateButton = true
         }
     }
@@ -364,7 +436,10 @@ struct OptionRow: View {
     let option: QuestionOption
     let isSelected: Bool
     var isMultiSelect: Bool = false
+    var accentColor: Color = Color("NormaPastelTeal")
     let onTap: () -> Void
+
+    @State private var stripesVisible = false
 
     var body: some View {
         Button(action: onTap) {
@@ -372,23 +447,23 @@ struct OptionRow: View {
                 // Icon with animated background
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color("NormaPastelTeal").opacity(0.15) : Color.clear)
+                        .fill(isSelected ? accentColor.opacity(0.15) : Color.clear)
                         .frame(width: 44, height: 44)
 
                     Image(systemName: option.icon)
                         .font(.system(size: 22))
-                        .foregroundColor(isSelected ? Color("NormaPastelTeal") : .primary)
+                        .foregroundColor(isSelected ? accentColor : .primary)
                 }
                 .animation(.easeInOut(duration: 0.2), value: isSelected)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(option.title)
-                        .font(.normaHeadline(17))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
 
                     Text(option.subtitle)
-                        .normaCaption()
-                        .foregroundColor(.secondary)
+                        .font(.custom(FontFamily.Rubik.regular, size: 13))
+                        .foregroundColor(Color("NormaText").opacity(0.4))
                 }
 
                 Spacer()
@@ -397,23 +472,23 @@ struct OptionRow: View {
                 ZStack {
                     if isMultiSelect {
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(isSelected ? Color("NormaPastelTeal") : Color.secondary.opacity(0.3), lineWidth: 2)
+                            .stroke(isSelected ? accentColor : Color.secondary.opacity(0.3), lineWidth: 2)
                             .frame(width: 24, height: 24)
 
                         if isSelected {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color("NormaPastelTeal"))
+                                .fill(accentColor)
                                 .frame(width: 16, height: 16)
                                 .transition(.scale.combined(with: .opacity))
                         }
                     } else {
                         Circle()
-                            .stroke(isSelected ? Color("NormaPastelTeal") : Color.secondary.opacity(0.3), lineWidth: 2)
+                            .stroke(isSelected ? accentColor : Color.secondary.opacity(0.3), lineWidth: 2)
                             .frame(width: 24, height: 24)
 
                         if isSelected {
                             Circle()
-                                .fill(Color("NormaPastelTeal"))
+                                .fill(accentColor)
                                 .frame(width: 14, height: 14)
                                 .transition(.scale.combined(with: .opacity))
                         }
@@ -424,58 +499,177 @@ struct OptionRow: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? Color("NormaPastelTeal").opacity(0.08) : Color("NormaSurface"))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(isSelected ? accentColor.opacity(0.1) : Color.white.opacity(0.05))
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+                    // Diagonal stripes on selected
+                    if isSelected {
+                        OptionStripesPattern(
+                            lineColor: accentColor.opacity(0.07),
+                            spacing: 10,
+                            lineWidth: 0.8
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .opacity(stripesVisible ? 1 : 0)
+                        .mask(
+                            GeometryReader { geo in
+                                Rectangle()
+                                    .frame(width: stripesVisible ? geo.size.width : 0)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        )
+                    }
+                }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color("NormaPastelTeal") : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? accentColor.opacity(0.5) : Color.white.opacity(0.15), lineWidth: 1.5)
             )
             .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
+        .onChange(of: isSelected) { _, selected in
+            if selected {
+                stripesVisible = false
+                withAnimation(.easeOut(duration: 0.45).delay(0.05)) {
+                    stripesVisible = true
+                }
+            } else {
+                stripesVisible = false
+            }
+        }
     }
 }
 
-// MARK: - Glass Background
+// MARK: - Option Pill
 
-struct OnboardingGlassBackground: View {
-    let question: OnboardingQuestion
+struct OptionPill: View {
+    let title: String
+    let isSelected: Bool
+    var accentColor: Color = Color("NormaPastelTeal")
+    let onTap: () -> Void
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color("NormaBackground")
-
-                // Lava lamp orbs
-                LavaOrb(
-                    color: question.heroAccentColor,
-                    size: 220,
-                    blur: 60,
-                    opacity: 0.18,
-                    bounds: geometry.size,
-                    speed: 4.0
+        Button(action: onTap) {
+            Text(title)
+                .font(.custom(FontFamily.Rubik.medium, size: 16))
+                .foregroundColor(isSelected ? .white : .primary)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? accentColor : Color.white.opacity(0.05))
                 )
-
-                LavaOrb(
-                    color: question.heroSecondaryColor,
-                    size: 200,
-                    blur: 50,
-                    opacity: 0.15,
-                    bounds: geometry.size,
-                    speed: 5.0
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? accentColor : Color.white.opacity(0.15), lineWidth: 1.5)
                 )
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
 
-                LavaOrb(
-                    color: question.heroAccentColor,
-                    size: 150,
-                    blur: 45,
-                    opacity: 0.12,
-                    bounds: geometry.size,
-                    speed: 6.0
+// MARK: - Flow Layout
+
+struct OptionPillFlowLayout: Layout {
+    var spacing: CGFloat = 10
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+
+        for (index, position) in result.positions.enumerated() {
+            guard index < subviews.count else { break }
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+
+            positions.append(CGPoint(x: currentX, y: currentY))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+            maxX = max(maxX, currentX - spacing)
+        }
+
+        return (CGSize(width: maxX, height: currentY + lineHeight), positions)
+    }
+}
+
+// MARK: - Option Stripes Pattern
+
+private struct OptionStripesPattern: View {
+    var lineColor: Color = .gray
+    var spacing: CGFloat = 10
+    var lineWidth: CGFloat = 0.8
+
+    var body: some View {
+        Canvas { context, size in
+            let totalLines = Int((size.width + size.height) / spacing) + 1
+
+            for i in 0..<totalLines {
+                let offset = CGFloat(i) * spacing
+
+                var path = Path()
+                let startX = offset
+                let startY: CGFloat = 0
+                let endX = offset - size.height
+                let endY = size.height
+
+                path.move(to: CGPoint(x: startX, y: startY))
+                path.addLine(to: CGPoint(x: endX, y: endY))
+
+                context.stroke(
+                    path,
+                    with: .color(lineColor),
+                    lineWidth: lineWidth
                 )
             }
         }
+    }
+}
+
+// MARK: - Gradient Background
+
+struct OnboardingGradientBackground: View {
+    let question: OnboardingQuestion
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        LinearGradient(
+            colors: [
+                colorScheme == .dark
+                    ? question.gradientTopColor.dark
+                    : question.gradientTopColor.light,
+                colorScheme == .dark
+                    ? question.gradientBottomColor.dark
+                    : question.gradientBottomColor.light
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .ignoresSafeArea()
     }
 }
@@ -492,21 +686,29 @@ struct QuestionHeroVisual: View {
     @State private var floatOffset: CGFloat = 0
 
     var body: some View {
-        FloatingCoin3DView(fileName: question.coinAsset)
-            .frame(width: 120, height: 120)
-            .scaleEffect(coinScale)
-            .opacity(coinOpacity)
-            .offset(y: floatOffset)
-            .onChange(of: isAnimating) { _, newValue in
-                if newValue {
-                    startAnimations()
-                }
+        CrossfadeView(
+            key: question.coinAsset,
+            duration: 0.45,
+            initialDelay: 0.7
+        ) { fileName in
+            FloatingCoin3DView(fileName: fileName)
+                .id(fileName)
+                .frame(width: 140, height: 140)
+        }
+        .frame(width: 140, height: 140)
+        .scaleEffect(coinScale)
+        .opacity(coinOpacity)
+        .offset(y: floatOffset)
+        .onChange(of: isAnimating) { _, newValue in
+            if newValue {
+                startAnimations()
             }
-            .onAppear {
-                if isAnimating {
-                    startAnimations()
-                }
+        }
+        .onAppear {
+            if isAnimating {
+                startAnimations()
             }
+        }
     }
 
     private func startAnimations() {
@@ -744,7 +946,7 @@ struct RunwayHelpBox: View {
 // MARK: - Preview Helper
 
 private struct OnboardingQuestionPreview: View {
-    @State private var currentIndex = 0
+    @State private var currentIndex = 1
 
     private var currentQuestion: OnboardingQuestion {
         OnboardingQuestion.allCases[currentIndex]
