@@ -316,7 +316,13 @@ struct LoginView: View {
                     }
                 }
             }
-            .background(Color("NormaBackground"))
+            .background(
+                ZStack {
+                    Color("NormaBackground")
+                    DotGridPattern()
+                }
+                .ignoresSafeArea()
+            )
             .overlay(
                 Group {
                     if isLoading {
@@ -521,7 +527,7 @@ struct LoginView: View {
 // Google logo view - uses image asset if available, otherwise draws a stylized "G"
 struct GoogleLogoView: View {
     var body: some View {
-        if let uiImage = UIImage(named: "GoogleLogo") {
+        if let uiImage = UIImage(named: "google-ios") {
             Image(uiImage: uiImage)
                 .resizable()
                 .scaledToFit()

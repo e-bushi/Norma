@@ -76,77 +76,169 @@ struct NomadTypeView: View {
     private let stepNumber = 2
     private let totalSteps = 9
 
-    private let accentColor = Color("NormaPastelPurple")
-    private let secondaryColor = Color("NormaPastelTeal")
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Silver coin gradient
+    private let gradientTopDark = Color(red: 0.08, green: 0.08, blue: 0.10)
+    private let gradientBottomDark = Color(red: 0.04, green: 0.04, blue: 0.05)
+    private let gradientTopLight = Color(red: 0.92, green: 0.92, blue: 0.94)
+    private let gradientBottomLight = Color(red: 0.96, green: 0.96, blue: 0.97)
+
+    private let accentColor = Color(red: 0.75, green: 0.75, blue: 0.8) // silver
+
+    private var subtitleText: String {
+        selectedType?.subtitle ?? "This helps Norma adapt to your lifestyle"
+    }
 
     var body: some View {
         ZStack {
-            // Lava lamp glass background
-            NomadTypeBackground(accentColor: accentColor, secondaryColor: secondaryColor)
+            // Gradient background
+            LinearGradient(
+                colors: [
+                    colorScheme == .dark ? gradientTopDark : gradientTopLight,
+                    colorScheme == .dark ? gradientBottomDark : gradientBottomLight
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 10
+                let maxRadius: CGFloat = 360
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 8
+                let maxRadius: CGFloat = 300
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.16 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         // Step indicator
                         OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
 
                         Spacer()
-                            .frame(height: 32)
+                            .frame(height: 24)
 
-                        // Hero - 3D coin
+                        // Hero - 3D coin with crossfade, centered
                         HStack {
                             Spacer()
-                            FloatingCoin3DView(fileName: "norma-coin-silver")
-                                .frame(width: 140, height: 140)
-                                .scaleEffect(animateHero ? 1.0 : 0.5)
-                                .opacity(animateHero ? 1.0 : 0.0)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.65), value: animateHero)
+                            CrossfadeView(
+                                key: "norma-coin-silver",
+                                duration: 0.45,
+                                initialDelay: 0.7
+                            ) { fileName in
+                                FloatingCoin3DView(fileName: fileName)
+                                    .id(fileName)
+                                    .frame(width: 140, height: 140)
+                            }
+                            .frame(width: 140, height: 140)
+                            .scaleEffect(animateHero ? 1.0 : 0.5)
+                            .opacity(animateHero ? 1.0 : 0.0)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.65), value: animateHero)
                             Spacer()
                         }
 
                         Spacer()
                             .frame(height: 24)
 
-                        // Title
-                        Text("How do you move?")
-                            .font(.normaHeadline(28))
+                        // Title — left-aligned, large
+                        Text("How do you\nmove?")
+                            .font(.custom(FontFamily.Rubik.bold, size: 48))
                             .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .scaleEffect(animateTitle ? 1.0 : 0.9)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .scaleEffect(animateTitle ? 1.0 : 0.95, anchor: .leading)
                             .opacity(animateTitle ? 1.0 : 0.0)
 
                         Spacer()
-                            .frame(height: 8)
+                            .frame(height: 10)
 
-                        // Subtitle
-                        Text("This helps Norma adapt to your lifestyle")
-                            .normaCaption()
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .opacity(animateSubtitle ? 1.0 : 0.0)
+                        // Subtitle — starts as default, wave-animates to selection description
+                        WaveTextView(
+                            text: subtitleText,
+                            font: .custom(FontFamily.Rubik.regular, size: 16),
+                            color: Color("NormaText").opacity(0.35),
+                            isAnimating: animateSubtitle,
+                            alignment: .leading
+                        )
+                        .id(subtitleText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
 
                         Spacer()
                             .frame(height: 28)
 
-                        // Type cards
-                        VStack(spacing: 12) {
+                        // Type pills
+                        OptionPillFlowLayout(spacing: 10) {
                             ForEach(Array(NomadType.allCases.enumerated()), id: \.element.id) { index, type in
-                                NomadTypeCard(
-                                    type: type,
+                                OptionPill(
+                                    title: type.title,
                                     isSelected: selectedType == type,
+                                    accentColor: accentColor,
                                     onTap: {
                                         playSelectionHaptic()
+                                        // Re-trigger subtitle wave animation
+                                        animateSubtitle = false
                                         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                                             selectedType = type
                                         }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            animateSubtitle = true
+                                        }
                                     }
                                 )
-                                .offset(y: animateCards ? 0 : 40)
+                                .scaleEffect(animateCards ? 1.0 : 0.8)
                                 .opacity(animateCards ? 1.0 : 0.0)
                                 .animation(
-                                    .spring(response: 0.6, dampingFraction: 0.75).delay(Double(index) * 0.08),
+                                    .spring(response: 0.5, dampingFraction: 0.75).delay(Double(index) * 0.06),
                                     value: animateCards
                                 )
                             }
@@ -155,7 +247,7 @@ struct NomadTypeView: View {
 
                         Spacer(minLength: 32)
 
-                        // Continue button
+                        // Continue button — matches gradient
                         Button(action: {
                             guard let selected = selectedType else { return }
                             playHaptic(intensity: 0.6, sharpness: 0.5)
@@ -163,20 +255,12 @@ struct NomadTypeView: View {
                         }) {
                             Text("Continue")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(selectedType != nil ? .primary : .secondary)
+                                .foregroundColor(selectedType != nil ? .white : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(
-                                    Group {
-                                        if selectedType != nil {
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(Color("NormaPastelTeal").opacity(0.25))
-                                                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
-                                        } else {
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(Color("NormaSurface"))
-                                        }
-                                    }
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedType != nil ? gradientTopDark : Color("NormaSurface"))
                                 )
                         }
                         .disabled(selectedType == nil)
@@ -204,32 +288,32 @@ struct NomadTypeView: View {
         playHaptic(intensity: 0.6, sharpness: 0.4)
 
         // Title
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            playHaptic(intensity: 0.4, sharpness: 0.3)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            playHaptic(intensity: 0.5, sharpness: 0.4)
         }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
             animateTitle = true
         }
 
         // Subtitle
-        withAnimation(.easeOut(duration: 0.4).delay(0.25)) {
+        withAnimation(.easeOut(duration: 0.45).delay(0.45)) {
             animateSubtitle = true
         }
 
         // Cards stagger in
-        withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+        withAnimation(.easeOut(duration: 0.5).delay(0.6)) {
             animateCards = true
         }
 
         // Staggered haptics per card
         for index in 0..<NomadType.allCases.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + (Double(index) * 0.08)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6 + (Double(index) * 0.1)) {
                 playHaptic(intensity: 0.3, sharpness: 0.2)
             }
         }
 
         // Button
-        withAnimation(.easeOut(duration: 0.4).delay(0.6)) {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.2)) {
             animateButton = true
         }
     }
@@ -266,116 +350,6 @@ struct NomadTypeView: View {
 
     private func playSelectionHaptic() {
         playHaptic(intensity: 0.6, sharpness: 0.5)
-    }
-}
-
-// MARK: - Nomad Type Card
-
-struct NomadTypeCard: View {
-    let type: NomadType
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 16) {
-                // Icon with animated background
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? type.accentColor.opacity(0.15) : Color.clear)
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: type.icon)
-                        .font(.system(size: 22))
-                        .foregroundColor(isSelected ? type.accentColor : .primary)
-                }
-                .animation(.easeInOut(duration: 0.2), value: isSelected)
-
-                // Title + subtitle
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(type.title)
-                        .font(.normaHeadline(17))
-                        .foregroundColor(.primary)
-
-                    Text(type.subtitle)
-                        .normaCaption()
-                        .foregroundColor(.secondary)
-                        .lineSpacing(2)
-                }
-
-                Spacer()
-
-                // Radio indicator
-                ZStack {
-                    Circle()
-                        .stroke(isSelected ? type.accentColor : Color.secondary.opacity(0.3), lineWidth: 2)
-                        .frame(width: 24, height: 24)
-
-                    if isSelected {
-                        Circle()
-                            .fill(type.accentColor)
-                            .frame(width: 14, height: 14)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? type.accentColor.opacity(0.08) : Color("NormaSurface"))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? type.accentColor : Color.clear, lineWidth: 2)
-            )
-            .animation(.easeInOut(duration: 0.2), value: isSelected)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Glass Background
-
-struct NomadTypeBackground: View {
-    let accentColor: Color
-    let secondaryColor: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color("NormaBackground")
-
-                LavaOrb(
-                    color: accentColor,
-                    size: 220,
-                    blur: 60,
-                    opacity: 0.16,
-                    bounds: geometry.size,
-                    speed: 5.0
-                )
-
-                LavaOrb(
-                    color: secondaryColor,
-                    size: 200,
-                    blur: 55,
-                    opacity: 0.12,
-                    bounds: geometry.size,
-                    speed: 6.0
-                )
-
-                LavaOrb(
-                    color: Color("NormaPastelPink"),
-                    size: 160,
-                    blur: 50,
-                    opacity: 0.1,
-                    bounds: geometry.size,
-                    speed: 7.0
-                )
-            }
-        }
-        .ignoresSafeArea()
     }
 }
 

@@ -13,22 +13,17 @@ struct WelcomeJourneyView: View {
 
     // Animation states
     @State private var coinVisible = false
-    @State private var orbitCoinVisibility: [Bool] = Array(repeating: false, count: 8)
-    @State private var startHovering = false
     @State private var animateTitle = false
     @State private var animateSubtitle = false
-    @State private var animateMessage = false
     @State private var animateButton = false
-    @State private var showConfetti = false
     @State private var hapticEngine: CHHapticEngine?
+
+    // Haptic tick tracking — fires ticks at intervals proportional to spin speed
+    @State private var lastTickTime: CFTimeInterval = 0
+    @State private var spinFinished = false
 
     private let stepNumber = 8
     private let totalSteps = 9
-
-    // Orbiting coins (all tiers for celebration)
-    private let orbitingCoins: [CoinTier] = [
-        .starter, .basic, .silver, .tealSteel, .gold, .skyBeige, .pinkPanther, .opal
-    ]
 
     private let accentColor = Color("NormaPastelTeal")
     private let secondaryColor = Color("NormaPastelPink")
@@ -38,134 +33,128 @@ struct WelcomeJourneyView: View {
             // Lava lamp glass background
             WelcomeGlassBackground(accentColor: accentColor, secondaryColor: secondaryColor)
 
-            GeometryReader { geometry in
-                ZStack {
-                    // Confetti overlay
-                    if showConfetti {
-                        ConfettiView()
-                            .ignoresSafeArea()
-                            .allowsHitTesting(false)
-                    }
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 8
+                let maxRadius: CGFloat = 320
+                let ringSpacing = maxRadius / CGFloat(ringCount)
 
-                    VStack(spacing: 0) {
-                        // Step indicator
-                        OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 16)
-
-                        Spacer()
-
-                        // Coin celebration orbit
-                        TimelineView(.animation(paused: !startHovering)) { timeline in
-                            let time = startHovering ? timeline.date.timeIntervalSinceReferenceDate : 0
-
-                            ZStack {
-                                // Orbiting smaller coins with hover effect
-                                ForEach(Array(orbitingCoins.enumerated()), id: \.element.id) { index, coin in
-                                    let angleOffset = (360.0 / Double(orbitingCoins.count)) * Double(index)
-                                    let isVisible = index < orbitCoinVisibility.count && orbitCoinVisibility[index]
-                                    let phaseOffset = Double(index) * 0.4
-                                    let individualHover = sin(time * 1.5 + phaseOffset) * 6
-
-                                    ZStack {
-                                        // Glow effect behind coin
-                                        Circle()
-                                            .fill(coin.glowColor.opacity(0.2))
-                                            .frame(width: 50, height: 50)
-                                            .blur(radius: 12)
-
-                                        StaticCoin3DView(fileName: coin.fileName)
-                                            .frame(width: 44, height: 44)
-                                    }
-                                    .offset(
-                                        x: cos(angleOffset * .pi / 180) * 110,
-                                        y: sin(angleOffset * .pi / 180) * 110 + individualHover
-                                    )
-                                    .scaleEffect(isVisible ? 1 : 0)
-                                    .opacity(isVisible ? 1 : 0)
-                                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isVisible)
-                                }
-
-                                // Center royalty coin with glow
-                                ZStack {
-                                    // Glow effect behind royalty coin
-                                    Circle()
-                                        .fill(CoinTier.royalty.glowColor.opacity(0.15))
-                                        .frame(width: 160, height: 160)
-                                        .blur(radius: 25)
-
-                                    MotionCoin3DView(fileName: "norma-coin-royalty")
-                                        .frame(width: 140, height: 140)
-                                }
-                                .scaleEffect(coinVisible ? 1 : 0.3)
-                                .opacity(coinVisible ? 1 : 0)
-                            }
-                        }
-                        .frame(width: 280, height: 280)
-
-                        Spacer()
-                            .frame(height: 40)
-
-                        // Title
-                        Text("Welcome to the journey")
-                            .font(.normaHeadline(32))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .scaleEffect(animateTitle ? 1.0 : 0.8)
-                            .opacity(animateTitle ? 1.0 : 0.0)
-
-                        Spacer()
-                            .frame(height: 16)
-
-                        // Subtitle
-                        Text("You just made one of the best decisions\nfor your financial freedom.")
-                            .normaBody()
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                            .padding(.horizontal, 32)
-                            .opacity(animateSubtitle ? 1.0 : 0.0)
-
-                        Spacer()
-                            .frame(height: 24)
-
-                        // Encouraging message
-                        VStack(spacing: 8) {
-                            Text("This is where it changes.")
-                                .font(.normaHeadline(18))
-                                .foregroundColor(accentColor)
-
-                            Text("Norma is here to help you every step of the way.")
-                                .normaCaption()
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal, 32)
-                        .opacity(animateMessage ? 1.0 : 0.0)
-
-                        Spacer()
-
-                        // Continue button with glass effect
-                        Button(action: {
-                            playHaptic(intensity: 0.7, sharpness: 0.5)
-                            onContinue()
-                        }) {
-                            Text("Let's go")
-                                .font(.normaHeadline(16))
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 56)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(accentColor.opacity(0.25))
-                                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
-                                )
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 32)
-                        .scaleEffect(animateButton ? 1.0 : 0.9)
-                        .opacity(animateButton ? 1.0 : 0.0)
-                    }
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
                 }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 6
+                let maxRadius: CGFloat = 240
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(secondaryColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                // Step indicator
+                OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+
+                Spacer()
+
+                // Solo royalty coin with glow
+                ZStack {
+                    Circle()
+                        .fill(CoinTier.royalty.glowColor.opacity(0.15))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 30)
+
+                    DecelerateCoin3DView(
+                        fileName: "norma-coin-royalty",
+                        onVelocityUpdate: { velocity in
+                            handleSpinVelocity(velocity)
+                        }
+                    )
+                    .frame(width: 180, height: 180)
+                }
+                .scaleEffect(coinVisible ? 1 : 0.3)
+                .opacity(coinVisible ? 1 : 0)
+
+                Spacer()
+                    .frame(height: 36)
+
+                // Title
+                Text("You're all set")
+                    .font(.custom(FontFamily.Rubik.bold, size: 44))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .scaleEffect(animateTitle ? 1.0 : 0.8)
+                    .opacity(animateTitle ? 1.0 : 0.0)
+
+                Spacer()
+                    .frame(height: 14)
+
+                // Subtitle
+                Text("You just made one of the best decisions\nfor your financial peace of mind.")
+                    .font(.custom(FontFamily.Rubik.regular, size: 18))
+                    .foregroundColor(Color("NormaText").opacity(0.4))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 32)
+                    .opacity(animateSubtitle ? 1.0 : 0.0)
+
+                Spacer()
+
+                // Solid teal button
+                Button(action: {
+                    playHaptic(intensity: 0.7, sharpness: 0.5)
+                    onContinue()
+                }) {
+                    Text("Let's go")
+                        .font(.normaHeadline(16))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color("NormaPastelPurple"))
+                        )
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+                .scaleEffect(animateButton ? 1.0 : 0.9)
+                .opacity(animateButton ? 1.0 : 0.0)
             }
         }
         .onAppear {
@@ -175,64 +164,65 @@ struct WelcomeJourneyView: View {
     }
 
     private func startAnimations() {
-        // Prepare haptics
         prepareHaptics()
 
-        // Center coin pops in first
+        // Coin pops in — spin starts immediately via DecelerateCoin3DView
         withAnimation(.spring(response: 0.6, dampingFraction: 0.65).delay(0.1)) {
             coinVisible = true
         }
 
-        // Trigger success haptic when coin appears
+        // Initial slam haptic when coin appears
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            playSuccessHaptic()
+            playSpinStartHaptic()
         }
 
-        // Stagger orbiting coins with haptics
-        let staggerDelay = 0.08
-        let startDelay = 0.3
-        for index in 0..<orbitingCoins.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + startDelay + (Double(index) * staggerDelay)) {
-                playHaptic(intensity: 0.5, sharpness: 0.3)
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    orbitCoinVisibility[index] = true
-                }
-            }
-        }
-
-        // Start confetti after coins appear
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            showConfetti = true
-            playSuccessHaptic()
-        }
-
-        // Start continuous hover animation after all coins appear
-        let totalHoverDelay = startDelay + (Double(orbitingCoins.count) * staggerDelay) + 0.3
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalHoverDelay) {
-            startHovering = true
-        }
-
-        // Title
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            playHaptic(intensity: 0.4, sharpness: 0.3)
-        }
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.7)) {
+        // Title appears as spin winds down (~2.5s in)
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(2.5)) {
             animateTitle = true
         }
 
         // Subtitle
-        withAnimation(.easeOut(duration: 0.5).delay(0.9)) {
+        withAnimation(.easeOut(duration: 0.5).delay(2.9)) {
             animateSubtitle = true
         }
 
-        // Message
-        withAnimation(.easeOut(duration: 0.5).delay(1.1)) {
-            animateMessage = true
+        // Button
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(3.3)) {
+            animateButton = true
+        }
+    }
+
+    // MARK: - Spin Haptics
+
+    /// Called every frame with the current angular velocity.
+    /// Fires haptic ticks at intervals inversely proportional to speed —
+    /// fast spin = rapid ticks, slow spin = sparse ticks, stopped = silence.
+    private func handleSpinVelocity(_ velocity: Float) {
+        guard velocity > 0.5, !spinFinished else {
+            if velocity <= 0 && !spinFinished {
+                spinFinished = true
+                playSuccessHaptic()
+            }
+            return
         }
 
-        // Button
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.3)) {
-            animateButton = true
+        let now = CACurrentMediaTime()
+
+        // Tick interval: faster spin = shorter interval
+        // At max velocity (~30), interval ≈ 0.03s (rapid buzz)
+        // At low velocity (~1), interval ≈ 0.25s (slow clicks)
+        let interval = Double(0.8 / velocity)
+        let clampedInterval = max(0.03, min(0.25, interval))
+
+        if now - lastTickTime >= clampedInterval {
+            lastTickTime = now
+
+            // Intensity scales with velocity
+            let normalizedVelocity = min(velocity / 30.0, 1.0)
+            let intensity = 0.15 + normalizedVelocity * 0.55
+            let sharpness: Float = 0.3 + normalizedVelocity * 0.4
+
+            playHaptic(intensity: intensity, sharpness: sharpness)
         }
     }
 
@@ -262,15 +252,33 @@ struct WelcomeJourneyView: View {
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: 0)
         } catch {
-            print("Haptic playback error: \(error.localizedDescription)")
+            // Silently fail — haptics are non-critical
         }
     }
 
+    /// Heavy initial slam when the spin starts
+    private func playSpinStartHaptic() {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics,
+              let engine = hapticEngine else { return }
+
+        let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.8)
+        let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0)
+
+        let event1 = CHHapticEvent(eventType: .hapticTransient, parameters: [intensity, sharpness], relativeTime: 0)
+        let event2 = CHHapticEvent(eventType: .hapticTransient, parameters: [intensity, sharpness], relativeTime: 0.05)
+
+        do {
+            let pattern = try CHHapticPattern(events: [event1, event2], parameters: [])
+            let player = try engine.makePlayer(with: pattern)
+            try player.start(atTime: 0)
+        } catch {}
+    }
+
+    /// Satisfying double-tap when the coin comes to rest
     private func playSuccessHaptic() {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics,
               let engine = hapticEngine else { return }
 
-        // Create a celebratory double-tap pattern
         let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
         let intensity1 = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8)
         let intensity2 = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6)
@@ -282,9 +290,7 @@ struct WelcomeJourneyView: View {
             let pattern = try CHHapticPattern(events: [event1, event2], parameters: [])
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: 0)
-        } catch {
-            print("Haptic playback error: \(error.localizedDescription)")
-        }
+        } catch {}
     }
 }
 
@@ -299,7 +305,6 @@ struct WelcomeGlassBackground: View {
             ZStack {
                 Color("NormaBackground")
 
-                // Subtle lava lamp orbs (more muted to not compete with coins)
                 LavaOrb(
                     color: accentColor,
                     size: 280,
@@ -381,7 +386,6 @@ struct ConfettiView: View {
     }
 
     private func animateParticles(screenHeight: CGFloat) {
-        // Continuous animation loop
         Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { timer in
             var allFallen = true
 
@@ -389,11 +393,9 @@ struct ConfettiView: View {
                 particles[i].position.y += particles[i].velocity
                 particles[i].position.x += particles[i].horizontalDrift
 
-                // Add some wavering
                 particles[i].horizontalDrift += CGFloat.random(in: -0.1...0.1)
                 particles[i].horizontalDrift = max(-2, min(2, particles[i].horizontalDrift))
 
-                // Fade out near bottom
                 if particles[i].position.y > screenHeight - 100 {
                     particles[i].opacity = max(0, particles[i].opacity - 0.02)
                 }

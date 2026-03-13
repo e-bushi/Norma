@@ -7,43 +7,28 @@
 
 import SwiftUI
 
-struct PaywallFeatureCard: View {
+struct PaywallFeatureRow: View {
     let icon: String
-    let iconColor: Color
-    let title: String
-    let description: String
+    let text: String
+
+    private let accentColor = Color("NormaPastelPurple")
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(iconColor)
-                .padding(.bottom, 4)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(accentColor)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(accentColor.opacity(0.1))
+                )
 
-            Text(title)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                .foregroundColor(.black)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-
-            Text(description)
-                .font(.custom(FontFamily.Rubik.regular, size: 13))
-                .foregroundColor(.black.opacity(0.6))
-                .lineSpacing(2)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(text)
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundColor(Color("NormaText").opacity(0.7))
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: 275, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color("NormaPastelPurple").opacity(0.15))
-                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
     }
 }

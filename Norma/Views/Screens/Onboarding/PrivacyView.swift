@@ -11,31 +11,96 @@ import CoreHaptics
 struct PrivacyView: View {
     let onContinue: () -> Void
 
-    @State private var animateHero = false
+    @State private var animateStepIndicator = false
     @State private var animateTitle = false
     @State private var animateSubtitle = false
     @State private var animateItems: [Bool] = [false, false, false, false]
-    @State private var animateFooter = false
     @State private var animateButton = false
     @State private var hapticEngine: CHHapticEngine?
 
     private let stepNumber = 7
     private let totalSteps = 9
 
-    private let encryptedItems = [
-        EncryptedItem(icon: "creditcard", title: "Your bills", description: "Due dates, amounts, everything"),
-        EncryptedItem(icon: "cart", title: "Your expenses", description: "Every transaction, fully private"),
-        EncryptedItem(icon: "banknote", title: "Your income", description: "What you earn stays yours"),
-        EncryptedItem(icon: "bubble.left.and.bubble.right", title: "Your conversations", description: "Every chat with Norma")
-    ]
-
     private let accentColor = Color("NormaPastelTeal")
-    private let secondaryColor = Color("NormaPastelPurple")
+    private let secondaryColor = Color("NormaPastelTeal")
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let privacyItems = [
+        (icon: "creditcard.fill", title: "Bills & due dates", description: "Encrypted and stored locally"),
+        (icon: "cart.fill", title: "Expenses & transactions", description: "Never shared with third parties"),
+        (icon: "banknote.fill", title: "Income & earnings", description: "Only you can see your numbers"),
+        (icon: "bubble.left.and.bubble.right.fill", title: "Conversations with Norma", description: "Private and not used for training")
+    ]
 
     var body: some View {
         ZStack {
-            // Lava lamp glass background
-            PrivacyGlassBackground(accentColor: accentColor, secondaryColor: secondaryColor)
+            // Gradient background — teal tones
+            LinearGradient(
+                colors: [
+                    colorScheme == .dark
+                        ? Color(red: 0.04, green: 0.12, blue: 0.14)
+                        : Color(red: 0.88, green: 0.96, blue: 0.96),
+                    colorScheme == .dark
+                        ? Color(red: 0.02, green: 0.05, blue: 0.06)
+                        : Color(red: 0.94, green: 0.98, blue: 0.98)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Radar rings from top-right
+            Canvas { context, size in
+                let origin = CGPoint(x: size.width, y: 0)
+                let ringCount = 10
+                let maxRadius: CGFloat = 360
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.18 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(accentColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Radar rings from bottom-left
+            Canvas { context, size in
+                let origin = CGPoint(x: 0, y: size.height)
+                let ringCount = 8
+                let maxRadius: CGFloat = 300
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.16 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: origin.x - radius,
+                        y: origin.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(secondaryColor.opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
@@ -44,82 +109,91 @@ struct PrivacyView: View {
                         OnboardingStepIndicator(currentStep: stepNumber, totalSteps: totalSteps)
                             .padding(.horizontal, 24)
                             .padding(.top, 16)
+                            .opacity(animateStepIndicator ? 1.0 : 0.0)
+                            .offset(y: animateStepIndicator ? 0 : -10)
 
                         Spacer()
-                            .frame(height: 32)
 
-                        // Hero visual - Shield with glow
-                        PrivacyHeroVisual(isAnimating: animateHero, accentColor: accentColor, secondaryColor: secondaryColor)
-
-                        Spacer()
-                            .frame(height: 28)
-
-                        // Title
-                        Text("Your data is yours")
-                            .font(.normaHeadline(32))
+                        // Title — left-aligned, large
+                        Text("Your data\nis yours.")
+                            .font(.custom(FontFamily.Rubik.bold, size: 64))
                             .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .scaleEffect(animateTitle ? 1.0 : 0.9)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .scaleEffect(animateTitle ? 1.0 : 0.95, anchor: .leading)
                             .opacity(animateTitle ? 1.0 : 0.0)
 
                         Spacer()
                             .frame(height: 12)
 
                         // Subtitle
-                        Text("Freedom means knowing you're safe.\nEverything you share is encrypted.")
-                            .normaBody()
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        Text("Everything you share is end-to-end\nencrypted. We never sell or share it.")
+                            .font(.custom(FontFamily.Rubik.regular, size: 20))
+                            .foregroundColor(Color("NormaText").opacity(0.35))
+                            .multilineTextAlignment(.leading)
                             .lineSpacing(4)
-                            .padding(.horizontal, 32)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
                             .opacity(animateSubtitle ? 1.0 : 0.0)
 
                         Spacer()
-                            .frame(height: 36)
+                            .frame(height: 18)
 
-                        // Encrypted items
-                        VStack(spacing: 14) {
-                            ForEach(Array(encryptedItems.enumerated()), id: \.element.title) { index, item in
-                                EncryptedItemRow(item: item, accentColor: accentColor)
-                                    .offset(x: index < animateItems.count && animateItems[index] ? 0 : -30)
-                                    .opacity(index < animateItems.count && animateItems[index] ? 1.0 : 0.0)
+                        // Privacy items — staggered, matching notification benefit rows
+                        VStack(spacing: 0) {
+                            ForEach(Array(privacyItems.enumerated()), id: \.element.title) { index, item in
+                                HStack(spacing: 14) {
+                                    Image(systemName: item.icon)
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(accentColor)
+                                        .frame(width: 36, height: 36)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(accentColor.opacity(0.15))
+                                                .glassEffect(in: RoundedRectangle(cornerRadius: 8))
+                                        )
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title)
+                                            .font(.custom(FontFamily.Rubik.medium, size: 17))
+                                            .foregroundColor(Color("NormaText").opacity(0.7))
+
+                                        Text(item.description)
+                                            .font(.custom(FontFamily.Rubik.regular, size: 14))
+                                            .foregroundColor(Color("NormaText").opacity(0.35))
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(.vertical, 8)
+                                .opacity(index < animateItems.count && animateItems[index] ? 1.0 : 0.0)
+                                .offset(x: index < animateItems.count && animateItems[index] ? 0 : -20)
                             }
                         }
                         .padding(.horizontal, 24)
 
                         Spacer()
-                            .frame(height: 28)
+                            .frame(height: 24)
 
-                        // Footer message
-                        Text("We don't sell your data. We don't share it.\nThis is about helping you achieve freedom.")
-                            .normaCaption()
-                            .foregroundColor(.secondary.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                            .padding(.horizontal, 40)
-                            .opacity(animateFooter ? 1.0 : 0.0)
-
-                        Spacer(minLength: 32)
-
-                        // Continue button with glass effect
+                        // Solid teal button
                         Button(action: {
                             playHaptic(intensity: 0.6, sharpness: 0.5)
                             onContinue()
                         }) {
-                            Text("I feel safe")
+                            Text("Continue")
                                 .font(.normaHeadline(16))
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(accentColor.opacity(0.25))
-                                        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
+                                        .fill(accentColor)
                                 )
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
-                        .scaleEffect(animateButton ? 1.0 : 0.9)
+                        .offset(y: animateButton ? 0 : 60)
                         .opacity(animateButton ? 1.0 : 0.0)
                     }
                     .frame(minHeight: geometry.size.height)
@@ -132,29 +206,29 @@ struct PrivacyView: View {
     }
 
     private func startAnimations() {
-        // Prepare haptics
         prepareHaptics()
 
-        // Hero pops in first
-        animateHero = true
-        playHaptic(intensity: 0.6, sharpness: 0.4)
+        // Step indicator
+        withAnimation(.easeOut(duration: 0.4).delay(0.05)) {
+            animateStepIndicator = true
+        }
 
         // Title
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            playHaptic(intensity: 0.4, sharpness: 0.3)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            playHaptic(intensity: 0.5, sharpness: 0.4)
         }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
             animateTitle = true
         }
 
         // Subtitle
-        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+        withAnimation(.easeOut(duration: 0.45).delay(0.45)) {
             animateSubtitle = true
         }
 
-        // Items stagger with haptics
+        // Items stagger
         for i in 0..<animateItems.count {
-            let delay = 0.45 + Double(i) * 0.08
+            let delay = 0.6 + Double(i) * 0.1
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 playHaptic(intensity: 0.3, sharpness: 0.2)
             }
@@ -163,13 +237,8 @@ struct PrivacyView: View {
             }
         }
 
-        // Footer
-        withAnimation(.easeOut(duration: 0.4).delay(0.85)) {
-            animateFooter = true
-        }
-
         // Button
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.0)) {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.1)) {
             animateButton = true
         }
     }
@@ -197,194 +266,7 @@ struct PrivacyView: View {
             let pattern = try CHHapticPattern(events: [event], parameters: [])
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: 0)
-        } catch {
-            print("Haptic playback error: \(error.localizedDescription)")
-        }
-    }
-}
-
-// MARK: - Privacy Glass Background
-
-struct PrivacyGlassBackground: View {
-    let accentColor: Color
-    let secondaryColor: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color("NormaBackground")
-
-                // Lava lamp orbs
-                LavaOrb(
-                    color: accentColor,
-                    size: 240,
-                    blur: 65,
-                    opacity: 0.16,
-                    bounds: geometry.size,
-                    speed: 5.0
-                )
-
-                LavaOrb(
-                    color: secondaryColor,
-                    size: 200,
-                    blur: 55,
-                    opacity: 0.12,
-                    bounds: geometry.size,
-                    speed: 6.0
-                )
-
-                LavaOrb(
-                    color: accentColor,
-                    size: 160,
-                    blur: 50,
-                    opacity: 0.1,
-                    bounds: geometry.size,
-                    speed: 7.0
-                )
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-// MARK: - Privacy Hero Visual
-
-struct PrivacyHeroVisual: View {
-    let isAnimating: Bool
-    let accentColor: Color
-    let secondaryColor: Color
-
-    @State private var iconScale: CGFloat = 0.5
-    @State private var iconOpacity: Double = 0
-    @State private var glowPulse = false
-    @State private var floatOffset: CGFloat = 0
-
-    var body: some View {
-        ZStack {
-            // Outer glow ring
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            accentColor.opacity(0.25),
-                            accentColor.opacity(0.08),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 30,
-                        endRadius: 80
-                    )
-                )
-                .frame(width: 160, height: 160)
-                .scaleEffect(glowPulse ? 1.15 : 1.0)
-
-            // Glass circle background
-            Circle()
-                .fill(accentColor.opacity(0.12))
-                .frame(width: 100, height: 100)
-                .overlay(
-                    Circle()
-                        .stroke(accentColor.opacity(0.3), lineWidth: 1)
-                )
-                .glassEffect(in: Circle())
-
-            // Shield icon
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: 44, weight: .medium))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [accentColor, secondaryColor],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        }
-        .scaleEffect(iconScale)
-        .opacity(iconOpacity)
-        .offset(y: floatOffset)
-        .onChange(of: isAnimating) { _, newValue in
-            if newValue {
-                startAnimations()
-            }
-        }
-        .onAppear {
-            if isAnimating {
-                startAnimations()
-            }
-        }
-    }
-
-    private func startAnimations() {
-        // Pop in animation
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.65)) {
-            iconScale = 1.0
-            iconOpacity = 1.0
-        }
-
-        // Start floating animation
-        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(0.5)) {
-            floatOffset = -8
-        }
-
-        // Start glow pulse
-        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true).delay(0.3)) {
-            glowPulse = true
-        }
-    }
-}
-
-// MARK: - Supporting Types
-
-struct EncryptedItem {
-    let icon: String
-    let title: String
-    let description: String
-}
-
-struct EncryptedItemRow: View {
-    let item: EncryptedItem
-    var accentColor: Color = Color("NormaPastelTeal")
-
-    var body: some View {
-        HStack(spacing: 16) {
-            // Icon with background
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(accentColor.opacity(0.1))
-                    .frame(width: 48, height: 48)
-
-                Image(systemName: item.icon)
-                    .font(.system(size: 22))
-                    .foregroundColor(accentColor)
-            }
-
-            // Text
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.normaHeadline(16))
-                    .foregroundColor(.primary)
-
-                Text(item.description)
-                    .normaCaption()
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            // Lock indicator
-            Image(systemName: "lock.fill")
-                .font(.system(size: 14))
-                .foregroundColor(accentColor.opacity(0.6))
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color("NormaSurface").opacity(0.8))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-        )
+        } catch {}
     }
 }
 

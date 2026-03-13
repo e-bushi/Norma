@@ -31,12 +31,37 @@ struct ChallengeDayCalendarView: View {
             )
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.gray.opacity(0.03))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.clear)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+                // Radar rings from bottom-right
+                Canvas { context, size in
+                    let origin = CGPoint(x: size.width, y: size.height)
+                    let ringCount = 8
+                    let maxRadius: CGFloat = 250
+                    let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                    for i in 1...ringCount {
+                        let radius = CGFloat(i) * ringSpacing
+                        let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                        let rect = CGRect(
+                            x: origin.x - radius,
+                            y: origin.y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )
+                        context.stroke(
+                            Path(ellipseIn: rect),
+                            with: .color(Color("NormaPastelTeal").opacity(opacity)),
+                            lineWidth: 0.8
+                        )
+                    }
+                }
+                .allowsHitTesting(false)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
         )
     }
 }

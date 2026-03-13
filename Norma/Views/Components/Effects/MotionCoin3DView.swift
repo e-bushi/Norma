@@ -8,6 +8,7 @@
 import SwiftUI
 import SceneKit
 import CoreMotion
+import CoreHaptics
 
 struct MotionCoin3DView: UIViewRepresentable {
     var fileName: String = "norma-coin"
@@ -126,7 +127,7 @@ struct MotionCoin3DView: UIViewRepresentable {
         scnView.scene = fallbackScene
     }
 
-    // MARK: - Coordinator for Motion Updates
+    // MARK: - Coordinator for Motion Updates + Haptics
     class Coordinator: NSObject {
         var containerNode: SCNNode?
         var scnView: SCNView?
@@ -136,9 +137,59 @@ struct MotionCoin3DView: UIViewRepresentable {
         private var blendFactor: Float = 0.0
         private var startTime: Date?
 
+        // CoreHaptics
+        private var hapticEngine: CHHapticEngine?
+        private var lastHapticPitch: Float = 0
+        private var lastHapticRoll: Float = 0
+        private let hapticThreshold: Float = 0.02  // Radians of tilt change to trigger haptic
+        private var lastHapticTime: Date = .distantPast
+
         init(baseYRotation: Float) {
             self.baseYRotation = baseYRotation
             super.init()
+            setupHaptics()
+        }
+
+        private func setupHaptics() {
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+
+            do {
+                hapticEngine = try CHHapticEngine()
+                hapticEngine?.resetHandler = { [weak self] in
+                    try? self?.hapticEngine?.start()
+                }
+                hapticEngine?.stoppedHandler = { _ in }
+                try hapticEngine?.start()
+            } catch {
+                hapticEngine = nil
+            }
+        }
+
+        private func playTiltHaptic(intensity: Float) {
+            guard let engine = hapticEngine else { return }
+
+            // Throttle: at least 80ms between haptics
+            guard Date().timeIntervalSince(lastHapticTime) > 0.08 else { return }
+            lastHapticTime = Date()
+
+            let clampedIntensity = min(max(intensity, 0.4), 0.9)
+
+            let hapticEvent = CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: clampedIntensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
+                ],
+                relativeTime: 0
+            )
+
+            do {
+                let pattern = try CHHapticPattern(events: [hapticEvent], parameters: [])
+                let player = try engine.makePlayer(with: pattern)
+                try player.start(atTime: CHHapticTimeImmediate)
+            } catch {
+                // Silently fail
+            }
         }
 
         func startMotionUpdates() {
@@ -174,11 +225,25 @@ struct MotionCoin3DView: UIViewRepresentable {
                     y: self.baseYRotation - currentYOffset,
                     z: 0
                 )
+
+                // Trigger haptic when tilt crosses threshold
+                if self.blendFactor > 0.2 {
+                    let pitchDelta = abs(currentPitch - self.lastHapticPitch)
+                    let rollDelta = abs(currentYOffset - self.lastHapticRoll)
+                    let totalDelta = pitchDelta + rollDelta
+
+                    if totalDelta > self.hapticThreshold {
+                        self.playTiltHaptic(intensity: min(totalDelta * 2, 1.0))
+                        self.lastHapticPitch = currentPitch
+                        self.lastHapticRoll = currentYOffset
+                    }
+                }
             }
         }
 
         func stopMotionUpdates() {
             motionManager.stopDeviceMotionUpdates()
+            hapticEngine?.stop()
         }
     }
 }
