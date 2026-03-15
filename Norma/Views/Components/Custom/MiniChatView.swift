@@ -16,10 +16,12 @@ enum MiniChatContext {
 struct MiniChatView: View {
     let selectedDate: Date
     let context: MiniChatContext
+    let accentColor: Color?
 
-    init(selectedDate: Date, context: MiniChatContext = .bill) {
+    init(selectedDate: Date, context: MiniChatContext = .bill, accentColor: Color? = nil) {
         self.selectedDate = selectedDate
         self.context = context
+        self.accentColor = accentColor
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -226,7 +228,23 @@ struct MiniChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             }
-            .background(Color("NormaBackground"))
+            .background {
+                ZStack {
+                    Color("NormaBackground")
+
+                    if let accentColor {
+                        LinearGradient(
+                            colors: [
+                                accentColor.opacity(0.2),
+                                accentColor.opacity(0.08)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                }
+                .ignoresSafeArea()
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

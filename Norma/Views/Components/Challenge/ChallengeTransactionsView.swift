@@ -49,7 +49,7 @@ struct ChallengeExpenseList: View {
                 .tracking(1.5)
 
             if displayedExpenses.isEmpty {
-                // Empty state
+                // Empty state with radar rings
                 VStack(spacing: 16) {
                     Image(systemName: "tray")
                         .font(.system(size: 32))
@@ -62,8 +62,35 @@ struct ChallengeExpenseList: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.gray.opacity(0.03))
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.03))
+
+                        Canvas { context, size in
+                            let origin = CGPoint(x: size.width, y: size.height)
+                            let ringCount = 6
+                            let maxRadius: CGFloat = 140
+                            let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                            for i in 1...ringCount {
+                                let radius = CGFloat(i) * ringSpacing
+                                let opacity = 0.2 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                                let rect = CGRect(
+                                    x: origin.x - radius,
+                                    y: origin.y - radius,
+                                    width: radius * 2,
+                                    height: radius * 2
+                                )
+                                context.stroke(
+                                    Path(ellipseIn: rect),
+                                    with: .color(Color.secondary.opacity(opacity)),
+                                    lineWidth: 1
+                                )
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .allowsHitTesting(false)
+                    }
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
@@ -87,11 +114,8 @@ struct ChallengeExpenseList: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.03))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 16))
                     )
 
                     // See all button
@@ -219,11 +243,8 @@ struct ChallengeTransactionsView: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.03))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 16))
                     )
 
                     // See all button

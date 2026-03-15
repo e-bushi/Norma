@@ -14,6 +14,8 @@ struct SettingsView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var appCoordinator: AppCoordinator
+    @EnvironmentObject var coinColorViewModel: CoinColorViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
@@ -42,7 +44,10 @@ struct SettingsView: View {
             .padding(.horizontal)
             .padding(.top, 8)
         }
-        .background(Color("NormaBackground"))
+        .background {
+            CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                .ignoresSafeArea()
+        }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -440,7 +445,7 @@ struct SettingsSectionView<Content: View>: View {
                 content
             }
             .padding()
-            .background(Color("NormaBackground"))
+            .background(Color.clear)
         }
     }
 }

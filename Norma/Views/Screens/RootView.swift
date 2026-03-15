@@ -66,6 +66,7 @@ struct ViewModelContainer<Content: View>: View {
     @StateObject private var incomeViewModel: IncomeViewModel
     @StateObject private var challengeViewModel: ChallengeViewModel
     @StateObject private var profileViewModel: ProfileViewModel
+    @StateObject private var coinColorViewModel: CoinColorViewModel
 
     init(dataManager: DataManager, sessionViewModel: SessionViewModel, @ViewBuilder content: () -> Content) {
         self.dataManager = dataManager
@@ -73,11 +74,13 @@ struct ViewModelContainer<Content: View>: View {
         self.content = content()
 
         // Initialize view models with proper dependencies
-        self._billViewModel = StateObject(wrappedValue: BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        let billVM = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
+        self._billViewModel = StateObject(wrappedValue: billVM)
         self._expenseViewModel = StateObject(wrappedValue: ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._incomeViewModel = StateObject(wrappedValue: IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._challengeViewModel = StateObject(wrappedValue: ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._profileViewModel = StateObject(wrappedValue: ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        self._coinColorViewModel = StateObject(wrappedValue: CoinColorViewModel(sessionViewModel: sessionViewModel, billViewModel: billVM))
     }
 
     var body: some View {
@@ -89,10 +92,12 @@ struct ViewModelContainer<Content: View>: View {
             .environmentObject(incomeViewModel)
             .environmentObject(challengeViewModel)
             .environmentObject(profileViewModel)
+            .environmentObject(coinColorViewModel)
             .onAppear {
                 // Set up ChallengeViewModel dependencies
                 challengeViewModel.setExpenseViewModel(expenseViewModel)
                 challengeViewModel.setBillViewModel(billViewModel)
+                coinColorViewModel.updateColor()
             }
     }
 }

@@ -13,6 +13,8 @@ struct ChatMenuView: View {
 
     @EnvironmentObject private var conversationManager: ConversationManager
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
+    @Environment(\.colorScheme) private var colorScheme
 
     // Delete confirmation state
     @State private var showDeleteConfirmation = false
@@ -217,7 +219,10 @@ struct ChatMenuView: View {
             .padding(.bottom, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Color("NormaBackground"))
+        .background {
+            CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                .ignoresSafeArea()
+        }
         .alert("Delete Conversation", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {
                 conversationToDelete = nil
