@@ -19,7 +19,7 @@ struct ChatEmptyStateView: View {
     @ObservedObject private var timezoneManager = TimezoneManager.shared
 
     private let greetingText = "How can I help with your finances?"
-    private let coinSize: CGFloat = 120
+    private let coinSize: CGFloat = 175
     private let capsuleColors: [Color] = [
         Color("NormaPastelTeal"),
         Color("NormaPastelPurple"),
@@ -47,12 +47,12 @@ struct ChatEmptyStateView: View {
 
                 WaveTextView(
                     text: greetingText,
-                    font: .normaHeadline(),
+                    font: .normaHeadline(42),
                     color: .primary,
                     isAnimating: textAnimating,
                     alignment: .center
                 )
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 24)
 
                 // Timezone capsules or add button
                 if timezoneManager.selectedTimezones.isEmpty {

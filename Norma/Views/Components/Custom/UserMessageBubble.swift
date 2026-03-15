@@ -10,6 +10,7 @@ import SwiftUI
 struct UserMessageBubble: View {
     let content: String
 
+    @EnvironmentObject var coinColorViewModel: CoinColorViewModel
     @State private var showContent = false
 
     var body: some View {
@@ -25,7 +26,12 @@ struct UserMessageBubble: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color("NormaUserBubble"))
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 20))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(coinColorViewModel.coinColor.opacity(0.3), lineWidth: 1)
                 )
                 .opacity(showContent ? 1 : 0)
                 .scaleEffect(showContent ? 1 : 0.95)

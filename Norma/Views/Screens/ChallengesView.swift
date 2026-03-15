@@ -27,6 +27,11 @@ struct ChallengesView: View {
     @State private var statsAppeared = false
     @State private var calendarAppeared = false
     @State private var transactionsAppeared = false
+    @State private var gradientOpacity: Double = 0
+
+    // Long press / MiniChat state
+    @State private var showMiniChat = false
+    @State private var longPressedDate: Date? = nil
 
     var body: some View {
         NavigationStack {
@@ -40,7 +45,11 @@ struct ChallengesView: View {
                                 statsAppeared: $statsAppeared,
                                 calendarAppeared: $calendarAppeared,
                                 transactionsAppeared: $transactionsAppeared,
-                                showBirdCollection: $showBirdCollection
+                                showBirdCollection: $showBirdCollection,
+                                onDayLongPressed: { date in
+                                    longPressedDate = date
+                                    showMiniChat = true
+                                }
                             )
                         } else if challengeViewModel.isLoading {
                             // Show skeleton only when we don't have a challenge yet
@@ -69,6 +78,9 @@ struct ChallengesView: View {
                             // Trigger entrance animations after overlay fades
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 triggerEntranceAnimations()
+                                withAnimation(.easeIn(duration: 1.2)) {
+                                    gradientOpacity = 1
+                                }
                             }
                         }
                     )
@@ -78,20 +90,21 @@ struct ChallengesView: View {
                 ZStack {
                     Color("NormaBackground")
 
-                    // Show gradient + radar when no active challenge
+                    let tierColor = challengeViewModel.currentTier.glowColor
+
+                    // Full-screen gradient using tier bird color
+                    LinearGradient(
+                        colors: [
+                            tierColor.opacity(colorScheme == .dark ? 0.25 : 0.18),
+                            tierColor.opacity(colorScheme == .dark ? 0.12 : 0.08)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .opacity(gradientOpacity)
+
+                    // Radar rings only when no active challenge
                     if challengeViewModel.activeChallenge == nil && !challengeViewModel.isLoading {
-                        let tierColor = challengeViewModel.currentTier.glowColor
-
-                        LinearGradient(
-                            colors: [
-                                tierColor.opacity(colorScheme == .dark ? 0.15 : 0.12),
-                                Color("NormaBackground")
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-
-                        // Radar rings from top-left
                         Canvas { context, size in
                             let origin = CGPoint(x: 0, y: 0)
                             let ringCount = 10
@@ -162,14 +175,6 @@ struct ChallengesView: View {
                     }
                 }
             }
-            .refreshable {
-                // Reset animation states before refresh
-                heroAppeared = false
-                statsAppeared = false
-                calendarAppeared = false
-                transactionsAppeared = false
-                await challengeViewModel.refreshChallenge()
-            }
             .task {
                 // Load stats on appear
                 await challengeViewModel.loadChallengeStats()
@@ -187,10 +192,24 @@ struct ChallengesView: View {
                     statsAppeared = false
                     calendarAppeared = false
                     transactionsAppeared = false
+
+                    // Animate gradient in for empty state (no loading coin)
+                    if challengeViewModel.activeChallenge == nil {
+                        withAnimation(.easeIn(duration: 1.2)) {
+                            gradientOpacity = 1
+                        }
+                    }
                 }
             }
             .sheet(isPresented: $showBirdCollection) {
                 BirdCollectionView(totalPoints: challengeViewModel.totalPoints)
+            }
+            .sheet(isPresented: $showMiniChat) {
+                if let date = longPressedDate {
+                    MiniChatView(selectedDate: date, context: .expense, accentColor: challengeViewModel.currentTier.glowColor)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                }
             }
             .sheet(isPresented: $challengeViewModel.showDailyRecap) {
                 if let recapData = challengeViewModel.dailyRecapData {

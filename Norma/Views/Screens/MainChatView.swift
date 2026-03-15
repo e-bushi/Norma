@@ -11,6 +11,7 @@ import AVFoundation
 struct MainChatView: View {
     @Binding var isMenuOpen: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -117,13 +118,6 @@ struct MainChatView: View {
             ZStack(alignment: .bottom) {
                 // Chat content fills entire space
                 chatContent
-                    .background(
-                        ZStack {
-                            Color("NormaBackground")
-                            DotPatternView()
-                        }
-                        .ignoresSafeArea()
-                    )
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
@@ -137,6 +131,16 @@ struct MainChatView: View {
 
                 // Input area overlays at bottom
                 inputArea
+            }
+            .background {
+                let coinColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
+
+                ZStack {
+                    CoinGradientBackground(coinColor: coinColor, colorScheme: colorScheme)
+
+                    DotPatternView()
+                }
+                .ignoresSafeArea()
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -391,7 +395,7 @@ struct MainChatView: View {
                         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
                     }
                     .coordinateSpace(name: "scroll")
-                    .background(Color("NormaBackground"))
+                    .background(Color.clear)
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 4)
                             .updating($isUserScrolling) { _, state, _ in
@@ -899,6 +903,41 @@ struct MainChatView: View {
     private func showError(_ message: String) {
         errorMessage = message
         showError = true
+    }
+}
+
+// MARK: - Coin Gradient Background
+
+/// Full-screen gradient tinted by the user's coin color.
+/// Uses the same pattern as LandingPageView — two explicit colors of the same hue at different brightness.
+struct CoinGradientBackground: View {
+    let coinColor: Color
+    let colorScheme: ColorScheme
+
+    private var rgb: (r: CGFloat, g: CGFloat, b: CGFloat) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(coinColor).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (r, g, b)
+    }
+
+    var body: some View {
+        let c = rgb
+
+        LinearGradient(
+            stops: colorScheme == .dark
+                ? [
+                    .init(color: Color(red: c.r * 0.22, green: c.g * 0.22, blue: c.b * 0.22), location: 0),
+                    .init(color: Color(red: c.r * 0.16, green: c.g * 0.16, blue: c.b * 0.16), location: 0.65),
+                    .init(color: Color(red: c.r * 0.08, green: c.g * 0.08, blue: c.b * 0.08), location: 1.0)
+                ]
+                : [
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.22, green: 1 - (1 - c.g) * 0.22, blue: 1 - (1 - c.b) * 0.22), location: 0),
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.14, green: 1 - (1 - c.g) * 0.14, blue: 1 - (1 - c.b) * 0.14), location: 0.65),
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.06, green: 1 - (1 - c.g) * 0.06, blue: 1 - (1 - c.b) * 0.06), location: 1.0)
+                ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }
 

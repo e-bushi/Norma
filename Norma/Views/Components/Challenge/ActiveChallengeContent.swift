@@ -15,71 +15,123 @@ struct ActiveChallengeContent: View {
     @Binding var calendarAppeared: Bool
     @Binding var transactionsAppeared: Bool
     @Binding var showBirdCollection: Bool
+    var onDayLongPressed: ((Date) -> Void)? = nil
 
     @EnvironmentObject var challengeViewModel: ChallengeViewModel
     @EnvironmentObject var profileViewModel: ProfileViewModel
     @State private var selectedDay: ChallengeDay?
-    @State private var graphAppeared = false
+    @State private var waveAnimating = false
 
-    private func dailyBudget(for challenge: Challenge) -> Double {
-        let days = max(1, challenge.daysRemaining)
-        return challenge.amountRemaining / Double(days)
+    private var percentUsed: Int {
+        guard challenge.amountTotal > 0 else { return 0 }
+        let used = challenge.amountTotal - challenge.amountRemaining
+        return min(100, max(0, Int((used / challenge.amountTotal) * 100)))
+    }
+
+    private var percentColor: Color {
+        if percentUsed >= 90 {
+            return Color("NormaPastelCoral")
+        } else if percentUsed >= 70 {
+            return Color("NormaPastelYellow")
+        } else {
+            return Color("NormaPastelTeal")
+        }
+    }
+
+    private var waveWords: [(word: String, color: Color)] {
+        var words: [(String, Color)] = []
+        words.append(("You've", .primary))
+        words.append(("used", .primary))
+        words.append(("\(percentUsed)%", percentColor))
+        words.append(("of", .primary))
+        words.append(("your", .primary))
+        words.append(("total", .primary))
+        words.append(("cap.", .primary))
+        return words
+    }
+
+    private var challengeDays: [ChallengeDay] {
+        challengeViewModel.getChallengeDays()
+    }
+
+    private func shortDate(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 
     var body: some View {
-        VStack(spacing: 32) {
-            // Hero + Sentences grouped together
-            VStack(spacing: 8) {
-                // Hero Section - Today's remaining budget
-                ChallengeHeroView(
-                    challenge: challenge,
-                    stats: challengeViewModel.challengeStats,
-                    totalPoints: challengeViewModel.totalPoints,
-                    tierFileName: challengeViewModel.currentTier.fileName,
-                    todaysCap: challengeViewModel.todaysDailyCap,
-                    todaysRemaining: challengeViewModel.todaysDailyCap - challengeViewModel.todaySpending,
-                    onPointsTapped: {
-                        showBirdCollection = true
-                    },
-                    triggerNumberAnimation: heroAppeared
-                )
+        VStack(alignment: .leading, spacing: 24) {
+            // Info capsules
+            HStack(spacing: 10) {
+                Text("\(challenge.durationDays) day challenge")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(Color.gray.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.gray.opacity(0.15), lineWidth: 0.5)
+                    )
 
-                // Contextual sentences - cap change info
-                ChallengeContextSentences(
-                    capChange: challengeViewModel.capChange,
-                    isPastFirstDay: challengeViewModel.isPastFirstDayOfChallenge,
-                    formatCurrency: { profileViewModel.formatCurrency($0) }
-                )
+                Text("\(profileViewModel.formatCurrency(challenge.amountRemaining)) left")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(Color.gray.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.gray.opacity(0.15), lineWidth: 0.5)
+                    )
             }
+            .padding(.top, 16)
             .scaleEffect(heroAppeared ? 1 : 0.95)
             .opacity(heroAppeared ? 1 : 0)
             .offset(y: heroAppeared ? 0 : 20)
 
-            // Contribution Graph - GitHub-style monthly view
-            ContributionGraphView(
-                dayResults: challengeViewModel.currentMonthResults,
-                selectedDate: selectedDay?.date,
-                currentStreak: challengeViewModel.currentStreak,
-                challengeRemaining: challenge.amountRemaining,
-                daysRemaining: challenge.daysRemaining,
-                formatCurrency: { profileViewModel.formatCurrency($0) }
+            // Main statement
+            ColoredWaveTextView(
+                words: waveWords,
+                font: .normaHeadline(64),
+                isAnimating: waveAnimating,
+                alignment: .leading
             )
-            .scaleEffect(graphAppeared ? 1 : 0.97)
-            .opacity(graphAppeared ? 1 : 0)
-            .offset(y: graphAppeared ? 0 : 15)
+            .scaleEffect(statsAppeared ? 1 : 0.97)
+            .opacity(statsAppeared ? 1 : 0)
+            .offset(y: statsAppeared ? 0 : 15)
 
-            // Combined Calendar + Stats View
-            VStack(alignment: .leading, spacing: 12) {
-                Text("CHALLENGE DAYS")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .tracking(1.5)
-
-                ChallengeDayCalendarView(
-                    challenge: challenge,
-                    challengeDays: challengeViewModel.getChallengeDays(),
-                    selectedDay: $selectedDay
-                )
+            // Day capsules - wrapping flow layout
+            FlowLayout(spacing: 8) {
+                ForEach(challengeDays) { day in
+                    ChallengeDayCapsule(
+                        day: day,
+                        isSelected: selectedDay != nil && Calendar.current.isDate(selectedDay!.date, inSameDayAs: day.date),
+                        formattedDate: shortDate(for: day.date),
+                        formattedSpending: profileViewModel.formatCurrency(day.spending)
+                    )
+                    .pressableStyle(
+                        onTap: {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedDay = day
+                            }
+                        },
+                        onLongPress: {
+                            let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+                            mediumImpact.impactOccurred()
+                            onDayLongPressed?(day.date)
+                        }
+                    )
+                }
             }
             .scaleEffect(calendarAppeared ? 1 : 0.97)
             .opacity(calendarAppeared ? 1 : 0)
@@ -103,62 +155,120 @@ struct ActiveChallengeContent: View {
             let days = challengeViewModel.getChallengeDays()
             selectedDay = days.first { $0.isToday } ?? days.first
         }
-        .onChange(of: heroAppeared) { _, appeared in
-            // When hero appears, trigger the graph animation shortly after
+        .onChange(of: statsAppeared) { _, appeared in
+            // Trigger wave animation when the headline section appears
             if appeared {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
-                    graphAppeared = true
+                waveAnimating = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    waveAnimating = true
                 }
             }
         }
     }
 }
 
-// MARK: - Challenge Context Sentences
+// MARK: - Challenge Day Capsule
 
-/// Contextual sentences showing cap change info
-private struct ChallengeContextSentences: View {
-    let capChange: Double
-    let isPastFirstDay: Bool
-    let formatCurrency: (Double) -> String
+/// A capsule showing the date and amount spent for a challenge day.
+/// Future days that haven't occurred yet use a dashed border.
+private struct ChallengeDayCapsule: View {
+    let day: ChallengeDay
+    let isSelected: Bool
+    let formattedDate: String
+    let formattedSpending: String
 
-    private var showCapChange: Bool {
-        isPastFirstDay && abs(capChange) > 0.01
+    private var isFuture: Bool {
+        !day.isPast && !day.isToday
+    }
+
+    private var isExperienced: Bool {
+        day.isPast || day.isToday
+    }
+
+    private var strokeColor: Color {
+        if isSelected {
+            return Color("NormaPastelTeal").opacity(0.5)
+        } else if isFuture {
+            return Color.gray.opacity(0.2)
+        } else if day.isToday {
+            return Color("NormaPastelTeal").opacity(0.3)
+        } else {
+            return Color.gray.opacity(0.15)
+        }
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            // Cap change sentence (or day 1 encouragement)
-            if showCapChange {
-                if capChange > 0 {
-                    (Text("Today's cap is ")
-                        .foregroundColor(.primary)
-                    + Text(formatCurrency(capChange))
-                        .foregroundColor(Color("NormaPastelTeal"))
-                    + Text(" higher than previous days.")
-                        .foregroundColor(.primary))
-                        .font(.custom(FontFamily.Rubik.medium, size: 22))
-                        .lineSpacing(10)
-                } else {
-                    (Text("Today's cap is ")
-                        .foregroundColor(.primary)
-                    + Text(formatCurrency(abs(capChange)))
-                        .foregroundColor(Color("NormaPastelCoral"))
-                    + Text(" lower than previous days.")
-                        .foregroundColor(.primary))
-                        .font(.custom(FontFamily.Rubik.medium, size: 22))
-                        .lineSpacing(10)
-                }
+        HStack(spacing: 8) {
+            Text(formattedDate)
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundColor(isSelected || day.isToday ? .primary : .secondary)
+
+            if isFuture {
+                Text("—")
+                    .font(.custom(FontFamily.Rubik.regular, size: 16))
+                    .foregroundColor(.secondary.opacity(0.5))
             } else {
-                // Day 1 or no cap change - show encouragement
-                Text("Stay under your cap to boost tomorrow.")
-                    .font(.custom(FontFamily.Rubik.medium, size: 22))
-                    .foregroundColor(.primary)
-                    .lineSpacing(10)
+                Text(formattedSpending)
+                    .font(.normaFinancial(16))
+                    .foregroundColor(day.isOverBudget ? Color("NormaPastelCoral") : .primary)
+                    .contentTransition(.numericText(countsDown: false))
             }
         }
-        .frame(maxWidth: 300)
-        .multilineTextAlignment(.center)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background {
+            if isExperienced {
+                Capsule()
+                    .fill(.clear)
+                    .glassEffect(in: Capsule())
+            } else {
+                Capsule()
+                    .fill(Color.gray.opacity(0.05))
+            }
+        }
+        .overlay(
+            Capsule()
+                .stroke(
+                    strokeColor,
+                    style: isFuture ? StrokeStyle(lineWidth: 1, dash: [5, 4]) : StrokeStyle(lineWidth: isSelected ? 1.5 : 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - Previews
+
+// MARK: - Pressable Style Modifier
+
+private struct PressableModifier: ViewModifier {
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+
+    @State private var isPressed = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressed ? 0.93 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: isPressed)
+            .onLongPressGesture(minimumDuration: 0.5) {
+                onLongPress()
+            } onPressingChanged: { pressing in
+                isPressed = pressing
+                if !pressing {
+                    // Short press = tap
+                }
+            }
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    onTap()
+                }
+            )
+    }
+}
+
+private extension View {
+    func pressableStyle(onTap: @escaping () -> Void, onLongPress: @escaping () -> Void) -> some View {
+        modifier(PressableModifier(onTap: onTap, onLongPress: onLongPress))
     }
 }
 

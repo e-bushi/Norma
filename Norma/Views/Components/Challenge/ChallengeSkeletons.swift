@@ -115,78 +115,12 @@ struct ChallengeStatsRowSkeleton: View {
     }
 }
 
-// MARK: - Mini Calendar Skeleton
-
-/// Skeleton loading state for the challenge mini calendar
-struct ChallengeMiniCalendarSkeleton: View {
-    @State private var isAnimating = false
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-    private let weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"]
-
-    var body: some View {
-        VStack(spacing: 8) {
-            // Weekday headers
-            HStack(spacing: 4) {
-                ForEach(weekdayLabels.indices, id: \.self) { index in
-                    Text(weekdayLabels[index])
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary.opacity(0.3))
-                        .frame(maxWidth: .infinity)
-                }
-            }
-
-            // Calendar grid skeleton
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(0..<14, id: \.self) { index in
-                    VStack(spacing: 2) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.gray.opacity(cellOpacity(for: index)))
-                            .frame(height: 20)
-
-                        Circle()
-                            .fill(Color.clear)
-                            .frame(width: 4, height: 4)
-                    }
-                    .frame(height: 40)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.gray.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
-                )
-        )
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                isAnimating = true
-            }
-        }
-    }
-
-    private func cellOpacity(for index: Int) -> Double {
-        let baseOpacity = 0.08
-        let variation = isAnimating ? 0.06 : 0
-        let offset = Double(index) * 0.05
-        return baseOpacity + variation * sin(offset * .pi)
-    }
-}
-
 // MARK: - Full Content Skeleton
 
 /// Complete skeleton for the entire ActiveChallengeContent view
 struct ActiveChallengeContentSkeleton: View {
     @State private var heroAppeared = false
     @State private var statsAppeared = false
-    @State private var graphAppeared = false
-    @State private var calendarAppeared = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -202,23 +136,6 @@ struct ActiveChallengeContentSkeleton: View {
                 .opacity(statsAppeared ? 1 : 0)
                 .offset(y: statsAppeared ? 0 : 15)
 
-            // Contribution graph skeleton
-            ContributionGraphSkeleton()
-                .scaleEffect(graphAppeared ? 1 : 0.97)
-                .opacity(graphAppeared ? 1 : 0)
-                .offset(y: graphAppeared ? 0 : 15)
-
-            // Mini calendar skeleton
-            VStack(alignment: .leading, spacing: 12) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.gray.opacity(0.12))
-                    .frame(width: 110, height: 12)
-
-                ChallengeMiniCalendarSkeleton()
-            }
-            .scaleEffect(calendarAppeared ? 1 : 0.97)
-            .opacity(calendarAppeared ? 1 : 0)
-            .offset(y: calendarAppeared ? 0 : 15)
 
             Spacer(minLength: 40)
         }
@@ -236,13 +153,6 @@ struct ActiveChallengeContentSkeleton: View {
             statsAppeared = true
         }
 
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
-            graphAppeared = true
-        }
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3)) {
-            calendarAppeared = true
-        }
     }
 }
 
@@ -256,12 +166,6 @@ struct ActiveChallengeContentSkeleton: View {
 
 #Preview("Stats Row Skeleton") {
     ChallengeStatsRowSkeleton()
-        .padding(20)
-        .background(Color("NormaBackground"))
-}
-
-#Preview("Mini Calendar Skeleton") {
-    ChallengeMiniCalendarSkeleton()
         .padding(20)
         .background(Color("NormaBackground"))
 }
