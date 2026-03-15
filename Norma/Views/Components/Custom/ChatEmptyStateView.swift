@@ -37,7 +37,7 @@ struct ChatEmptyStateView: View {
                     duration: 0.45,
                     initialDelay: 0.7
                 ) { fileName in
-                    MotionCoin3DView(fileName: fileName)
+                    MotionCoin3DView(fileName: fileName, hapticsEnabled: false)
                         .id(fileName)
                         .frame(width: coinSize, height: coinSize)
                 }

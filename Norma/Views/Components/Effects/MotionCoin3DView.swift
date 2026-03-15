@@ -12,12 +12,13 @@ import CoreHaptics
 
 struct MotionCoin3DView: UIViewRepresentable {
     var fileName: String = "norma-coin"
+    var hapticsEnabled: Bool = true
 
     // Base Y rotation angle (-5°)
     private let baseYRotation: Float = -5 * .pi / 180
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(baseYRotation: baseYRotation)
+        Coordinator(baseYRotation: baseYRotation, hapticsEnabled: hapticsEnabled)
     }
 
     func makeUIView(context: Context) -> SCNView {
@@ -134,6 +135,7 @@ struct MotionCoin3DView: UIViewRepresentable {
         private let motionManager = CMMotionManager()
         private let sensitivity: Float = 0.6
         private let baseYRotation: Float
+        private let hapticsEnabled: Bool
         private var blendFactor: Float = 0.0
         private var startTime: Date?
 
@@ -144,10 +146,13 @@ struct MotionCoin3DView: UIViewRepresentable {
         private let hapticThreshold: Float = 0.02  // Radians of tilt change to trigger haptic
         private var lastHapticTime: Date = .distantPast
 
-        init(baseYRotation: Float) {
+        init(baseYRotation: Float, hapticsEnabled: Bool = true) {
             self.baseYRotation = baseYRotation
+            self.hapticsEnabled = hapticsEnabled
             super.init()
-            setupHaptics()
+            if hapticsEnabled {
+                setupHaptics()
+            }
         }
 
         private func setupHaptics() {
@@ -166,7 +171,7 @@ struct MotionCoin3DView: UIViewRepresentable {
         }
 
         private func playTiltHaptic(intensity: Float) {
-            guard let engine = hapticEngine else { return }
+            guard hapticsEnabled, let engine = hapticEngine else { return }
 
             // Throttle: at least 80ms between haptics
             guard Date().timeIntervalSince(lastHapticTime) > 0.08 else { return }
