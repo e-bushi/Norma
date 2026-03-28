@@ -10,6 +10,7 @@ import UIKit
 
 struct LoginView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -174,35 +175,24 @@ struct LoginView: View {
                     Button(action: {
                         handleLogin()
                     }) {
-                        ZStack {
-                            // Gradient background that animates
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color("NormaPastelTeal"),
-                                            Color("NormaPastelTeal").opacity(0.8)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .shadow(color: Color("NormaPastelTeal").opacity(0.3), radius: buttonScale > 1 ? 8 : 4, x: 0, y: buttonScale > 1 ? 4 : 2)
-
-                            HStack {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Sign in")
-                                        .font(.normaHeadline(16))
-                                }
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else {
+                                Text("Sign in")
+                                    .font(.normaHeadline(18))
                             }
-                            .foregroundColor(.white)
                         }
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 56)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color("NormaPastelPurple").opacity(0.7))
+                                .glassEffect(in: RoundedRectangle(cornerRadius: 14))
+                        )
                     }
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
                     .opacity((isLoading || email.isEmpty || password.isEmpty) ? 0.6 : 1)
@@ -318,7 +308,18 @@ struct LoginView: View {
             }
             .background(
                 ZStack {
-                    Color("NormaBackground")
+                    LinearGradient(
+                        colors: [
+                            colorScheme == .dark
+                                ? Color(red: 0.10, green: 0.06, blue: 0.16)
+                                : Color(red: 0.93, green: 0.90, blue: 0.98),
+                            colorScheme == .dark
+                                ? Color(red: 0.04, green: 0.02, blue: 0.08)
+                                : Color(red: 0.96, green: 0.94, blue: 0.98)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                     DotGridPattern()
                 }
                 .ignoresSafeArea()

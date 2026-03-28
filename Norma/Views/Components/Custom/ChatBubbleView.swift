@@ -10,13 +10,14 @@ import SwiftUI
 struct ChatBubbleView: View {
     let message: ChatMessage
     var shouldAnimate: Bool = false
+    var accentColor: Color = Color("NormaPastelPurple")
     var onArcSimulatorTap: ((Int, Double, Double, String) -> Void)?
 
     var body: some View {
         if !message.isVisible {
             EmptyView()
         } else if message.role == .user {
-            UserMessageBubble(content: message.content)
+            UserMessageBubble(content: message.content, accentColor: accentColor)
         } else {
             AIMessageBubble(content: message.content, uiComponent: message.uiComponent, revealDirection: .leftToRight, shouldAnimate: shouldAnimate, onArcSimulatorTap: onArcSimulatorTap)
         }

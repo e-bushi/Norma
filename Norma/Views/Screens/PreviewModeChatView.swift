@@ -10,6 +10,7 @@ import SwiftUI
 struct PreviewModeChatView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var onboardingViewModel: OnboardingViewModel
+    @Environment(\.colorScheme) private var colorScheme
 
     // Access the shared preview mode view model from onboarding
     private var previewModeViewModel: PreviewModeViewModel {
@@ -68,7 +69,24 @@ struct PreviewModeChatView: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 chatContent
-                    .background(Color("NormaBackground").ignoresSafeArea())
+                    .background {
+                        ZStack {
+                            LinearGradient(
+                                colors: [
+                                    colorScheme == .dark
+                                        ? Color(red: 0.10, green: 0.06, blue: 0.16)
+                                        : Color(red: 0.93, green: 0.90, blue: 0.98),
+                                    colorScheme == .dark
+                                        ? Color(red: 0.04, green: 0.02, blue: 0.08)
+                                        : Color(red: 0.96, green: 0.94, blue: 0.98)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            DotPatternView()
+                        }
+                        .ignoresSafeArea()
+                    }
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
@@ -101,7 +119,7 @@ struct PreviewModeChatView: View {
                                 .padding(.vertical, 4)
                                 .background(
                                     Capsule()
-                                        .fill(Color("NormaPastelTeal").opacity(0.8))
+                                        .fill(Color("NormaPastelPurple").opacity(0.8))
                                 )
                         }
                     }
@@ -194,6 +212,7 @@ struct PreviewModeChatView: View {
                                 ChatBubbleView(
                                     message: message,
                                     shouldAnimate: newlyAddedMessageIds.contains(message.id),
+                                    accentColor: Color("NormaPastelPurple"),
                                     onArcSimulatorTap: { arcs, bills, fund, currency in
                                         arcSimulatorData = (arcs, bills, fund, currency)
                                         showArcSimulator = true
@@ -241,7 +260,7 @@ struct PreviewModeChatView: View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: messages.count)
                 }
                 .coordinateSpace(name: "scroll")
-                .background(Color("NormaBackground"))
+                .scrollContentBackground(.hidden)
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 4)
                         .updating($isUserScrolling) { _, state, _ in
@@ -618,7 +637,18 @@ struct SaveProgressModal: View {
         ZStack {
             GeometryReader { geometry in
                 ZStack {
-                    Color("NormaBackground")
+                    LinearGradient(
+                        colors: [
+                            colorScheme == .dark
+                                ? Color(red: 0.10, green: 0.06, blue: 0.16)
+                                : Color(red: 0.93, green: 0.90, blue: 0.98),
+                            colorScheme == .dark
+                                ? Color(red: 0.04, green: 0.02, blue: 0.08)
+                                : Color(red: 0.96, green: 0.94, blue: 0.98)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
 
                     DotGridPattern()
 

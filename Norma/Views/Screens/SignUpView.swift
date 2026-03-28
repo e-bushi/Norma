@@ -9,6 +9,7 @@ import SwiftUI
 import UIKit
 
 struct SignUpView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -169,7 +170,18 @@ struct SignUpView: View {
             }
         .background(
             ZStack {
-                Color("NormaBackground")
+                LinearGradient(
+                    colors: [
+                        colorScheme == .dark
+                            ? Color(red: 0.10, green: 0.06, blue: 0.16)
+                            : Color(red: 0.93, green: 0.90, blue: 0.98),
+                        colorScheme == .dark
+                            ? Color(red: 0.04, green: 0.02, blue: 0.08)
+                            : Color(red: 0.96, green: 0.94, blue: 0.98)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 DotGridPattern()
             }
             .ignoresSafeArea()

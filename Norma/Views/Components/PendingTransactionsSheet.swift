@@ -12,6 +12,7 @@ struct PendingTransactionsSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
 
     @State private var selectedDate: Date = Date()
     @State private var currentMonth: Date = Date()
@@ -21,15 +22,7 @@ struct PendingTransactionsSheet: View {
     @State private var isCalendarExpanded = false
     @State private var showInfoAlert = false
 
-    // Wave animation state
-    @State private var waveAnimationStart: Date? = nil
-    @State private var waveOriginCol: Int = 0
-    @State private var waveOriginRow: Int = 0
-
-    // Wave parameters
-    private let waveWidth: CGFloat = 2.5
-    private let waveSpeed: CGFloat = 25.0
-    private let waveDuration: TimeInterval = 0.6
+    @State private var visibleCellCount: Int = 0
 
     private let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -85,7 +78,7 @@ struct PendingTransactionsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 28) {
-                    collapsibleCalendarSection
+                    calendarSection
                     if pendingTransactions.isEmpty {
                         emptyState
                     } else {
@@ -97,7 +90,11 @@ struct PendingTransactionsSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 140)
             }
-            .background(Color("NormaBackground"))
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Review Transactions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -113,7 +110,7 @@ struct PendingTransactionsSheet: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color("NormaPastelPurple"))
                 }
             }
@@ -140,10 +137,10 @@ struct PendingTransactionsSheet: View {
         }
     }
 
-    // MARK: - Collapsible Calendar Section
+    // MARK: - Calendar Section
 
-    private var collapsibleCalendarSection: some View {
-        VStack(spacing: 20) {
+    private var calendarSection: some View {
+        VStack(spacing: 16) {
             // Tappable date bar
             Button {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -156,11 +153,11 @@ struct PendingTransactionsSheet: View {
                         .foregroundColor(Color("NormaPastelPurple"))
 
                     Text("Date:")
-                        .font(.custom(FontFamily.Rubik.regular, size: 14))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundColor(.secondary)
 
                     Text(dateDisplayText)
-                        .font(.custom(FontFamily.Rubik.medium, size: 14))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color("NormaPastelPurple"))
 
                     Spacer()
@@ -192,28 +189,29 @@ struct PendingTransactionsSheet: View {
     }
 
     private var calendarContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // Month navigation header
             HStack {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         currentMonth = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+                        visibleCellCount = 0
+                        let totalCells = extractDates().count
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            visibleCellCount = totalCells
+                        }
                     }
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color("NormaPastelPurple"))
                         .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(Color("NormaPastelPurple").opacity(0.1))
-                        )
                 }
 
                 Spacer()
 
                 Text(monthYearFormatter.string(from: currentMonth).uppercased())
-                    .font(.normaFinancial(16))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
                     .tracking(1.2)
 
@@ -222,113 +220,84 @@ struct PendingTransactionsSheet: View {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         currentMonth = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+                        visibleCellCount = 0
+                        let totalCells = extractDates().count
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            visibleCellCount = totalCells
+                        }
                     }
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(canGoForward ? Color("NormaPastelPurple") : Color.gray.opacity(0.3))
                         .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(canGoForward ? Color("NormaPastelPurple").opacity(0.1) : Color.gray.opacity(0.05))
-                        )
                 }
                 .disabled(!canGoForward)
             }
             .padding(.horizontal, 8)
 
-            // Calendar container
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: colorScheme == .dark ? [
-                                Color(red: 0.160, green: 0.128, blue: 0.102),
-                                Color(red: 0.180, green: 0.145, blue: 0.118)
-                            ] : [
-                                Color(UIColor.systemBackground),
-                                Color.gray.opacity(0.02)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.gray.opacity(0.2),
-                                        Color.gray.opacity(0.05)
-                                    ]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
+            // Calendar grid
+            VStack(spacing: 16) {
+                // Day labels
+                HStack(spacing: 0) {
+                    ForEach(days, id: \.self) { day in
+                        Text(day)
+                            .font(.system(size: 11, weight: .regular))
+                            .frame(maxWidth: .infinity)
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                }
+
+                // Calendar grid
+                let dates = extractDates()
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(Array(dates.enumerated()), id: \.offset) { index, date in
+                        if let date = date {
+                            PendingDayCell(
+                                date: date,
+                                isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
+                                isToday: Calendar.current.isDateInToday(date),
+                                isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonth, toGranularity: .month),
+                                isFuture: date > Date()
                             )
-                    )
-
-                TimelineView(.animation(minimumInterval: 1.0/60.0, paused: waveAnimationStart == nil)) { timeline in
-                    let waveRadius = currentWaveRadius(at: timeline.date)
-
-                    VStack(spacing: 16) {
-                        // Day labels
-                        HStack(spacing: 0) {
-                            ForEach(days, id: \.self) { day in
-                                Text(day)
-                                    .font(.normaInput(12))
-                                    .frame(maxWidth: .infinity)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Calendar grid
-                        let dates = extractDates()
-                        LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(Array(dates.enumerated()), id: \.offset) { index, date in
-                                let row = index / 7
-                                let col = index % 7
-                                let distance = calculateDistance(
-                                    fromCol: waveOriginCol,
-                                    fromRow: waveOriginRow,
-                                    toCol: col,
-                                    toRow: row
-                                )
-
-                                if let date = date {
-                                    PendingDayCell(
-                                        date: date,
-                                        isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
-                                        isToday: Calendar.current.isDateInToday(date),
-                                        isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonth, toGranularity: .month),
-                                        isFuture: date > Date(),
-                                        waveRadius: waveRadius,
-                                        waveWidth: waveWidth,
-                                        distanceFromOrigin: distance
-                                    )
-                                    .onTapGesture {
-                                        // Only allow selecting today or past dates
-                                        if date <= Date() {
-                                            // Trigger wave animation
-                                            triggerWaveAnimation(fromCol: col, fromRow: row)
-
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                selectedDate = date
-                                            }
-                                        }
+                            .opacity(visibleCellCount > index ? 1 : 0)
+                            .offset(y: visibleCellCount > index ? 0 : 8)
+                            .animation(
+                                .spring(response: 0.35, dampingFraction: 0.8)
+                                    .delay(Double(index) * 0.02),
+                                value: visibleCellCount
+                            )
+                            .onTapGesture {
+                                if date <= Date() {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedDate = date
                                     }
-                                } else {
-                                    Rectangle()
-                                        .foregroundColor(.clear)
-                                        .frame(height: 40)
                                 }
                             }
+                        } else {
+                            Rectangle()
+                                .foregroundColor(.clear)
+                                .frame(height: 48)
                         }
-                        .padding(.horizontal)
                     }
-                    .padding(.vertical, 16)
                 }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.gray.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                    )
+            )
+        }
+        .onAppear {
+            let totalCells = extractDates().count
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                visibleCellCount = totalCells
             }
         }
     }
@@ -377,42 +346,16 @@ struct PendingTransactionsSheet: View {
         return dates
     }
 
-    // MARK: - Wave Animation Helpers
-
-    private func calculateDistance(fromCol: Int, fromRow: Int, toCol: Int, toRow: Int) -> Double {
-        let dx = Double(toCol - fromCol)
-        let dy = Double(toRow - fromRow)
-        return hypot(dx, dy)
-    }
-
-    private func currentWaveRadius(at date: Date) -> CGFloat {
-        guard let start = waveAnimationStart else { return -100 }
-        let elapsed = date.timeIntervalSince(start)
-        return CGFloat(elapsed) * waveSpeed
-    }
-
-    private func triggerWaveAnimation(fromCol: Int, fromRow: Int) {
-        guard waveAnimationStart == nil else { return }
-
-        waveOriginCol = fromCol
-        waveOriginRow = fromRow
-        waveAnimationStart = Date()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + waveDuration) {
-            self.waveAnimationStart = nil
-        }
-    }
-
     // MARK: - Transactions Section Header
 
     private var transactionsSectionHeader: some View {
         HStack {
             Text("Transactions")
-                .font(.custom(FontFamily.Rubik.medium, size: 16))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.primary)
 
             Text("\(pendingTransactions.count) pending")
-                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundColor(.secondary)
 
             Spacer()
@@ -461,7 +404,7 @@ struct PendingTransactionsSheet: View {
                         Image(systemName: allSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 13, weight: .medium))
                         Text(allSelected ? "Deselect All" : "Select All")
-                            .font(.custom(FontFamily.Rubik.medium, size: 13))
+                            .font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(Color("NormaPastelPurple"))
                     .padding(.horizontal, 14)
@@ -478,7 +421,7 @@ struct PendingTransactionsSheet: View {
                 .buttonStyle(.plain)
 
                 Text("\(selectedTransactionIds.count) of \(pendingTransactions.count)")
-                    .font(.custom(FontFamily.Rubik.regular, size: 13))
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
 
                 Spacer()
@@ -502,17 +445,17 @@ struct PendingTransactionsSheet: View {
 
                     if selectedTransactionIds.isEmpty {
                         Text("Select transactions")
-                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+                            .font(.system(size: 15, weight: .medium))
                     } else {
                         Text("Confirm \(selectedTransactionIds.count)")
-                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+                            .font(.system(size: 15, weight: .medium))
 
                         Text("•")
                             .font(.system(size: 10))
                             .opacity(0.6)
 
                         Text(formatCurrency(selectedAmount))
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
+                            .font(.system(size: 14, weight: .regular))
                             .opacity(0.9)
                     }
                 }
@@ -564,11 +507,11 @@ struct PendingTransactionsSheet: View {
 
             VStack(spacing: 8) {
                 Text("All caught up!")
-                    .font(.normaFinancial(20))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
 
                 Text("No pending transactions to review")
-                    .font(.normaInput(14))
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundColor(.secondary)
             }
         }
@@ -689,99 +632,49 @@ private struct PendingDayCell: View {
     let isToday: Bool
     let isCurrentMonth: Bool
     let isFuture: Bool
-    let waveRadius: CGFloat
-    let waveWidth: CGFloat
-    let distanceFromOrigin: Double
 
-    /// Wave intensity based on how close the wave front is to this cell
-    private var waveIntensity: CGFloat {
-        let distanceFromWaveFront = abs(CGFloat(distanceFromOrigin) - waveRadius)
-
-        if distanceFromWaveFront > waveWidth {
-            return 0
-        }
-
-        let normalizedDistance = distanceFromWaveFront / waveWidth
-        return (1 + cos(normalizedDistance * .pi)) / 2
-    }
-
-    /// Scale based on wave intensity
-    private var scale: CGFloat {
-        1.0 + (0.3 * waveIntensity)
-    }
-
-    /// Brightness boost as wave passes
-    private var brightness: Double {
-        0.25 * Double(waveIntensity)
-    }
-
-    /// Shadow radius for depth effect
-    private var shadowRadius: CGFloat {
-        3 * waveIntensity
-    }
-
-    private var cellColor: Color {
-        if isSelected {
-            return Color("NormaPastelPurple")
-        } else if isToday {
-            return Color("NormaPastelPurple").opacity(0.08)
-        } else {
-            return Color.clear
-        }
+    private var showNumber: Bool {
+        isSelected || isToday
     }
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(cellTextColor)
+        VStack(spacing: 3) {
+            if showNumber {
+                Text("\(Calendar.current.component(.day, from: date))")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(textColor)
+            } else {
+                Circle()
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 4, height: 4)
+            }
         }
-        .frame(height: 40)
+        .frame(height: 48)
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color("NormaPastelPurple"))
-
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color("NormaPastelPurple").opacity(0.6), lineWidth: 1.5)
                 } else if isToday {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color("NormaPastelPurple").opacity(0.08))
-
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color("NormaPastelPurple").opacity(0.25), lineWidth: 1)
                 }
             }
         )
-        .scaleEffect(scale)
-        .brightness(brightness)
-        .shadow(color: Color("NormaPastelPurple").opacity(0.4 * Double(waveIntensity)), radius: shadowRadius, y: 2)
-        .opacity(cellOpacity)
+        .opacity(isCurrentMonth ? (isFuture ? 0.4 : 1) : 0.3)
     }
 
-    private var cellTextColor: Color {
+    private var textColor: Color {
         if isSelected {
             return .white
         } else if isToday {
             return Color("NormaPastelPurple")
-        } else if isFuture {
-            return .secondary.opacity(0.3)
-        } else if !isCurrentMonth {
-            return .secondary.opacity(0.5)
         } else {
-            return .primary
+            return .secondary
         }
-    }
-
-    private var cellOpacity: Double {
-        if isFuture {
-            return 0.5
-        } else if !isCurrentMonth {
-            return 0.3
-        }
-        return 1
     }
 }
 

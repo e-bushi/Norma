@@ -12,27 +12,9 @@ struct ChatInputView: View {
     let isLoading: Bool
     let onSend: () -> Void
     let onVoiceInput: () -> Void
+    var glowColor: Color? = nil
 
-    @State private var showBills = false
-    @State private var showChallenge = false
-    @State private var showExpenses = false
-    @State private var visibleCapsules: Int = 0
-    @State private var isExpanded: Bool = true
-    @State private var pressedCapsule: String? = nil
     @State private var isKeyboardVisible: Bool = false
-    @State private var billsTotal: Double = 0
-    @State private var monthlySpend: Double = 0
-    @State private var activeChallenge: Challenge?
-    @EnvironmentObject var profileViewModel: ProfileViewModel
-    @EnvironmentObject var challengeViewModel: ChallengeViewModel
-    @EnvironmentObject var billViewModel: BillViewModel
-    @EnvironmentObject var expenseViewModel: ExpenseViewModel
-
-    private var currentMonthAbbreviation: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
-        return formatter.string(from: Date())
-    }
 
     private var isSendButtonActive: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
@@ -41,7 +23,7 @@ struct ChatInputView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Floating input container
-            VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 // Text field
                 TextField("Chat with Norma", text: $text, axis: .vertical)
                     .textFieldStyle(PlainTextFieldStyle())
@@ -55,129 +37,7 @@ struct ChatInputView: View {
                     }
                     .padding(.vertical, 8)
 
-                // Tags and buttons row
-                HStack(alignment: .bottom, spacing: 12) {
-                    // Tags on the left
-                    VStack(alignment: .leading, spacing: 8) {
-                        // First row: Bills and Budgets
-                        HStack(spacing: 8) {
-                            // Bills tag
-                            Button {
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                impactFeedback.impactOccurred()
-                                showBills = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "doc.text.fill")
-                                        .font(.system(size: 12))
-                                    Text("Bills: \(profileViewModel.formatCurrencyTruncated(billsTotal))")
-                                        .font(.normaFinancial(14))
-                                        .lineLimit(1)
-                                        .fixedSize()
-                                        .contentTransition(.numericText(value: billsTotal))
-                                        .animation(.snappy(duration: 0.4), value: billsTotal)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(Color("NormaPastelTeal").opacity(0.15))
-                                        .glassEffect(in: Capsule())
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 0.5)
-                                )
-                                .foregroundColor(Color("NormaPastelTeal"))
-                            }
-                            .buttonStyle(CapsulePressStyle())
-                            .opacity(visibleCapsules > 0 ? 1 : 0)
-                            .scaleEffect(visibleCapsules > 0 ? 1.0 : 0.3)
-                            .offset(x: visibleCapsules > 0 ? 0 : -30)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.3), value: visibleCapsules)
-
-                            // Challenge tag
-                            Button {
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                impactFeedback.impactOccurred()
-                                showChallenge = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "target")
-                                        .font(.system(size: 12))
-                                    if let challenge = activeChallenge {
-                                        Text("\(profileViewModel.formatCurrencyTruncated(challenge.amountRemaining)) left . \(challenge.shortDaysRemaining)")
-                                            .font(.normaFinancial(14))
-                                            .lineLimit(1)
-                                            .fixedSize()
-                                            .contentTransition(.numericText(value: challenge.amountRemaining))
-                                            .animation(.snappy(duration: 0.4), value: challenge.amountRemaining)
-                                    } else {
-                                        Text("No Challenge")
-                                            .font(.normaFinancial(14))
-                                            .lineLimit(1)
-                                            .fixedSize()
-                                    }
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(Color("NormaPastelPurple").opacity(0.15))
-                                        .glassEffect(in: Capsule())
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 0.5)
-                                )
-                                .foregroundColor(Color("NormaPastelPurple"))
-                            }
-                            .buttonStyle(CapsulePressStyle())
-                            .opacity(visibleCapsules > 1 ? 1 : 0)
-                            .scaleEffect(visibleCapsules > 1 ? 1.0 : 0.3)
-                            .offset(x: visibleCapsules > 1 ? 0 : -30)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: visibleCapsules)
-                        }
-
-                        // Second row: Monthly Spend
-                        Button {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            showExpenses = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "creditcard.fill")
-                                    .font(.system(size: 12))
-                                Text("\(currentMonthAbbreviation). Spend: \(profileViewModel.formatCurrencyTruncated(monthlySpend))")
-                                    .font(.normaFinancial(14))
-                                    .lineLimit(1)
-                                    .fixedSize()
-                                    .contentTransition(.numericText(value: monthlySpend))
-                                    .animation(.snappy(duration: 0.4), value: monthlySpend)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelCoral").opacity(0.15))
-                                    .glassEffect(in: Capsule())
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color("NormaPastelCoral").opacity(0.3), lineWidth: 0.5)
-                            )
-                            .foregroundColor(Color("NormaPastelCoral"))
-                        }
-                        .buttonStyle(CapsulePressStyle())
-                        .opacity(visibleCapsules > 2 ? 1 : 0)
-                        .scaleEffect(visibleCapsules > 2 ? 1.0 : 0.3)
-                        .offset(x: visibleCapsules > 2 ? 0 : -30)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: visibleCapsules)
-                    }
-
-                    Spacer()
-
-                    // Dual-purpose voice/send button
+                // Dual-purpose voice/send button
                     Button {
                         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                         impactFeedback.impactOccurred()
@@ -210,9 +70,6 @@ struct ChatInputView: View {
                     }
                     .buttonStyle(SendButtonStyle())
                     .disabled(isLoading)
-                }
-                .frame(height: isExpanded ? nil : 0)
-                .opacity(isExpanded ? 1 : 0)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -224,7 +81,10 @@ struct ChatInputView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28)
-                    .stroke(Color.gray.opacity(0.22), lineWidth: 1)
+                    .stroke(glowColor?.opacity(0.6) ?? Color.gray.opacity(0.22), lineWidth: glowColor != nil ? 1.5 : 1)
+                    .shadow(color: glowColor?.opacity(0.5) ?? .clear, radius: 8)
+                    .shadow(color: glowColor?.opacity(0.3) ?? .clear, radius: 16)
+                    .animation(.easeInOut(duration: 0.4), value: glowColor)
             )
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -232,31 +92,6 @@ struct ChatInputView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isKeyboardVisible)
         }
         .padding(.top, 12)
-        .onAppear {
-            // Initialize capsule values
-            billsTotal = billViewModel.bills.reduce(0) { $0 + $1.amount }
-            monthlySpend = expenseViewModel.currentMonthExpenses
-            activeChallenge = challengeViewModel.activeChallenge
-            // Animate capsules appearing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                visibleCapsules = 3
-            }
-        }
-        .onReceive(expenseViewModel.$currentMonthExpenses) { newValue in
-            withAnimation(.snappy(duration: 0.4)) {
-                monthlySpend = newValue
-            }
-        }
-        .onReceive(billViewModel.$bills) { bills in
-            withAnimation(.snappy(duration: 0.4)) {
-                billsTotal = bills.reduce(0) { $0 + $1.amount }
-            }
-        }
-        .onReceive(challengeViewModel.$activeChallenge) { challenge in
-            withAnimation(.snappy(duration: 0.4)) {
-                activeChallenge = challenge
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 isKeyboardVisible = true
@@ -266,28 +101,6 @@ struct ChatInputView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 isKeyboardVisible = false
             }
-        }
-        .background(
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.clear)
-
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: 20)
-            }
-            .ignoresSafeArea()
-        )
-        .sheet(isPresented: $showBills) {
-            BillHomeView()
-        }
-        .sheet(isPresented: $showChallenge) {
-            ChallengesView()
-                .environmentObject(challengeViewModel)
-                .environmentObject(profileViewModel)
-        }
-        .sheet(isPresented: $showExpenses) {
-            IncomeAndExpenseView()
         }
     }
 }

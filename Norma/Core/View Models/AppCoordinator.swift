@@ -214,7 +214,6 @@ enum MainLayerViewType: Hashable {
     case chat
     case settings
     case currencyConverter
-    case overview
     case moneyTasks
 }
 

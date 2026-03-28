@@ -60,8 +60,6 @@ struct MainLayerView: View {
                 screen = .settings
             case .currencyConverter:
                 screen = .currencyConverter
-            case .overview:
-                screen = .overview
             case .moneyTasks:
                 screen = .moneyTasks
             }
@@ -77,8 +75,6 @@ struct MainLayerView: View {
                 screen = .settings
             case .currencyConverter:
                 screen = .currencyConverter
-            case .overview:
-                screen = .overview
             case .moneyTasks:
                 screen = .moneyTasks
             }
@@ -191,17 +187,6 @@ struct MainLayerView: View {
         case .currencyConverter:
             NavigationStack {
                 CurrencyConverterView(isMenuOpen: $isMenuOpen)
-            }
-
-        case .overview:
-            NavigationStack {
-                FinancialOverviewView(isMenuOpen: $isMenuOpen)
-                    .environmentObject(sessionViewModel)
-                    .environmentObject(dataManager)
-                    .environmentObject(billViewModel)
-                    .environmentObject(expenseViewModel)
-                    .environmentObject(challengeViewModel)
-                    .environmentObject(profileViewModel)
             }
 
         case .moneyTasks:

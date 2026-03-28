@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AppCoordinatorView: View {
     @EnvironmentObject var appCoordinator: AppCoordinator
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .dark
 
     var body: some View {
         ZStack {
