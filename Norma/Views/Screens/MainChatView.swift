@@ -34,9 +34,13 @@ struct MainChatView: View {
     @State private var showArcDetail = false
     @State private var showPendingTransactions = false
     @State private var showRemindersSheet = false
+    @State private var showBillHome = false
+    @State private var showActivity = false
+    @State private var showExpenses = false
     @State private var reminderCount: Int = 0
     @State private var navBarCapsulesVisible = false
     @State private var showIncomeDropdown = false
+    @State private var inputGlowColor: Color? = nil
 
     // Voice input state
     @State private var isRecording = false
@@ -63,7 +67,13 @@ struct MainChatView: View {
     }
 
     private var freedomFund: Double {
-        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+        // Use linked account balance if set, otherwise manual value
+        if let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId,
+           let account = PlaidService.shared.connectedAccounts.first(where: { $0.accountId == arcAccountId }),
+           let balance = account.balances.current {
+            return balance
+        }
+        return sessionViewModel.currentUser?.settings.freedomFund ?? 0
     }
 
     private var currency: String {
@@ -210,34 +220,38 @@ struct MainChatView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    // Arc count capsule
-                    Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        showArcDetail = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            NavBarCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
-                                .id(CoinTierService.currentCoinFileName(for: arcCount))
-                                .frame(width: 20, height: 20)
+                    HStack(spacing: 8) {
+                        // Coin capsule — shows when chat has messages
+                        if !messages.isEmpty {
+                            Button {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                showArcDetail = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    NavBarCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
+                                        .id(CoinTierService.currentCoinFileName(for: arcCount))
+                                        .frame(width: 20, height: 20)
 
-                            Text("x \(arcCount)")
-                                .font(.normaFinancial(12))
-                                .foregroundColor(.primary)
+                                    Text("x \(arcCount)")
+                                        .font(.normaFinancial(12))
+                                        .foregroundColor(.primary)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(.clear)
+                                        .glassEffect(in: Capsule())
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(.clear)
-                                .glassEffect(in: Capsule())
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
                 .sharedBackgroundVisibility(.hidden)
 
@@ -291,23 +305,49 @@ struct MainChatView: View {
                 totalMonthlyBills: totalMonthlyBills,
                 currency: currency
             )
+            .environmentObject(sessionViewModel)
+            .environmentObject(billViewModel)
+            .environmentObject(expenseViewModel)
+            .environmentObject(profileViewModel)
+        }
+        .sheet(isPresented: $showBillHome) {
+            BillHomeView()
+        }
+        .sheet(isPresented: $showActivity) {
+            ActivityView()
+        }
+        .sheet(isPresented: $showExpenses) {
+            IncomeAndExpenseView()
         }
         .overlay(alignment: .top) {
             // Dropdown that appears below nav bar when title is tapped
             if showIncomeDropdown {
                 QuickActionsHubView(
-                    onInsertText: { text in
+                    onShowBills: {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             showIncomeDropdown = false
                         }
-                        inputText = text
+                        showBillHome = true
+                    },
+                    onShowActivity: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showIncomeDropdown = false
+                        }
+                        showActivity = true
+                    },
+                    onShowExpenses: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showIncomeDropdown = false
+                        }
+                        showExpenses = true
                     },
                     onShowPendingTransactions: {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             showIncomeDropdown = false
                         }
                         showPendingTransactions = true
-                    }
+                    },
+                    pendingTransactionsCount: pendingCount
                 )
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -340,7 +380,9 @@ struct MainChatView: View {
     @ViewBuilder
     private var chatContent: some View {
         if messages.isEmpty && !isLoading {
-            ChatEmptyStateView(arcCount: arcCount)
+            ChatEmptyStateView(arcCount: arcCount, onCoinTapped: {
+                showArcDetail = true
+            })
         } else {
             ScrollViewReader { proxy in
                 GeometryReader { outerGeometry in
@@ -350,7 +392,8 @@ struct MainChatView: View {
                                 ForEach(messages) { message in
                                     ChatBubbleView(
                                         message: message,
-                                        shouldAnimate: conversationManager.newlyAddedMessageIds.contains(message.id)
+                                        shouldAnimate: conversationManager.newlyAddedMessageIds.contains(message.id),
+                                        accentColor: CoinTierService.currentCoinTier(for: arcCount).glowColor
                                     )
                                         .id(message.id)
                                         .transition(.asymmetric(
@@ -452,7 +495,8 @@ struct MainChatView: View {
                 text: $inputText,
                 isLoading: isLoading,
                 onSend: sendMessage,
-                onVoiceInput: startVoiceInput
+                onVoiceInput: startVoiceInput,
+                glowColor: inputGlowColor
             )
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isRecording)
@@ -927,13 +971,15 @@ struct CoinGradientBackground: View {
             stops: colorScheme == .dark
                 ? [
                     .init(color: Color(red: c.r * 0.22, green: c.g * 0.22, blue: c.b * 0.22), location: 0),
-                    .init(color: Color(red: c.r * 0.16, green: c.g * 0.16, blue: c.b * 0.16), location: 0.65),
-                    .init(color: Color(red: c.r * 0.08, green: c.g * 0.08, blue: c.b * 0.08), location: 1.0)
+                    .init(color: Color(red: c.r * 0.18, green: c.g * 0.18, blue: c.b * 0.18), location: 0.35),
+                    .init(color: Color(red: c.r * 0.14, green: c.g * 0.14, blue: c.b * 0.14), location: 0.65),
+                    .init(color: Color(red: c.r * 0.12, green: c.g * 0.12, blue: c.b * 0.12), location: 1.0)
                 ]
                 : [
                     .init(color: Color(red: 1 - (1 - c.r) * 0.22, green: 1 - (1 - c.g) * 0.22, blue: 1 - (1 - c.b) * 0.22), location: 0),
-                    .init(color: Color(red: 1 - (1 - c.r) * 0.14, green: 1 - (1 - c.g) * 0.14, blue: 1 - (1 - c.b) * 0.14), location: 0.65),
-                    .init(color: Color(red: 1 - (1 - c.r) * 0.06, green: 1 - (1 - c.g) * 0.06, blue: 1 - (1 - c.b) * 0.06), location: 1.0)
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.16, green: 1 - (1 - c.g) * 0.16, blue: 1 - (1 - c.b) * 0.16), location: 0.35),
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.12, green: 1 - (1 - c.g) * 0.12, blue: 1 - (1 - c.b) * 0.12), location: 0.65),
+                    .init(color: Color(red: 1 - (1 - c.r) * 0.08, green: 1 - (1 - c.g) * 0.08, blue: 1 - (1 - c.b) * 0.08), location: 1.0)
                 ],
             startPoint: .top,
             endPoint: .bottom

@@ -25,7 +25,7 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .dark
 
     // Security/Encryption states
     @State private var showRecoveryPhraseSheet = false
@@ -35,7 +35,6 @@ struct SettingsView: View {
             VStack(spacing: 24) {
                 welcomeSection
                 profileSection
-                appearanceSection
                 subscriptionSection
                 supportSection
                 securitySection

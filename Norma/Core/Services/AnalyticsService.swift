@@ -42,7 +42,6 @@ enum AnalyticsScreen: String {
 
     // Main App
     case chat = "Chat"
-    case overview = "Overview"
     case settings = "Settings"
     case currencyConverter = "Currency Converter"
     case moneyTasks = "Money Tasks"

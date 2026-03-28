@@ -10,7 +10,9 @@ import RevenueCat
 
 struct PaywallView: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPurchasing = false
     @State private var showError = false
     @State private var showTermsOfUse = false
@@ -33,34 +35,38 @@ struct PaywallView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color("NormaBackground")
-                .ignoresSafeArea()
+            // Coin gradient background + radar rings
+            ZStack(alignment: .topTrailing) {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
 
-            // Radar rings from top-right
-            Canvas { context, size in
-                let origin = CGPoint(x: size.width, y: 0)
-                let ringCount = 8
-                let maxRadius: CGFloat = 320
-                let ringSpacing = maxRadius / CGFloat(ringCount)
+                Canvas { context, size in
+                    let origin = CGPoint(x: size.width, y: 0)
+                    let ringCount = 8
+                    let maxRadius: CGFloat = 320
+                    let ringSpacing = maxRadius / CGFloat(ringCount)
+                    let tierColor = UIColor(coinColorViewModel.coinColor)
+                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                    tierColor.getRed(&r, green: &g, blue: &b, alpha: &a)
 
-                for i in 1...ringCount {
-                    let radius = CGFloat(i) * ringSpacing
-                    let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
-                    let rect = CGRect(
-                        x: origin.x - radius,
-                        y: origin.y - radius,
-                        width: radius * 2,
-                        height: radius * 2
-                    )
-                    context.stroke(
-                        Path(ellipseIn: rect),
-                        with: .color(accentColor.opacity(opacity)),
-                        lineWidth: 1
-                    )
+                    for i in 1...ringCount {
+                        let radius = CGFloat(i) * ringSpacing
+                        let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                        let rect = CGRect(
+                            x: origin.x - radius,
+                            y: origin.y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )
+                        context.stroke(
+                            Path(ellipseIn: rect),
+                            with: .color(Color(red: r, green: g, blue: b).opacity(opacity)),
+                            lineWidth: 1
+                        )
+                    }
                 }
+                .allowsHitTesting(false)
             }
             .ignoresSafeArea()
-            .allowsHitTesting(false)
 
             ScrollView {
                 VStack(spacing: 28) {

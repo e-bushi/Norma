@@ -234,30 +234,7 @@ struct PreviewChatInputView: View {
             }
         }
 
-        .background(
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color("NormaBackground"))
-                    .mask(
-                        LinearGradient(
-                            gradient: Gradient(stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .white.opacity(0.6), location: 0.5),
-                                .init(color: .white.opacity(0.9), location: 0.7),
-                                .init(color: .white, location: 1.0)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                // Solid extension below
-                Rectangle()
-                    .fill(Color("NormaBackground"))
-                    .frame(height: 20)
-            }
-            .ignoresSafeArea()
-        )
+        .background(.clear)
         .sheet(isPresented: $showBills) {
             PreviewModeBillsView()
         }

@@ -139,12 +139,10 @@ struct MotionCoin3DView: UIViewRepresentable {
         private var blendFactor: Float = 0.0
         private var startTime: Date?
 
-        // CoreHaptics
+        // CoreHaptics — continuous pattern
         private var hapticEngine: CHHapticEngine?
-        private var lastHapticPitch: Float = 0
-        private var lastHapticRoll: Float = 0
-        private let hapticThreshold: Float = 0.02  // Radians of tilt change to trigger haptic
-        private var lastHapticTime: Date = .distantPast
+        private var continuousPlayer: CHHapticAdvancedPatternPlayer?
+        private var currentIntensity: Float = 0
 
         init(baseYRotation: Float, hapticsEnabled: Bool = true) {
             self.baseYRotation = baseYRotation
@@ -162,36 +160,63 @@ struct MotionCoin3DView: UIViewRepresentable {
                 hapticEngine = try CHHapticEngine()
                 hapticEngine?.resetHandler = { [weak self] in
                     try? self?.hapticEngine?.start()
+                    self?.startContinuousHaptic()
                 }
                 hapticEngine?.stoppedHandler = { _ in }
                 try hapticEngine?.start()
+                startContinuousHaptic()
             } catch {
                 hapticEngine = nil
             }
         }
 
-        private func playTiltHaptic(intensity: Float) {
-            guard hapticsEnabled, let engine = hapticEngine else { return }
+        private func startContinuousHaptic() {
+            guard let engine = hapticEngine else { return }
 
-            // Throttle: at least 80ms between haptics
-            guard Date().timeIntervalSince(lastHapticTime) > 0.08 else { return }
-            lastHapticTime = Date()
-
-            let clampedIntensity = min(max(intensity, 0.4), 0.9)
-
-            let hapticEvent = CHHapticEvent(
-                eventType: .hapticTransient,
+            // Start at a small non-zero intensity so the engine fully engages
+            let continuousEvent = CHHapticEvent(
+                eventType: .hapticContinuous,
                 parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: clampedIntensity),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.01),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
                 ],
-                relativeTime: 0
+                relativeTime: 0,
+                duration: 300
             )
 
             do {
-                let pattern = try CHHapticPattern(events: [hapticEvent], parameters: [])
-                let player = try engine.makePlayer(with: pattern)
-                try player.start(atTime: CHHapticTimeImmediate)
+                let pattern = try CHHapticPattern(events: [continuousEvent], parameters: [])
+                continuousPlayer = try engine.makeAdvancedPlayer(with: pattern)
+                try continuousPlayer?.start(atTime: CHHapticTimeImmediate)
+            } catch {
+                print("Haptic player failed to start: \(error)")
+            }
+        }
+
+        private func updateHapticIntensity(_ tiltMagnitude: Float) {
+            guard hapticsEnabled, let player = continuousPlayer else { return }
+
+            // Map tilt velocity to intensity — amplify so gentle tilts are felt
+            let target = min(tiltMagnitude * 6.0, 1.0)
+            // Fast rise, gradual decay
+            let smoothing: Float = target > currentIntensity ? 0.6 : 0.25
+            currentIntensity += (target - currentIntensity) * smoothing
+
+            // Perceptible range — continuous haptics need strong values
+            let finalIntensity: Float
+            if currentIntensity > 0.01 {
+                finalIntensity = 0.15 + currentIntensity * 0.65 // floor of 0.15 so you always feel it when moving
+            } else {
+                finalIntensity = 0
+            }
+            // Low sharpness = warm and round, not buzzy
+            let sharpness: Float = 0.05 + currentIntensity * 0.1
+
+            do {
+                try player.sendParameters([
+                    CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: finalIntensity, relativeTime: 0),
+                    CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: sharpness, relativeTime: 0)
+                ], atTime: CHHapticTimeImmediate)
             } catch {
                 // Silently fail
             }
@@ -231,23 +256,20 @@ struct MotionCoin3DView: UIViewRepresentable {
                     z: 0
                 )
 
-                // Trigger haptic when tilt crosses threshold
+                // Update continuous haptic based on tilt velocity
                 if self.blendFactor > 0.2 {
-                    let pitchDelta = abs(currentPitch - self.lastHapticPitch)
-                    let rollDelta = abs(currentYOffset - self.lastHapticRoll)
-                    let totalDelta = pitchDelta + rollDelta
-
-                    if totalDelta > self.hapticThreshold {
-                        self.playTiltHaptic(intensity: min(totalDelta * 2, 1.0))
-                        self.lastHapticPitch = currentPitch
-                        self.lastHapticRoll = currentYOffset
-                    }
+                    let pitchRate = abs(Float(motion.rotationRate.x))
+                    let rollRate = abs(Float(motion.rotationRate.y))
+                    let tiltMagnitude = (pitchRate + rollRate) * 0.5
+                    self.updateHapticIntensity(tiltMagnitude)
                 }
             }
         }
 
         func stopMotionUpdates() {
             motionManager.stopDeviceMotionUpdates()
+            try? continuousPlayer?.stop(atTime: CHHapticTimeImmediate)
+            continuousPlayer = nil
             hapticEngine?.stop()
         }
     }

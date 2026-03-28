@@ -14,6 +14,8 @@ struct BillHomeView: View {
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
     @EnvironmentObject var incomeViewModel: IncomeViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
+    @EnvironmentObject var coinColorViewModel: CoinColorViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showMyBills: Bool = false
     @State private var isScrolling = false
     @State private var scrollTimer: Timer?
@@ -22,6 +24,8 @@ struct BillHomeView: View {
     @State private var showAllBills = false
     @State private var showInfoPopover = false
     @State private var selectedMonthOffset: Int = 0
+    @State private var showRecurringReview = false
+    @ObservedObject private var plaidService = PlaidService.shared
 
     private var referenceDate: Date {
         Calendar.current.date(byAdding: .month, value: selectedMonthOffset, to: Date()) ?? Date()
@@ -129,7 +133,7 @@ struct BillHomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Header — matches FinancialOverviewView positioning
+                    // Header
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 8) {
                             monthCapsule(
@@ -208,6 +212,48 @@ struct BillHomeView: View {
                         waveAnimating = true
                     }
 
+                    // Recurring bills detected banner
+                    if !plaidService.recurringOutflows.isEmpty {
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showRecurringReview = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Color("NormaPastelTeal"))
+
+                                Text("\(plaidService.recurringOutflows.count) bills detected")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                                    .foregroundColor(.primary)
+
+                                Spacer()
+
+                                Text("Review")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(Color("NormaPastelTeal"))
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(Color("NormaPastelTeal"))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(.clear)
+                                    .glassEffect(in: RoundedRectangle(cornerRadius: 14))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color("NormaPastelTeal").opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal, 24)
+                    }
+
                     // Bill Due Date Calendar
                     BillDueDateCalendarView(initialMonth: referenceDate, billsPerDay: billsPerDayDict)
                         .id(selectedMonthOffset)
@@ -218,7 +264,11 @@ struct BillHomeView: View {
                 .padding(.bottom)
             }
             .scrollIndicators(.hidden)
-            .background(Color("NormaBackground"))
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
+            .scrollContentBackground(.hidden)
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { _ in
                 // Scroll detected
@@ -255,6 +305,11 @@ struct BillHomeView: View {
             }
             .sheet(isPresented: $showAllBills) {
                 MyBillsView()
+            }
+            .sheet(isPresented: $showRecurringReview) {
+                RecurringBillsReviewView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 Task {
