@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F638A84F2F78B8D9007CDFC3 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = F638A84E2F78B8D9007CDFC3 /* LinkKit */; };
 		F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F64F88152E3BECD3002D2FC5 /* RevenueCat */; };
 		F6938D312E0B2B6100C98852 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F6938D302E0B2B6100C98852 /* Supabase */; };
 		F6958ACA2F435AFA00610F2D /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = F6958AC92F435AFA00610F2D /* PostHog */; };
@@ -122,6 +123,7 @@
 				F6958ACF2F435C4200610F2D /* GoogleSignInSwift in Frameworks */,
 				F6958ACA2F435AFA00610F2D /* PostHog in Frameworks */,
 				F6958ACD2F435C4200610F2D /* GoogleSignIn in Frameworks */,
+				F638A84F2F78B8D9007CDFC3 /* LinkKit in Frameworks */,
 				F64F88162E3BECD3002D2FC5 /* RevenueCat in Frameworks */,
 				F6938D312E0B2B6100C98852 /* Supabase in Frameworks */,
 			);
@@ -200,6 +202,7 @@
 				F6958AC92F435AFA00610F2D /* PostHog */,
 				F6958ACC2F435C4200610F2D /* GoogleSignIn */,
 				F6958ACE2F435C4200610F2D /* GoogleSignInSwift */,
+				F638A84E2F78B8D9007CDFC3 /* LinkKit */,
 			);
 			productName = Norma;
 			productReference = F6638D402DCD6C3F009D95C3 /* Norma.app */;
@@ -313,6 +316,7 @@
 				F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				F6958AC82F435AFA00610F2D /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				F6958ACB2F435C4200610F2D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				F638A84D2F78B8D9007CDFC3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F6638D412DCD6C3F009D95C3 /* Products */;
@@ -532,7 +536,7 @@
 		F6638D642DCD6C40009D95C3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = normsy;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Norma/Norma.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -555,7 +559,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -571,7 +575,7 @@
 		F6638D652DCD6C40009D95C3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = normsy;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Norma/Norma.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -594,7 +598,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -696,7 +700,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma.NormaShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -730,7 +734,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.myndfruit.Norma.NormaShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -798,6 +802,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F638A84D2F78B8D9007CDFC3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/plaid/plaid-link-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.4.7;
+			};
+		};
 		F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
@@ -833,6 +845,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F638A84E2F78B8D9007CDFC3 /* LinkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F638A84D2F78B8D9007CDFC3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
+			productName = LinkKit;
+		};
 		F64F88152E3BECD3002D2FC5 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F64F88142E3BECD3002D2FC5 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;

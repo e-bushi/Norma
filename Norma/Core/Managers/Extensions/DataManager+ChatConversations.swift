@@ -80,11 +80,24 @@ extension DataManager {
             throw EncryptionError.noEncryptionKeys
         }
 
+        // Fetches recent 8 by default
         let encryptableConversations = try await supabaseService.fetchEncryptableConversations(userId: userId)
 
-        // Decrypt locally for display
         let conversations = encryptableConversations.compactMap { $0.toChatConversation(using: masterKey) }
         print("✅ Fetched \(conversations.count) conversations with encryption for user: \(userId)")
+        return conversations
+    }
+
+    /// Fetch ALL conversations (for "See All" in chat menu)
+    func fetchEveryConversationWithEncryption(userId: String) async throws -> [ChatConversation] {
+        guard let masterKey = getCurrentMasterKey() else {
+            throw EncryptionError.noEncryptionKeys
+        }
+
+        let encryptableConversations = try await supabaseService.fetchAllEncryptableConversations(userId: userId)
+
+        let conversations = encryptableConversations.compactMap { $0.toChatConversation(using: masterKey) }
+        print("✅ Fetched ALL \(conversations.count) conversations for user: \(userId)")
         return conversations
     }
 

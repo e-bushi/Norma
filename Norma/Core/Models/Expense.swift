@@ -7,11 +7,31 @@
 
 import Foundation
 
+struct BankDetail: Codable, Equatable {
+    let transactionId: String
+    let accountId: String
+    let pendingTransactionId: String?
+    let institutionName: String?
+    let merchantNameRaw: String?
+    let authorizedDate: String?
+    let postedDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case transactionId = "transaction_id"
+        case accountId = "account_id"
+        case pendingTransactionId = "pending_transaction_id"
+        case institutionName = "institution_name"
+        case merchantNameRaw = "merchant_name_raw"
+        case authorizedDate = "authorized_date"
+        case postedDate = "posted_date"
+    }
+}
+
 struct Expense: Identifiable, Codable, Equatable {
     var id: String?
     var userId: String
     let name: String
-    let amount: Double
+    var amount: Double
     let expenseDate: String
     let budgetId: String?
     let billId: String?
@@ -25,7 +45,10 @@ struct Expense: Identifiable, Codable, Equatable {
     var updatedAt: String?
     var notes: String?
     var attachmentUrls: [String]
-    
+    var bankDetail: BankDetail?
+    var source: String
+    var pending: Bool
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -44,8 +67,11 @@ struct Expense: Identifiable, Codable, Equatable {
         case updatedAt = "updated_at"
         case notes
         case attachmentUrls = "attachment_urls"
+        case bankDetail = "bank_detail"
+        case source
+        case pending
     }
-    
+
     init(
         id: String? = nil,
         userId: String,
@@ -63,7 +89,10 @@ struct Expense: Identifiable, Codable, Equatable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         notes: String? = nil,
-        attachmentUrls: [String] = []
+        attachmentUrls: [String] = [],
+        bankDetail: BankDetail? = nil,
+        source: String = "manual",
+        pending: Bool = false
     ) {
         self.id = id
         self.userId = userId
@@ -82,6 +111,9 @@ struct Expense: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.notes = notes
         self.attachmentUrls = attachmentUrls
+        self.bankDetail = bankDetail
+        self.source = source
+        self.pending = pending
     }
 }
 

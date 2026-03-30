@@ -403,46 +403,47 @@ struct DetailRowView: View {
 // Simple flow layout for tags
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
-    
+    var verticalSpacing: CGFloat?
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(in: proposal.replacingUnspecifiedDimensions().width, subviews: subviews, spacing: spacing)
+        let result = FlowResult(in: proposal.replacingUnspecifiedDimensions().width, subviews: subviews, hSpacing: spacing, vSpacing: verticalSpacing ?? spacing)
         return result.size
     }
-    
+
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
+        let result = FlowResult(in: bounds.width, subviews: subviews, hSpacing: spacing, vSpacing: verticalSpacing ?? spacing)
         for (index, frame) in result.frames.enumerated() {
             subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
         }
     }
-    
+
     struct FlowResult {
         var size: CGSize
         var frames: [CGRect]
-        
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+
+        init(in maxWidth: CGFloat, subviews: Subviews, hSpacing: CGFloat, vSpacing: CGFloat) {
             var frames: [CGRect] = []
             var currentX: CGFloat = 0
             var currentY: CGFloat = 0
             var lineHeight: CGFloat = 0
             var maxX: CGFloat = 0
-            
+
             for subview in subviews {
                 let viewSize = subview.sizeThatFits(.unspecified)
-                
+
                 if currentX + viewSize.width > maxWidth && currentX > 0 {
                     currentX = 0
-                    currentY += lineHeight + spacing
+                    currentY += lineHeight + vSpacing
                     lineHeight = 0
                 }
-                
+
                 frames.append(CGRect(origin: CGPoint(x: currentX, y: currentY), size: viewSize))
                 lineHeight = max(lineHeight, viewSize.height)
-                currentX += viewSize.width + spacing
+                currentX += viewSize.width + hSpacing
                 maxX = max(maxX, currentX)
             }
-            
-            self.size = CGSize(width: maxX - spacing, height: currentY + lineHeight)
+
+            self.size = CGSize(width: maxX - hSpacing, height: currentY + lineHeight)
             self.frames = frames
         }
     }

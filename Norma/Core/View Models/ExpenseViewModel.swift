@@ -53,6 +53,13 @@ class ExpenseViewModel: ObservableObject {
         self.dataManager = dataManager
         self.sessionViewModel = sessionViewModel
         
+        // Default to current month
+        let calendar = Calendar.current
+        let now = Date()
+        if let monthStart = calendar.dateInterval(of: .month, for: now) {
+            selectedDateRange = monthStart
+        }
+
         setupObservers()
         loadExpenses()
     }

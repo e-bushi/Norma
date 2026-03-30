@@ -13,8 +13,10 @@ struct RootView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var appCoordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     @ObservedObject private var rewardQueue = RewardQueueManager.shared
+    @ObservedObject private var plaidService = PlaidService.shared
 
     var body: some View {
         ViewModelContainer(dataManager: dataManager, sessionViewModel: sessionViewModel) {
@@ -34,14 +36,23 @@ struct RootView: View {
         }
         .task(id: sessionViewModel.currentUser?.userId) {
             // Load user data when main app becomes active (only once per user session)
-            if let _ = sessionViewModel.currentUser?.userId {
+            if let userId = sessionViewModel.currentUser?.userId {
                 do {
                     // Refresh user profile first
                     await sessionViewModel.fetchUserProfile()
                     // Then fetch financial data
                     try await dataManager.fetchAllFinancialData()
+                    // Sync Plaid transactions if connected
+                    await syncPlaidBalances(userId: userId)
                 } catch {
                     print("Failed to load financial data: \(error)")
+                }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active, let userId = sessionViewModel.currentUser?.userId {
+                Task {
+                    await syncPlaidBalances(userId: userId)
                 }
             }
         }
@@ -50,6 +61,31 @@ struct RootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled()
+        }
+    }
+
+    private func syncPlaidBalances(userId: String) async {
+        do {
+            let plaidItems = try await dataManager.supabaseService.fetchPlaidItems(userId: userId)
+            guard let plaidItem = plaidItems.first else { return }
+
+            // Populate institution info
+            await MainActor.run {
+                plaidService.institutionName = plaidItem.institutionName
+                plaidService.itemId = plaidItem.itemId
+            }
+
+            // Fetch balances
+            let accounts = try await PlaidService.shared.fetchBalances(userId: userId)
+
+            await MainActor.run {
+                plaidService.connectedAccounts = accounts
+                plaidService.isConnected = true
+            }
+
+            print("Plaid sync complete: \(accounts.count) accounts loaded")
+        } catch {
+            print("Plaid sync failed: \(error)")
         }
     }
 }

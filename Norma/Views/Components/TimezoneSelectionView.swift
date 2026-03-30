@@ -9,6 +9,8 @@ import SwiftUI
 
 struct TimezoneSelectionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
     @ObservedObject private var timezoneManager = TimezoneManager.shared
 
     @State private var searchText = ""
@@ -68,7 +70,10 @@ struct TimezoneSelectionView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
-            .background(Color("NormaBackground"))
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
             .navigationTitle("Timezones")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search cities...")

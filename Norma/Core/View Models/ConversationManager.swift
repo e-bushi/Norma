@@ -60,6 +60,21 @@ class ConversationManager: ObservableObject {
         isLoading = false
     }
 
+    /// Load all conversations (triggered by "See All")
+    func loadAllConversations() async {
+        guard let userId = sessionViewModel.currentUser?.userId else { return }
+
+        isLoading = true
+        do {
+            conversations = try await dataManager.fetchEveryConversationWithEncryption(userId: userId)
+            print("✅ ConversationManager: Loaded all \(conversations.count) conversations")
+        } catch {
+            self.error = error
+            print("❌ ConversationManager: Failed to load all conversations: \(error.localizedDescription)")
+        }
+        isLoading = false
+    }
+
     // MARK: - Conversation Creation
 
     /// Create a new conversation and set it as current

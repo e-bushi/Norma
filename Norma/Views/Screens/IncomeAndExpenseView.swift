@@ -16,6 +16,8 @@ struct IncomeAndExpenseView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
+    @Environment(\.colorScheme) private var colorScheme
 
     // Track selected date for calendar integration
     @State private var selectedDate: Date = Date()
@@ -203,7 +205,11 @@ struct IncomeAndExpenseView: View {
                 }
                 .padding(.bottom)
             }
-            .background(Color("NormaBackground"))
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
+            .scrollContentBackground(.hidden)
             .scrollIndicators(.hidden)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

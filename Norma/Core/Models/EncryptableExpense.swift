@@ -34,6 +34,9 @@ struct EncryptableExpense: Identifiable, Codable {
     var createdAt: String?
     var updatedAt: String?
     var attachmentUrls: [String]
+    var bankDetail: BankDetail?
+    var source: String
+    var pending: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -53,6 +56,9 @@ struct EncryptableExpense: Identifiable, Codable {
         case updatedAt = "updated_at"
         case notes
         case attachmentUrls = "attachment_urls"
+        case bankDetail = "bank_detail"
+        case source
+        case pending
     }
 
     /// Decrypt and convert to Expense for display
@@ -87,7 +93,10 @@ struct EncryptableExpense: Identifiable, Codable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             notes: decryptedNotes,
-            attachmentUrls: attachmentUrls
+            attachmentUrls: attachmentUrls,
+            bankDetail: bankDetail,
+            source: source,
+            pending: pending
         )
     }
 }
@@ -111,7 +120,10 @@ extension EncryptableExpense {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         notes: String? = nil,
-        attachmentUrls: [String] = []
+        attachmentUrls: [String] = [],
+        bankDetail: BankDetail? = nil,
+        source: String = "manual",
+        pending: Bool = false
     ) {
         self.id = id
         self.userId = userId
@@ -130,5 +142,8 @@ extension EncryptableExpense {
         self.updatedAt = updatedAt
         self.notes = notes
         self.attachmentUrls = attachmentUrls
+        self.bankDetail = bankDetail
+        self.source = source
+        self.pending = pending
     }
 }

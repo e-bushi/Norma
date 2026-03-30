@@ -127,7 +127,7 @@ struct ChatEmptyStateView: View {
                     .animation(.easeOut(duration: 0.5), value: subGreetingVisible)
 
                 // Timezone capsules
-                FlowLayout(spacing: 8, verticalSpacing: 8) {
+                FlowLayout(spacing: 8) {
                     // Existing timezone capsules
                     ForEach(Array(timezoneManager.selectedTimezones.prefix(3).enumerated()), id: \.element.id) { index, timezone in
                         Button {

@@ -109,6 +109,7 @@ struct ProfileSettings: Codable, Equatable {
     var monthlyBudgetAlert: Bool
     var darkModeEnabled: Bool
     var hasReceivedWelcome: Bool
+    var arcAccountId: String?
 
     enum CodingKeys: String, CodingKey {
         case currency
@@ -121,6 +122,7 @@ struct ProfileSettings: Codable, Equatable {
         case monthlyBudgetAlert = "monthly_budget_alert"
         case darkModeEnabled = "dark_mode_enabled"
         case hasReceivedWelcome = "has_received_welcome"
+        case arcAccountId = "arc_account_id"
     }
 
     init(
@@ -133,7 +135,8 @@ struct ProfileSettings: Codable, Equatable {
         billReminderDays: Int = 3,
         monthlyBudgetAlert: Bool = true,
         darkModeEnabled: Bool = false,
-        hasReceivedWelcome: Bool = false
+        hasReceivedWelcome: Bool = false,
+        arcAccountId: String? = nil
     ) {
         self.currency = currency
         self.spendingCurrency = spendingCurrency
@@ -145,6 +148,7 @@ struct ProfileSettings: Codable, Equatable {
         self.monthlyBudgetAlert = monthlyBudgetAlert
         self.darkModeEnabled = darkModeEnabled
         self.hasReceivedWelcome = hasReceivedWelcome
+        self.arcAccountId = arcAccountId
     }
 
     // Custom decoder to handle missing fields with default values
@@ -161,5 +165,6 @@ struct ProfileSettings: Codable, Equatable {
         monthlyBudgetAlert = try container.decodeIfPresent(Bool.self, forKey: .monthlyBudgetAlert) ?? true
         darkModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .darkModeEnabled) ?? false
         hasReceivedWelcome = try container.decodeIfPresent(Bool.self, forKey: .hasReceivedWelcome) ?? false
+        arcAccountId = try container.decodeIfPresent(String.self, forKey: .arcAccountId)
     }
 }

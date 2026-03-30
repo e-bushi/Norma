@@ -10,7 +10,9 @@ import SceneKit
 
 struct ArcCountView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
     let arcCount: Int
     let freedomFund: Double
     let totalMonthlyBills: Double
@@ -25,7 +27,12 @@ struct ArcCountView: View {
     @State private var heroVisible = false
     @State private var arcCountVisible = false
     @State private var statsVisible = false
+    @State private var capsuleVisibility: [Bool] = [false, false]
     @State private var monthsHeaderVisible = false
+    @State private var paceAnimating = false
+    @State private var paceTitleVisible = false
+    @State private var milestoneAnimating = false
+    @State private var milestoneTitleVisible = false
     @State private var coinVisibility: [Bool] = Array(repeating: false, count: 24)
 
     // Haptic generator
@@ -43,6 +50,41 @@ struct ArcCountView: View {
         guard totalMonthlyBills > 0 else { return 0 }
         let nextArcTarget = Double(arcCount + 1) * totalMonthlyBills
         return max(0, nextArcTarget - freedomFund)
+    }
+
+    // Spending pace
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+
+    private var daysElapsedThisMonth: Int {
+        max(1, Calendar.current.component(.day, from: Date()))
+    }
+
+    private var daysInMonth: Int {
+        Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
+    }
+
+    private var dailySpendingPace: Double {
+        expenseViewModel.currentMonthExpenses / Double(daysElapsedThisMonth)
+    }
+
+    private var projectedMonthlySpend: Double {
+        dailySpendingPace * Double(daysInMonth)
+    }
+
+    private var nextMilestoneMonth: String {
+        let nextIndex = arcCount // 0-based, so arcCount gives us the next uncovered
+        guard nextIndex < upcomingMonths.count else { return "" }
+        let month = upcomingMonths[nextIndex]
+        return "\(month.shortName) \(month.year)"
+    }
+
+    /// Can the user reach the next arc based on current saving pace?
+    /// Compares freedom fund growth needed vs projected remaining income after spending
+    private var canReachNextMilestone: Bool {
+        guard totalMonthlyBills > 0 else { return false }
+        let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        let projectedLeftover = monthlyIncome - projectedMonthlySpend
+        return projectedLeftover >= amountToNextArc
     }
 
     private func formatCurrency(_ value: Double) -> String {
@@ -93,6 +135,40 @@ struct ArcCountView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Freedom Fund info
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Freedom Fund amount + edit
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showFreedomFundEdit = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("Freedom Fund")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(.secondary)
+
+                                Text(formatCurrency(freedomFund))
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                                    .foregroundColor(.primary)
+
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary.opacity(0.4))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .glassEffect(in: Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .opacity(capsuleVisibility[0] ? 1 : 0)
+                        .scaleEffect(capsuleVisibility[0] ? 1 : 0.8, anchor: .leading)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: capsuleVisibility[0])
+
+                        // To next arc
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                     // Wave text headline
                     ColoredWaveTextView(
                         words: waveWords,
@@ -100,144 +176,179 @@ struct ArcCountView: View {
                         isAnimating: waveAnimating,
                         alignment: .leading
                     )
-                    .padding(.top, 16)
-                    .onAppear { waveAnimating = true }
 
-                    // Freedom Fund card with coin + arc count
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Header row: label + edit
-                        HStack {
-                            Text("Freedom Fund")
-                                .font(.normaInput(13))
-                                .foregroundColor(.secondary.opacity(0.6))
+                    // Coverage range capsules
+                    if arcCount > 0 {
+                        let firstCovered = upcomingMonths.first(where: { $0.isCovered })
+                        let lastCovered = upcomingMonths.last(where: { $0.isCovered })
 
-                            Spacer()
+                        let isSingleMonth = firstCovered?.shortName == lastCovered?.shortName && firstCovered?.year == lastCovered?.year
+                        let nextUncovered = upcomingMonths.first(where: { !$0.isCovered })
 
-                            Button {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                showFreedomFundEdit = true
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.secondary.opacity(0.4))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                        GlassEffectContainer(spacing: 0) {
+                            HStack(spacing: isSingleMonth ? 8 : -8) {
+                                // First covered month
+                                if let first = firstCovered {
+                                    HStack(spacing: 6) {
+                                        Text(first.shortName)
+                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                            .foregroundColor(.primary)
 
-                        // Hero amount
-                        Text(formatCurrency(freedomFund))
-                            .font(.normaHeadline(46))
-                            .foregroundColor(.primary)
-                            .minimumScaleFactor(0.7)
-                            .lineLimit(1)
+                                        Text(String(first.year))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                            .foregroundColor(.primary.opacity(0.7))
 
-                        // Dashed divider
-                        DashedDividerShape()
-                            .stroke(Color.gray.opacity(0.15), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                            .frame(height: 1)
-                            .padding(.vertical, 2)
+                                        Text("·")
+                                            .foregroundColor(.secondary.opacity(0.3))
 
-                        // Coin + arc count + bills info
-                        HStack(spacing: 12) {
-                            // Spinning coin with glow
-                            ZStack {
-                                Circle()
-                                    .fill(CoinTierService.currentCoinTier(for: arcCount).glowColor.opacity(0.10))
-                                    .frame(width: 48, height: 48)
-                                    .blur(radius: 10)
-
-                                HeroCoin3DView(fileName: CoinTierService.currentCoinFileName(for: arcCount))
-                                    .id(CoinTierService.currentCoinFileName(for: arcCount))
-                                    .frame(width: 36, height: 36)
-                            }
-                            .scaleEffect(heroVisible ? 1 : 0)
-                            .opacity(heroVisible ? 1 : 0)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 4) {
-                                    Text("\(arcCount)")
-                                        .font(.normaFinancial(16))
-                                        .foregroundColor(.primary)
-                                    Text(arcCount == 1 ? "arc" : "arcs")
-                                        .font(.normaInput(13))
-                                        .foregroundColor(.secondary.opacity(0.5))
+                                        Text(formatCurrency(totalMonthlyBills))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .glassEffect(in: Capsule())
+                                    .zIndex(1)
                                 }
 
-                                Text("\(formatCurrency(totalMonthlyBills))/mo in bills")
-                                    .font(.normaInput(12))
-                                    .foregroundColor(.secondary.opacity(0.5))
-                            }
-                            .opacity(arcCountVisible ? 1 : 0)
+                                if !isSingleMonth, let last = lastCovered {
+                                    // Connecting bar
+                                    Color.clear
+                                        .frame(width: 40, height: 8)
+                                        .glassEffect(in: RoundedRectangle(cornerRadius: 4))
+                                        .zIndex(0)
 
-                            Spacer()
+                                    // Last covered month
+                                    HStack(spacing: 6) {
+                                        Text(last.shortName)
+                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                            .foregroundColor(.primary)
 
-                            HStack(spacing: 5) {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color("NormaPastelTeal"))
-                                Text("\(formatCurrency(amountToNextArc)) to next")
-                                    .font(.normaInput(12))
-                                    .foregroundColor(Color("NormaPastelTeal"))
+                                        Text(String(last.year))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                            .foregroundColor(.primary.opacity(0.7))
+
+                                        Text("·")
+                                            .foregroundColor(.secondary.opacity(0.3))
+
+                                        Text(formatCurrency(totalMonthlyBills * Double(arcCount)))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .glassEffect(in: Capsule())
+                                    .zIndex(1)
+                                }
+
+                                // Next uncovered month — dashed
+                                if isSingleMonth, let next = nextUncovered {
+                                    HStack(spacing: 6) {
+                                        Text(next.shortName)
+                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                            .foregroundColor(.secondary.opacity(0.4))
+
+                                        Text(String(next.year))
+                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                            .foregroundColor(.secondary.opacity(0.3))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                                    )
+                                }
                             }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .opacity(monthsHeaderVisible ? 1 : 0)
+                        .scaleEffect(monthsHeaderVisible ? 1 : 0.9, anchor: .leading)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: monthsHeaderVisible)
+                    }
+
+                    // Daily pace
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Your pace")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .textCase(.uppercase)
+                            .tracking(0.5)
+                            .opacity(paceTitleVisible ? 1 : 0)
+                            .offset(y: paceTitleVisible ? 0 : 10)
+                            .animation(.easeOut(duration: 0.4), value: paceTitleVisible)
+
+                        WaveTextView(
+                            text: "You're spending about \(formatCurrency(dailySpendingPace)) per day. At this rate you'll spend \(formatCurrency(projectedMonthlySpend)) by month end.",
+                            font: .custom(FontFamily.Rubik.regular, size: 18),
+                            color: .primary.opacity(0.7),
+                            isAnimating: paceAnimating,
+                            alignment: .leading
+                        )
+                        .lineSpacing(4)
+                    }
+
+                    // Next milestone
+                    if totalMonthlyBills > 0 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Next milestone")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .textCase(.uppercase)
+                                .tracking(0.5)
+                                .opacity(milestoneTitleVisible ? 1 : 0)
+                                .offset(y: milestoneTitleVisible ? 0 : 10)
+                                .animation(.easeOut(duration: 0.4), value: milestoneTitleVisible)
+
+                            WaveTextView(
+                                text: canReachNextMilestone
+                                    ? "Save \(formatCurrency(amountToNextArc)) more to cover \(nextMilestoneMonth). You're on track based on your spending pace."
+                                    : "Save \(formatCurrency(amountToNextArc)) more to cover \(nextMilestoneMonth). At your current pace, this milestone may take a bit longer.",
+                                font: .custom(FontFamily.Rubik.regular, size: 18),
+                                color: .primary.opacity(0.7),
+                                isAnimating: milestoneAnimating,
+                                alignment: .leading
+                            )
+                            .lineSpacing(4)
                         }
                     }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.clear)
-                                .glassEffect(in: RoundedRectangle(cornerRadius: 20))
-
-                            Canvas { context, size in
-                                let origin = CGPoint(x: size.width, y: size.height)
-                                let ringCount = 6
-                                let maxRadius: CGFloat = 180
-                                let ringSpacing = maxRadius / CGFloat(ringCount)
-                                let tierColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
-
-                                for i in 1...ringCount {
-                                    let radius = CGFloat(i) * ringSpacing
-                                    let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
-                                    let rect = CGRect(
-                                        x: origin.x - radius,
-                                        y: origin.y - radius,
-                                        width: radius * 2,
-                                        height: radius * 2
-                                    )
-                                    context.stroke(
-                                        Path(ellipseIn: rect),
-                                        with: .color(tierColor.opacity(opacity)),
-                                        lineWidth: 1
-                                    )
-                                }
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .allowsHitTesting(false)
-                        }
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.gray.opacity(0.12), lineWidth: 0.5)
-                    )
-                    .opacity(statsVisible ? 1 : 0)
-                    .offset(y: statsVisible ? 0 : 15)
-
-                    // Months covered — timeline calendar
-                    ArcTimelineCalendarView(
-                        upcomingMonths: upcomingMonths,
-                        coinVisibility: coinVisibility,
-                        monthsHeaderVisible: monthsHeaderVisible,
-                        totalMonthlyBills: totalMonthlyBills,
-                        currency: currency
-                    )
 
                     Spacer(minLength: 40)
                 }
                 .padding(.horizontal, 24)
             }
-            .background(Color("NormaBackground"))
+            .background {
+                ZStack(alignment: .bottomTrailing) {
+                    CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+
+                    Canvas { context, size in
+                        let origin = CGPoint(x: size.width, y: size.height)
+                        let ringCount = 8
+                        let maxRadius: CGFloat = 220
+                        let ringSpacing = maxRadius / CGFloat(ringCount)
+                        let tierColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
+
+                        for i in 1...ringCount {
+                            let radius = CGFloat(i) * ringSpacing
+                            let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                            let rect = CGRect(
+                                x: origin.x - radius,
+                                y: origin.y - radius,
+                                width: radius * 2,
+                                height: radius * 2
+                            )
+                            context.stroke(
+                                Path(ellipseIn: rect),
+                                with: .color(tierColor.opacity(opacity)),
+                                lineWidth: 1
+                            )
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+                .ignoresSafeArea()
+            }
+            .scrollContentBackground(.hidden)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -257,28 +368,11 @@ struct ArcCountView: View {
                     }
                 }
 
-                ToolbarItem(placement: .principal) {
-                    Text("My Arcs")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 20))
-                        .foregroundColor(.primary)
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        showFreedomFundEdit = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                }
             }
         }
         .sheet(isPresented: $showFreedomFundEdit) {
             FreedomFundEditSheet()
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
@@ -298,14 +392,44 @@ struct ArcCountView: View {
                 arcCountVisible = true
             }
 
-            // Stats grid fade in
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.7)) {
-                statsVisible = true
+            // Capsules stagger in
+            for index in 0..<capsuleVisibility.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + (Double(index) * 0.2)) {
+                    capsuleVisibility[index] = true
+                    impactGenerator.impactOccurred(intensity: 0.4)
+                }
             }
 
-            // Months header
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.9)) {
-                monthsHeaderVisible = true
+            // Wave text after capsules
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                waveAnimating = true
+            }
+
+            // Timeline capsules after big text finishes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    monthsHeaderVisible = true
+                }
+            }
+
+            // Pace title
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                paceTitleVisible = true
+            }
+
+            // Pace wave text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                paceAnimating = true
+            }
+
+            // Milestone title
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.6) {
+                milestoneTitleVisible = true
+            }
+
+            // Milestone wave text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
+                milestoneAnimating = true
             }
 
             // Staggered coin grid animations with haptics
@@ -325,15 +449,24 @@ struct ArcCountView: View {
 // MARK: - Freedom Fund Edit Sheet
 struct FreedomFundEditSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
+    @ObservedObject private var plaidService = PlaidService.shared
 
     @State private var freedomFundText: String = ""
     @State private var isSaving = false
+    @State private var useLinkedAccount: Bool = false
+    @State private var selectedAccountId: String?
     @FocusState private var isTextFieldFocused: Bool
 
     private var currentFreedomFund: Double {
         sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    private var currentArcAccountId: String? {
+        sessionViewModel.currentUser?.settings.arcAccountId
     }
 
     private var currency: String {
@@ -344,112 +477,261 @@ struct FreedomFundEditSheet: View {
         CurrencyData.getSymbol(for: currency)
     }
 
+    private var hasPlaidAccounts: Bool {
+        !plaidService.connectedAccounts.isEmpty
+    }
+
+    private var selectedAccountBalance: Double? {
+        guard let accountId = selectedAccountId else { return nil }
+        return plaidService.connectedAccounts.first { $0.accountId == accountId }?.balances.current
+    }
+
+    @State private var showFundInfo = false
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "banknote.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(Color("NormaPastelTeal"))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Source capsules at top — only show if Plaid accounts exist
+                    if hasPlaidAccounts {
+                        HStack(spacing: 10) {
+                            Button {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    useLinkedAccount = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        isTextFieldFocused = true
+                                    }
+                                }
+                            } label: {
+                                Text("Manual")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(!useLinkedAccount ? .primary : .secondary.opacity(0.5))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 9)
+                                    .background(
+                                        Group {
+                                            if !useLinkedAccount {
+                                                Capsule()
+                                                    .fill(.clear)
+                                                    .glassEffect(in: Capsule())
+                                            }
+                                        }
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                !useLinkedAccount ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.2),
+                                                style: !useLinkedAccount ? StrokeStyle(lineWidth: 0.5) : StrokeStyle(lineWidth: 1, dash: [5, 3])
+                                            )
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
 
-                    Text("Update Freedom Fund")
-                        .font(.custom(FontFamily.Rubik.medium, size: 18))
-                        .foregroundColor(.primary)
+                            Button {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    useLinkedAccount = true
+                                    isTextFieldFocused = false
+                                }
+                            } label: {
+                                Text("Linked Account")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(useLinkedAccount ? .primary : .secondary.opacity(0.5))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 9)
+                                    .background(
+                                        Group {
+                                            if useLinkedAccount {
+                                                Capsule()
+                                                    .fill(.clear)
+                                                    .glassEffect(in: Capsule())
+                                            }
+                                        }
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                useLinkedAccount ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.2),
+                                                style: useLinkedAccount ? StrokeStyle(lineWidth: 0.5) : StrokeStyle(lineWidth: 1, dash: [5, 3])
+                                            )
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.top, 16)
+                    }
 
-                    Text("Enter the total amount you have saved for bills")
-                        .font(.normaInput(14))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                    // Hero amount — left aligned, bigger
+                    VStack(alignment: .leading, spacing: 8) {
+                        if useLinkedAccount, let balance = selectedAccountBalance {
+                            Text(formatNumberWithoutCurrency(balance))
+                                .font(.normaHeadline(72))
+                                .foregroundColor(.primary)
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
+                        } else {
+                            TextField("0", text: $freedomFundText)
+                                .font(.normaHeadline(72))
+                                .keyboardType(.decimalPad)
+                                .focused($isTextFieldFocused)
+                                .multilineTextAlignment(.leading)
+                                .minimumScaleFactor(0.5)
+                        }
+
+                        Text(useLinkedAccount ? "from linked account" : "How much is in your Freedom Fund?")
+                            .font(.normaInput(14))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+
+                    if useLinkedAccount {
+                        // Account picker
+                        VStack(spacing: 6) {
+                            ForEach(plaidService.connectedAccounts) { account in
+                                Button {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedAccountId = account.accountId
+                                    }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: selectedAccountId == account.accountId ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(selectedAccountId == account.accountId ? Color("NormaPastelTeal") : .secondary.opacity(0.3))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 6) {
+                                                Text(account.name)
+                                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                                                    .foregroundColor(.primary)
+
+                                                if let mask = account.mask {
+                                                    Text("••\(mask)")
+                                                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                                                        .foregroundColor(.secondary.opacity(0.5))
+                                                }
+                                            }
+
+                                            if let current = account.balances.current {
+                                                Text(formatCurrencyFull(current))
+                                                    .font(.custom(FontFamily.Rubik.regular, size: 13))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(.clear)
+                                            .glassEffect(in: RoundedRectangle(cornerRadius: 14))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(selectedAccountId == account.accountId ? Color("NormaPastelTeal").opacity(0.4) : Color.secondary.opacity(0.1), lineWidth: selectedAccountId == account.accountId ? 1.5 : 0.5)
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                    }
                 }
-                .padding(.top, 24)
-
-                // Amount input
-                HStack(spacing: 8) {
-                    Text(currencySymbol)
-                        .font(.custom(FontFamily.Rubik.medium, size: 24))
-                        .foregroundColor(.primary)
-
-                    TextField("0", text: $freedomFundText)
-                        .font(.custom(FontFamily.Rubik.regular, size: 24))
-                        .keyboardType(.decimalPad)
-                        .focused($isTextFieldFocused)
-                        .multilineTextAlignment(.leading)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.gray.opacity(0.1))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            isTextFieldFocused ? Color("NormaPastelTeal") : Color.clear,
-                            lineWidth: 2
-                        )
-                )
                 .padding(.horizontal, 24)
-
-                Spacer()
-
-                // Save button
+                .padding(.bottom, 100)
+            }
+            .safeAreaInset(edge: .bottom) {
+                // Save button pinned at bottom
                 Button {
                     saveChanges()
                 } label: {
                     HStack {
                         if isSaving {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .tint(.primary)
                                 .scaleEffect(0.8)
                         } else {
                             Text("Save")
                                 .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                .foregroundColor(.primary)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color("NormaPastelTeal"))
+                        RoundedRectangle(cornerRadius: 28)
+                            .fill(.clear)
+                            .glassEffect(in: RoundedRectangle(cornerRadius: 28))
                     )
-                    .foregroundColor(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28)
+                            .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                    )
                 }
-                .disabled(isSaving)
+                .disabled(isSaving || (useLinkedAccount && selectedAccountId == nil))
+                .opacity(isSaving || (useLinkedAccount && selectedAccountId == nil) ? 0.4 : 1)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
             }
-            .background(Color("NormaBackground"))
-            .navigationTitle("")
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
+            .scrollContentBackground(.hidden)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Freedom Fund")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
-                        .foregroundColor(.primary)
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showFundInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.secondary)
+                    }
+                    .popover(isPresented: $showFundInfo, arrowEdge: .top) {
+                        FreedomFundInfoPopover()
+                            .presentationCompactAdaptation(.popover)
+                    }
                 }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.secondary)
+                        Text("Done")
+                            .font(.custom(FontFamily.Rubik.medium, size: 16))
+                            .foregroundColor(.primary)
                     }
                 }
             }
         }
         .onAppear {
-            // Pre-populate with current value
-            if currentFreedomFund > 0 {
-                freedomFundText = formatNumberWithoutCurrency(currentFreedomFund)
-            }
-
-            // Auto-focus
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTextFieldFocused = true
+            if let arcAccountId = currentArcAccountId,
+               plaidService.connectedAccounts.contains(where: { $0.accountId == arcAccountId }) {
+                useLinkedAccount = true
+                selectedAccountId = arcAccountId
+            } else {
+                useLinkedAccount = false
+                if currentFreedomFund > 0 {
+                    freedomFundText = formatNumberWithoutCurrency(currentFreedomFund)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isTextFieldFocused = true
+                }
             }
         }
+    }
+
+    private func formatCurrencyFull(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
     private func formatNumberWithoutCurrency(_ value: Double) -> String {
@@ -470,25 +752,30 @@ struct FreedomFundEditSheet: View {
 
         isSaving = true
 
-        let newFreedomFund = parseNumber(freedomFundText)
-
-        // Create updated settings
         var updatedSettings = currentUser.settings
-        updatedSettings.freedomFund = newFreedomFund
-
-        // Create updated profile - update BOTH settings and direct column
         var updatedProfile = currentUser
+
+        if useLinkedAccount, let accountId = selectedAccountId, let balance = selectedAccountBalance {
+            // Link to account — set the balance as freedom fund and store account ID
+            updatedSettings.arcAccountId = accountId
+            updatedSettings.freedomFund = balance
+            updatedProfile.freedomFund = balance
+        } else {
+            // Manual — clear linked account
+            let newFreedomFund = parseNumber(freedomFundText)
+            updatedSettings.arcAccountId = nil
+            updatedSettings.freedomFund = newFreedomFund
+            updatedProfile.freedomFund = newFreedomFund
+        }
+
         updatedProfile.settings = updatedSettings
-        updatedProfile.freedomFund = newFreedomFund  // Also update direct column for Edge Function
 
         Task {
-            // Use arc check version to trigger rewards when arcs increase
             await sessionViewModel.updateUserProfileWithArcCheck(updatedProfile, bills: billViewModel.bills)
 
             await MainActor.run {
                 isSaving = false
 
-                // Haptic feedback
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
 
@@ -741,6 +1028,55 @@ struct ArcInfoPopover: View {
     }
 }
 
+// MARK: - Freedom Fund Info Popover
+struct FreedomFundInfoPopover: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(Color("NormaPastelTeal"))
+
+                Text("Freedom Fund")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .foregroundColor(.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Your Freedom Fund is the total amount you have saved to cover bills.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Arcs are calculated by dividing this amount by your total monthly bills. The more you save, the more months you're covered.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            HStack(spacing: 10) {
+                Image(systemName: "building.columns.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color("NormaPastelPurple"))
+
+                Text("Linked Account")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(.primary)
+            }
+
+            Text("Connect a bank account to automatically sync your balance as your Freedom Fund. No more manual updates.")
+                .font(.normaInput(14))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 300)
+        .background(Color("NormaBackground"))
+    }
+}
+
 // MARK: - Arc Timeline Calendar
 
 struct ArcTimelineCalendarView: View {
@@ -783,83 +1119,64 @@ struct ArcTimelineCalendarView: View {
         return sections
     }
 
-    @State private var deckIndices: [Int: Int] = [:]
+    private func coveredMonths(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))] {
+        section.months.filter { $0.month.isCovered }
+    }
 
-    private func isYearFullyCovered(_ section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> Bool {
-        section.months.allSatisfy { $0.month.isCovered }
+    private func firstMonth(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> (index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))? {
+        section.months.first
+    }
+
+    private func lastCoveredMonth(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> (index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))? {
+        section.months.last(where: { $0.month.isCovered })
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 24) {
             ForEach(Array(yearSections.enumerated()), id: \.element.year) { sectionIndex, section in
-                let isLastSection = sectionIndex == yearSections.count - 1
-                let fullyCovers = isYearFullyCovered(section)
+                let covered = coveredMonths(in: section)
+                let hasCoverage = !covered.isEmpty
+                let first = firstMonth(in: section)
+                let lastCovered = lastCoveredMonth(in: section)
 
-                HStack(alignment: .top, spacing: 0) {
-                    // Timeline column — one dot per year
-                    VStack(spacing: 0) {
-                        Circle()
-                            .fill(yearDotColor(for: section))
-                            .frame(width: 10, height: 10)
-                            .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 12) {
+                    if hasCoverage, let first = first, let last = lastCovered {
+                        let showBar = first.index != last.index
 
-                        if !isLastSection {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.12))
-                                .frame(width: 1.5)
-                                .frame(maxHeight: .infinity)
-                        }
-                    }
-                    .frame(width: 20)
+                        GlassEffectContainer(spacing: 4) {
+                            HStack(spacing: 6) {
+                                // Start month
+                                Text(first.month.shortName)
+                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .glassEffect(in: Capsule())
 
-                    // Year label + content
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Year header
-                        Text(String(section.year))
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                            .foregroundColor(.secondary.opacity(0.5))
-                            .opacity(monthsHeaderVisible ? 1 : 0)
-
-                        if fullyCovers {
-                            // Entire year covered — card deck
-                            ArcYearDeckView(
-                                months: section.months,
-                                currentIndex: Binding(
-                                    get: { deckIndices[section.year] ?? 0 },
-                                    set: { deckIndices[section.year] = $0 }
-                                ),
-                                coinVisibility: coinVisibility,
-                                formatAmount: formatCumulativeAmount
-                            )
-                        } else {
-                            // Individual month cards
-                            ForEach(section.months, id: \.index) { item in
-                                let globalIndex = item.index
-                                let month = item.month
-                                let isVisible = globalIndex < coinVisibility.count && coinVisibility[globalIndex]
-
-                                ArcMonthCard(
-                                    monthName: month.name,
-                                    isCovered: month.isCovered,
-                                    monthNumber: globalIndex + 1,
-                                    isVisible: isVisible,
-                                    billAmount: formatCumulativeAmount(for: globalIndex + 1)
-                                )
+                                if showBar {
+                                    // End month
+                                    Text(last.month.shortName)
+                                        .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                        .foregroundColor(.primary)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .glassEffect(in: Capsule())
+                                }
                             }
                         }
+                    } else {
+                        // No coverage — description only
+                        let firstIndex = section.months.first?.index ?? 0
+                        let monthsInSection = section.months.count
+
+                        Text("Save \(formatCumulativeAmount(for: firstIndex + 1)) to start covering \(section.year)")
+                            .font(.custom(FontFamily.Rubik.regular, size: 18))
+                            .foregroundColor(.secondary.opacity(0.3))
+                            .lineSpacing(4)
                     }
-                    .padding(.leading, 14)
                 }
-                .padding(.bottom, isLastSection ? 0 : 24)
             }
         }
-    }
-
-    private func yearDotColor(for section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> Color {
-        if let firstCovered = section.months.first(where: { $0.month.isCovered }) {
-            return ArcMonthCard.stateColorForMonth(firstCovered.index + 1)
-        }
-        return Color.gray.opacity(0.25)
     }
 }
 

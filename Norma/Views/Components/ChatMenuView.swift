@@ -63,246 +63,9 @@ struct ChatMenuView: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    // New Chat / Financial Overview
-                    VStack(alignment: .leading, spacing: 4) {
-                        compactMenuItem(icon: "plus.message", title: "New Chat", action: {
-                            _ = conversationManager.createNewConversation()
-                            mainLayerView = .chat
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                isMenuOpen = false
-                            }
-                        })
-
-                        if plaidService.isConnected {
-                            compactMenuItem(icon: "building.columns", title: "Connect another bank", action: {
-                                connectBank()
-                            })
-                        }
-                    }
-                    .padding(.horizontal, 12)
-
-                    // Chats section
-                    VStack(alignment: .leading, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Chats")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
-                                .foregroundColor(.secondary)
-                                .textCase(.uppercase)
-                                .tracking(0.5)
-                                .padding(.leading, 12)
-
-                            Group {
-                                if displayedConversations.isEmpty {
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "bubble.left.and.bubble.right")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(.secondary.opacity(0.5))
-
-                                        Text("No chats yet")
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.secondary)
-
-                                        Text("Start a new chat to begin")
-                                            .font(.custom(FontFamily.Rubik.regular, size: 12))
-                                            .foregroundColor(.secondary.opacity(0.7))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 40)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(Color.secondary.opacity(0.03))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                            )
-                                    )
-                                } else {
-                                    VStack(spacing: 8) {
-                                        ForEach(displayedConversations) { conversation in
-                                            conversationItem(conversation: conversation)
-                                        }
-
-                                        if hasMoreConversations {
-                                            Button {
-                                                let impactLight = UIImpactFeedbackGenerator(style: .light)
-                                                impactLight.impactOccurred()
-                                                Task {
-                                                    await conversationManager.loadAllConversations()
-                                                }
-                                                showAllChats = true
-                                            } label: {
-                                                HStack(spacing: 8) {
-                                                    Image(systemName: "ellipsis")
-                                                        .font(.system(size: 14))
-                                                        .foregroundColor(.secondary)
-
-                                                    Text("See All (\(additionalConversationsCount) more)")
-                                                        .font(.custom(FontFamily.Rubik.medium, size: 13))
-                                                        .foregroundColor(.secondary)
-
-                                                    Spacer()
-
-                                                    Image(systemName: "chevron.right")
-                                                        .font(.system(size: 12, weight: .medium))
-                                                        .foregroundColor(.secondary.opacity(0.6))
-                                                }
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 10)
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(Color.secondary.opacity(0.03))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                            )
-                                    )
-                                }
-                            }
-                        }
-                        .frame(maxWidth: UIScreen.main.bounds.width * 0.65, alignment: .leading)
-                    }
-                    .padding(.horizontal, 20)
-
-                    // Banking section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Banking")
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 11))
-                            .foregroundColor(.secondary)
-                            .textCase(.uppercase)
-                            .tracking(0.5)
-                            .padding(.leading, 12)
-
-                        if !plaidService.connectedAccounts.isEmpty {
-                            VStack(spacing: 0) {
-                                // Institution header — tappable to expand
-                                Button {
-                                    let impactLight = UIImpactFeedbackGenerator(style: .light)
-                                    impactLight.impactOccurred()
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        isInstitutionExpanded.toggle()
-                                    }
-                                } label: {
-                                    institutionHeader
-                                }
-                                .buttonStyle(PlainButtonStyle())
-
-                                // Expandable sub-accounts
-                                if isInstitutionExpanded {
-                                    Divider()
-                                        .padding(.horizontal, 12)
-
-                                    VStack(spacing: 4) {
-                                        ForEach(plaidService.connectedAccounts) { account in
-                                            accountItem(account: account)
-                                                .transition(.opacity.combined(with: .move(edge: .top)))
-                                        }
-
-                                        // Disconnect button
-                                        Button {
-                                            showDisconnectConfirmation = true
-                                        } label: {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "link.badge.plus")
-                                                    .rotationEffect(.degrees(45))
-                                                    .font(.system(size: 12))
-                                                Text("Disconnect")
-                                                    .font(.custom(FontFamily.Rubik.regular, size: 12))
-                                            }
-                                            .foregroundColor(Color("NormaPastelCoral").opacity(0.7))
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                        .transition(.opacity)
-                                    }
-                                    .padding(.top, 4)
-                                    .padding(.bottom, 4)
-                                }
-                            }
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.secondary.opacity(0.03))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
-                        } else if isExchangingToken {
-                            HStack(spacing: 12) {
-                                ProgressView()
-                                    .tint(.primary)
-                                    .frame(width: 20)
-
-                                Text("Connecting account...")
-                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
-                                    .foregroundColor(.primary)
-
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.secondary.opacity(0.03))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
-                        } else {
-                            Button {
-                                let impactLight = UIImpactFeedbackGenerator(style: .light)
-                                impactLight.impactOccurred()
-                                connectBank()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    if isLoadingLinkToken {
-                                        ProgressView()
-                                            .tint(.primary)
-                                            .frame(width: 20)
-                                    } else {
-                                        Image(systemName: "building.columns")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.primary)
-                                            .frame(width: 20)
-                                    }
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Connect your bank")
-                                            .font(.custom(FontFamily.Rubik.medium, size: 15))
-                                            .foregroundColor(.primary)
-
-                                        Text("U.S. Only")
-                                            .font(.custom(FontFamily.Rubik.regular, size: 11))
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.secondary.opacity(0.03))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .disabled(isLoadingLinkToken)
-                        }
-                    }
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.65, alignment: .leading)
-                    .padding(.horizontal, 20)
+                    topActionsSection
+                    chatsSection
+                    bankingSection
                 }
                 .padding(.bottom, 16)
             }
@@ -323,48 +86,7 @@ struct ChatMenuView: View {
                     .ignoresSafeArea()
             }
             .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 8) {
-                    Button {
-                        let impactLight = UIImpactFeedbackGenerator(style: .light)
-                        impactLight.impactOccurred()
-                        mainLayerView = .settings
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            isMenuOpen = false
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.secondary.opacity(0.2))
-                                    .frame(width: 40, height: 40)
-
-                                Text(userInitials)
-                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
-                                    .foregroundColor(.primary)
-                            }
-
-                            Text(sessionViewModel.currentUser?.name ?? "User")
-                                .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(.clear)
-                                .glassEffect(in: RoundedRectangle(cornerRadius: 28))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 28)
-                                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                bottomUserBar
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -406,6 +128,320 @@ struct ChatMenuView: View {
             )
             .environmentObject(conversationManager)
         }
+    }
+
+    // MARK: - Extracted Sections
+
+    private var topActionsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            compactMenuItem(icon: "plus.message", title: "New Chat", action: {
+                _ = conversationManager.createNewConversation()
+                mainLayerView = .chat
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    isMenuOpen = false
+                }
+            })
+
+            if plaidService.isConnected {
+                compactMenuItem(icon: "building.columns", title: "Connect another bank", action: {
+                    connectBank()
+                })
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var chatsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Chats")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                    .padding(.leading, 12)
+
+                Group {
+                    if displayedConversations.isEmpty {
+                        chatsEmptyState
+                    } else {
+                        chatsListContent
+                    }
+                }
+            }
+            .frame(maxWidth: UIScreen.main.bounds.width * 0.65, alignment: .leading)
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private var chatsEmptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.5))
+
+            Text("No chats yet")
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundColor(.secondary)
+
+            Text("Start a new chat to begin")
+                .font(.custom(FontFamily.Rubik.regular, size: 12))
+                .foregroundColor(.secondary.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.secondary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private var chatsListContent: some View {
+        VStack(spacing: 8) {
+            ForEach(displayedConversations) { conversation in
+                conversationItem(conversation: conversation)
+            }
+
+            if hasMoreConversations {
+                Button {
+                    let impactLight = UIImpactFeedbackGenerator(style: .light)
+                    impactLight.impactOccurred()
+                    let manager = conversationManager
+                    Task {
+                        await manager.loadConversations()
+                    }
+                    showAllChats = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+
+                        Text("See All (\(additionalConversationsCount) more)")
+                            .font(.custom(FontFamily.Rubik.medium, size: 13))
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.secondary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private var bankingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Banking")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .padding(.leading, 12)
+
+            bankingContent
+        }
+        .frame(maxWidth: UIScreen.main.bounds.width * 0.65, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder
+    private var bankingContent: some View {
+        if !plaidService.connectedAccounts.isEmpty {
+            connectedBankView
+        } else if isExchangingToken {
+            connectingBankView
+        } else {
+            connectBankButton
+        }
+    }
+
+    private var connectedBankView: some View {
+        VStack(spacing: 0) {
+            Button {
+                let impactLight = UIImpactFeedbackGenerator(style: .light)
+                impactLight.impactOccurred()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isInstitutionExpanded.toggle()
+                }
+            } label: {
+                institutionHeader
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if isInstitutionExpanded {
+                Divider()
+                    .padding(.horizontal, 12)
+
+                VStack(spacing: 4) {
+                    ForEach(plaidService.connectedAccounts) { account in
+                        accountItem(account: account)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    Button {
+                        showDisconnectConfirmation = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "link.badge.plus")
+                                .rotationEffect(.degrees(45))
+                                .font(.system(size: 12))
+                            Text("Disconnect")
+                                .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        }
+                        .foregroundColor(Color("NormaPastelCoral").opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .transition(.opacity)
+                }
+                .padding(.top, 4)
+                .padding(.bottom, 4)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.secondary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private var connectingBankView: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.primary)
+                .frame(width: 20)
+
+            Text("Connecting account...")
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundColor(.primary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.secondary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private var connectBankButton: some View {
+        Button {
+            let impactLight = UIImpactFeedbackGenerator(style: .light)
+            impactLight.impactOccurred()
+            connectBank()
+        } label: {
+            HStack(spacing: 12) {
+                if isLoadingLinkToken {
+                    ProgressView()
+                        .tint(.primary)
+                        .frame(width: 20)
+                } else {
+                    Image(systemName: "building.columns")
+                        .font(.system(size: 16))
+                        .foregroundColor(.primary)
+                        .frame(width: 20)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Connect your bank")
+                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .foregroundColor(.primary)
+
+                    Text("U.S. Only")
+                        .font(.custom(FontFamily.Rubik.regular, size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.secondary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isLoadingLinkToken)
+    }
+
+    private var bottomUserBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                let impactLight = UIImpactFeedbackGenerator(style: .light)
+                impactLight.impactOccurred()
+                mainLayerView = .settings
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    isMenuOpen = false
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(width: 40, height: 40)
+
+                        Text(userInitials)
+                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+                            .foregroundColor(.primary)
+                    }
+
+                    Text(sessionViewModel.currentUser?.name ?? "User")
+                        .font(.custom(FontFamily.Rubik.medium, size: 16))
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(.clear)
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 28))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
     }
 
     private func connectBank() {

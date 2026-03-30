@@ -88,15 +88,21 @@ extension SupabaseService {
     
     // MARK: - Expenses Methods (Encryption Support)
     
-    /// Fetch expenses with encryption support
+    /// Fetch expenses with encryption support (current month only)
     func fetchEncryptableExpenses(userId: String) async throws -> [EncryptableExpense] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let startOfMonth = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date()))!
+        let startDate = dateFormatter.string(from: startOfMonth)
+
         let response: [EncryptableExpense] = try await from("expenses")
             .select()
             .eq("user_id", value: userId)
+            .gte("expense_date", value: startDate)
             .order("expense_date", ascending: false)
             .execute()
             .value
-        
+
         return response
     }
     

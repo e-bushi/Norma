@@ -146,8 +146,21 @@ extension SupabaseService {
     // Note: CREATE/UPDATE for encrypted data goes through EdgeFunctionService
     // These fetch methods are for reading encrypted data to be decrypted client-side
 
-    /// Fetch all encryptable conversations for a user, sorted by most recently updated
-    func fetchEncryptableConversations(userId: String) async throws -> [EncryptableChatConversation] {
+    /// Fetch recent encryptable conversations for a user, sorted by most recently updated
+    func fetchEncryptableConversations(userId: String, limit: Int = 8) async throws -> [EncryptableChatConversation] {
+        let response: [EncryptableChatConversation] = try await from("chat_conversations")
+            .select()
+            .eq("user_id", value: userId)
+            .order("updated_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+
+        return response
+    }
+
+    /// Fetch all encryptable conversations for a user (used by "See All")
+    func fetchAllEncryptableConversations(userId: String) async throws -> [EncryptableChatConversation] {
         let response: [EncryptableChatConversation] = try await from("chat_conversations")
             .select()
             .eq("user_id", value: userId)

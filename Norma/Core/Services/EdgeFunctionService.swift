@@ -517,7 +517,9 @@ extension Expense {
             "payment_method": AnyCodable(paymentMethod.rawValue),
             "is_recurring": AnyCodable(isRecurring),
             "tags": AnyCodable(tags),
-            "attachment_urls": AnyCodable(attachmentUrls)
+            "attachment_urls": AnyCodable(attachmentUrls),
+            "source": AnyCodable(source),
+            "pending": AnyCodable(pending)
         ]
 
         if let budgetId = budgetId {
@@ -537,6 +539,11 @@ extension Expense {
         }
         if let notes = notes {
             data["notes"] = AnyCodable(notes)
+        }
+        if let bankDetail = bankDetail,
+           let jsonData = try? JSONEncoder().encode(bankDetail),
+           let jsonDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+            data["bank_detail"] = AnyCodable(jsonDict)
         }
 
         return data

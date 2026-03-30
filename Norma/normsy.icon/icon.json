@@ -2,7 +2,7 @@
   "fill" : {
     "linear-gradient" : [
       "extended-gray:0.00000,1.00000",
-      "display-p3:0.73911,0.61086,0.96783,1.00000"
+      "display-p3:0.59183,0.48951,0.72090,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -17,10 +17,20 @@
   },
   "groups" : [
     {
+      "hidden" : false,
       "layers" : [
         {
-          "image-name" : "normaaa-icon.png",
-          "name" : "normaaa-icon"
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "fa.png",
+          "name" : "fa",
+          "position" : {
+            "scale" : 0.45,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
         }
       ],
       "shadow" : {

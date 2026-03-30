@@ -185,7 +185,7 @@ struct ActivityView: View {
                             .textCase(.uppercase)
                             .tracking(0.5)
 
-                        FlowLayout(spacing: 6, verticalSpacing: 6) {
+                        FlowLayout(spacing: 6) {
                             ForEach(Array(currentWeekDays.enumerated()), id: \.offset) { index, day in
                                 HStack(spacing: 6) {
                                     Text(day.label)

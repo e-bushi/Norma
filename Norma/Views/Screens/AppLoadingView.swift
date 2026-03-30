@@ -8,105 +8,76 @@
 import SwiftUI
 
 struct AppLoadingView: View {
-    // External state
     let isDataReady: Bool
     let onStart: () -> Void
 
-    // Orbiting coins (all except royalty)
-    private let orbitingCoins: [CoinTier] = [
-        .starter, .basic, .silver, .tealSteel, .gold, .skyBeige, .pinkPanther, .opal
-    ]
-
-    // Animation states - coins
-    @State private var coinVisible = false
-    @State private var orbitCoinVisibility: [Bool] = Array(repeating: false, count: 8)
-    @State private var startHovering = false
-
-    // Animation states - text
-    @State private var titleAnimating = false
-    @State private var subtitleAnimating = false
-
-    // Animation states - loading/start button
-    @State private var loadingOpacity = 0.0
-    @State private var loadingOffset: CGFloat = 30
+    // Animation states
+    @State private var coinBlur: CGFloat = 20
+    @State private var coinOpacity: Double = 0
+    @State private var coinScale: CGFloat = 0.8
+    @State private var glowOpacity: Double = 0
+    @State private var glowScale: CGFloat = 0.5
+    @State private var gradientOpacity: Double = 0
+    @State private var titleText: String = ""
+    @State private var subtitleAnimating: Bool = false
+    @State private var subtitleOpacity: Double = 1
+    @State private var hasAutoTransitioned = false
+    @State private var loadingVisible = false
     @State private var dotCount = 0
-    @State private var showStartButton = false
-    @State private var startButtonScale: CGFloat = 0.8
-
-    // Haptic generator
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
-    private let heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-
-    // Timer for animated dots
     @State private var dotTimer: Timer?
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let fullTitle = "Norma"
+    private let coinTier = CoinTier.royalty
 
     var body: some View {
         ZStack {
+            // Start with NormaBackground so there's no jarring flash
             Color("NormaBackground")
                 .ignoresSafeArea()
 
-            VStack(spacing: 16) {
+            // Gradient fades in over the base background
+            CoinGradientBackground(coinColor: coinTier.glowColor, colorScheme: colorScheme)
+                .ignoresSafeArea()
+                .opacity(gradientOpacity)
+
+            VStack(spacing: 20) {
                 Spacer()
 
-                // Coin orbit system with TimelineView for smooth hover
-                TimelineView(.animation(paused: !startHovering)) { timeline in
-                    let time = startHovering ? timeline.date.timeIntervalSinceReferenceDate : 0
+                // Coin with bloom glow
+                ZStack {
+                    // Outer glow bloom
+                    Circle()
+                        .fill(coinTier.glowColor.opacity(0.15))
+                        .frame(width: 280, height: 280)
+                        .blur(radius: 50)
+                        .scaleEffect(glowScale)
+                        .opacity(glowOpacity)
 
-                    ZStack {
-                        // Orbiting smaller coins with hover effect
-                        ForEach(Array(orbitingCoins.enumerated()), id: \.element.id) { index, coin in
-                            let angleOffset = (360.0 / Double(orbitingCoins.count)) * Double(index)
-                            let isVisible = index < orbitCoinVisibility.count && orbitCoinVisibility[index]
-                            // Each coin hovers with a phase offset for wave effect
-                            let phaseOffset = Double(index) * 0.4
-                            let individualHover = sin(time * 1.5 + phaseOffset) * 6
+                    // Inner glow
+                    Circle()
+                        .fill(coinTier.glowColor.opacity(0.25))
+                        .frame(width: 160, height: 160)
+                        .blur(radius: 25)
+                        .scaleEffect(glowScale)
+                        .opacity(glowOpacity)
 
-                            ZStack {
-                                // Glow effect behind coin
-                                Circle()
-                                    .fill(coin.glowColor.opacity(0.15))
-                                    .frame(width: 50, height: 50)
-                                    .blur(radius: 12)
-
-                                StaticCoin3DView(fileName: coin.fileName)
-                                    .frame(width: 44, height: 44)
-                            }
-                            .offset(
-                                x: cos(angleOffset * .pi / 180) * 120,
-                                y: sin(angleOffset * .pi / 180) * 120 + individualHover
-                            )
-                            .scaleEffect(isVisible ? 1 : 0)
-                            .opacity(isVisible ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isVisible)
-                        }
-
-                        // Center royalty coin with glow
-                        ZStack {
-                            // Glow effect behind royalty coin
-                            Circle()
-                                .fill(CoinTier.royalty.glowColor.opacity(0.12))
-                                .frame(width: 180, height: 180)
-                                .blur(radius: 30)
-
-                            StaticCoin3DView(fileName: CoinTier.royalty.fileName)
-                                .frame(width: 160, height: 160)
-                        }
-                        .scaleEffect(coinVisible ? 1 : 0.3)
-                        .opacity(coinVisible ? 1 : 0)
-                    }
+                    // The coin
+                    StaticCoin3DView(fileName: coinTier.fileName)
+                        .frame(width: 160, height: 160)
+                        .blur(radius: coinBlur)
+                        .opacity(coinOpacity)
+                        .scaleEffect(coinScale)
                 }
-                .frame(width: 300, height: 300)
 
-                // Norma title
-                WaveTextView(
-                    text: "Norma",
-                    font: .normaTitle(64),
-                    color: .primary,
-                    isAnimating: titleAnimating,
-                    alignment: .center
-                )
+                // Title — types in letter by letter
+                Text(titleText)
+                    .font(.normaTitle(64))
+                    .foregroundColor(.primary)
+                    .frame(height: 70)
 
-                // Subtitle
+                // Subtitle with wave animation
                 WaveTextView(
                     text: "Financial clarity for wherever you call home",
                     font: .normaSubheadline(18),
@@ -115,132 +86,98 @@ struct AppLoadingView: View {
                     alignment: .center
                 )
                 .frame(maxWidth: 200)
+                .opacity(subtitleOpacity)
 
                 Spacer()
 
-                // Loading indicator or Start button
-                ZStack {
-                    // Loading text with animated dots
-                    if !showStartButton {
-                        HStack(spacing: 0) {
-                            Text("loading")
-                                .font(.normaInput(14))
-                                .foregroundColor(.secondary)
-                            Text(String(repeating: ".", count: dotCount))
-                                .font(.normaInput(14))
-                                .foregroundColor(.secondary)
-                                .frame(width: 20, alignment: .leading)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(.clear)
-                                .glassEffect(in: Capsule())
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-                        )
-                        .opacity(loadingOpacity)
-                        .offset(y: loadingOffset)
-                    }
-
-                    // Start button
-                    if showStartButton {
-                        Button(action: {
-                            heavyImpactGenerator.impactOccurred()
-                            onStart()
-                        }) {
-                            Text("Start")
-                                .font(.normaHeadline(18))
-                                .foregroundColor(.primary)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 14)
-                                .background(
-                                    Capsule()
-                                        .fill(Color("NormaPastelTeal").opacity(0.3))
-                                        .glassEffect(in: Capsule())
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color("NormaPastelTeal").opacity(0.4), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .scaleEffect(startButtonScale)
-                        .transition(.scale.combined(with: .opacity))
-                    }
+                // Loading capsule
+                HStack(spacing: 0) {
+                    Text("loading")
+                        .font(.normaInput(14))
+                        .foregroundColor(.secondary)
+                    Text(String(repeating: ".", count: dotCount))
+                        .font(.normaInput(14))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, alignment: .leading)
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(.clear)
+                        .glassEffect(in: Capsule())
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                )
+                .opacity(loadingVisible ? 1 : 0)
+                .offset(y: loadingVisible ? 0 : 20)
+                .animation(.spring(response: 0.5, dampingFraction: 0.75), value: loadingVisible)
                 .padding(.bottom, 60)
             }
         }
         .onAppear {
-            startAppearanceAnimations()
+            startCinematicReveal()
         }
-        .onChange(of: isDataReady) { _, _ in }
+        .onChange(of: isDataReady) { _, ready in
+            if ready && !hasAutoTransitioned {
+                autoTransition()
+            }
+        }
         .onDisappear {
             dotTimer?.invalidate()
         }
     }
 
-    private func startAppearanceAnimations() {
-        // Prepare haptic generators
-        impactGenerator.prepare()
-        heavyImpactGenerator.prepare()
-
-        // Center coin pops in first
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
-            coinVisible = true
+    private func startCinematicReveal() {
+        // Phase 1: Coin emerges from blur (0.0s – 1.2s)
+        withAnimation(.easeOut(duration: 1.2)) {
+            coinOpacity = 1
+            coinBlur = 0
+            coinScale = 1
         }
 
-        // Stagger orbiting coins with haptics
-        let staggerDelay = 0.1
-        let startDelay = 0.3
-        for index in 0..<orbitingCoins.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + startDelay + (Double(index) * staggerDelay)) {
-                impactGenerator.impactOccurred()
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    orbitCoinVisibility[index] = true
-                }
+        // Phase 2: Glow blooms outward (0.4s – 1.6s)
+        withAnimation(.easeOut(duration: 1.2).delay(0.4)) {
+            glowOpacity = 1
+            glowScale = 1
+        }
+
+        // Phase 3: Gradient background fades in (0.8s – 2.0s)
+        withAnimation(.easeIn(duration: 1.2).delay(0.8)) {
+            gradientOpacity = 1
+        }
+
+        // Phase 4: Title types in letter by letter (1.5s+)
+        let typeDelay = 1.5
+        for (index, char) in fullTitle.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + typeDelay + (Double(index) * 0.12)) {
+                titleText.append(char)
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
             }
         }
 
-        // Start continuous hover animation after all coins appear
-        let coinsFinishDelay = startDelay + (Double(orbitingCoins.count) * staggerDelay) + 0.3
-        DispatchQueue.main.asyncAfter(deadline: .now() + coinsFinishDelay) {
-            startHovering = true
-        }
-
-        // Title wave animation after coins finish
-        let titleDelay = coinsFinishDelay + 0.4
-        DispatchQueue.main.asyncAfter(deadline: .now() + titleDelay) {
-            titleAnimating = true
-        }
-
-        // Subtitle wave animation after title lands
-        let subtitleDelay = titleDelay + 1.0
+        // Phase 5: Subtitle wave animation (after title finishes)
+        let subtitleDelay = typeDelay + (Double(fullTitle.count) * 0.12) + 0.3
         DispatchQueue.main.asyncAfter(deadline: .now() + subtitleDelay) {
             subtitleAnimating = true
         }
 
-        // Loading indicator slides up after subtitle finishes
+        // Phase 6: Loading capsule slides up after subtitle
         let loadingDelay = subtitleDelay + 1.2
         DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay) {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
-                loadingOpacity = 1.0
-                loadingOffset = 0
-            }
-        }
-
-        // Start animated dots
-        DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay + 0.3) {
+            loadingVisible = true
             startDotAnimation()
         }
 
-        // Start button appears last
-        DispatchQueue.main.asyncAfter(deadline: .now() + loadingDelay + 1.5) {
-            transitionToStartButton()
+        // Check if data is ready after full animation
+        let animationEnd = loadingDelay + 0.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + animationEnd) {
+            if isDataReady && !hasAutoTransitioned {
+                autoTransition()
+            }
         }
     }
 
@@ -252,19 +189,57 @@ struct AppLoadingView: View {
         }
     }
 
-    private func transitionToStartButton() {
-        // Stop dot animation
+    private func autoTransition() {
+        hasAutoTransitioned = true
         dotTimer?.invalidate()
 
-        // Animate transition
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            loadingOpacity = 0
-            showStartButton = true
-            startButtonScale = 1.0
+        // Hold for 4 seconds, then stagger each element disappearing
+
+        // Loading capsule fades out first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            withAnimation(.easeOut(duration: 0.4)) {
+                loadingVisible = false
+            }
         }
 
-        // Haptic feedback for ready state
-        heavyImpactGenerator.impactOccurred()
+        // Subtitle fades out
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) {
+            withAnimation(.easeOut(duration: 0.4)) {
+                subtitleOpacity = 0
+            }
+        }
+
+        // Title shrinks and fades
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.4) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                titleText = ""
+            }
+        }
+
+        // Coin blurs out and scales down
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) {
+            withAnimation(.easeOut(duration: 0.6)) {
+                coinBlur = 15
+                coinOpacity = 0
+                coinScale = 0.7
+                glowOpacity = 0
+                glowScale = 0.5
+            }
+        }
+
+        // Gradient fades out last
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.9) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                gradientOpacity = 0
+            }
+        }
+
+        // Transition to app after everything is gone
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) {
+            let impact = UIImpactFeedbackGenerator(style: .heavy)
+            impact.impactOccurred()
+            onStart()
+        }
     }
 }
 
