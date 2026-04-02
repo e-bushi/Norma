@@ -241,18 +241,14 @@ extension Bill {
     /// Check if an expense date is in the current billing period for this bill
     private func isSameBillingPeriod(expenseDate: Date, billDueDate: Date) -> Bool {
         let calendar = Calendar.current
-        let now = Date()
-        
+
         switch frequency {
         case .monthly:
-            // For monthly bills, check if the expense is in the current month
-            return calendar.isDate(expenseDate, equalTo: now, toGranularity: .month)
+            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .month)
         case .quarterly:
-            // For quarterly bills, check if the expense is in the current quarter
-            return calendar.isDate(expenseDate, equalTo: now, toGranularity: .quarter)
+            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .quarter)
         case .yearly:
-            // For yearly bills, check if the expense is in the current year
-            return calendar.isDate(expenseDate, equalTo: now, toGranularity: .year)
+            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .year)
         }
     }
     

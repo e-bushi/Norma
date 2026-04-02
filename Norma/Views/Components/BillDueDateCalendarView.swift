@@ -30,10 +30,27 @@ struct BillDueDateCalendarView: View {
     // Dictionary to track bills per day
     var billsPerDay: [Date: [Double]] = [:]
 
+    @EnvironmentObject var expenseViewModel: ExpenseViewModel
+
     private var billsForSelectedDate: [Bill] {
         let calendar = Calendar.current
         return billViewModel.activeBills.filter { bill in
             calendar.isDate(bill.dueDate, inSameDayAs: selectedDate)
+        }
+    }
+
+    /// Bill payment expenses on the selected day for bills that have been advanced
+    private var paidBillExpensesForSelectedDate: [Expense] {
+        let calendar = Calendar.current
+        let activeBillIds = Set(billsForSelectedDate.compactMap { $0.id })
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current
+
+        return expenseViewModel.expenses.filter { expense in
+            guard let billId = expense.billId,
+                  !activeBillIds.contains(billId),
+                  let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
+            return calendar.isDate(expenseDate, inSameDayAs: selectedDate)
         }
     }
 
@@ -127,7 +144,22 @@ struct BillDueDateCalendarView: View {
                     insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
                     removal: .opacity
                 ))
-            } else {
+            }
+
+            // Paid bill expenses (advanced bills)
+            if !paidBillExpensesForSelectedDate.isEmpty {
+                VStack(spacing: 10) {
+                    ForEach(paidBillExpensesForSelectedDate, id: \.id) { expense in
+                        BillPaymentCard(expense: expense)
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
+                    removal: .opacity
+                ))
+            }
+
+            if billsForSelectedDate.isEmpty && paidBillExpensesForSelectedDate.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "hand.tap")
                         .font(.system(size: 14, weight: .medium))
@@ -571,4 +603,89 @@ struct BillDeckCardView: View {
         .environmentObject(profileViewModel)
         .environmentObject(expenseViewModel)
         .padding()
+}
+
+// MARK: - Bill Payment Card (for advanced/paid bills)
+
+struct BillPaymentCard: View {
+    let expense: Expense
+    @EnvironmentObject var profileViewModel: ProfileViewModel
+
+    private var formattedDate: String {
+        let iso = ISO8601DateFormatter()
+        iso.timeZone = TimeZone.current
+        let display = DateFormatter()
+        display.dateFormat = "MMM d"
+
+        if let date = iso.date(from: expense.expenseDate) {
+            return display.string(from: date)
+        }
+        return expense.expenseDate
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(expense.name)
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(formattedDate)
+                        .font(.normaInput(12))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text("·")
+                        .foregroundColor(.secondary.opacity(0.3))
+
+                    Text("Paid")
+                        .font(.normaInput(12))
+                        .foregroundColor(Color("NormaPastelGreen"))
+                }
+            }
+
+            Spacer()
+
+            Text(profileViewModel.formatCurrency(expense.amount))
+                .font(.normaFinancial(16))
+                .foregroundColor(.primary)
+        }
+        .padding(16)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.gray.opacity(0.03))
+
+                Canvas { context, size in
+                    let origin = CGPoint(x: size.width, y: size.height)
+                    let ringCount = 5
+                    let maxRadius: CGFloat = 120
+                    let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                    for i in 1...ringCount {
+                        let radius = CGFloat(i) * ringSpacing
+                        let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                        let rect = CGRect(
+                            x: origin.x - radius,
+                            y: origin.y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )
+                        context.stroke(
+                            Path(ellipseIn: rect),
+                            with: .color(Color("NormaPastelTeal").opacity(opacity)),
+                            lineWidth: 1
+                        )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .allowsHitTesting(false)
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+        )
+    }
 }

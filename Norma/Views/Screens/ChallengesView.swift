@@ -207,8 +207,6 @@ struct ChallengesView: View {
             .sheet(isPresented: $showMiniChat) {
                 if let date = longPressedDate {
                     MiniChatView(selectedDate: date, context: .expense, accentColor: challengeViewModel.currentTier.glowColor)
-                        .presentationDetents([.medium, .large])
-                        .presentationDragIndicator(.visible)
                 }
             }
             .sheet(isPresented: $challengeViewModel.showDailyRecap) {

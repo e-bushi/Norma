@@ -20,7 +20,13 @@ struct ActivityView: View {
     @State private var dayCapsuleVisibility: [Bool] = Array(repeating: false, count: 7)
     @State private var heroTextAnimating = false
     @State private var remainingCapsuleVisible = false
+    @State private var thisWeekVisible = false
     @State private var currencySectionVisible = false
+    @State private var transactionsSectionVisible = false
+
+    // Long press / MiniChat state
+    @State private var showMiniChat = false
+    @State private var longPressedDate: Date? = nil
 
     // Currency conversion state
     @State private var convertedAmount: Double?
@@ -66,6 +72,24 @@ struct ActivityView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM"
         return formatter.string(from: Date())
+    }
+
+    /// Recent transactions for the current week, sorted newest first
+    private var recentTransactions: [Expense] {
+        let calendar = Calendar.current
+        let today = Date()
+        let weekday = calendar.component(.weekday, from: today)
+        let startOfWeek = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(weekday - 2), to: today)!)
+
+        return dataManager.expenses.filter { expense in
+            guard let date = parseDate(expense.expenseDate) else { return false }
+            return date >= startOfWeek && date <= today
+        }
+        .sorted { a, b in
+            let dateA = parseDate(a.expenseDate) ?? .distantPast
+            let dateB = parseDate(b.expenseDate) ?? .distantPast
+            return dateA > dateB
+        }
     }
 
     // MARK: - Week Data
@@ -184,6 +208,9 @@ struct ActivityView: View {
                             .foregroundColor(.secondary.opacity(0.5))
                             .textCase(.uppercase)
                             .tracking(0.5)
+                            .opacity(thisWeekVisible ? 1 : 0)
+                            .offset(y: thisWeekVisible ? 0 : 8)
+                            .animation(.easeOut(duration: 0.4), value: thisWeekVisible)
 
                         FlowLayout(spacing: 6) {
                             ForEach(Array(currentWeekDays.enumerated()), id: \.offset) { index, day in
@@ -222,6 +249,12 @@ struct ActivityView: View {
                                             style: day.isFuture ? StrokeStyle(lineWidth: 1, dash: [5, 4]) : StrokeStyle(lineWidth: day.isToday ? 1.5 : 0.5)
                                         )
                                 )
+                                .onLongPressGesture(minimumDuration: 0.5) {
+                                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                                    impact.impactOccurred()
+                                    longPressedDate = day.date
+                                    showMiniChat = true
+                                }
                                 .opacity(dayCapsuleVisibility[index] ? 1 : 0)
                                 .scaleEffect(dayCapsuleVisibility[index] ? 1 : 0.8)
                                 .animation(.spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.06), value: dayCapsuleVisibility[index])
@@ -234,40 +267,22 @@ struct ActivityView: View {
                         .opacity(currencySectionVisible ? 1 : 0)
                         .offset(y: currencySectionVisible ? 0 : 12)
                         .animation(.easeOut(duration: 0.5), value: currencySectionVisible)
+
+                    // MARK: - Transactions
+                    transactionsSection
+                        .opacity(transactionsSectionVisible ? 1 : 0)
+                        .offset(y: transactionsSectionVisible ? 0 : 12)
+                        .animation(.easeOut(duration: 0.5), value: transactionsSectionVisible)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)
             }
             .background {
-                ZStack(alignment: .bottomTrailing) {
+                ZStack {
                     CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
 
-                    Canvas { context, size in
-                        let origin = CGPoint(x: size.width, y: size.height)
-                        let ringCount = 8
-                        let maxRadius: CGFloat = 220
-                        let ringSpacing = maxRadius / CGFloat(ringCount)
-                        let tierColor = UIColor(coinColorViewModel.coinColor)
-                        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                        tierColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-
-                        for i in 1...ringCount {
-                            let radius = CGFloat(i) * ringSpacing
-                            let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
-                            let rect = CGRect(
-                                x: origin.x - radius,
-                                y: origin.y - radius,
-                                width: radius * 2,
-                                height: radius * 2
-                            )
-                            context.stroke(
-                                Path(ellipseIn: rect),
-                                with: .color(Color(red: r, green: g, blue: b).opacity(opacity)),
-                                lineWidth: 1
-                            )
-                        }
-                    }
-                    .allowsHitTesting(false)
+                    radarRingsView
+                        .allowsHitTesting(false)
                 }
                 .ignoresSafeArea()
             }
@@ -289,6 +304,7 @@ struct ActivityView: View {
             SpendingCurrencyPicker(
                 currentSpendingCurrency: spendingCurrency,
                 homeCurrency: currency,
+                coinColor: coinColorViewModel.coinColor,
                 onSelect: { selected in
                     updateSpendingCurrency(selected)
                 },
@@ -297,6 +313,11 @@ struct ActivityView: View {
                 }
             )
             .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showMiniChat) {
+            if let date = longPressedDate {
+                MiniChatView(selectedDate: date, context: .expense, accentColor: coinColorViewModel.coinColor)
+            }
         }
     }
 
@@ -395,6 +416,68 @@ struct ActivityView: View {
         }
     }
 
+    // MARK: - Radar Rings
+
+    private var hasTransactions: Bool {
+        !recentTransactions.isEmpty
+    }
+
+    @ViewBuilder
+    private var radarRingsView: some View {
+        GeometryReader { geo in
+            let originX: CGFloat = geo.size.width
+            let originY: CGFloat = hasTransactions ? 0 : geo.size.height
+            let tierColor = UIColor(coinColorViewModel.coinColor)
+
+            Canvas { context, size in
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                tierColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+
+                let ringCount = 8
+                let maxRadius: CGFloat = 220
+                let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                for i in 1...ringCount {
+                    let radius = CGFloat(i) * ringSpacing
+                    let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                    let rect = CGRect(
+                        x: originX - radius,
+                        y: originY - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(Color(red: r, green: g, blue: b).opacity(opacity)),
+                        lineWidth: 1
+                    )
+                }
+            }
+            .animation(.easeInOut(duration: 0.8), value: hasTransactions)
+        }
+    }
+
+    // MARK: - Transactions Section
+
+    @ViewBuilder
+    private var transactionsSection: some View {
+        if !recentTransactions.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Transactions")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+
+                VStack(spacing: 10) {
+                    ForEach(recentTransactions, id: \.id) { expense in
+                        TransactionCard(expense: expense, formatCurrency: formatCurrency)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Conversion
 
     private func fetchConversion() {
@@ -478,6 +561,11 @@ struct ActivityView: View {
             heroTextAnimating = true
         }
 
+        // "This Week" header
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            thisWeekVisible = true
+        }
+
         // Day capsules stagger in after hero text
         for index in 0..<7 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2 + (Double(index) * 0.06)) {
@@ -489,6 +577,11 @@ struct ActivityView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
             currencySectionVisible = true
         }
+
+        // Transactions section after currency
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) {
+            transactionsSectionVisible = true
+        }
     }
 }
 
@@ -497,11 +590,14 @@ struct ActivityView: View {
 private struct SpendingCurrencyPicker: View {
     let currentSpendingCurrency: String?
     let homeCurrency: String
+    let coinColor: Color
     let onSelect: (String) -> Void
     let onClear: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var searchText: String = ""
     @State private var visibleCount: Int = 0
+    @State private var heroAnimating = false
     @FocusState private var isSearchFocused: Bool
 
     private let travelCurrencies = [
@@ -536,21 +632,29 @@ private struct SpendingCurrencyPicker: View {
         }
     }
 
+    private var heroWords: [(word: String, color: Color)] {
+        [
+            ("Choose", .primary),
+            ("the", .primary),
+            ("currency", .primary),
+            ("you're", .secondary),
+            ("spending", .secondary),
+            ("in.", .secondary)
+        ]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Title + subtitle
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Spending Currency")
-                    .font(.normaHeadline(34))
-                    .foregroundColor(.primary)
-
-                Text("Choose the currency where you're spending")
-                    .font(.normaFinancial(14))
-                    .foregroundColor(.secondary)
-            }
+            // Hero text
+            ColoredWaveTextView(
+                words: heroWords,
+                font: .normaHeadline(48),
+                isAnimating: heroAnimating,
+                alignment: .leading
+            )
             .padding(.horizontal, 24)
             .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.bottom, 20)
 
             // Search bar
             HStack(spacing: 10) {
@@ -635,12 +739,18 @@ private struct SpendingCurrencyPicker: View {
                 .padding(.bottom, 24)
             }
         }
-        .background(Color("NormaBackground"))
+        .background {
+            CoinGradientBackground(coinColor: coinColor, colorScheme: colorScheme)
+                .ignoresSafeArea()
+        }
         .onChange(of: searchText) { _, _ in
             animateCapsules()
         }
         .onAppear {
             animateCapsules()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                heroAnimating = true
+            }
         }
     }
 
@@ -695,5 +805,100 @@ private struct CurrencyCapsuleFlow: Layout {
         }
 
         return (size: CGSize(width: totalWidth, height: y + lineHeight), positions: positions)
+    }
+}
+
+// MARK: - Transaction Card
+
+private struct TransactionCard: View {
+    let expense: Expense
+    let formatCurrency: (Double) -> String
+
+    private var formattedDate: String {
+        let iso = ISO8601DateFormatter()
+        let display = DateFormatter()
+        display.dateFormat = "MMM d, h:mm a"
+
+        if let date = iso.date(from: expense.expenseDate) {
+            return display.string(from: date)
+        }
+        if expense.expenseDate.contains("T") {
+            if let date = iso.date(from: expense.expenseDate + "Z") {
+                return display.string(from: date)
+            }
+        }
+        if let date = iso.date(from: expense.expenseDate + "T00:00:00Z") {
+            return display.string(from: date)
+        }
+        return expense.expenseDate
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(expense.name)
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(formattedDate)
+                        .font(.normaInput(12))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    if let merchant = expense.merchant, !merchant.isEmpty {
+                        Text("·")
+                            .foregroundColor(.secondary.opacity(0.3))
+                        Text(merchant)
+                            .font(.normaInput(12))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Text(formatCurrency(expense.amount))
+                .font(.normaFinancial(16))
+                .foregroundColor(.primary)
+        }
+        .padding(16)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.gray.opacity(0.03))
+
+                // Radar rings from bottom-right
+                Canvas { context, size in
+                    let origin = CGPoint(x: size.width, y: size.height)
+                    let ringCount = 5
+                    let maxRadius: CGFloat = 120
+                    let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                    for i in 1...ringCount {
+                        let radius = CGFloat(i) * ringSpacing
+                        let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                        let rect = CGRect(
+                            x: origin.x - radius,
+                            y: origin.y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )
+                        context.stroke(
+                            Path(ellipseIn: rect),
+                            with: .color(Color("NormaPastelCoral").opacity(opacity)),
+                            lineWidth: 1
+                        )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .allowsHitTesting(false)
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+        )
     }
 }

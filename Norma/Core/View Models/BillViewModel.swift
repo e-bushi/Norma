@@ -364,6 +364,38 @@ class BillViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Advance Paid Bills
+
+    /// Advances paid bills' dueDate to their nextDueDate and resets status to scheduled
+    func advancePaidBills(_ bills: [Bill]) async {
+        isLoading = true
+        clearError()
+
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current
+
+        for bill in bills {
+            guard bill.status == .paid || bill.calculateStatus(from: dataManager.expenses) == .paid else { continue }
+
+            let newDueDate = bill.nextDueDate ?? calculateNextDueDateFrom(bill.dueDate, frequency: bill.frequency)
+            let nextNextDueDate = calculateNextDueDateFrom(newDueDate, frequency: bill.frequency)
+
+            var advancedBill = bill
+            advancedBill.dueDate = newDueDate
+            advancedBill.nextDueDate = nextNextDueDate
+            advancedBill.status = .scheduled
+
+            do {
+                try await dataManager.updateBillWithEncryption(advancedBill)
+            } catch {
+                print("Failed to advance bill \(bill.name): \(error)")
+            }
+        }
+
+        loadBills()
+        isLoading = false
+    }
+
     // MARK: - Filtering and Searching
     
     var filteredBills: [Bill] {

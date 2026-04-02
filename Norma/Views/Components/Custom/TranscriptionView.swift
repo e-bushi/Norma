@@ -15,6 +15,7 @@ struct TranscriptionView: View {
 
     @State private var appeared = false
     @State private var pulseAnimation = false
+    @State private var acceptButtonVisible = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -39,9 +40,14 @@ struct TranscriptionView: View {
                     impactFeedback.impactOccurred()
                     isRecording = false
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.secondary)
+                    ZStack {
+                        Circle()
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 
@@ -68,9 +74,20 @@ struct TranscriptionView: View {
                     Spacer()
 
                     if !transcribedText.isEmpty {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color("NormaPastelTeal"))
+                        ZStack {
+                            Circle()
+                                .fill(Color("NormaPastelTeal"))
+                                .frame(width: 44, height: 44)
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .scaleEffect(acceptButtonVisible ? 1 : 0.3)
+                        .opacity(acceptButtonVisible ? 1 : 0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.5), value: acceptButtonVisible)
+                        .onAppear {
+                            acceptButtonVisible = true
+                        }
                     }
                 }
                 .frame(minHeight: 44)
@@ -92,6 +109,11 @@ struct TranscriptionView: View {
         .padding(.bottom, 8)
         .scaleEffect(appeared ? 1 : 0.9)
         .opacity(appeared ? 1 : 0)
+        .onChange(of: transcribedText) { _, newValue in
+            if newValue.isEmpty {
+                acceptButtonVisible = false
+            }
+        }
         .onAppear {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 appeared = true

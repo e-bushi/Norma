@@ -99,6 +99,35 @@ struct MainChatView: View {
         dataManager.getPendingTransactionsCount()
     }
 
+    private var capsuleBillsFormatted: String {
+        profileViewModel.formatCurrencyTruncated(billViewModel.totalMonthlyBills)
+    }
+
+    private var capsuleWeeklySpendFormatted: String {
+        let calendar = Calendar.current
+        let today = Date()
+        let weekday = calendar.component(.weekday, from: today)
+        let startOfWeek = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(weekday - 2), to: today)!)
+        let spend = dataManager.expenses.filter { expense in
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: expense.expenseDate) {
+                return date >= startOfWeek && date <= today
+            }
+            return false
+        }.reduce(0) { $0 + $1.amount }
+        return profileViewModel.formatCurrencyTruncated(spend)
+    }
+
+    private var capsuleMonthlySpendFormatted: String {
+        profileViewModel.formatCurrencyTruncated(expenseViewModel.currentMonthExpenses)
+    }
+
+    private var capsuleShortMonth: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: Date())
+    }
+
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -131,12 +160,12 @@ struct MainChatView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
-                        // Dismiss dropdown when tapping on chat content
-                        if showIncomeDropdown {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIncomeDropdown = false
-                            }
-                        }
+                        // Dropdown dismiss — commented out for later
+                        // if showIncomeDropdown {
+                        //     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        //         showIncomeDropdown = false
+                        //     }
+                        // }
                     }
 
                 // Input area overlays at bottom
@@ -187,36 +216,22 @@ struct MainChatView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    // Title row - tappable dropdown trigger
-                    Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showIncomeDropdown.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("Norma")
-                                .font(.custom(FontFamily.Rubik.medium, size: 22))
-                                .foregroundColor(.primary)
+                    // Title row — dropdown trigger commented out for later
+                    HStack(spacing: 8) {
+                        Text("Norma")
+                            .font(.custom(FontFamily.Rubik.medium, size: 22))
+                            .foregroundColor(.primary)
 
-                            Text("Pro")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(Color("NormaPastelPurple").opacity(0.8))
-                                )
-
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .rotationEffect(.degrees(showIncomeDropdown ? 180 : 0))
-                        }
+                        Text("Pro")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color("NormaPastelPurple").opacity(0.8))
+                            )
                     }
-                    .buttonStyle(.plain)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -319,57 +334,82 @@ struct MainChatView: View {
         .sheet(isPresented: $showExpenses) {
             IncomeAndExpenseView()
         }
-        .overlay(alignment: .top) {
-            // Dropdown that appears below nav bar when title is tapped
-            if showIncomeDropdown {
-                QuickActionsHubView(
-                    onShowBills: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showIncomeDropdown = false
-                        }
-                        showBillHome = true
-                    },
-                    onShowActivity: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showIncomeDropdown = false
-                        }
-                        showActivity = true
-                    },
-                    onShowExpenses: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showIncomeDropdown = false
-                        }
-                        showExpenses = true
-                    },
-                    onShowPendingTransactions: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showIncomeDropdown = false
-                        }
-                        showPendingTransactions = true
-                    },
-                    pendingTransactionsCount: pendingCount
-                )
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+        // QuickActionsHubView overlay — commented out for later
+        // .overlay(alignment: .top) {
+        //     if showIncomeDropdown {
+        //         QuickActionsHubView(
+        //             onShowBills: {
+        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        //                     showIncomeDropdown = false
+        //                 }
+        //                 showBillHome = true
+        //             },
+        //             onShowActivity: {
+        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        //                     showIncomeDropdown = false
+        //                 }
+        //                 showActivity = true
+        //             },
+        //             onShowExpenses: {
+        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        //                     showIncomeDropdown = false
+        //                 }
+        //                 showExpenses = true
+        //             },
+        //             onShowPendingTransactions: {
+        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        //                     showIncomeDropdown = false
+        //                 }
+        //                 showPendingTransactions = true
+        //             },
+        //             pendingTransactionsCount: pendingCount
+        //         )
+        //         .padding(.horizontal, 12)
+        //         .padding(.vertical, 10)
+        //         .background(
+        //             RoundedRectangle(cornerRadius: 16)
+        //                 .fill(.clear)
+        //                 .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+        //         )
+        //         .overlay(
+        //             RoundedRectangle(cornerRadius: 16)
+        //                 .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+        //         )
+        //         .frame(maxWidth: 300)
+        //         .padding(.top, 56)
+        //         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+        //         .transition(.asymmetric(
+        //             insertion: .opacity.combined(with: .move(edge: .top)),
+        //             removal: .opacity
+        //         ))
+        //         .zIndex(100)
+        //     }
+        // }
+    }
+
+    @ViewBuilder
+    private func inputNavCapsule(title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        } label: {
+            Text(title)
+                .font(.normaFinancial(16))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    Capsule()
                         .fill(.clear)
-                        .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+                        .glassEffect(in: Capsule())
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                    Capsule()
+                        .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
                 )
-                .frame(maxWidth: 300)
-                .padding(.top, 56)
-                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .top)),
-                    removal: .opacity
-                ))
-                .zIndex(100)
-            }
         }
+        .buttonStyle(CapsulePressStyle())
     }
 
     private func hideKeyboard() {
@@ -380,9 +420,15 @@ struct MainChatView: View {
     @ViewBuilder
     private var chatContent: some View {
         if messages.isEmpty && !isLoading {
-            ChatEmptyStateView(arcCount: arcCount, onCoinTapped: {
-                showArcDetail = true
-            })
+            ChatEmptyStateView(
+                arcCount: arcCount,
+                onCoinTapped: { showArcDetail = true },
+                onShowBills: { showBillHome = true },
+                onShowActivity: { showActivity = true },
+                onShowExpenses: { showExpenses = true },
+                onShowPendingTransactions: { showPendingTransactions = true },
+                pendingTransactionsCount: pendingCount
+            )
         } else {
             ScrollViewReader { proxy in
                 GeometryReader { outerGeometry in
@@ -489,6 +535,20 @@ struct MainChatView: View {
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // Navigation capsules — visible when chat has messages
+            if !messages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        inputNavCapsule(title: "Bills \(capsuleBillsFormatted)") { showBillHome = true }
+                        inputNavCapsule(title: "This week \(capsuleWeeklySpendFormatted)") { showActivity = true }
+                        inputNavCapsule(title: "\(capsuleShortMonth). Spend \(capsuleMonthlySpendFormatted)") { showExpenses = true }
+                        inputNavCapsule(title: pendingCount > 0 ? "Pending (\(pendingCount))" : "Pending") { showPendingTransactions = true }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.bottom, 2)
             }
 
             ChatInputView(

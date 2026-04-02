@@ -25,6 +25,7 @@ struct MiniChatView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var expenseViewModel: ExpenseViewModel
@@ -39,6 +40,7 @@ struct MiniChatView: View {
     @State private var isRecording = false
     @State private var audioEngine = AVAudioEngine()
     @State private var taskCreated = false
+    @State private var selectedDetent: PresentationDetent = .medium
     @FocusState private var isInputFocused: Bool
 
     @ObservedObject private var deepgramService = DeepgramService.shared
@@ -47,6 +49,10 @@ struct MiniChatView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM d, yyyy"
         return formatter.string(from: selectedDate)
+    }
+
+    private var isExpanded: Bool {
+        selectedDetent == .large
     }
 
     private var isSendActive: Bool {
@@ -133,9 +139,14 @@ struct MiniChatView: View {
                     isInputFocused = true
                 }
                 .background(
-                    DotPatternView()
-                        .allowsHitTesting(false)
-                        .ignoresSafeArea()
+                    DotPatternView(
+                        dotSize: isExpanded ? 3 : 2,
+                        spacing: isExpanded ? 18 : 12,
+                        dotOpacity: isExpanded ? 0.25 : 0.15
+                    )
+                    .animation(.easeInOut(duration: 0.4), value: isExpanded)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
                 )
 
                 Spacer(minLength: 0)
@@ -229,20 +240,10 @@ struct MiniChatView: View {
                 .padding(.bottom, 12)
             }
             .background {
-                ZStack {
-                    Color("NormaBackground")
-
-                    if let accentColor {
-                        LinearGradient(
-                            colors: [
-                                accentColor.opacity(0.2),
-                                accentColor.opacity(0.08)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                }
+                CoinGradientBackground(
+                    coinColor: accentColor ?? Color("NormaPastelPurple"),
+                    colorScheme: colorScheme
+                )
                 .ignoresSafeArea()
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -288,6 +289,8 @@ struct MiniChatView: View {
         .onDisappear {
             if isRecording { stopVoiceInput() }
         }
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
+        .presentationDragIndicator(.visible)
     }
 
     private var buttonFillColor: Color {

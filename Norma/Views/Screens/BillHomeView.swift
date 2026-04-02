@@ -25,6 +25,7 @@ struct BillHomeView: View {
     @State private var showInfoPopover = false
     @State private var selectedMonthOffset: Int = 0
     @State private var showRecurringReview = false
+    @State private var showAdvanceBills = false
     @ObservedObject private var plaidService = PlaidService.shared
 
     private var referenceDate: Date {
@@ -101,6 +102,12 @@ struct BillHomeView: View {
         billsForSelectedMonth.count
     }
 
+    private var paidBillsToAdvance: [Bill] {
+        billsForSelectedMonth.filter {
+            $0.calculateStatus(from: expenseViewModel.expenses) == .paid
+        }
+    }
+
     private var profileIncomeAmount: Double {
         // Use income from profile settings if available, otherwise fall back to IncomeViewModel
         return sessionViewModel.currentUser?.settings.monthlyIncome ?? incomeViewModel.totalMonthlyIncome
@@ -117,12 +124,32 @@ struct BillHomeView: View {
         let calendar = Calendar.current
         var dict: [Date: [Double]] = [:]
 
+        // Active bills with dueDate in this month
         for bill in billsForSelectedMonth {
             let startOfDay = calendar.startOfDay(for: bill.dueDate)
             if dict[startOfDay] != nil {
                 dict[startOfDay]?.append(bill.amount)
             } else {
                 dict[startOfDay] = [bill.amount]
+            }
+        }
+
+        // Bill payment expenses in this month (for advanced bills that already rolled forward)
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.timeZone = TimeZone.current
+        let activeBillIds = Set(billsForSelectedMonth.compactMap { $0.id })
+
+        for expense in expenseViewModel.expenses {
+            guard let billId = expense.billId,
+                  !activeBillIds.contains(billId),
+                  let expenseDate = dateFormatter.date(from: expense.expenseDate),
+                  calendar.isDate(expenseDate, equalTo: referenceDate, toGranularity: .month) else { continue }
+
+            let startOfDay = calendar.startOfDay(for: expenseDate)
+            if dict[startOfDay] != nil {
+                dict[startOfDay]?.append(expense.amount)
+            } else {
+                dict[startOfDay] = [expense.amount]
             }
         }
 
@@ -173,16 +200,6 @@ struct BillHomeView: View {
 
                         if totalBillCountThisMonth > 0 {
                             HStack(spacing: 8) {
-                                Text("\(paidBillCount) of \(totalBillCountThisMonth) paid")
-                                    .font(.normaFinancial(16))
-                                    .foregroundColor(paidBillCount == totalBillCountThisMonth ? Color("NormaPastelGreen") : .secondary)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule()
-                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                                    )
-
                                 Button {
                                     let impact = UIImpactFeedbackGenerator(style: .light)
                                     impact.impactOccurred()
@@ -203,6 +220,29 @@ struct BillHomeView: View {
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
+
+                                if !paidBillsToAdvance.isEmpty {
+                                    Button {
+                                        let impact = UIImpactFeedbackGenerator(style: .light)
+                                        impact.impactOccurred()
+                                        showAdvanceBills = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.right.circle")
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text("Advance")
+                                                .font(.normaFinancial(16))
+                                        }
+                                        .foregroundColor(Color("NormaPastelPurple"))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            Capsule()
+                                                .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
                             }
                             .padding(.top, 12)
                         }
@@ -311,6 +351,11 @@ struct BillHomeView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showAdvanceBills) {
+                AdvanceBillsSheet(bills: paidBillsToAdvance)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
             .onAppear {
                 Task {
                     await loadInitialData()
@@ -404,6 +449,206 @@ struct BillInfoPopover: View {
         .padding(20)
         .frame(width: 300)
         .background(Color("NormaBackground"))
+    }
+}
+
+// MARK: - Advance Bills Sheet
+
+private struct AdvanceBillsSheet: View {
+    let bills: [Bill]
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isAdvancing = false
+    @State private var heroAnimating = false
+
+    private var currency: String {
+        sessionViewModel.currentUser?.settings.currency ?? "USD"
+    }
+
+    private func formatCurrency(_ amount: Double) -> String {
+        amount.formatted(.currency(code: currency).precision(.fractionLength(0)))
+    }
+
+    private func nextDueDateForBill(_ bill: Bill) -> Date {
+        let calendar = Calendar.current
+        switch bill.frequency {
+        case .monthly:
+            return calendar.date(byAdding: .month, value: 1, to: bill.dueDate) ?? bill.dueDate
+        case .quarterly:
+            return calendar.date(byAdding: .month, value: 3, to: bill.dueDate) ?? bill.dueDate
+        case .yearly:
+            return calendar.date(byAdding: .year, value: 1, to: bill.dueDate) ?? bill.dueDate
+        }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+
+    private var heroWords: [(word: String, color: Color)] {
+        var words: [(String, Color)] = []
+        let count = "\(bills.count)"
+        words.append((count, Color("NormaPastelPurple")))
+        words.append(("paid", .primary))
+        words.append((bills.count == 1 ? "bill" : "bills", .primary))
+        words.append(("ready", .primary))
+        words.append(("to", .primary))
+        words.append(("advance.", .primary))
+        return words
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Hero text
+                ColoredWaveTextView(
+                    words: heroWords,
+                    font: .normaHeadline(48),
+                    isAnimating: heroAnimating,
+                    alignment: .leading
+                )
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 8)
+
+                // Bill list
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 10) {
+                        ForEach(bills, id: \.id) { bill in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(bill.name)
+                                        .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                        .foregroundColor(.primary)
+
+                                    HStack(spacing: 6) {
+                                        Text(formatDate(bill.dueDate))
+                                            .font(.normaFinancial(13))
+                                            .foregroundColor(.secondary.opacity(0.6))
+
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(.secondary.opacity(0.4))
+
+                                        Text(formatDate(nextDueDateForBill(bill)))
+                                            .font(.normaFinancial(13))
+                                            .foregroundColor(Color("NormaPastelTeal"))
+                                    }
+                                }
+
+                                Spacer()
+
+                                Text(formatCurrency(bill.amount))
+                                    .font(.normaFinancial(15))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(16)
+                            .background(
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(.clear)
+                                        .glassEffect(in: RoundedRectangle(cornerRadius: 14))
+
+                                    Canvas { context, size in
+                                        let origin = CGPoint(x: size.width, y: size.height)
+                                        let ringCount = 5
+                                        let maxRadius: CGFloat = 100
+                                        let ringSpacing = maxRadius / CGFloat(ringCount)
+
+                                        for i in 1...ringCount {
+                                            let radius = CGFloat(i) * ringSpacing
+                                            let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
+                                            let rect = CGRect(
+                                                x: origin.x - radius,
+                                                y: origin.y - radius,
+                                                width: radius * 2,
+                                                height: radius * 2
+                                            )
+                                            context.stroke(
+                                                Path(ellipseIn: rect),
+                                                with: .color(Color("NormaPastelPurple").opacity(opacity)),
+                                                lineWidth: 1
+                                            )
+                                        }
+                                    }
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .allowsHitTesting(false)
+                                }
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
+
+                // Confirm button
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    isAdvancing = true
+                    Task {
+                        await billViewModel.advancePaidBills(bills)
+                        isAdvancing = false
+                        dismiss()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isAdvancing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 16))
+                            Text("Advance All")
+                                .font(.custom(FontFamily.Rubik.medium, size: 16))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        Capsule()
+                            .fill(Color("NormaPastelPurple"))
+                    )
+                }
+                .disabled(isAdvancing)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            }
+            .background {
+                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                    .ignoresSafeArea()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    EmptyView()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        // Info action
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                heroAnimating = true
+            }
+        }
     }
 }
 

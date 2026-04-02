@@ -28,11 +28,18 @@ struct ArcCountView: View {
     @State private var arcCountVisible = false
     @State private var statsVisible = false
     @State private var capsuleVisibility: [Bool] = [false, false]
+    // Coverage capsule animation states
+    @State private var firstCapsuleVisible = false
+    @State private var firstAmountRevealed = false
+    @State private var barExtended = false
+    @State private var secondCapsuleVisible = false
+    @State private var secondAmountRevealed = false
     @State private var monthsHeaderVisible = false
     @State private var paceAnimating = false
     @State private var paceTitleVisible = false
     @State private var milestoneAnimating = false
     @State private var milestoneTitleVisible = false
+    @State private var comingSoonVisible = false
     @State private var coinVisibility: [Bool] = Array(repeating: false, count: 24)
 
     // Haptic generator
@@ -76,6 +83,13 @@ struct ArcCountView: View {
         guard nextIndex < upcomingMonths.count else { return "" }
         let month = upcomingMonths[nextIndex]
         return "\(month.shortName) \(month.year)"
+    }
+
+    private var coveredUntilText: String {
+        guard let lastCovered = upcomingMonths.last(where: { $0.isCovered }) else {
+            return "Your freedom fund doesn't cover any upcoming months yet."
+        }
+        return "Your freedom fund covers you until \(lastCovered.name) \(lastCovered.year)."
     }
 
     /// Can the user reach the next arc based on current saving pace?
@@ -145,11 +159,11 @@ struct ArcCountView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Text("Freedom Fund")
-                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
                                     .foregroundColor(.secondary)
 
                                 Text(formatCurrency(freedomFund))
-                                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                                     .foregroundColor(.primary)
 
                                 Image(systemName: "pencil")
@@ -201,23 +215,30 @@ struct ArcCountView: View {
                                         Text("·")
                                             .foregroundColor(.secondary.opacity(0.3))
 
-                                        Text(formatCurrency(totalMonthlyBills))
+                                        Text(formatCurrency(firstAmountRevealed ? totalMonthlyBills : 0))
                                             .font(.custom(FontFamily.Rubik.medium, size: 14))
                                             .foregroundColor(.secondary)
+                                            .contentTransition(.numericText(value: firstAmountRevealed ? totalMonthlyBills : 0))
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 10)
                                     .glassEffect(in: Capsule())
                                     .zIndex(1)
+                                    .opacity(firstCapsuleVisible ? 1 : 0)
+                                    .scaleEffect(firstCapsuleVisible ? 1 : 0.8)
+                                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: firstCapsuleVisible)
                                 }
 
-                                if !isSingleMonth, let last = lastCovered {
+                                if !isSingleMonth, let last = lastCovered, barExtended {
                                     // Connecting bar
                                     Color.clear
                                         .frame(width: 40, height: 8)
                                         .glassEffect(in: RoundedRectangle(cornerRadius: 4))
                                         .zIndex(0)
+                                        .transition(.scale(scale: 0.01, anchor: .leading).combined(with: .opacity))
+                                }
 
+                                if !isSingleMonth, let last = lastCovered, secondCapsuleVisible {
                                     // Last covered month
                                     HStack(spacing: 6) {
                                         Text(last.shortName)
@@ -231,18 +252,20 @@ struct ArcCountView: View {
                                         Text("·")
                                             .foregroundColor(.secondary.opacity(0.3))
 
-                                        Text(formatCurrency(totalMonthlyBills * Double(arcCount)))
+                                        Text(formatCurrency(secondAmountRevealed ? totalMonthlyBills * Double(arcCount) : 0))
                                             .font(.custom(FontFamily.Rubik.medium, size: 14))
                                             .foregroundColor(.secondary)
+                                            .contentTransition(.numericText(value: secondAmountRevealed ? totalMonthlyBills * Double(arcCount) : 0))
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 10)
                                     .glassEffect(in: Capsule())
                                     .zIndex(1)
+                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
                                 }
 
                                 // Next uncovered month — dashed
-                                if isSingleMonth, let next = nextUncovered {
+                                if isSingleMonth, let next = nextUncovered, secondCapsuleVisible {
                                     HStack(spacing: 6) {
                                         Text(next.shortName)
                                             .font(.custom(FontFamily.Rubik.medium, size: 16))
@@ -258,60 +281,52 @@ struct ArcCountView: View {
                                         Capsule()
                                             .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                                     )
+                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
                                 }
                             }
                         }
+                        .opacity(firstCapsuleVisible ? 1 : 0)
+                        .animation(.easeOut(duration: 0.3), value: firstCapsuleVisible)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .opacity(monthsHeaderVisible ? 1 : 0)
-                        .scaleEffect(monthsHeaderVisible ? 1 : 0.9, anchor: .leading)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: monthsHeaderVisible)
-                    }
-
-                    // Daily pace
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Your pace")
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
-                            .foregroundColor(.secondary.opacity(0.5))
-                            .textCase(.uppercase)
-                            .tracking(0.5)
-                            .opacity(paceTitleVisible ? 1 : 0)
-                            .offset(y: paceTitleVisible ? 0 : 10)
-                            .animation(.easeOut(duration: 0.4), value: paceTitleVisible)
-
-                        WaveTextView(
-                            text: "You're spending about \(formatCurrency(dailySpendingPace)) per day. At this rate you'll spend \(formatCurrency(projectedMonthlySpend)) by month end.",
-                            font: .custom(FontFamily.Rubik.regular, size: 18),
-                            color: .primary.opacity(0.7),
-                            isAnimating: paceAnimating,
-                            alignment: .leading
-                        )
-                        .lineSpacing(4)
                     }
 
                     // Next milestone
-                    if totalMonthlyBills > 0 {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Next milestone")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
-                                .foregroundColor(.secondary.opacity(0.5))
-                                .textCase(.uppercase)
-                                .tracking(0.5)
-                                .opacity(milestoneTitleVisible ? 1 : 0)
-                                .offset(y: milestoneTitleVisible ? 0 : 10)
-                                .animation(.easeOut(duration: 0.4), value: milestoneTitleVisible)
+                    if totalMonthlyBills > 0 && !nextMilestoneMonth.isEmpty {
+                        HStack(spacing: 10) {
+                            Text("Next Milestone")
+                                .font(.custom(FontFamily.Rubik.medium, size: 18))
+                                .foregroundColor(.secondary)
 
-                            WaveTextView(
-                                text: canReachNextMilestone
-                                    ? "Save \(formatCurrency(amountToNextArc)) more to cover \(nextMilestoneMonth). You're on track based on your spending pace."
-                                    : "Save \(formatCurrency(amountToNextArc)) more to cover \(nextMilestoneMonth). At your current pace, this milestone may take a bit longer.",
-                                font: .custom(FontFamily.Rubik.regular, size: 18),
-                                color: .primary.opacity(0.7),
-                                isAnimating: milestoneAnimating,
-                                alignment: .leading
+                            HStack(spacing: 6) {
+                                Text(nextMilestoneMonth)
+                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                    .foregroundColor(.primary)
+
+                                Text("·")
+                                    .foregroundColor(.secondary.opacity(0.3))
+
+                                Text(formatCurrency(amountToNextArc))
+                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4]))
                             )
-                            .lineSpacing(4)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .opacity(milestoneTitleVisible ? 1 : 0)
+                        .offset(y: milestoneTitleVisible ? 0 : 10)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: milestoneTitleVisible)
                     }
+
+                    // Coming soon — Freedom Fund Timeline
+                    FreedomFundTimelinePreview()
+                        .opacity(comingSoonVisible ? 1 : 0)
+                        .offset(y: comingSoonVisible ? 0 : 16)
+                        .animation(.easeOut(duration: 0.6), value: comingSoonVisible)
 
                     Spacer(minLength: 40)
                 }
@@ -405,31 +420,50 @@ struct ArcCountView: View {
                 waveAnimating = true
             }
 
-            // Timeline capsules after big text finishes
+            // Coverage capsule sequence
+            // Step 1: First capsule appears
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    monthsHeaderVisible = true
+                firstCapsuleVisible = true
+                monthsHeaderVisible = true
+            }
+            // Step 2: First amount counts up
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.9) {
+                withAnimation(.snappy(duration: 0.5)) {
+                    firstAmountRevealed = true
+                }
+            }
+            // Step 3: Bar extends
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    barExtended = true
+                }
+            }
+            // Step 4: Second capsule appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    secondCapsuleVisible = true
+                }
+            }
+            // Step 5: Second amount counts up
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) {
+                withAnimation(.snappy(duration: 0.5)) {
+                    secondAmountRevealed = true
                 }
             }
 
-            // Pace title
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
-                paceTitleVisible = true
-            }
-
-            // Pace wave text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            // Coverage subtext wave
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) {
                 paceAnimating = true
             }
 
-            // Milestone title
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.6) {
+            // Next milestone
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.2) {
                 milestoneTitleVisible = true
             }
 
-            // Milestone wave text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
-                milestoneAnimating = true
+            // Coming soon card
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.6) {
+                comingSoonVisible = true
             }
 
             // Staggered coin grid animations with haptics
@@ -1583,6 +1617,96 @@ private struct DashedDividerShape: Shape {
         path.move(to: CGPoint(x: 0, y: rect.midY))
         path.addLine(to: CGPoint(x: rect.width, y: rect.midY))
         return path
+    }
+}
+
+// MARK: - Freedom Fund Timeline Preview (Coming Soon)
+
+private struct FreedomFundTimelinePreview: View {
+    @State private var barsVisible = false
+
+    // Mock timeline bar widths (as fractions of available width)
+    private let barWidths: [CGFloat] = [0.85, 0.6, 0.45, 0.7, 0.35]
+
+    var body: some View {
+        // Frosted container with text and mock timeline bars
+        ZStack {
+            // Faint mock bars behind the frost
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Array(barWidths.enumerated()), id: \.offset) { index, fraction in
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.secondary.opacity(0.08))
+                            .frame(width: 36, height: 10)
+
+                        GeometryReader { geo in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color("NormaPastelTeal").opacity(0.2),
+                                            Color("NormaPastelPurple").opacity(0.15)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: barsVisible ? geo.size.width * fraction : 0)
+                                .animation(
+                                    .easeOut(duration: 0.6).delay(Double(index) * 0.08),
+                                    value: barsVisible
+                                )
+                        }
+                        .frame(height: 10)
+
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.secondary.opacity(0.06))
+                            .frame(width: 28, height: 10)
+                    }
+                }
+            }
+            .padding(20)
+
+            // Frosted overlay
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.clear)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+
+            // Text content on top of the frost
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Coming Soon")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                    )
+
+                Text("Freedom Fund Timeline")
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .foregroundColor(.primary.opacity(0.7))
+
+                Text("Track how your freedom fund grows over time. See deposits, withdrawals, and how close you are to covering the next month.")
+                    .font(.custom(FontFamily.Rubik.regular, size: 14))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .lineSpacing(3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+        }
+        .frame(height: 200)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 0.5)
+        )
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                barsVisible = true
+            }
+        }
     }
 }
 

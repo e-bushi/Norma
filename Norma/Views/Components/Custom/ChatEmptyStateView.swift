@@ -10,17 +10,24 @@ import SwiftUI
 struct ChatEmptyStateView: View {
     let arcCount: Int
     var onCoinTapped: () -> Void = {}
+    var onShowBills: () -> Void = {}
+    var onShowActivity: () -> Void = {}
+    var onShowExpenses: () -> Void = {}
+    var onShowPendingTransactions: () -> Void = {}
+    var pendingTransactionsCount: Int = 0
 
     @State private var textAnimating: Bool = false
     @State private var coinVisible: Bool = false
-    @State private var timezonesVisible: Bool = false
-    @State private var showTimezoneSelection: Bool = false
+    @State private var capsulesVisible: Bool = false
     @State private var visibleCapsuleCount: Int = 0
     @State private var showHint: Bool = false
     @State private var coinPressed: Bool = false
     @State private var subGreetingVisible: Bool = false
 
-    @ObservedObject private var timezoneManager = TimezoneManager.shared
+    // Timezone state — commented out for later
+    // @State private var showTimezoneSelection: Bool = false
+    // @ObservedObject private var timezoneManager = TimezoneManager.shared
+
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
 
@@ -48,11 +55,49 @@ struct ChatEmptyStateView: View {
         default: return "How can I help you tonight?"
         }
     }
-    private let capsuleColors: [Color] = [
-        Color("NormaPastelTeal"),
-        Color("NormaPastelPurple"),
-        Color("NormaPastelCoral")
-    ]
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var dataManager: DataManager
+
+    // MARK: - Capsule Display Values
+
+    private var totalBillsFormatted: String {
+        profileViewModel.formatCurrencyTruncated(billViewModel.totalMonthlyBills)
+    }
+
+    private var weeklySpend: Double {
+        let calendar = Calendar.current
+        let today = Date()
+        let weekday = calendar.component(.weekday, from: today)
+        let startOfWeek = calendar.date(byAdding: .day, value: -(weekday - 2), to: today)!
+        let dayStart = calendar.startOfDay(for: startOfWeek)
+        let now = today
+
+        return dataManager.expenses.filter { expense in
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: expense.expenseDate) {
+                return date >= dayStart && date <= now
+            }
+            if expense.expenseDate.contains("T") {
+                return formatter.date(from: expense.expenseDate + "Z").map { $0 >= dayStart && $0 <= now } ?? false
+            }
+            return formatter.date(from: expense.expenseDate + "T00:00:00Z").map { $0 >= dayStart && $0 <= now } ?? false
+        }.reduce(0) { $0 + $1.amount }
+    }
+
+    private var weeklySpendFormatted: String {
+        profileViewModel.formatCurrencyTruncated(weeklySpend)
+    }
+
+    private var monthlySpendFormatted: String {
+        profileViewModel.formatCurrencyTruncated(expenseViewModel.currentMonthExpenses)
+    }
+
+    private var shortMonthName: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: Date())
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -77,8 +122,6 @@ struct ChatEmptyStateView: View {
                     .animation(.spring(response: 0.5, dampingFraction: 0.65), value: showHint)
 
                 // Motion coin based on user's current tier (tilts with device)
-                // Wrapped in CrossfadeView for smooth transition when tier changes
-                // initialDelay of 0.7s lets the appearance animation complete before crossfade
                 CrossfadeView(
                     key: CoinTierService.currentCoinFileName(for: arcCount),
                     duration: 0.45,
@@ -115,20 +158,50 @@ struct ChatEmptyStateView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: coinVisible)
 
                 // Sub-greeting
-                Text(subGreeting)
-                    .font(.custom(FontFamily.Rubik.medium, size: scaledSubGreetingSize(for: geometry)))
-                    .foregroundColor(.white.opacity(0.85))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .frame(maxWidth: scaledSubGreetingWidth(for: geometry))
-                    .padding(.horizontal, 24)
-                    .opacity(subGreetingVisible ? 1 : 0)
-                    .offset(y: subGreetingVisible ? 0 : 10)
-                    .animation(.easeOut(duration: 0.5), value: subGreetingVisible)
+                WaveTextView(
+                    text: subGreeting,
+                    font: .custom(FontFamily.Rubik.medium, size: scaledSubGreetingSize(for: geometry)),
+                    color: .white.opacity(0.85),
+                    isAnimating: subGreetingVisible,
+                    alignment: .center
+                )
+                .lineSpacing(4)
+                .frame(maxWidth: scaledSubGreetingWidth(for: geometry))
+                .padding(.horizontal, 24)
 
-                // Timezone capsules
+                // Navigation capsules
                 FlowLayout(spacing: 8) {
-                    // Existing timezone capsules
+                    // Bills
+                    navCapsule(title: "Bills \(totalBillsFormatted)", index: 0) {
+                        onShowBills()
+                    }
+
+                    // Activity (this week)
+                    navCapsule(title: "This week \(weeklySpendFormatted)", index: 1) {
+                        onShowActivity()
+                    }
+
+                    // Expenses (month spend)
+                    navCapsule(title: "\(shortMonthName). Spend \(monthlySpendFormatted)", index: 2) {
+                        onShowExpenses()
+                    }
+
+                    // Pending
+                    navCapsule(
+                        title: pendingTransactionsCount > 0 ? "Pending (\(pendingTransactionsCount))" : "Pending",
+                        index: 3
+                    ) {
+                        onShowPendingTransactions()
+                    }
+                }
+                .frame(maxWidth: 320)
+                .padding(.top, 6)
+                .opacity(capsulesVisible ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: capsulesVisible)
+
+                // Timezone capsules — commented out for later
+                /*
+                FlowLayout(spacing: 8) {
                     ForEach(Array(timezoneManager.selectedTimezones.prefix(3).enumerated()), id: \.element.id) { index, timezone in
                         Button {
                             showTimezoneSelection = true
@@ -151,7 +224,6 @@ struct ChatEmptyStateView: View {
                         )
                     }
 
-                    // Add button
                     Button {
                         showTimezoneSelection = true
                     } label: {
@@ -170,19 +242,18 @@ struct ChatEmptyStateView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .opacity(timezoneManager.selectedTimezones.isEmpty ? (timezonesVisible ? 1 : 0) : (visibleCapsuleCount > timezoneManager.selectedTimezones.prefix(3).count - 1 ? 1 : 0))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
-                .opacity(timezonesVisible ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: timezonesVisible)
+                */
             }
             .frame(width: geometry.size.width)
             .position(x: geometry.size.width / 2, y: (geometry.size.height / 2) - 60)
             .onAppear {
                 coinVisible = false
                 textAnimating = false
-                timezonesVisible = false
+                capsulesVisible = false
+                visibleCapsuleCount = 0
                 showHint = false
                 subGreetingVisible = false
 
@@ -202,10 +273,10 @@ struct ChatEmptyStateView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     showHint = true
                 }
-                // Timezones appear last
+                // Navigation capsules appear
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    timezonesVisible = true
-                    visibleCapsuleCount = timezoneManager.selectedTimezones.prefix(3).count
+                    capsulesVisible = true
+                    visibleCapsuleCount = 4
                 }
                 // Hint fades out
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
@@ -217,15 +288,45 @@ struct ChatEmptyStateView: View {
             .onDisappear {
                 coinVisible = false
                 textAnimating = false
-                timezonesVisible = false
+                capsulesVisible = false
                 visibleCapsuleCount = 0
                 showHint = false
                 subGreetingVisible = false
             }
         }
-        .sheet(isPresented: $showTimezoneSelection) {
-            TimezoneSelectionView()
+        // Timezone sheet — commented out for later
+        // .sheet(isPresented: $showTimezoneSelection) {
+        //     TimezoneSelectionView()
+        // }
+    }
+
+    // MARK: - Navigation Capsule
+
+    @ViewBuilder
+    private func navCapsule(title: String, index: Int, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        } label: {
+            Text(title)
+                .font(.normaFinancial(16))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                )
         }
+        .buttonStyle(CapsulePressStyle())
+        .opacity(visibleCapsuleCount > index ? 1 : 0)
+        .scaleEffect(visibleCapsuleCount > index ? 1 : 0.8)
+        .animation(
+            .spring(response: 0.45, dampingFraction: 0.75)
+                .delay(Double(index) * 0.1),
+            value: visibleCapsuleCount
+        )
     }
 
     private func scaledCoinSize(for geometry: GeometryProxy) -> CGFloat {
