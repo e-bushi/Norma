@@ -136,7 +136,6 @@ struct SendButtonStyle: ButtonStyle {
         onVoiceInput: { print("Voice input tapped") }
     )
     .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-    .environmentObject(ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .background(Color("NormaBackground"))

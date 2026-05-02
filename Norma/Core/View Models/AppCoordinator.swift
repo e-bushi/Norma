@@ -19,20 +19,15 @@ class AppCoordinator: ObservableObject {
     @Published var isReady = false
     @Published var dataLoaded = false
     @Published var userStartedApp = false
-    @Published var mainLayerView: MainLayerViewType = .chat
+    @Published var mainLayerView: MainLayerViewType = .notes
 
-    /// Only show the fancy loading view if user is authenticated (loading their data)
-    var shouldShowAppLoadingView: Bool {
-        sessionViewModel.isAuthenticated && !userStartedApp
-    }
+    /// Loading view removed — go straight to the main app once auth is resolved.
+    var shouldShowAppLoadingView: Bool { false }
     
     // MARK: - Core Managers and ViewModels
 
     let dataManager: DataManager
     let sessionViewModel: SessionViewModel
-
-    // Challenge ViewModel for daily calculations during loading
-    private var challengeViewModel: ChallengeViewModel?
 
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
@@ -44,7 +39,14 @@ class AppCoordinator: ObservableObject {
         // Initialize core components
         self.dataManager = DataManager()
         self.sessionViewModel = SessionViewModel(dataManager: dataManager)
-        
+
+        // Bridge note-extracted bill tokens into the canonical Bill model so
+        // recurring bill mentions written in notes surface in BillsView.
+        BillTokenBridge.shared.configure(
+            dataManager: dataManager,
+            sessionViewModel: sessionViewModel
+        )
+
         setupAppFlow()
         setupNotificationObservers()
     }
@@ -59,49 +61,20 @@ class AppCoordinator: ObservableObject {
             // Determine initial view
             updateCurrentView()
 
-            // Add delay for authenticated users to show loading screen
-            if sessionViewModel.isAuthenticated {
-                // Run daily calculations during loading to create any pending rewards
-                await runDailyCalculationsDuringLoading()
-
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds remaining for loading
-                dataLoaded = true
-            } else {
-                // Non-authenticated users skip loading screen
-                isReady = true
-            }
+            // No artificial loading delay — drop straight into the destination.
+            dataLoaded = true
+            userStartedApp = true
+            isReady = true
 
             // Observe session changes
             observeSessionChanges()
         }
     }
 
-    /// Run daily challenge calculations during app loading.
-    /// This creates any pending rewards BEFORE fetchAndQueuePendingRewards() runs.
-    private func runDailyCalculationsDuringLoading() async {
-        // Create a temporary ChallengeViewModel to run calculations
-        let tempChallengeVM = ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
-        self.challengeViewModel = tempChallengeVM
-
-        // Load challenge data
-        tempChallengeVM.loadChallenge()
-        await tempChallengeVM.loadChallengeStats()
-
-        // Run daily calculations - this creates rewards and persists them to backend
-        await tempChallengeVM.runDailyCalculations()
-
-        print("🎁 Daily calculations completed during loading")
-    }
-
-    /// Called when user taps Start button on loading screen
+    /// Legacy hook from the old loading screen — kept for any stragglers, no-op.
     func userTappedStart() {
         userStartedApp = true
         isReady = true
-
-        // Now fetch pending rewards that were created during loading
-        Task {
-            await RewardQueueManager.shared.fetchAndQueuePendingRewards()
-        }
     }
     
     private func setupNotificationObservers() {
@@ -184,7 +157,8 @@ class AppCoordinator: ObservableObject {
     var currentViewContent: some View {
         switch currentView {
         case .loading:
-            AppLoadingView(isDataReady: dataLoaded, onStart: { self.userTappedStart() })
+            // Brief auth-resolution moment — show the canvas color, no spinner.
+            Color("NormaBackground").ignoresSafeArea()
 
         case .onboarding:
             OnboardingCoordinatorView()
@@ -213,8 +187,7 @@ enum AppView {
 enum MainLayerViewType: Hashable {
     case chat
     case settings
-    case currencyConverter
-    case moneyTasks
+    case notes
 }
 
 // MARK: - Coordinator Views
@@ -235,11 +208,6 @@ struct OnboardingCoordinatorView: View {
                     )
                 )
                 .environmentObject(onboardingViewModel)
-
-            case .previewMode:
-                PreviewModeChatView()
-                    .environmentObject(sessionViewModel)
-                    .environmentObject(onboardingViewModel)
 
             case .authentication:
                 if onboardingViewModel.showSignUp {
@@ -266,68 +234,73 @@ struct OnboardingCoordinatorView: View {
                 )
                 .environmentObject(onboardingViewModel)
 
-            // MARK: - Welcome Section: Nomad Context (2 screens)
+            // MARK: - Intro interstitial
 
-            case .nomadWelcome:
-                NomadWelcomeView {
+            case .intro:
+                OnboardingIntroInterstitialView(
+                    onContinue: {
+                        withAnimation { onboardingViewModel.currentStep = .triedBefore }
+                    }
+                )
+
+            // MARK: - Card-based onboarding questions (May 2026)
+
+            case .triedBefore:
+                NormaCardQuestionView(question: .triedBefore) { selected in
+                    onboardingViewModel.triedBefore = selected.first ?? ""
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .nomadType:
-                NomadTypeView { selected in
-                    onboardingViewModel.nomadType = selected
+            case .messyMoney:
+                NormaCardQuestionView(question: .messyMoney) { selected in
+                    onboardingViewModel.messyMoney = Array(selected)
                     onboardingViewModel.moveToNextStep()
                 }
 
-            // MARK: - Extended Onboarding: Personal Questions (4 screens - Digital Nomad focused)
-
-            case .runwayCheck:
-                OnboardingQuestionView(question: .runwayCheck) { selected in
-                    onboardingViewModel.runwayStatus = selected
+            case .writingFrequency:
+                NormaCardQuestionView(question: .writingFrequency) { selected in
+                    onboardingViewModel.writingFrequency = selected.first ?? ""
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .nomadChallenges:
-                OnboardingQuestionView(question: .nomadChallenges) { selected in
-                    onboardingViewModel.nomadChallenges = selected
+            case .incomeShape:
+                NormaCardQuestionView(question: .incomeShape) { selected in
+                    onboardingViewModel.incomeShape = selected.first ?? ""
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .moneyStoppedYou:
-                OnboardingQuestionView(question: .moneyStoppedYou) { selected in
-                    onboardingViewModel.moneyStoppedYou = selected
+            case .whatsWorking:
+                NormaCardQuestionView(question: .whatsWorking) { selected in
+                    onboardingViewModel.whatsWorking = selected.first ?? ""
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .winningLooksLike:
-                OnboardingQuestionView(question: .winningLooksLike) { selected in
-                    onboardingViewModel.winningLooksLike = selected
-                    onboardingViewModel.moveToNextStep()
-                }
+            case .currencyIncome:
+                OnboardingCurrencyIncomeView(
+                    onContinue: { onboardingViewModel.moveToNextStep() },
+                    onBack: {
+                        withAnimation { onboardingViewModel.currentStep = .whatsWorking }
+                    }
+                )
+                .environmentObject(onboardingViewModel)
 
-            // MARK: - Final Screens: Privacy & Welcome
+            case .cashCardMix:
+                OnboardingCashCardMixView(
+                    onContinue: { onboardingViewModel.moveToNextStep() },
+                    onBack: {
+                        withAnimation { onboardingViewModel.currentStep = .currencyIncome }
+                    }
+                )
+                .environmentObject(onboardingViewModel)
 
-            case .privacy:
-                PrivacyView {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .welcomeJourney:
-                WelcomeJourneyView {
-                    onboardingViewModel.moveToNextStep()
-                }
-
-            case .notifications:
-                NotificationPermissionView(
-                    onPermissionGranted: {
-                        Task {
-                            await onboardingViewModel.finalizeOnboarding()
-                        }
+            case .saveAnswers:
+                OnboardingSaveAnswersView(
+                    onEmailSignUp: {
+                        onboardingViewModel.showSignUp = true
+                        withAnimation { onboardingViewModel.currentStep = .authentication }
                     },
-                    onSkip: {
-                        Task {
-                            await onboardingViewModel.finalizeOnboarding()
-                        }
+                    onBack: {
+                        withAnimation { onboardingViewModel.currentStep = .cashCardMix }
                     }
                 )
                 .environmentObject(onboardingViewModel)

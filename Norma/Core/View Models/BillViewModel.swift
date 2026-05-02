@@ -41,7 +41,7 @@ class BillViewModel: ObservableObject {
 
         return activeBills
             .filter { bill in
-                calendar.isDate(bill.dueDate, equalTo: currentMonth, toGranularity: .month)
+                calendar.isDate(bill.effectiveDueDate, equalTo: currentMonth, toGranularity: .month)
             }
             .reduce(0) { $0 + $1.amount }
     }
@@ -92,8 +92,8 @@ class BillViewModel: ObservableObject {
     private func updateOverdueBills() {
         let today = Date()
         let billsNeedingUpdate = dataManager.bills.filter { bill in
-            // Only update bills that are scheduled but past their due date
-            bill.status == .scheduled && bill.dueDate < today
+            // Only update bills that are scheduled but past their effective due date
+            bill.status == .scheduled && bill.effectiveDueDate < today
         }
         
         // Update each overdue bill
@@ -157,7 +157,7 @@ class BillViewModel: ObservableObject {
         status: BillStatus = .scheduled,
         categoryId: String? = nil,
         merchant: String? = nil,
-        isReminderOn: Bool = false,
+        isReminderOn: Bool = true,
         reminderDays: Int? = nil,
         notes: String? = nil,
         isMostCritical: Bool? = nil
@@ -214,6 +214,12 @@ class BillViewModel: ObservableObject {
 
             // Find and return the created bill
             let createdBill = bills.first { $0.name == name && $0.amount == amount && $0.userId == userId }
+
+            // Schedule reminder notifications for the new bill (day before by default).
+            if let createdBill, createdBill.isReminderOn {
+                await NotificationService.shared.scheduleBillReminders(for: createdBill)
+            }
+
             isLoading = false
             print("🔄 [DEBUG] BillViewModel.addBill: Method completed, returning bill with ID: \(createdBill?.id ?? "nil")")
             return createdBill
@@ -233,11 +239,15 @@ class BillViewModel: ObservableObject {
             try await dataManager.updateBillWithEncryption(bill)
             loadBills()
 
+            // Reschedule (or cancel) reminder notifications to reflect the new state.
+            if bill.isReminderOn {
+                await NotificationService.shared.scheduleBillReminders(for: bill)
+            } else {
+                await NotificationService.shared.cancelNotifications(for: bill)
+            }
+
             // Track bill updated
             AnalyticsService.shared.track(.billUpdated(billId: bill.id ?? "", field: "multiple"))
-
-            // Check if reducing bill amount increased arcs
-            sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
             showError("Failed to update bill: \(error.localizedDescription)")
         }
@@ -253,11 +263,11 @@ class BillViewModel: ObservableObject {
             try await dataManager.deleteBill(bill)
             loadBills()
 
+            // Cancel any scheduled reminder notifications for this bill.
+            await NotificationService.shared.cancelNotifications(for: bill)
+
             // Track bill deleted
             AnalyticsService.shared.track(.billDeleted(billId: bill.id ?? ""))
-
-            // Check if deleting bill increased arcs
-            sessionViewModel.checkArcIncreaseAfterBillChange(bills: bills)
         } catch {
             showError("Failed to delete bill: \(error.localizedDescription)")
         }
@@ -275,7 +285,7 @@ class BillViewModel: ObservableObject {
 
             // Calculate days before due
             let calendar = Calendar.current
-            let daysBeforeDue = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
+            let daysBeforeDue = calendar.dateComponents([.day], from: Date(), to: bill.effectiveDueDate).day ?? 0
 
             // Track bill marked as paid
             AnalyticsService.shared.track(.billMarkedPaid(
@@ -296,103 +306,33 @@ class BillViewModel: ObservableObject {
     func markBillAsUnpaid(_ bill: Bill) async {
         isLoading = true
         clearError()
-        
+
         do {
-            // Create date formatter with correct timezone
             let dateFormatter = ISO8601DateFormatter()
             dateFormatter.timeZone = TimeZone.current
-            
-            // Determine the appropriate status based on current date
-            let status: BillStatus = Date() > bill.dueDate ? .overdue : .scheduled
-            
-            // Calculate next due date (one period ahead of current due date)
-            let nextDueDate = calculateNextDueDateFrom(bill.dueDate, frequency: bill.frequency)
-            
-            // Create updated bill keeping original dueDate
-            let updatedBill = Bill(
-                id: bill.id,
-                userId: bill.userId,
-                name: bill.name,
-                dueDate: bill.dueDate,  // Keep the original due date
-                nextDueDate: nextDueDate,  // Set next due date one period ahead
-                amount: bill.amount,
-                status: status,  // Set to scheduled or overdue based on current date
-                frequency: bill.frequency,
-                categoryId: bill.categoryId,
-                merchant: bill.merchant,
-                isReminderOn: bill.isReminderOn,
-                reminderDays: bill.reminderDays,
-                isActive: bill.isActive,
-                createdAt: bill.createdAt,
-                updatedAt: dateFormatter.string(from: Date()),
-                notes: bill.notes,
-                verificationDate: bill.verificationDate
-            )
-            
+
+            // Status is derived from the rolled-forward effective due date.
+            let status: BillStatus = bill.effectiveDueDate < Date() ? .overdue : .scheduled
+
+            var updatedBill = bill
+            updatedBill.status = status
+            updatedBill.updatedAt = dateFormatter.string(from: Date())
+
             try await dataManager.updateBillWithEncryption(updatedBill)
 
-            // Delete the associated expense payment if any
+            // Delete the associated expense payment(s).
             let expenses = dataManager.expenses.filter { $0.billId == bill.id }
             for expense in expenses {
-                // Only delete expenses that are bill payments (have a billId)
-                if expense.billId == bill.id {
-                    try await dataManager.deleteExpense(expense)
-                }
+                try await dataManager.deleteExpense(expense)
             }
 
             loadBills()
 
-            // Track bill marked as unpaid
             AnalyticsService.shared.track(.billMarkedUnpaid(billId: bill.id ?? ""))
         } catch {
             showError("Failed to mark bill as unpaid: \(error.localizedDescription)")
         }
 
-        isLoading = false
-    }
-    
-    private func calculateNextDueDateFrom(_ date: Date, frequency: BillFrequency) -> Date {
-        let calendar = Calendar.current
-        
-        switch frequency {
-        case .monthly:
-            return calendar.date(byAdding: .month, value: 1, to: date) ?? date
-        case .quarterly:
-            return calendar.date(byAdding: .month, value: 3, to: date) ?? date
-        case .yearly:
-            return calendar.date(byAdding: .year, value: 1, to: date) ?? date
-        }
-    }
-    
-    // MARK: - Advance Paid Bills
-
-    /// Advances paid bills' dueDate to their nextDueDate and resets status to scheduled
-    func advancePaidBills(_ bills: [Bill]) async {
-        isLoading = true
-        clearError()
-
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.timeZone = TimeZone.current
-
-        for bill in bills {
-            guard bill.status == .paid || bill.calculateStatus(from: dataManager.expenses) == .paid else { continue }
-
-            let newDueDate = bill.nextDueDate ?? calculateNextDueDateFrom(bill.dueDate, frequency: bill.frequency)
-            let nextNextDueDate = calculateNextDueDateFrom(newDueDate, frequency: bill.frequency)
-
-            var advancedBill = bill
-            advancedBill.dueDate = newDueDate
-            advancedBill.nextDueDate = nextNextDueDate
-            advancedBill.status = .scheduled
-
-            do {
-                try await dataManager.updateBillWithEncryption(advancedBill)
-            } catch {
-                print("Failed to advance bill \(bill.name): \(error)")
-            }
-        }
-
-        loadBills()
         isLoading = false
     }
 
@@ -414,7 +354,7 @@ class BillViewModel: ObservableObject {
             }
         }
         
-        return filtered.sorted { $0.dueDate < $1.dueDate }
+        return filtered.sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
     
     // MARK: - Statistics
@@ -427,6 +367,8 @@ class BillViewModel: ObservableObject {
             let monthlyAmount: Double
             
             switch bill.frequency {
+            case .oneTime:
+                monthlyAmount = 0
             case .monthly:
                 monthlyAmount = bill.amount
             case .quarterly:
@@ -458,8 +400,8 @@ class BillViewModel: ObservableObject {
                 bill.calculateStatus(from: expenses) == .paid
             }
             .filter { bill in
-                // Only include bills due this month
-                Calendar.current.isDate(bill.dueDate, equalTo: Date(), toGranularity: .month)
+                // Only include bills whose current cycle falls in this month
+                Calendar.current.isDate(bill.effectiveDueDate, equalTo: Date(), toGranularity: .month)
             }
             .reduce(0) { $0 + $1.amount }
     }
@@ -475,7 +417,7 @@ class BillViewModel: ObservableObject {
     
     func getDueDateStatus(for bill: Bill) -> (text: String, color: Color) {
         let calendar = Calendar.current
-        let daysUntilDue = calendar.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
+        let daysUntilDue = calendar.dateComponents([.day], from: Date(), to: bill.effectiveDueDate).day ?? 0
         
         switch bill.status {
         case .paid:

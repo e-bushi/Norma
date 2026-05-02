@@ -2,7 +2,9 @@
 //  PaywallBillingCard.swift
 //  Norma
 //
-//  Created by Assistant on 7/31/25.
+//  Plan card for the paywall in D9/D10 dark editorial language.
+//  Active = solid lavender border + tinted fill. Inactive = dashed border
+//  on dim text — matches the dashed/solid capsule pattern used elsewhere.
 //
 
 import SwiftUI
@@ -15,148 +17,91 @@ struct PaywallPlanCard: View {
     let isSelected: Bool
     let action: () -> Void
 
-    @State private var stripesVisible = false
-
-    private let accentColor = Color("NormaPastelPurple")
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let onAccent = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                // Radio indicator
+                // Radio indicator: filled lavender when active, dashed circle when not.
                 ZStack {
-                    Circle()
-                        .stroke(isSelected ? accentColor : Color("NormaText").opacity(0.2), lineWidth: 2)
-                        .frame(width: 20, height: 20)
-
                     if isSelected {
                         Circle()
-                            .fill(accentColor)
-                            .frame(width: 10, height: 10)
+                            .fill(accentPurple)
+                            .frame(width: 18, height: 18)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(onAccent)
+                    } else {
+                        Circle()
+                            .stroke(
+                                mutedText.opacity(0.7),
+                                style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                            )
+                            .frame(width: 18, height: 18)
                     }
                 }
+                .frame(width: 22)
 
-                // Title + price
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(title)
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                            .foregroundColor(Color("NormaText"))
+                        Text(title.lowercased())
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .foregroundStyle(cream)
 
                         if let badge = badge {
-                            Text(badge)
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
-                                .foregroundColor(.white)
+                            Text(badge.lowercased())
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 10))
+                                .tracking(0.4)
+                                .foregroundStyle(onAccent)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(
-                                    Capsule().fill(accentColor)
-                                )
+                                .background(Capsule().fill(accentPurple))
                         }
                     }
 
                     HStack(spacing: 6) {
-                        Text(price)
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
-                            .foregroundColor(Color("NormaText").opacity(0.5))
+                        Text(price.lowercased())
+                            .font(.custom(FontFamily.Rubik.regular, size: 13))
+                            .foregroundStyle(mutedText)
 
                         if let strikethrough = strikethroughPrice {
-                            Text(strikethrough)
-                                .font(.custom(FontFamily.Rubik.regular, size: 13))
-                                .foregroundColor(Color("NormaText").opacity(0.3))
-                                .strikethrough(color: Color("NormaText").opacity(0.3))
+                            Text(strikethrough.lowercased())
+                                .font(.custom(FontFamily.Rubik.regular, size: 12))
+                                .foregroundStyle(dimText)
+                                .strikethrough(color: dimText)
                         }
                     }
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(isSelected ? accentColor.opacity(0.08) : Color.clear)
-
-                    if isSelected {
-                        DiagonalStripesPattern(
-                            lineColor: accentColor.opacity(0.07),
-                            spacing: 10,
-                            lineWidth: 0.8
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .opacity(stripesVisible ? 1 : 0)
-                        .mask(
-                            GeometryReader { geo in
-                                Rectangle()
-                                    .frame(width: stripesVisible ? geo.size.width : 0)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        )
-                    }
-                }
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? accentPurple.opacity(0.06) : Color.clear)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(
-                        isSelected ? accentColor.opacity(0.5) : Color("NormaText").opacity(0.08),
-                        lineWidth: 1.5
-                    )
-            )
-        }
-        .buttonStyle(PlanCardButtonStyle())
-        .onChange(of: isSelected) { _, selected in
-            if selected {
-                stripesVisible = false
-                withAnimation(.easeOut(duration: 0.45).delay(0.05)) {
-                    stripesVisible = true
-                }
-            } else {
-                stripesVisible = false
-            }
-        }
-        .onAppear {
-            if isSelected {
-                // Slight delay so initial load also animates
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.easeOut(duration: 0.45)) {
-                        stripesVisible = true
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(accentPurple.opacity(0.7), lineWidth: 1.2)
+                    } else {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                mutedText.opacity(0.4),
+                                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                            )
                     }
                 }
-            }
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-    }
-}
-
-// MARK: - Diagonal Stripes Pattern
-
-private struct DiagonalStripesPattern: View {
-    var lineColor: Color = .gray
-    var spacing: CGFloat = 10
-    var lineWidth: CGFloat = 0.8
-
-    var body: some View {
-        Canvas { context, size in
-            let totalLines = Int((size.width + size.height) / spacing) + 1
-
-            for i in 0..<totalLines {
-                let offset = CGFloat(i) * spacing
-
-                var path = Path()
-                let startX = offset
-                let startY: CGFloat = 0
-                let endX = offset - size.height
-                let endY = size.height
-
-                path.move(to: CGPoint(x: startX, y: startY))
-                path.addLine(to: CGPoint(x: endX, y: endY))
-
-                context.stroke(
-                    path,
-                    with: .color(lineColor),
-                    lineWidth: lineWidth
-                )
-            }
-        }
+        .buttonStyle(PlanCardButtonStyle())
     }
 }
 

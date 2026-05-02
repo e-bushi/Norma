@@ -19,7 +19,23 @@ struct NormaApp: App {
 
     init() {
         do {
-            self.modelContainer = try ModelContainer(for: CachedBill.self, CachedExpense.self, CachedChallenge.self, CachedCategory.self, CachedPendingTransaction.self, CachedUserReward.self)
+            self.modelContainer = try ModelContainer(
+                for:
+                    Note.self,
+                    NoteToken.self,
+                    CachedBill.self,
+                    CachedExpense.self,
+                    CachedCategory.self,
+                    CachedPendingTransaction.self,
+                    FreedomFundEntry.self
+            )
+            // Start the note sync queue's network monitor at launch and bind it
+            // to the SwiftData container so flush() can persist extracted tokens.
+            let container = self.modelContainer
+            Task { @MainActor in
+                NoteSyncQueue.shared.attach(modelContainer: container)
+            }
+
             Purchases.logLevel = .debug
             Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf", appUserID: nil)
 

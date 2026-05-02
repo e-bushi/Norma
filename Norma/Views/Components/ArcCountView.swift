@@ -6,99 +6,87 @@
 //
 
 import SwiftUI
-import SceneKit
+import SwiftData
 
 struct ArcCountView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionViewModel: SessionViewModel
-    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
+    @Query(sort: \FreedomFundEntry.createdAt, order: .reverse)
+    private var allEntries: [FreedomFundEntry]
+
     let arcCount: Int
     let freedomFund: Double
     let totalMonthlyBills: Double
     let currency: String
 
-    // Sheet state
     @State private var showFreedomFundEdit = false
     @State private var showInfoPopover = false
 
-    // Staggered animation states
-    @State private var waveAnimating = false
-    @State private var heroVisible = false
-    @State private var arcCountVisible = false
-    @State private var statsVisible = false
-    @State private var capsuleVisibility: [Bool] = [false, false]
-    // Coverage capsule animation states
-    @State private var firstCapsuleVisible = false
-    @State private var firstAmountRevealed = false
-    @State private var barExtended = false
-    @State private var secondCapsuleVisible = false
-    @State private var secondAmountRevealed = false
-    @State private var monthsHeaderVisible = false
-    @State private var paceAnimating = false
-    @State private var paceTitleVisible = false
-    @State private var milestoneAnimating = false
-    @State private var milestoneTitleVisible = false
-    @State private var comingSoonVisible = false
-    @State private var coinVisibility: [Bool] = Array(repeating: false, count: 24)
+    @State private var heroWordCount = 0
+    @State private var pillVisible = false
+    @State private var rangeVisible = false
+    @State private var activityVisible = false
+    private let heroWordTotal = 8
 
-    // Haptic generator
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let bg = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var glassBorder: Color { cream.opacity(0.22) }
+    private var glassFill: Color { Color.white.opacity(0.04) }
+    private var heroFont: Font { .system(size: 64, weight: .bold) }
 
-    // Progress to next arc (0.0 to 1.0)
-    private var progressToNextArc: CGFloat {
-        guard totalMonthlyBills > 0 else { return 0 }
-        let currentArcProgress = freedomFund.truncatingRemainder(dividingBy: totalMonthlyBills)
-        return CGFloat(currentArcProgress / totalMonthlyBills)
+    private struct ActivityItem: Identifiable {
+        let id: UUID
+        let date: String
+        let label: String
+        let amount: String
+        let isIncome: Bool
+        var faded: Bool = false
     }
 
-    // Amount needed for next arc
-    private var amountToNextArc: Double {
-        guard totalMonthlyBills > 0 else { return 0 }
-        let nextArcTarget = Double(arcCount + 1) * totalMonthlyBills
-        return max(0, nextArcTarget - freedomFund)
+    private var activityItems: [ActivityItem] {
+        guard let userId = sessionViewModel.currentUser?.userId else { return [] }
+        return allEntries
+            .filter { $0.userId == userId }
+            .map { entry in
+                ActivityItem(
+                    id: UUID(uuidString: entry.id) ?? UUID(),
+                    date: Self.dateLabel(for: entry.createdAt),
+                    label: Self.activityLabel(for: entry),
+                    amount: formatSignedCurrency(entry.delta),
+                    isIncome: entry.delta > 0
+                )
+            }
     }
 
-    // Spending pace
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-
-    private var daysElapsedThisMonth: Int {
-        max(1, Calendar.current.component(.day, from: Date()))
+    private static func dateLabel(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "today" }
+        if calendar.isDateInYesterday(date) { return "yesterday" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date).lowercased()
     }
 
-    private var daysInMonth: Int {
-        Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
-    }
-
-    private var dailySpendingPace: Double {
-        expenseViewModel.currentMonthExpenses / Double(daysElapsedThisMonth)
-    }
-
-    private var projectedMonthlySpend: Double {
-        dailySpendingPace * Double(daysInMonth)
-    }
-
-    private var nextMilestoneMonth: String {
-        let nextIndex = arcCount // 0-based, so arcCount gives us the next uncovered
-        guard nextIndex < upcomingMonths.count else { return "" }
-        let month = upcomingMonths[nextIndex]
-        return "\(month.shortName) \(month.year)"
-    }
-
-    private var coveredUntilText: String {
-        guard let lastCovered = upcomingMonths.last(where: { $0.isCovered }) else {
-            return "Your freedom fund doesn't cover any upcoming months yet."
+    private static func activityLabel(for entry: FreedomFundEntry) -> String {
+        switch entry.source {
+        case .manualEdit:
+            return entry.delta >= 0 ? "added to fund" : "withdrew from fund"
+        case .linkedAccountSync:
+            return "balance synced"
         }
-        return "Your freedom fund covers you until \(lastCovered.name) \(lastCovered.year)."
     }
 
-    /// Can the user reach the next arc based on current saving pace?
-    /// Compares freedom fund growth needed vs projected remaining income after spending
-    private var canReachNextMilestone: Bool {
-        guard totalMonthlyBills > 0 else { return false }
-        let monthlyIncome = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        let projectedLeftover = monthlyIncome - projectedMonthlySpend
-        return projectedLeftover >= amountToNextArc
+    private func formatSignedCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        let absString = formatter.string(from: NSNumber(value: abs(value))) ?? "$\(Int(abs(value)))"
+        let prefix = value >= 0 ? "+" : "−"
+        return "\(prefix)\(absString)"
     }
 
     private func formatCurrency(_ value: Double) -> String {
@@ -109,261 +97,138 @@ struct ArcCountView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
-    private var waveWords: [(word: String, color: Color)] {
-        var words: [(String, Color)] = []
-        words.append(("You", .primary))
-        words.append(("can", .primary))
-        words.append(("pay", .primary))
-        words.append(("\(arcCount)", Color("NormaPastelTeal")))
-        words.append((arcCount == 1 ? "month" : "months", Color("NormaPastelTeal")))
-        words.append(("of", .primary))
-        words.append(("bills.", .primary))
-        return words
-    }
-
-    // Get months starting from next month
     private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)] {
         let calendar = Calendar.current
         let now = Date()
-
         return (1...24).map { offset in
             guard let futureDate = calendar.date(byAdding: .month, value: offset, to: now) else {
                 return (name: "", shortName: "", isCovered: false, year: 0)
             }
-
             let formatter = DateFormatter()
             formatter.dateFormat = "MMMM"
             let fullName = formatter.string(from: futureDate)
-
             formatter.dateFormat = "MMM"
-            let shortName = formatter.string(from: futureDate)
-
+            let shortName = formatter.string(from: futureDate).lowercased()
             let year = calendar.component(.year, from: futureDate)
-            let isCovered = offset <= arcCount
-
-            return (name: fullName, shortName: shortName, isCovered: isCovered, year: year)
+            return (name: fullName, shortName: shortName, isCovered: offset <= arcCount, year: year)
         }
     }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Freedom Fund info
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Freedom Fund amount + edit
-                        Button {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            showFreedomFundEdit = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text("Freedom Fund")
-                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                    .foregroundColor(.secondary)
-
-                                Text(formatCurrency(freedomFund))
-                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                                    .foregroundColor(.primary)
-
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary.opacity(0.4))
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .glassEffect(in: Capsule())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .opacity(capsuleVisibility[0] ? 1 : 0)
-                        .scaleEffect(capsuleVisibility[0] ? 1 : 0.8, anchor: .leading)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: capsuleVisibility[0])
-
-                        // To next arc
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showFreedomFundEdit = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("freedom fund")
+                            .font(.custom(FontFamily.Rubik.medium, size: 13))
+                            .foregroundColor(mutedText)
+                        Text(formatCurrency(freedomFund))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                            .foregroundColor(cream)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(dimText)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(glassFill))
+                    .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .opacity(pillVisible ? 1 : 0)
+                .offset(y: pillVisible ? 0 : 8)
 
-                    // Wave text headline
-                    ColoredWaveTextView(
-                        words: waveWords,
-                        font: .normaHeadline(64),
-                        isAnimating: waveAnimating,
-                        alignment: .leading
-                    )
-
-                    // Coverage range capsules
-                    if arcCount > 0 {
-                        let firstCovered = upcomingMonths.first(where: { $0.isCovered })
-                        let lastCovered = upcomingMonths.last(where: { $0.isCovered })
-
-                        let isSingleMonth = firstCovered?.shortName == lastCovered?.shortName && firstCovered?.year == lastCovered?.year
-                        let nextUncovered = upcomingMonths.first(where: { !$0.isCovered })
-
-                        GlassEffectContainer(spacing: 0) {
-                            HStack(spacing: isSingleMonth ? 8 : -8) {
-                                // First covered month
-                                if let first = firstCovered {
-                                    HStack(spacing: 6) {
-                                        Text(first.shortName)
-                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                            .foregroundColor(.primary)
-
-                                        Text(String(first.year))
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.primary.opacity(0.7))
-
-                                        Text("·")
-                                            .foregroundColor(.secondary.opacity(0.3))
-
-                                        Text(formatCurrency(firstAmountRevealed ? totalMonthlyBills : 0))
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.secondary)
-                                            .contentTransition(.numericText(value: firstAmountRevealed ? totalMonthlyBills : 0))
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .glassEffect(in: Capsule())
-                                    .zIndex(1)
-                                    .opacity(firstCapsuleVisible ? 1 : 0)
-                                    .scaleEffect(firstCapsuleVisible ? 1 : 0.8)
-                                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: firstCapsuleVisible)
-                                }
-
-                                if !isSingleMonth, let last = lastCovered, barExtended {
-                                    // Connecting bar
-                                    Color.clear
-                                        .frame(width: 40, height: 8)
-                                        .glassEffect(in: RoundedRectangle(cornerRadius: 4))
-                                        .zIndex(0)
-                                        .transition(.scale(scale: 0.01, anchor: .leading).combined(with: .opacity))
-                                }
-
-                                if !isSingleMonth, let last = lastCovered, secondCapsuleVisible {
-                                    // Last covered month
-                                    HStack(spacing: 6) {
-                                        Text(last.shortName)
-                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                            .foregroundColor(.primary)
-
-                                        Text(String(last.year))
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.primary.opacity(0.7))
-
-                                        Text("·")
-                                            .foregroundColor(.secondary.opacity(0.3))
-
-                                        Text(formatCurrency(secondAmountRevealed ? totalMonthlyBills * Double(arcCount) : 0))
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.secondary)
-                                            .contentTransition(.numericText(value: secondAmountRevealed ? totalMonthlyBills * Double(arcCount) : 0))
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .glassEffect(in: Capsule())
-                                    .zIndex(1)
-                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                }
-
-                                // Next uncovered month — dashed
-                                if isSingleMonth, let next = nextUncovered, secondCapsuleVisible {
-                                    HStack(spacing: 6) {
-                                        Text(next.shortName)
-                                            .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                            .foregroundColor(.secondary.opacity(0.4))
-
-                                        Text(String(next.year))
-                                            .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                            .foregroundColor(.secondary.opacity(0.3))
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                                    )
-                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                }
-                            }
-                        }
-                        .opacity(firstCapsuleVisible ? 1 : 0)
-                        .animation(.easeOut(duration: 0.3), value: firstCapsuleVisible)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 14) {
+                        waveWord("you", index: 0)
+                        waveWord("can", index: 1)
+                        waveWord("pay", index: 2)
                     }
-
-                    // Next milestone
-                    if totalMonthlyBills > 0 && !nextMilestoneMonth.isEmpty {
-                        HStack(spacing: 10) {
-                            Text("Next Milestone")
-                                .font(.custom(FontFamily.Rubik.medium, size: 18))
-                                .foregroundColor(.secondary)
-
-                            HStack(spacing: 6) {
-                                Text(nextMilestoneMonth)
-                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                    .foregroundColor(.primary)
-
-                                Text("·")
-                                    .foregroundColor(.secondary.opacity(0.3))
-
-                                Text(formatCurrency(amountToNextArc))
-                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4]))
-                            )
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .opacity(milestoneTitleVisible ? 1 : 0)
-                        .offset(y: milestoneTitleVisible ? 0 : 10)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: milestoneTitleVisible)
+                    HStack(spacing: 14) {
+                        waveWord("\(arcCount)", index: 3)
+                        waveWord(arcCount == 1 ? "month" : "months", index: 4)
                     }
-
-                    // Coming soon — Freedom Fund Timeline
-                    FreedomFundTimelinePreview()
-                        .opacity(comingSoonVisible ? 1 : 0)
-                        .offset(y: comingSoonVisible ? 0 : 16)
-                        .animation(.easeOut(duration: 0.6), value: comingSoonVisible)
-
-                    Spacer(minLength: 40)
+                    HStack(alignment: .firstTextBaseline, spacing: 14) {
+                        waveWord("of", index: 5)
+                        HStack(alignment: .firstTextBaseline, spacing: 0) {
+                            waveWord("bills", index: 6)
+                            waveWord(".", index: 7, color: accentPurple)
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
-            }
-            .background {
-                ZStack(alignment: .bottomTrailing) {
-                    CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+                .padding(.vertical, 20)
 
-                    Canvas { context, size in
-                        let origin = CGPoint(x: size.width, y: size.height)
-                        let ringCount = 8
-                        let maxRadius: CGFloat = 220
-                        let ringSpacing = maxRadius / CGFloat(ringCount)
-                        let tierColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
-
-                        for i in 1...ringCount {
-                            let radius = CGFloat(i) * ringSpacing
-                            let opacity = 0.10 * (1.0 - CGFloat(i) / CGFloat(ringCount))
-                            let rect = CGRect(
-                                x: origin.x - radius,
-                                y: origin.y - radius,
-                                width: radius * 2,
-                                height: radius * 2
-                            )
-                            context.stroke(
-                                Path(ellipseIn: rect),
-                                with: .color(tierColor.opacity(opacity)),
-                                lineWidth: 1
-                            )
+                if arcCount > 0 {
+                    let firstCovered = upcomingMonths.first(where: { $0.isCovered })
+                    let lastCovered = upcomingMonths.last(where: { $0.isCovered })
+                    HStack(spacing: 12) {
+                        if let first = firstCovered {
+                            rangePill(first.shortName, year: first.year)
+                        }
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(mutedText)
+                        if let last = lastCovered {
+                            rangePill(last.shortName, year: last.year)
                         }
                     }
-                    .allowsHitTesting(false)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
+                    .opacity(rangeVisible ? 1 : 0)
+                    .offset(y: rangeVisible ? 0 : 8)
                 }
-                .ignoresSafeArea()
+
+                Text("recent activity")
+                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                    .foregroundColor(mutedText)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+                    .opacity(activityVisible ? 1 : 0)
+
+                ZStack(alignment: .top) {
+                    if activityItems.isEmpty {
+                        Text("no activity yet.")
+                            .font(.custom(FontFamily.Rubik.regular, size: 14).italic())
+                            .foregroundColor(dimText)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 32)
+                            .padding(.bottom, 40)
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 10) {
+                                ForEach(activityItems) { item in
+                                    HStack(spacing: 0) {
+                                        if !item.isIncome { Spacer(minLength: 0) }
+                                        activityRow(item)
+                                        if item.isIncome { Spacer(minLength: 0) }
+                                    }
+                                    .opacity(item.faded ? 0.55 : 1)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 24)
+                            .padding(.bottom, 40)
+                        }
+                        LinearGradient(
+                            colors: [bg, bg.opacity(0)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 28)
+                        .allowsHitTesting(false)
+                    }
+                }
+                .opacity(activityVisible ? 1 : 0)
+                .offset(y: activityVisible ? 0 : 8)
             }
-            .scrollContentBackground(.hidden)
+            .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -375,118 +240,134 @@ struct ArcCountView: View {
                     } label: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 18))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(mutedText)
                     }
                     .popover(isPresented: $showInfoPopover, arrowEdge: .top) {
                         ArcInfoPopover()
                             .presentationCompactAdaptation(.popover)
                     }
                 }
-
             }
         }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showFreedomFundEdit) {
             FreedomFundEditSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onAppear {
-            // Prepare haptic generator
-            impactGenerator.prepare()
+        .onAppear { runEntranceAnimation() }
+    }
 
-            // Hero coin bounce in with dramatic entrance
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.15)) {
-                heroVisible = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                impactGenerator.impactOccurred(intensity: 1.0)
-            }
+    @ViewBuilder
+    private func waveWord(_ text: String, index: Int, color: Color? = nil) -> some View {
+        let visible = index < heroWordCount
+        Text(text)
+            .font(heroFont)
+            .foregroundColor(color ?? cream)
+            .tracking(-2.56)
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 18)
+            .blur(radius: visible ? 0 : 5)
+    }
 
-            // Arc count text fade in
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.5)) {
-                arcCountVisible = true
-            }
+    private func runEntranceAnimation() {
+        guard heroWordCount == 0 else { return }
 
-            // Capsules stagger in
-            for index in 0..<capsuleVisibility.count {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + (Double(index) * 0.2)) {
-                    capsuleVisibility[index] = true
-                    impactGenerator.impactOccurred(intensity: 0.4)
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                pillVisible = true
             }
+        }
 
-            // Wave text after capsules
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                waveAnimating = true
-            }
-
-            // Coverage capsule sequence
-            // Step 1: First capsule appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                firstCapsuleVisible = true
-                monthsHeaderVisible = true
-            }
-            // Step 2: First amount counts up
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.9) {
-                withAnimation(.snappy(duration: 0.5)) {
-                    firstAmountRevealed = true
-                }
-            }
-            // Step 3: Bar extends
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
-                withAnimation(.easeOut(duration: 0.4)) {
-                    barExtended = true
-                }
-            }
-            // Step 4: Second capsule appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    secondCapsuleVisible = true
-                }
-            }
-            // Step 5: Second amount counts up
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) {
-                withAnimation(.snappy(duration: 0.5)) {
-                    secondAmountRevealed = true
-                }
-            }
-
-            // Coverage subtext wave
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.6) {
-                paceAnimating = true
-            }
-
-            // Next milestone
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.2) {
-                milestoneTitleVisible = true
-            }
-
-            // Coming soon card
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.6) {
-                comingSoonVisible = true
-            }
-
-            // Staggered coin grid animations with haptics
-            for index in 0..<24 {
-                let delay = 1.1 + (Double(index) * 0.08)
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    coinVisibility[index] = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.05) {
-                    impactGenerator.impactOccurred(intensity: 0.3)
+        let heroStart = 0.3
+        for i in 0..<heroWordTotal {
+            DispatchQueue.main.asyncAfter(deadline: .now() + heroStart + Double(i) * 0.06) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                    heroWordCount = i + 1
                 }
             }
         }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                rangeVisible = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                activityVisible = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rangePill(_ name: String, year: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(name)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                .foregroundColor(cream)
+            Text(String(year))
+                .font(.custom(FontFamily.Rubik.medium, size: 12))
+                .foregroundColor(cream.opacity(0.6))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(Capsule().fill(glassFill))
+        .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func activityRow(_ item: ActivityItem) -> some View {
+        HStack(spacing: 10) {
+            Text(item.date)
+                .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                .foregroundColor(dimText)
+
+            if item.isIncome {
+                Circle()
+                    .fill(cream.opacity(0.3))
+                    .frame(width: 3, height: 3)
+            } else {
+                Rectangle()
+                    .fill(cream.opacity(0.3))
+                    .frame(width: 8, height: 1)
+            }
+
+            Text(item.label)
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundColor(mutedText)
+
+            Text(item.amount)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                .foregroundColor(item.isIncome ? accentPurple : mutedText)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background(
+            Group {
+                if !item.isIncome {
+                    Capsule().fill(Color.white.opacity(0.02))
+                }
+            }
+        )
+        .overlay(
+            Capsule()
+                .stroke(
+                    item.isIncome ? accentPurple.opacity(0.32) : glassBorder,
+                    style: item.isIncome
+                        ? StrokeStyle(lineWidth: 1, dash: [4, 3])
+                        : StrokeStyle(lineWidth: 1)
+                )
+        )
     }
 }
 
 // MARK: - Freedom Fund Edit Sheet
 struct FreedomFundEditSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
-    @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
     @ObservedObject private var plaidService = PlaidService.shared
 
     @State private var freedomFundText: String = ""
@@ -494,6 +375,15 @@ struct FreedomFundEditSheet: View {
     @State private var useLinkedAccount: Bool = false
     @State private var selectedAccountId: String?
     @FocusState private var isTextFieldFocused: Bool
+
+    private let bg = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var glassBorder: Color { cream.opacity(0.22) }
+    private var glassFill: Color { Color.white.opacity(0.04) }
+    private var heroFont: Font { .system(size: 64, weight: .bold) }
 
     private var currentFreedomFund: Double {
         sessionViewModel.currentUser?.settings.freedomFund ?? 0
@@ -524,199 +414,104 @@ struct FreedomFundEditSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Source capsules at top — only show if Plaid accounts exist
-                    if hasPlaidAccounts {
-                        HStack(spacing: 10) {
-                            Button {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    useLinkedAccount = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        isTextFieldFocused = true
-                                    }
-                                }
-                            } label: {
-                                Text("Manual")
-                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                    .foregroundColor(!useLinkedAccount ? .primary : .secondary.opacity(0.5))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 9)
-                                    .background(
-                                        Group {
-                                            if !useLinkedAccount {
-                                                Capsule()
-                                                    .fill(.clear)
-                                                    .glassEffect(in: Capsule())
-                                            }
-                                        }
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                !useLinkedAccount ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.2),
-                                                style: !useLinkedAccount ? StrokeStyle(lineWidth: 0.5) : StrokeStyle(lineWidth: 1, dash: [5, 3])
-                                            )
-                                    )
+            VStack(alignment: .leading, spacing: 0) {
+                if hasPlaidAccounts {
+                    HStack(spacing: 10) {
+                        sourcePill("manual", active: !useLinkedAccount) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                useLinkedAccount = false
                             }
-                            .buttonStyle(PlainButtonStyle())
-
-                            Button {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    useLinkedAccount = true
-                                    isTextFieldFocused = false
-                                }
-                            } label: {
-                                Text("Linked Account")
-                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                                    .foregroundColor(useLinkedAccount ? .primary : .secondary.opacity(0.5))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 9)
-                                    .background(
-                                        Group {
-                                            if useLinkedAccount {
-                                                Capsule()
-                                                    .fill(.clear)
-                                                    .glassEffect(in: Capsule())
-                                            }
-                                        }
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                useLinkedAccount ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.2),
-                                                style: useLinkedAccount ? StrokeStyle(lineWidth: 0.5) : StrokeStyle(lineWidth: 1, dash: [5, 3])
-                                            )
-                                    )
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                isTextFieldFocused = true
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
-                        .padding(.top, 16)
+                        sourcePill("linked account", active: useLinkedAccount) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                useLinkedAccount = true
+                                isTextFieldFocused = false
+                            }
+                        }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                }
 
-                    // Hero amount — left aligned, bigger
-                    VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(currencySymbol)
+                            .font(heroFont)
+                            .tracking(-2.56)
+                            .foregroundColor(cream.opacity(0.55))
+
                         if useLinkedAccount, let balance = selectedAccountBalance {
                             Text(formatNumberWithoutCurrency(balance))
-                                .font(.normaHeadline(72))
-                                .foregroundColor(.primary)
+                                .font(heroFont)
+                                .tracking(-2.56)
+                                .foregroundColor(cream)
                                 .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                         } else {
                             TextField("0", text: $freedomFundText)
-                                .font(.normaHeadline(72))
+                                .font(heroFont)
+                                .tracking(-2.56)
+                                .foregroundColor(cream)
+                                .tint(accentPurple)
                                 .keyboardType(.decimalPad)
                                 .focused($isTextFieldFocused)
                                 .multilineTextAlignment(.leading)
                                 .minimumScaleFactor(0.5)
                         }
-
-                        Text(useLinkedAccount ? "from linked account" : "How much is in your Freedom Fund?")
-                            .font(.normaInput(14))
-                            .foregroundColor(.secondary.opacity(0.6))
                     }
 
-                    if useLinkedAccount {
-                        // Account picker
-                        VStack(spacing: 6) {
-                            ForEach(plaidService.connectedAccounts) { account in
-                                Button {
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        selectedAccountId = account.accountId
-                                    }
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: selectedAccountId == account.accountId ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(selectedAccountId == account.accountId ? Color("NormaPastelTeal") : .secondary.opacity(0.3))
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            HStack(spacing: 6) {
-                                                Text(account.name)
-                                                    .font(.custom(FontFamily.Rubik.medium, size: 15))
-                                                    .foregroundColor(.primary)
-
-                                                if let mask = account.mask {
-                                                    Text("••\(mask)")
-                                                        .font(.custom(FontFamily.Rubik.regular, size: 12))
-                                                        .foregroundColor(.secondary.opacity(0.5))
-                                                }
-                                            }
-
-                                            if let current = account.balances.current {
-                                                Text(formatCurrencyFull(current))
-                                                    .font(.custom(FontFamily.Rubik.regular, size: 13))
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(.clear)
-                                            .glassEffect(in: RoundedRectangle(cornerRadius: 14))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .stroke(selectedAccountId == account.accountId ? Color("NormaPastelTeal").opacity(0.4) : Color.secondary.opacity(0.1), lineWidth: selectedAccountId == account.accountId ? 1.5 : 0.5)
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                    }
+                    Text(useLinkedAccount ? "from linked account" : "how much is in your freedom fund?")
+                        .font(.custom(FontFamily.Rubik.medium, size: 13))
+                        .foregroundColor(mutedText)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 100)
+                .padding(.top, 24)
+
+                if useLinkedAccount {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            ForEach(plaidService.connectedAccounts) { account in
+                                accountCard(account)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                        .padding(.bottom, 40)
+                    }
+                }
+
+                Spacer(minLength: 0)
             }
+            .background(bg.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
-                // Save button pinned at bottom
                 Button {
                     saveChanges()
                 } label: {
                     HStack {
                         if isSaving {
                             ProgressView()
-                                .tint(.primary)
-                                .scaleEffect(0.8)
+                                .tint(cream)
+                                .scaleEffect(0.85)
                         } else {
-                            Text("Save")
+                            Text("save")
                                 .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                                .foregroundColor(.primary)
+                                .foregroundColor(cream)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 28)
-                            .fill(.clear)
-                            .glassEffect(in: RoundedRectangle(cornerRadius: 28))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28)
-                            .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-                    )
+                    .background(Capsule().fill(glassFill))
+                    .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
                 }
                 .disabled(isSaving || (useLinkedAccount && selectedAccountId == nil))
                 .opacity(isSaving || (useLinkedAccount && selectedAccountId == nil) ? 0.4 : 1)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 16)
             }
-            .background {
-                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
-                    .ignoresSafeArea()
-            }
-            .scrollContentBackground(.hidden)
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
@@ -724,7 +519,7 @@ struct FreedomFundEditSheet: View {
                     } label: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 18))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(mutedText)
                     }
                     .popover(isPresented: $showFundInfo, arrowEdge: .top) {
                         FreedomFundInfoPopover()
@@ -736,13 +531,14 @@ struct FreedomFundEditSheet: View {
                     Button {
                         dismiss()
                     } label: {
-                        Text("Done")
-                            .font(.custom(FontFamily.Rubik.medium, size: 16))
-                            .foregroundColor(.primary)
+                        Text("done")
+                            .font(.custom(FontFamily.Rubik.medium, size: 14))
+                            .foregroundColor(cream)
                     }
                 }
             }
         }
+        .preferredColorScheme(.dark)
         .onAppear {
             if let arcAccountId = currentArcAccountId,
                plaidService.connectedAccounts.contains(where: { $0.accountId == arcAccountId }) {
@@ -758,6 +554,80 @@ struct FreedomFundEditSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func sourcePill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        } label: {
+            Text(label)
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundColor(active ? cream : mutedText)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(active ? Capsule().fill(glassFill) : Capsule().fill(.clear))
+                .overlay(
+                    Capsule().stroke(
+                        active ? glassBorder : mutedText.opacity(0.4),
+                        style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private func accountCard(_ account: PlaidService.PlaidAccount) -> some View {
+        let selected = selectedAccountId == account.accountId
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedAccountId = account.accountId
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(selected ? accentPurple : dimText)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(account.name)
+                            .font(.custom(FontFamily.Rubik.medium, size: 15))
+                            .foregroundColor(cream)
+
+                        if let mask = account.mask {
+                            Text("••\(mask)")
+                                .font(.custom(FontFamily.Rubik.regular, size: 12))
+                                .foregroundColor(mutedText)
+                        }
+                    }
+
+                    if let current = account.balances.current {
+                        Text(formatCurrencyFull(current))
+                            .font(.custom(FontFamily.Rubik.regular, size: 13))
+                            .foregroundColor(mutedText)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(RoundedRectangle(cornerRadius: 14).fill(glassFill))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(
+                        selected ? accentPurple.opacity(0.55) : glassBorder,
+                        style: selected ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     private func formatCurrencyFull(_ value: Double) -> String {
@@ -789,23 +659,37 @@ struct FreedomFundEditSheet: View {
         var updatedSettings = currentUser.settings
         var updatedProfile = currentUser
 
-        if useLinkedAccount, let accountId = selectedAccountId, let balance = selectedAccountBalance {
-            // Link to account — set the balance as freedom fund and store account ID
+        if useLinkedAccount {
+            // Wire the account. Plaid is the source of truth for the value —
+            // we don't snapshot the balance into settings, and we don't write
+            // a ledger entry here. RootView's Plaid sync already records
+            // .linkedAccountSync entries whenever the live balance moves.
+            guard let accountId = selectedAccountId else {
+                isSaving = false
+                return
+            }
             updatedSettings.arcAccountId = accountId
-            updatedSettings.freedomFund = balance
-            updatedProfile.freedomFund = balance
         } else {
-            // Manual — clear linked account
+            // Manual is the source of truth for this branch — settings.freedomFund
+            // holds the user-typed value, and we record a manual-edit ledger
+            // entry when it actually changes.
             let newFreedomFund = parseNumber(freedomFundText)
             updatedSettings.arcAccountId = nil
             updatedSettings.freedomFund = newFreedomFund
             updatedProfile.freedomFund = newFreedomFund
+
+            FreedomFundLedger.recordIfChanged(
+                in: modelContext,
+                userId: currentUser.userId,
+                newBalance: newFreedomFund,
+                source: .manualEdit
+            )
         }
 
         updatedProfile.settings = updatedSettings
 
         Task {
-            await sessionViewModel.updateUserProfileWithArcCheck(updatedProfile, bills: billViewModel.bills)
+            await sessionViewModel.updateUserProfile(updatedProfile)
 
             await MainActor.run {
                 isSaving = false
@@ -1111,604 +995,6 @@ struct FreedomFundInfoPopover: View {
     }
 }
 
-// MARK: - Arc Timeline Calendar
-
-struct ArcTimelineCalendarView: View {
-    let upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)]
-    let coinVisibility: [Bool]
-    let monthsHeaderVisible: Bool
-    let totalMonthlyBills: Double
-    let currency: String
-
-    private func formatCumulativeAmount(for monthNumber: Int) -> String {
-        let cumulative = totalMonthlyBills * Double(monthNumber)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: cumulative)) ?? "$\(Int(cumulative))"
-    }
-
-    // Group months by year, preserving index
-    private var yearSections: [(year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])] {
-        var sections: [(Int, [(Int, (String, String, Bool, Int))])] = []
-        var currentYear: Int? = nil
-        var currentGroup: [(Int, (String, String, Bool, Int))] = []
-
-        for i in 0..<upcomingMonths.count {
-            let month = upcomingMonths[i]
-            if month.year != currentYear {
-                if let cy = currentYear, !currentGroup.isEmpty {
-                    sections.append((cy, currentGroup))
-                }
-                currentYear = month.year
-                currentGroup = [(i, month)]
-            } else {
-                currentGroup.append((i, month))
-            }
-        }
-        if let cy = currentYear, !currentGroup.isEmpty {
-            sections.append((cy, currentGroup))
-        }
-        return sections
-    }
-
-    private func coveredMonths(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))] {
-        section.months.filter { $0.month.isCovered }
-    }
-
-    private func firstMonth(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> (index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))? {
-        section.months.first
-    }
-
-    private func lastCoveredMonth(in section: (year: Int, months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))])) -> (index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))? {
-        section.months.last(where: { $0.month.isCovered })
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            ForEach(Array(yearSections.enumerated()), id: \.element.year) { sectionIndex, section in
-                let covered = coveredMonths(in: section)
-                let hasCoverage = !covered.isEmpty
-                let first = firstMonth(in: section)
-                let lastCovered = lastCoveredMonth(in: section)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    if hasCoverage, let first = first, let last = lastCovered {
-                        let showBar = first.index != last.index
-
-                        GlassEffectContainer(spacing: 4) {
-                            HStack(spacing: 6) {
-                                // Start month
-                                Text(first.month.shortName)
-                                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .glassEffect(in: Capsule())
-
-                                if showBar {
-                                    // End month
-                                    Text(last.month.shortName)
-                                        .font(.custom(FontFamily.Rubik.medium, size: 16))
-                                        .foregroundColor(.primary)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 10)
-                                        .glassEffect(in: Capsule())
-                                }
-                            }
-                        }
-                    } else {
-                        // No coverage — description only
-                        let firstIndex = section.months.first?.index ?? 0
-                        let monthsInSection = section.months.count
-
-                        Text("Save \(formatCumulativeAmount(for: firstIndex + 1)) to start covering \(section.year)")
-                            .font(.custom(FontFamily.Rubik.regular, size: 18))
-                            .foregroundColor(.secondary.opacity(0.3))
-                            .lineSpacing(4)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Arc Year Deck (Swipeable Stack for fully covered year)
-
-struct ArcYearDeckView: View {
-    let months: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))]
-    @Binding var currentIndex: Int
-    let coinVisibility: [Bool]
-    let formatAmount: (Int) -> String
-
-    @State private var dragOffset: CGFloat = 0
-
-    private let peekOffset: CGFloat = 8
-    private let peekScale: CGFloat = 0.04
-
-    private var visibleCards: [(index: Int, month: (name: String, shortName: String, isCovered: Bool, year: Int))] {
-        let start = currentIndex
-        let end = min(currentIndex + 3, months.count)
-        guard start < end else { return [] }
-        return Array(months[start..<end])
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                ForEach(Array(visibleCards.enumerated().reversed()), id: \.element.index) { stackIndex, item in
-                    let isTop = stackIndex == 0
-                    let globalIndex = item.index
-                    let isVisible = globalIndex < coinVisibility.count && coinVisibility[globalIndex]
-
-                    ArcMonthCard(
-                        monthName: item.month.name,
-                        isCovered: item.month.isCovered,
-                        monthNumber: globalIndex + 1,
-                        isVisible: isVisible,
-                        billAmount: formatAmount(globalIndex + 1)
-                    )
-                    .scaleEffect(1 - CGFloat(stackIndex) * peekScale)
-                    .offset(y: -CGFloat(stackIndex) * peekOffset)
-                    .offset(x: isTop ? dragOffset : 0)
-                    .rotationEffect(isTop ? .degrees(Double(dragOffset) / 20) : .zero)
-                    .opacity(stackIndex == 2 ? 0.5 : 1)
-                    .zIndex(Double(3 - stackIndex))
-                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentIndex)
-                }
-            }
-            .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { value in
-                        if abs(value.translation.width) > abs(value.translation.height) {
-                            dragOffset = value.translation.width
-                        }
-                    }
-                    .onEnded { value in
-                        let threshold: CGFloat = 50
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                            if value.translation.width < -threshold && currentIndex < months.count - 1 {
-                                currentIndex += 1
-                            } else if value.translation.width > threshold && currentIndex > 0 {
-                                currentIndex -= 1
-                            }
-                            dragOffset = 0
-                        }
-                    }
-            )
-
-            // Month counter
-            if months.count > 1 {
-                Text("\(currentIndex + 1) of \(months.count)")
-                    .font(.normaInput(12))
-                    .foregroundColor(.secondary.opacity(0.4))
-                    .padding(.top, 10)
-            }
-        }
-    }
-}
-
-// MARK: - Arc Month Card
-
-struct ArcMonthCard: View {
-    let monthName: String
-    let isCovered: Bool
-    let monthNumber: Int
-    var isVisible: Bool = true
-    var billAmount: String = ""
-
-    private var coinTier: CoinTier {
-        CoinTierService.currentCoinTier(for: monthNumber)
-    }
-
-    private var coinFileName: String {
-        coinTier.fileName
-    }
-
-    private var stateDescription: String {
-        if isCovered {
-            switch monthNumber {
-            case 1: return "urgency"
-            case 2: return "caution"
-            case 3: return "stable"
-            case 4: return "calm"
-            case 5: return "steady"
-            case 6: return "secure"
-            case 7: return "balanced"
-            case 8: return "thriving"
-            case 9: return "flourishing"
-            case 10: return "abundant"
-            case 11: return "liberated"
-            case 12: return "free"
-            case 13: return "fortified"
-            case 14: return "resilient"
-            case 15: return "unshakable"
-            case 16: return "sovereign"
-            case 17: return "powerful"
-            case 18: return "legendary"
-            case 19: return "transcendent"
-            case 20: return "infinite"
-            case 21: return "mythic"
-            case 22: return "eternal"
-            case 23: return "ascended"
-            case 24: return "untouchable"
-            default: return "covered"
-            }
-        } else {
-            return ""
-        }
-    }
-
-    static func stateColorForMonth(_ monthNumber: Int) -> Color {
-        switch monthNumber {
-        case 1: return Color("NormaPastelCoral")
-        case 2: return Color(red: 1.0, green: 0.7, blue: 0.3)
-        case 3: return Color(red: 0.9, green: 0.75, blue: 0.4)
-        case 4: return Color(red: 0.8, green: 0.8, blue: 0.45)
-        case 5: return Color(red: 0.65, green: 0.8, blue: 0.5)
-        case 6: return Color("NormaPastelTeal")
-        case 7: return Color(red: 0.4, green: 0.75, blue: 0.8)
-        case 8: return Color(red: 0.4, green: 0.7, blue: 0.9)
-        case 9: return Color(red: 0.5, green: 0.6, blue: 0.9)
-        case 10: return Color(red: 0.6, green: 0.5, blue: 0.85)
-        case 11: return Color(red: 0.65, green: 0.4, blue: 0.8)
-        case 12: return Color(red: 0.7, green: 0.35, blue: 0.75)
-        case 13: return Color(red: 0.75, green: 0.3, blue: 0.7)
-        case 14: return Color(red: 0.6, green: 0.3, blue: 0.75)
-        case 15: return Color(red: 0.45, green: 0.35, blue: 0.8)
-        case 16: return Color(red: 0.35, green: 0.4, blue: 0.85)
-        case 17: return Color(red: 0.3, green: 0.5, blue: 0.9)
-        case 18: return Color(red: 0.25, green: 0.6, blue: 0.85)
-        case 19: return Color(red: 0.2, green: 0.65, blue: 0.75)
-        case 20: return Color(red: 0.2, green: 0.7, blue: 0.65)
-        case 21: return Color(red: 0.25, green: 0.75, blue: 0.55)
-        case 22: return Color(red: 0.3, green: 0.8, blue: 0.45)
-        case 23: return Color(red: 0.4, green: 0.85, blue: 0.4)
-        case 24: return Color(red: 0.5, green: 0.9, blue: 0.35)
-        default: return Color("NormaPastelTeal")
-        }
-    }
-
-    private var stateColor: Color {
-        isCovered ? Self.stateColorForMonth(monthNumber) : Color.secondary
-    }
-
-    private var coinAnimation: Animation {
-        .spring(response: 0.7, dampingFraction: 0.6)
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            // 3D Coin
-            ZStack {
-                if isCovered {
-                    Circle()
-                        .fill(coinTier.glowColor.opacity(0.10))
-                        .frame(width: 52, height: 52)
-                        .blur(radius: 10)
-
-                    StaticCoin3DView(fileName: coinFileName)
-                        .id(coinFileName)
-                        .frame(width: 44, height: 44)
-                } else {
-                    StaticCoin3DView(fileName: coinFileName)
-                        .id("\(coinFileName)-locked")
-                        .frame(width: 44, height: 44)
-                        .saturation(0)
-                        .opacity(0.3)
-                }
-            }
-            .scaleEffect(isVisible ? 1 : 0)
-            .opacity(isVisible ? 1 : 0)
-            .animation(coinAnimation, value: isVisible)
-
-            // Month name + state
-            VStack(alignment: .leading, spacing: 3) {
-                Text(monthName)
-                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                    .foregroundColor(isCovered ? .primary : .secondary.opacity(0.4))
-
-                if isCovered {
-                    Text(stateDescription)
-                        .font(.custom(FontFamily.Rubik.regular, size: 12))
-                        .foregroundColor(stateColor)
-                }
-            }
-
-            Spacer()
-
-            // Bill amount
-            if !billAmount.isEmpty {
-                Text(billAmount)
-                    .font(.normaFinancial(16))
-                    .foregroundColor(isCovered ? .primary : .secondary.opacity(0.25))
-                    .strikethrough(!isCovered, color: .secondary.opacity(0.3))
-            }
-        }
-        .padding(14)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.clear)
-                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-
-                if isCovered {
-                    DiagonalLinesPattern(
-                        lineColor: stateColor,
-                        spacing: 10,
-                        lineWidth: 0.8
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .mask(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(0.25),
-                                .white.opacity(0.08),
-                                .clear
-                            ],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    )
-                    .allowsHitTesting(false)
-                }
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 0.5)
-        )
-        .opacity(isVisible ? 1 : 0)
-        .offset(x: isVisible ? 0 : -10)
-        .animation(coinAnimation, value: isVisible)
-    }
-}
-
-// MARK: - Hero Coin 3D View (Spinning)
-/// Large spinning 3D coin for hero display
-struct HeroCoin3DView: UIViewRepresentable {
-    var fileName: String = "norma-coin"
-
-    func makeUIView(context: Context) -> SCNView {
-        let scnView = SCNView()
-        scnView.backgroundColor = .clear
-        scnView.isOpaque = false
-        scnView.autoenablesDefaultLighting = true
-        scnView.allowsCameraControl = false
-        scnView.isUserInteractionEnabled = false
-        scnView.antialiasingMode = .multisampling4X
-
-        if !loadScene(into: scnView) {
-            createFallbackScene(into: scnView)
-        }
-
-        scnView.isPlaying = true
-
-        return scnView
-    }
-
-    func updateUIView(_ uiView: SCNView, context: Context) {
-        // No updates needed
-    }
-
-    private func loadScene(into scnView: SCNView) -> Bool {
-        guard let url = Bundle.main.url(forResource: fileName, withExtension: "usdz") else {
-            print("HeroCoin3DView: Could not find \(fileName).usdz")
-            return false
-        }
-
-        guard let scene = try? SCNScene(url: url, options: [.checkConsistency: true]) else {
-            print("HeroCoin3DView: Failed to load scene from URL")
-            return false
-        }
-
-        scene.background.contents = UIColor.clear
-
-        // Create container for the model
-        let containerNode = SCNNode()
-
-        // Clone all child nodes from the loaded scene
-        for childNode in scene.rootNode.childNodes {
-            containerNode.addChildNode(childNode.clone())
-        }
-
-        // Remove original nodes to prevent static coin overlay
-        scene.rootNode.childNodes.forEach { $0.removeFromParentNode() }
-
-        // Calculate bounding box and center the model
-        let (minBound, maxBound) = containerNode.boundingBox
-        let centerX = (minBound.x + maxBound.x) / 2
-        let centerY = (minBound.y + maxBound.y) / 2
-        let centerZ = (minBound.z + maxBound.z) / 2
-        containerNode.position = SCNVector3(-centerX, -centerY, -centerZ)
-
-        // Calculate model dimensions
-        let width = maxBound.x - minBound.x
-        let height = maxBound.y - minBound.y
-        let depth = maxBound.z - minBound.z
-        let maxDimension = max(width, max(height, depth))
-
-        scene.rootNode.addChildNode(containerNode)
-
-        // Setup camera
-        let cameraNode = SCNNode()
-        cameraNode.camera = SCNCamera()
-        cameraNode.camera?.usesOrthographicProjection = true
-        cameraNode.camera?.orthographicScale = Double(maxDimension * 0.6)
-        cameraNode.position = SCNVector3(0, 0, maxDimension * 2)
-        scene.rootNode.addChildNode(cameraNode)
-
-        // Slow rotation for hero coin (10 seconds for full rotation)
-        let rotation = SCNAction.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 10)
-        let repeatRotation = SCNAction.repeatForever(rotation)
-        containerNode.runAction(repeatRotation)
-
-        scnView.scene = scene
-        return true
-    }
-
-    private func createFallbackScene(into scnView: SCNView) {
-        let fallbackScene = SCNScene()
-        fallbackScene.background.contents = UIColor.clear
-
-        let torus = SCNTorus(ringRadius: 0.4, pipeRadius: 0.15)
-        torus.firstMaterial?.diffuse.contents = UIColor(red: 0.4, green: 0.8, blue: 0.8, alpha: 1.0)
-        torus.firstMaterial?.specular.contents = UIColor.white
-        let torusNode = SCNNode(geometry: torus)
-        torusNode.eulerAngles.x = .pi / 4
-
-        fallbackScene.rootNode.addChildNode(torusNode)
-
-        let camera = SCNNode()
-        camera.camera = SCNCamera()
-        camera.camera?.usesOrthographicProjection = true
-        camera.camera?.orthographicScale = 1.0
-        camera.position = SCNVector3(0, 0, 3)
-        fallbackScene.rootNode.addChildNode(camera)
-
-        let rotation = SCNAction.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 10)
-        torusNode.runAction(SCNAction.repeatForever(rotation))
-
-        scnView.scene = fallbackScene
-    }
-}
-
-// MARK: - Dashed Divider Shape
-
-// MARK: - Diagonal Lines Pattern
-
-private struct DiagonalLinesPattern: View {
-    var lineColor: Color = .gray
-    var spacing: CGFloat = 10
-    var lineWidth: CGFloat = 0.8
-
-    var body: some View {
-        Canvas { context, size in
-            let totalLines = Int((size.width + size.height) / spacing) + 1
-
-            for i in 0..<totalLines {
-                let offset = CGFloat(i) * spacing
-
-                var path = Path()
-                // Lines go from top-right to bottom-left
-                let startX = offset
-                let startY: CGFloat = 0
-                let endX = offset - size.height
-                let endY = size.height
-
-                path.move(to: CGPoint(x: startX, y: startY))
-                path.addLine(to: CGPoint(x: endX, y: endY))
-
-                context.stroke(
-                    path,
-                    with: .color(lineColor),
-                    lineWidth: lineWidth
-                )
-            }
-        }
-    }
-}
-
-private struct DashedDividerShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.width, y: rect.midY))
-        return path
-    }
-}
-
-// MARK: - Freedom Fund Timeline Preview (Coming Soon)
-
-private struct FreedomFundTimelinePreview: View {
-    @State private var barsVisible = false
-
-    // Mock timeline bar widths (as fractions of available width)
-    private let barWidths: [CGFloat] = [0.85, 0.6, 0.45, 0.7, 0.35]
-
-    var body: some View {
-        // Frosted container with text and mock timeline bars
-        ZStack {
-            // Faint mock bars behind the frost
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(barWidths.enumerated()), id: \.offset) { index, fraction in
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.secondary.opacity(0.08))
-                            .frame(width: 36, height: 10)
-
-                        GeometryReader { geo in
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color("NormaPastelTeal").opacity(0.2),
-                                            Color("NormaPastelPurple").opacity(0.15)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: barsVisible ? geo.size.width * fraction : 0)
-                                .animation(
-                                    .easeOut(duration: 0.6).delay(Double(index) * 0.08),
-                                    value: barsVisible
-                                )
-                        }
-                        .frame(height: 10)
-
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.secondary.opacity(0.06))
-                            .frame(width: 28, height: 10)
-                    }
-                }
-            }
-            .padding(20)
-
-            // Frosted overlay
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.clear)
-                .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-
-            // Text content on top of the frost
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Coming Soon")
-                    .font(.custom(FontFamily.Rubik.medium, size: 11))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4]))
-                    )
-
-                Text("Freedom Fund Timeline")
-                    .font(.custom(FontFamily.Rubik.medium, size: 16))
-                    .foregroundColor(.primary.opacity(0.7))
-
-                Text("Track how your freedom fund grows over time. See deposits, withdrawals, and how close you are to covering the next month.")
-                    .font(.custom(FontFamily.Rubik.regular, size: 14))
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .lineSpacing(3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-        }
-        .frame(height: 200)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 0.5)
-        )
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                barsVisible = true
-            }
-        }
-    }
-}
 
 #Preview {
     ArcCountView(

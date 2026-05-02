@@ -88,15 +88,6 @@ struct AIMessageBubble: View {
             // Pre-text components (cards, confirmations, etc.) — NOT instructional images
             if let component = uiComponent, showCards, !isInstructionalImages {
                 switch component {
-                case .billCards(let bills, let currency):
-                    MiniBillCardView(bills: bills, currency: currency)
-                        .transition(.opacity.combined(with: .scale))
-                case .expenseCards(let expenses, let currency):
-                    MiniExpenseCardView(expenses: expenses, currency: currency)
-                        .transition(.opacity.combined(with: .scale))
-                case .challengeCard(let challenge, let currency):
-                    MiniChallengeCardView(challenge: challenge, currency: currency)
-                        .transition(.opacity.combined(with: .scale))
                 case .actionConfirmation(let icon, let message, let colorName):
                     ActionConfirmationCard(icon: icon, message: message, colorName: colorName)
                         .transition(.opacity.combined(with: .scale))

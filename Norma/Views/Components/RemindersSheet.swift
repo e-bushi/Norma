@@ -2,222 +2,260 @@
 //  RemindersSheet.swift
 //  Norma
 //
-//  Half-sheet displaying scheduled AI reminders
+//  Sheet listing scheduled reminders + bill notifications. Reads pending
+//  requests from UNUserNotificationCenter and renders them in the D9/D10
+//  dark editorial language used by CalendarSheet and BillsView.
 //
 
 import SwiftUI
+import SwiftData
 import UserNotifications
 
 struct RemindersSheet: View {
     @Binding var isPresented: Bool
-    @State private var reminders: [UNNotificationRequest] = []
+    @State private var reminders: [LoadedReminder] = []
     @State private var isLoading = true
-    @State private var showInfoAlert = false
+    @Environment(\.modelContext) private var modelContext
+
+    private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+
+    private var heroFont: Font { .system(size: 56, weight: .heavy) }
+
+    private struct LoadedReminder: Identifiable {
+        let id: String
+        let title: String
+        let date: Date
+        let kindLabel: String  // "bill" or "reminder"
+        let amount: String?
+        let recurrence: String? // "daily" | "weekly" | "monthly" | nil
+    }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if reminders.isEmpty {
-                    emptyState
-                } else {
-                    remindersList
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showInfoAlert = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 17))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 6) {
-                        Text("Money Tasks")
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+        VStack(spacing: 0) {
+            dragHandle
 
-                        // Segmented progress bar (8 segments, 8 slots each)
-                        HStack(spacing: 3) {
-                            ForEach(0..<8, id: \.self) { segment in
-                                let slotsPerSegment = 8
-                                let segmentStart = segment * slotsPerSegment
-                                let fillRatio = min(1.0, max(0.0, Double(reminders.count - segmentStart) / Double(slotsPerSegment)))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    heroBlock
+                        .padding(.horizontal, 24)
 
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(fillRatio > 0 ? Color("NormaPastelTeal") : Color.secondary.opacity(0.2))
-                                    .frame(width: 12, height: 6)
-                            }
-                        }
-                    }
+                    listBlock
+                        .padding(.horizontal, 24)
+                        .padding(.top, 22)
+                        .padding(.bottom, 32)
                 }
-            }
-            .alert("A little heads up", isPresented: $showInfoAlert) {
-                Button("Got it", role: .cancel) { }
-            } message: {
-                Text("I can keep track of 64 reminders for you at a time. Pro tip: recurring ones only count as one — perfect for weekly check-ins!")
             }
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .task {
-            await loadReminders()
+        .background(bg.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+        .task { await loadReminders() }
+    }
+
+    // MARK: - Drag handle
+
+    private var dragHandle: some View {
+        Capsule()
+            .fill(cream.opacity(0.2))
+            .frame(width: 36, height: 4)
+            .padding(.top, 6)
+            .padding(.bottom, 18)
+            .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Hero
+
+    private var heroBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("reminders.")
+                .font(heroFont)
+                .tracking(-2.24)
+                .foregroundStyle(cream)
+
+            Text(eyebrowText)
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundStyle(mutedText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var eyebrowText: String {
+        if isLoading { return "loading…" }
+        if reminders.isEmpty { return "nothing scheduled." }
+        let count = reminders.count
+        return "\(count) \(count == 1 ? "reminder" : "reminders") scheduled."
+    }
+
+    // MARK: - List
+
+    @ViewBuilder
+    private var listBlock: some View {
+        if isLoading {
+            EmptyView()
+        } else if reminders.isEmpty {
+            emptyState
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(reminders) { reminder in
+                    reminderCard(reminder)
+                }
+            }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bell.slash")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary.opacity(0.5))
-
-            Text("No reminders")
-                .font(.custom(FontFamily.Rubik.medium, size: 18))
-                .foregroundColor(.primary)
-
-            Text("Ask Norma to set a reminder\nand it will appear here")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("ask norma to set a reminder, or write “remind me to…” in a note. it'll land here.")
                 .font(.custom(FontFamily.Rubik.regular, size: 14))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(dimText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 14)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
     }
 
-    private var remindersList: some View {
-        List {
-            ForEach(reminders, id: \.identifier) { reminder in
-                ReminderRow(reminder: reminder)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 24, bottom: 8, trailing: 24))
+    @ViewBuilder
+    private func reminderCard(_ item: LoadedReminder) -> some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title.lowercased())
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .tracking(-0.16)
+                    .foregroundStyle(cream)
+                Text(subtitleLabel(for: item))
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundStyle(accentPurple)
             }
-            .onDelete(perform: deleteReminders)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let amount = item.amount {
+                Text(amount)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .tracking(-0.18)
+                    .foregroundStyle(cream)
+            }
+
+            Button {
+                cancel(item)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(mutedText)
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Circle().stroke(
+                            mutedText.opacity(0.6),
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
         }
-        .listStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: 18).fill(accentPurple.opacity(0.06)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(accentPurple.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        )
     }
+
+    private func subtitleLabel(for item: LoadedReminder) -> String {
+        let prefix = formattedDate(for: item.date)
+        if let rec = item.recurrence {
+            return "\(prefix) · \(rec)"
+        }
+        return "\(prefix) · \(item.kindLabel)"
+    }
+
+    private func formattedDate(for date: Date) -> String {
+        let cal = Calendar.current
+        let f = DateFormatter()
+        if cal.isDateInToday(date) {
+            f.dateFormat = "'today at' h:mm a"
+        } else if cal.isDateInTomorrow(date) {
+            f.dateFormat = "'tomorrow at' h:mm a"
+        } else if cal.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            f.dateFormat = "EEEE 'at' h:mm a"
+        } else {
+            f.dateFormat = "MMM d 'at' h:mm a"
+        }
+        return f.string(from: date).lowercased()
+    }
+
+    // MARK: - Data
 
     private func loadReminders() async {
         isLoading = true
-        reminders = await NotificationService.shared.getPendingAIReminders()
-            .sorted { first, second in
-                guard let trigger1 = first.trigger as? UNCalendarNotificationTrigger,
-                      let trigger2 = second.trigger as? UNCalendarNotificationTrigger,
-                      let date1 = trigger1.nextTriggerDate(),
-                      let date2 = trigger2.nextTriggerDate() else {
-                    return false
+        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
+            .filter { $0.identifier.hasPrefix("ai_reminder_") || $0.content.categoryIdentifier == "BILL_REMINDER" }
+
+        let cal = Calendar.current
+        let now = Date()
+        var loaded: [LoadedReminder] = []
+        for req in requests {
+            guard let trigger = req.trigger as? UNCalendarNotificationTrigger,
+                  let next = trigger.nextTriggerDate(),
+                  next >= cal.startOfDay(for: now)
+            else { continue }
+
+            let isBill = req.content.categoryIdentifier == "BILL_REMINDER"
+            let amountString: String? = {
+                if let amt = req.content.userInfo["amount"] as? Double {
+                    let f = NumberFormatter()
+                    f.numberStyle = .currency
+                    return f.string(from: NSNumber(value: amt))
                 }
-                return date1 < date2
-            }
+                return nil
+            }()
+
+            let title: String = {
+                if isBill, let billName = req.content.userInfo["billName"] as? String, !billName.isEmpty {
+                    return billName
+                }
+                return req.content.title
+            }()
+
+            let recurrenceRaw = req.content.userInfo["recurrence"] as? String
+            let recurrence = (recurrenceRaw == "none" ? nil : recurrenceRaw)
+
+            loaded.append(LoadedReminder(
+                id: req.identifier,
+                title: title,
+                date: next,
+                kindLabel: isBill ? "bill" : "reminder",
+                amount: amountString,
+                recurrence: recurrence
+            ))
+        }
+
+        reminders = loaded.sorted { $0.date < $1.date }
         isLoading = false
     }
 
-    private func deleteReminders(at offsets: IndexSet) {
-        for index in offsets {
-            let reminder = reminders[index]
-            NotificationService.shared.cancelAIReminder(identifier: reminder.identifier)
+    private func cancel(_ item: LoadedReminder) {
+        NotificationService.shared.cancelAIReminder(identifier: item.id)
+        // If this reminder originated from a note token, clear its
+        // confirmedAt so the chip on the note flips back to dashed and
+        // the next LLM re-extraction's preservation logic doesn't zombie
+        // a fresh OS notification back into existence.
+        if let tokenId = NoteRepository.parseReminderTokenId(from: item.id) {
+            NoteRepository(context: modelContext).unconfirmReminder(tokenId: tokenId)
         }
-        reminders.remove(atOffsets: offsets)
-    }
-}
-
-struct ReminderRow: View {
-    let reminder: UNNotificationRequest
-
-    private var triggerDate: Date? {
-        guard let trigger = reminder.trigger as? UNCalendarNotificationTrigger else {
-            return nil
-        }
-        return trigger.nextTriggerDate()
-    }
-
-    private var recurrence: String? {
-        guard let recurrenceValue = reminder.content.userInfo["recurrence"] as? String,
-              recurrenceValue != "none" else {
-            return nil
-        }
-        return recurrenceValue
-    }
-
-    private var isRecurring: Bool {
-        recurrence != nil
-    }
-
-    private var formattedDate: String {
-        guard let date = triggerDate else { return "Unknown" }
-
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-
-        if calendar.isDateInToday(date) {
-            formatter.dateFormat = "'Today at' h:mm a"
-        } else if calendar.isDateInTomorrow(date) {
-            formatter.dateFormat = "'Tomorrow at' h:mm a"
-        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
-            formatter.dateFormat = "EEEE 'at' h:mm a"
-        } else {
-            formatter.dateFormat = "MMM d 'at' h:mm a"
-        }
-
-        return formatter.string(from: date)
-    }
-
-    private var recurrenceText: String {
-        guard let rec = recurrence else { return "" }
-        switch rec {
-        case "daily": return "Daily"
-        case "weekly": return "Weekly"
-        case "monthly": return "Monthly"
-        default: return ""
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: isRecurring ? "repeat" : "bell.fill")
-                .font(.system(size: 18))
-                .foregroundColor(Color("NormaPastelCoral"))
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(Color("NormaPastelCoral").opacity(0.15))
-                )
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    Text(reminder.content.title)
-                        .font(.custom(FontFamily.Rubik.medium, size: 17))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-
-                    if isRecurring {
-                        Text(recurrenceText)
-                            .font(.custom(FontFamily.Rubik.medium, size: 11))
-                            .foregroundColor(Color("NormaPastelCoral"))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(Color("NormaPastelCoral").opacity(0.15))
-                            )
-                    }
-                }
-
-                Text(formattedDate)
-                    .font(.custom(FontFamily.Rubik.regular, size: 15))
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 6)
+        reminders.removeAll { $0.id == item.id }
     }
 }
 
 #Preview {
-    RemindersSheet(isPresented: .constant(true))
+    Color.black
+        .ignoresSafeArea()
+        .sheet(isPresented: .constant(true)) {
+            RemindersSheet(isPresented: .constant(true))
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
 }

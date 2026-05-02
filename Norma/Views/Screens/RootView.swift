@@ -15,7 +15,6 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
-    @ObservedObject private var rewardQueue = RewardQueueManager.shared
     @ObservedObject private var plaidService = PlaidService.shared
 
     var body: some View {
@@ -26,13 +25,6 @@ struct RootView: View {
         .onAppear {
             // Set the model context on DataManager
             dataManager.setModelContext(modelContext)
-
-            // Signal to RewardQueueManager that the view is ready
-            // This handles the case where rewards were fetched before this view was mounted
-            rewardQueue.onViewAppear()
-        }
-        .onDisappear {
-            rewardQueue.onViewDisappear()
         }
         .task(id: sessionViewModel.currentUser?.userId) {
             // Load user data when main app becomes active (only once per user session)
@@ -56,12 +48,6 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $rewardQueue.isShowingCelebration) {
-            RewardCelebrationView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled()
-        }
     }
 
     private func syncPlaidBalances(userId: String) async {
@@ -81,12 +67,29 @@ struct RootView: View {
             await MainActor.run {
                 plaidService.connectedAccounts = accounts
                 plaidService.isConnected = true
+
+                // If the user has wired a specific account to their freedom
+                // fund, record any balance change as a ledger entry.
+                recordArcBalanceIfChanged(userId: userId, accounts: accounts)
             }
 
             print("Plaid sync complete: \(accounts.count) accounts loaded")
         } catch {
             print("Plaid sync failed: \(error)")
         }
+    }
+
+    private func recordArcBalanceIfChanged(userId: String, accounts: [PlaidService.PlaidAccount]) {
+        guard let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId,
+              let account = accounts.first(where: { $0.accountId == arcAccountId }),
+              let balance = account.balances.current else { return }
+
+        FreedomFundLedger.recordIfChanged(
+            in: modelContext,
+            userId: userId,
+            newBalance: balance,
+            source: .linkedAccountSync
+        )
     }
 }
 
@@ -100,7 +103,6 @@ struct ViewModelContainer<Content: View>: View {
     @StateObject private var billViewModel: BillViewModel
     @StateObject private var expenseViewModel: ExpenseViewModel
     @StateObject private var incomeViewModel: IncomeViewModel
-    @StateObject private var challengeViewModel: ChallengeViewModel
     @StateObject private var profileViewModel: ProfileViewModel
     @StateObject private var coinColorViewModel: CoinColorViewModel
 
@@ -109,12 +111,10 @@ struct ViewModelContainer<Content: View>: View {
         self.sessionViewModel = sessionViewModel
         self.content = content()
 
-        // Initialize view models with proper dependencies
         let billVM = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
         self._billViewModel = StateObject(wrappedValue: billVM)
         self._expenseViewModel = StateObject(wrappedValue: ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._incomeViewModel = StateObject(wrappedValue: IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-        self._challengeViewModel = StateObject(wrappedValue: ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._profileViewModel = StateObject(wrappedValue: ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._coinColorViewModel = StateObject(wrappedValue: CoinColorViewModel(sessionViewModel: sessionViewModel, billViewModel: billVM))
     }
@@ -126,13 +126,9 @@ struct ViewModelContainer<Content: View>: View {
             .environmentObject(billViewModel)
             .environmentObject(expenseViewModel)
             .environmentObject(incomeViewModel)
-            .environmentObject(challengeViewModel)
             .environmentObject(profileViewModel)
             .environmentObject(coinColorViewModel)
             .onAppear {
-                // Set up ChallengeViewModel dependencies
-                challengeViewModel.setExpenseViewModel(expenseViewModel)
-                challengeViewModel.setBillViewModel(billViewModel)
                 coinColorViewModel.updateColor()
             }
     }

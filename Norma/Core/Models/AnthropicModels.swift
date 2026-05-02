@@ -210,7 +210,48 @@ struct AnthropicToolSchema: Codable {
 
 struct AnthropicToolProperty: Codable {
     let type: String
-    let description: String
+    let description: String?
+    let `enum`: [String]?
+    let items: AnthropicToolItems?
+
+    init(
+        type: String,
+        description: String? = nil,
+        `enum`: [String]? = nil,
+        items: AnthropicToolItems? = nil
+    ) {
+        self.type = type
+        self.description = description
+        self.`enum` = `enum`
+        self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type, description, items
+        case `enum`
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(type, forKey: .type)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(`enum`, forKey: .enum)
+        try c.encodeIfPresent(items, forKey: .items)
+    }
+}
+
+/// Schema for `array` items — supports nested object schemas with their own
+/// properties + required list. Used for tool inputs like `tokens: [Token]`.
+struct AnthropicToolItems: Codable {
+    let type: String
+    let properties: [String: AnthropicToolProperty]?
+    let required: [String]?
+
+    init(type: String, properties: [String: AnthropicToolProperty]? = nil, required: [String]? = nil) {
+        self.type = type
+        self.properties = properties
+        self.required = required
+    }
 }
 
 struct AnthropicToolChoice: Codable {

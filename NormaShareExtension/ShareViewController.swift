@@ -31,37 +31,15 @@ class ShareViewController: UIViewController {
 
     private let edgeFunctionURL = URL(string: "https://tafoviioqavefsyxskpo.supabase.co/functions/v1/extract-transactions")!
 
-    // MARK: - Brand Colors
+    // MARK: - Brand Colors (D9/D10 dark editorial palette)
 
-    private var normaTeal: UIColor {
-        UIColor { traitCollection in
-            if traitCollection.userInterfaceStyle == .dark {
-                return UIColor(red: 0.520, green: 0.580, blue: 0.560, alpha: 1.0)
-            } else {
-                return UIColor(red: 0.400, green: 0.600, blue: 0.580, alpha: 1.0)
-            }
-        }
-    }
-
-    private var normaBackground: UIColor {
-        UIColor { traitCollection in
-            if traitCollection.userInterfaceStyle == .dark {
-                return UIColor(red: 0.137, green: 0.110, blue: 0.094, alpha: 1.0)
-            } else {
-                return UIColor(red: 1.0, green: 0.996, blue: 0.984, alpha: 1.0)
-            }
-        }
-    }
-
-    private var normaCard: UIColor {
-        UIColor { traitCollection in
-            if traitCollection.userInterfaceStyle == .dark {
-                return UIColor(red: 0.180, green: 0.160, blue: 0.140, alpha: 1.0)
-            } else {
-                return UIColor.white
-            }
-        }
-    }
+    private let normaBg = UIColor(red: 0x16/255, green: 0x16/255, blue: 0x1A/255, alpha: 1.0)
+    private let normaCream = UIColor(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255, alpha: 1.0)
+    private let normaMuted = UIColor(red: 0x7A/255, green: 0x76/255, blue: 0x70/255, alpha: 1.0)
+    private let normaDim = UIColor(red: 0x5C/255, green: 0x58/255, blue: 0x52/255, alpha: 1.0)
+    private let normaLavender = UIColor(red: 0x96/255, green: 0x76/255, blue: 0xD9/255, alpha: 1.0)
+    private let normaOnAccent = UIColor(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255, alpha: 1.0)
+    private let normaCoral = UIColor(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255, alpha: 1.0)
 
     // MARK: - Fonts
 
@@ -104,81 +82,80 @@ class ShareViewController: UIViewController {
     // MARK: - UI Setup
 
     private func setupUI() {
-        view.backgroundColor = normaBackground
+        view.backgroundColor = normaBg
+        overrideUserInterfaceStyle = .dark
 
         // Container - full screen
-        containerView.backgroundColor = normaBackground
+        containerView.backgroundColor = normaBg
         containerView.translatesAutoresizingMaskIntoConstraints = false
         containerView.alpha = 0
         view.addSubview(containerView)
 
-        // Handle bar (iOS sheet style)
-        handleBar.backgroundColor = UIColor.systemGray3
-        handleBar.layer.cornerRadius = 2.5
+        // Handle bar
+        handleBar.backgroundColor = normaCream.withAlphaComponent(0.2)
+        handleBar.layer.cornerRadius = 2
         handleBar.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(handleBar)
 
-        // Title
-        titleLabel.text = "Your Screenshot"
-        titleLabel.font = rubikFont(size: 22, weight: .semibold)
-        titleLabel.textAlignment = .center
-        titleLabel.textColor = .label
+        // Title — D9/D10 hero treatment, lowercase
+        titleLabel.text = "your screenshot."
+        titleLabel.font = rubikFont(size: 32, weight: .heavy)
+        titleLabel.textAlignment = .left
+        titleLabel.textColor = normaCream
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(titleLabel)
 
-        // Subtitle
-        subtitleLabel.text = "Scan receipt for expense tracking"
-        subtitleLabel.font = rubikFont(size: 14, weight: .regular)
-        subtitleLabel.textAlignment = .center
-        subtitleLabel.textColor = .secondaryLabel
+        // Subtitle — muted eyebrow under hero
+        subtitleLabel.text = "scan receipt for expense tracking"
+        subtitleLabel.font = rubikFont(size: 14, weight: .medium)
+        subtitleLabel.textAlignment = .left
+        subtitleLabel.textColor = normaMuted
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(subtitleLabel)
 
-        // Image Preview - flexible sizing for different image sizes
+        // Image Preview — lavender dashed border on a dim card fill
         imagePreview.contentMode = .scaleAspectFit
         imagePreview.clipsToBounds = true
-        imagePreview.layer.cornerRadius = 16
+        imagePreview.layer.cornerRadius = 18
         imagePreview.layer.cornerCurve = .continuous
-        imagePreview.backgroundColor = UIColor.secondarySystemBackground
-        imagePreview.layer.borderWidth = 1
-        imagePreview.layer.borderColor = UIColor.separator.cgColor
+        imagePreview.backgroundColor = normaLavender.withAlphaComponent(0.06)
         imagePreview.translatesAutoresizingMaskIntoConstraints = false
         imagePreview.setContentHuggingPriority(.defaultLow, for: .vertical)
         imagePreview.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         containerView.addSubview(imagePreview)
 
         // Status Label
-        statusLabel.text = "Ready to scan"
+        statusLabel.text = "ready to scan."
         statusLabel.font = rubikFont(size: 13, weight: .medium)
-        statusLabel.textColor = normaTeal
-        statusLabel.textAlignment = .center
+        statusLabel.textColor = normaLavender
+        statusLabel.textAlignment = .left
         statusLabel.numberOfLines = 2
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(statusLabel)
 
         // Activity Indicator
         activityIndicator.hidesWhenStopped = true
-        activityIndicator.color = normaTeal
+        activityIndicator.color = normaLavender
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(activityIndicator)
 
-        // Send Button
-        sendButton.setTitle("Send to Norma", for: .normal)
-        sendButton.titleLabel?.font = rubikFont(size: 17, weight: .semibold)
-        sendButton.backgroundColor = normaTeal
-        sendButton.setTitleColor(.white, for: .normal)
-        sendButton.setTitleColor(UIColor.white.withAlphaComponent(0.7), for: .highlighted)
-        sendButton.setTitleColor(UIColor.white.withAlphaComponent(0.5), for: .disabled)
-        sendButton.layer.cornerRadius = 14
+        // Send Button — solid lavender capsule with dark text (matches in-app FAB)
+        sendButton.setTitle("send to norma", for: .normal)
+        sendButton.titleLabel?.font = rubikFont(size: 16, weight: .semibold)
+        sendButton.backgroundColor = normaLavender
+        sendButton.setTitleColor(normaOnAccent, for: .normal)
+        sendButton.setTitleColor(normaOnAccent.withAlphaComponent(0.7), for: .highlighted)
+        sendButton.setTitleColor(normaOnAccent.withAlphaComponent(0.5), for: .disabled)
+        sendButton.layer.cornerRadius = 26
         sendButton.layer.cornerCurve = .continuous
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         sendButton.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(sendButton)
 
-        // Cancel Button
-        cancelButton.setTitle("Cancel", for: .normal)
-        cancelButton.titleLabel?.font = rubikFont(size: 15, weight: .medium)
-        cancelButton.setTitleColor(.secondaryLabel, for: .normal)
+        // Cancel Button — dashed capsule (matches inactive capsule pattern)
+        cancelButton.setTitle("cancel", for: .normal)
+        cancelButton.titleLabel?.font = rubikFont(size: 14, weight: .medium)
+        cancelButton.setTitleColor(normaMuted, for: .normal)
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(cancelButton)
@@ -239,8 +216,8 @@ class ShareViewController: UIViewController {
     private func extractImage() {
         guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
               let attachments = extensionItem.attachments else {
-            statusLabel.text = "No image found"
-            statusLabel.textColor = .systemRed
+            statusLabel.text = "no image found."
+            statusLabel.textColor = normaCoral
             sendButton.isEnabled = false
             return
         }
@@ -250,8 +227,8 @@ class ShareViewController: UIViewController {
                 attachment.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, error in
                     DispatchQueue.main.async {
                         if let error = error {
-                            self?.statusLabel.text = "Failed to load image"
-                            self?.statusLabel.textColor = .systemRed
+                            self?.statusLabel.text = "failed to load image."
+                            self?.statusLabel.textColor = self?.normaCoral
                             self?.sendButton.isEnabled = false
                             print("Error loading image: \(error)")
                             return
@@ -295,8 +272,8 @@ class ShareViewController: UIViewController {
     @objc private func sendTapped() {
         guard !isProcessing else { return }
         guard let imageData = imageData else {
-            statusLabel.text = "No image to send"
-            statusLabel.textColor = .systemRed
+            statusLabel.text = "no image to send."
+            statusLabel.textColor = normaCoral
             return
         }
 
@@ -305,8 +282,8 @@ class ShareViewController: UIViewController {
 
         guard let userId, let authToken else {
             let hasUser = userId != nil
-            statusLabel.text = hasUser ? "Session missing (user found). Re-open Norma." : "No credentials found. Please log in to Norma."
-            statusLabel.textColor = .systemRed
+            statusLabel.text = hasUser ? "session missing. re-open norma." : "no credentials found. please log in to norma."
+            statusLabel.textColor = normaCoral
             print("🔴 Share ext auth: userId=\(hasUser), token=\(authToken != nil)")
             return
         }
@@ -314,8 +291,8 @@ class ShareViewController: UIViewController {
         isProcessing = true
         sendButton.isEnabled = false
         activityIndicator.startAnimating()
-        statusLabel.text = "Uploading receipt..."
-        statusLabel.textColor = .secondaryLabel
+        statusLabel.text = "uploading receipt…"
+        statusLabel.textColor = normaMuted
 
         // Animate button
         UIView.animate(withDuration: 0.2) {
@@ -379,7 +356,7 @@ class ShareViewController: UIViewController {
                     self?.handleSuccess(data: data)
                 } else if httpResponse.statusCode == 401 && !isRetry {
                     // Token expired — attempt refresh
-                    self?.statusLabel.text = "Refreshing session..."
+                    self?.statusLabel.text = "refreshing session…"
                     self?.attemptTokenRefreshAndRetry(imageData: imageData, userId: userId)
                 } else {
                     self?.activityIndicator.stopAnimating()
@@ -395,7 +372,7 @@ class ShareViewController: UIViewController {
         guard let refreshToken = SharedKeychainHelper.getRefreshToken(for: userId),
               let config = SharedKeychainHelper.getSupabaseConfig() else {
             activityIndicator.stopAnimating()
-            handleError("Session expired. Please open Norma to sign in again.")
+            handleError("session expired. please open norma to sign in again.")
             return
         }
 
@@ -414,7 +391,7 @@ class ShareViewController: UIViewController {
                     self.uploadAndProcess(imageData: imageData, authToken: newAccessToken, userId: userId, isRetry: true)
                 } else {
                     self.activityIndicator.stopAnimating()
-                    self.handleError("Session expired. Please open Norma to sign in again.")
+                    self.handleError("session expired. please open norma to sign in again.")
                 }
             }
         }
@@ -456,20 +433,20 @@ class ShareViewController: UIViewController {
     }
 
     private func handleSuccess(data: Data?) {
-        var message = "Receipt sent!"
+        var message = "receipt sent."
 
         if let data = data,
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let serverMessage = json["message"] as? String {
-            message = serverMessage
+            message = serverMessage.lowercased()
         }
 
         statusLabel.text = message
-        statusLabel.textColor = normaTeal
+        statusLabel.textColor = normaLavender
 
         // Success animation
         UIView.animate(withDuration: 0.3) {
-            self.sendButton.backgroundColor = self.normaTeal
+            self.sendButton.backgroundColor = self.normaLavender
             self.sendButton.alpha = 1
         }
 
@@ -484,12 +461,12 @@ class ShareViewController: UIViewController {
     }
 
     private func handleErrorResponse(data: Data?, statusCode: Int) {
-        var errorMessage = "Upload failed (Error \(statusCode))"
+        var errorMessage = "upload failed (error \(statusCode))."
 
         if let data = data,
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let serverError = json["error"] as? String {
-            errorMessage = serverError
+            errorMessage = serverError.lowercased()
         }
 
         handleError(errorMessage)
@@ -497,7 +474,7 @@ class ShareViewController: UIViewController {
 
     private func handleError(_ message: String) {
         statusLabel.text = message
-        statusLabel.textColor = .systemRed
+        statusLabel.textColor = normaCoral
         sendButton.isEnabled = true
         isProcessing = false
 

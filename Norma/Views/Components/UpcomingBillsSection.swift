@@ -22,7 +22,7 @@ struct UpcomingBillsSection: View {
                 let status = bill.calculateStatus(from: expenseViewModel.expenses)
                 return status != .paid
             }
-            .sorted { $0.dueDate < $1.dueDate }
+            .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
 
     private var displayedBills: [Bill] {
@@ -74,7 +74,7 @@ struct UpcomingBillsSection: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
-                Text(formattedDueDate(bill.dueDate))
+                Text(formattedDueDate(bill.effectiveDueDate))
                     .font(.normaInput(12))
                     .foregroundColor(.secondary)
             }
@@ -104,7 +104,7 @@ struct UpcomingBillsSection: View {
             return Color("NormaPastelCoral")
         case .scheduled:
             // Check if due within 3 days
-            let daysUntilDue = Calendar.current.dateComponents([.day], from: Date(), to: bill.dueDate).day ?? 0
+            let daysUntilDue = Calendar.current.dateComponents([.day], from: Date(), to: bill.effectiveDueDate).day ?? 0
             if daysUntilDue <= 3 {
                 return Color("NormaPastelCoral").opacity(0.7)
             }

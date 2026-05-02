@@ -102,14 +102,6 @@ extension DataManager {
         // Remove from cache
         await deleteCachedPendingTransaction(transactionId)
 
-        // Check for first pending transaction confirmed milestone
-        Task { @MainActor in
-            let isFirst = await RewardMilestoneTracker.shared.checkAndMarkFirstTime(.firstPendingTransactionConfirmed)
-            if isFirst {
-                RewardQueueManager.shared.enqueue(.firstPendingConfirmed(merchant: name))
-            }
-        }
-
         print("Confirmed pending transaction: \(name) with date: \(dateString)")
     }
 
@@ -118,9 +110,6 @@ extension DataManager {
         for transaction in transactions {
             try await confirmPendingTransaction(transaction, withDate: date)
         }
-
-        // Refresh snapshot once after all transactions are processed
-        await refreshCurrentMonthSnapshot()
     }
 
     /// Reject a pending transaction

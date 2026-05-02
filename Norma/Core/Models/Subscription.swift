@@ -32,7 +32,7 @@ enum SubscriptionTier: String, CaseIterable {
             "Push notifications",
             "Data encryption",
             "Multi-currency support",
-            "Spending challenges",
+            "Voice transcription",
             "AI-powered personal finance analyst",
             "Personalized spending insights"
         ]

@@ -22,16 +22,10 @@ class DataManager: ObservableObject {
     // Financial Data
     @Published var expenses: [Expense] = []
     @Published var income: [Income] = []
-    @Published var challenges: [Challenge] = []
     @Published var categories: [Category] = []
     @Published var bills: [Bill] = []
     @Published var pendingTransactions: [PendingTransaction] = []
-    @Published var monthlyStats: [MonthlyStats] = []
-    
-    // Psychology Data
-    @Published var moneyPersonality: MoneyPersonality?
-    @Published var financialHealthInsight: FinancialHealthInsight?
-    
+
     // Data State
     @Published var isLoading = false
     @Published var lastSyncDate: Date?
@@ -150,14 +144,11 @@ class DataManager: ObservableObject {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask { try await self.fetchExpensesWithEncryption(userId: userId) }
             group.addTask { try await self.fetchBillsWithEncryption(userId: userId) }
-            group.addTask { try await self.fetchChallenges(userId: userId) }
             group.addTask { try await self.fetchPendingTransactions(userId: userId) }
-            group.addTask { try await self.fetchMonthlyStats(userId: userId) }
 
             // These don't need encryption yet
             group.addTask { try await self.fetchIncomes(userId: userId) }
             group.addTask { try await self.fetchCategories() }
-            group.addTask { try await self.fetchPsychologyData(userId: userId) }
 
             // Wait for all tasks to complete
             try await group.waitForAll()
@@ -185,13 +176,9 @@ class DataManager: ObservableObject {
         currentProfile = nil
         expenses.removeAll()
         income.removeAll()
-        challenges.removeAll()
         categories.removeAll()
         bills.removeAll()
         pendingTransactions.removeAll()
-        monthlyStats.removeAll()
-        moneyPersonality = nil
-        financialHealthInsight = nil
         hasUnsyncedChanges = false
         lastSyncDate = nil
     }
@@ -216,10 +203,6 @@ class DataManager: ObservableObject {
     
     var hasFinancialData: Bool {
         !expenses.isEmpty || !income.isEmpty || !bills.isEmpty
-    }
-    
-    var hasPsychologyData: Bool {
-        moneyPersonality != nil || financialHealthInsight != nil
     }
 
     // MARK: - Private Methods

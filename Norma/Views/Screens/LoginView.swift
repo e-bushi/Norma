@@ -2,7 +2,9 @@
 //  LoginView.swift
 //  Norma
 //
-//  Created by Claude on 5/9/25.
+//  O2-style sign-in screen for returning users. Lavender-dithered shader on
+//  dark canvas, lowercase title, dark-surface fields with lavender focus
+//  accent, lavender pill primary CTA, and dark-surface apple/google buttons.
 //
 
 import SwiftUI
@@ -10,456 +12,452 @@ import UIKit
 
 struct LoginView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isLoading = false
-    @State private var showPassword = false
-    @State private var showError = false
-    @State private var errorMessage = ""
     @Binding var isAuthenticated: Bool
     @Binding var showSignUp: Bool
-    
-    // Animation states
-    @State private var logoScale = 0.8
-    @State private var logoOpacity = 0.0
-    @State private var titleOpacity = 0.0
-    @State private var formOpacity = 0.0
-    @State private var buttonOpacity = 0.0
-    
-    // Enhanced animation states
-    @State private var logoRotation = 0.0
-    @State private var formOffset: CGFloat = 20
-    @State private var buttonScale = 0.95
-    @State private var isTextFieldFocused = false
-    @State private var emailFieldFocused = false
-    @State private var passwordFieldFocused = false
-    @State private var floatingOffset: CGFloat = 0
-    
-    // Loading animation states
-    @State private var loadingRotation = 0.0
-    @State private var loadingScale = 0.8
-    @State private var loadingOpacity = 0.0
+
+    @State private var email = ""
+    @State private var password = ""
+    @State private var showPassword = false
+
+    @State private var isLoading = false
     @State private var isAppleSignInLoading = false
     @State private var isGoogleSignInLoading = false
 
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    @State private var emailFocused = false
+    @State private var passwordFocused = false
+
+    @State private var titleAppeared = false
+    @State private var subtitleAppeared = false
+    @State private var formAppeared = false
+    @State private var ctaAppeared = false
+    @State private var altAppeared = false
+
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+
     var body: some View {
-        NavigationStack {
+        ZStack {
+            NormaPalette.canvas.ignoresSafeArea()
+
             ScrollView {
-                VStack(spacing: 20) {
-                    Spacer()
-                        .frame(height: 20)
+                VStack(alignment: .leading, spacing: 0) {
+                    backButton
+                        .padding(.top, 8)
+                        .padding(.bottom, 48)
 
-                    // Error message if needed
+                    titleView
+                        .opacity(titleAppeared ? 1 : 0)
+                        .offset(y: titleAppeared ? 0 : 12)
+                        .padding(.bottom, 12)
+
+                    Text("pick up where you left off.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(NormaPalette.inkSubtle)
+                        .opacity(subtitleAppeared ? 1 : 0)
+                        .offset(y: subtitleAppeared ? 0 : 8)
+                        .padding(.bottom, 32)
+
                     if showError {
-                        HStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.red)
-                                .font(.system(size: 14))
-                            
-                            Text(errorMessage)
-                                .font(.normaInput(14))
-                                .foregroundColor(.red)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.red.opacity(0.05))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
-                                )
-                        )
-                        .padding(.horizontal, 24)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    
-                    // Form fields container
-                    VStack(spacing: 16) {
-                        // Email field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("EMAIL")
-                                .font(.normaFinancial(11))
-                                .foregroundColor(.secondary)
-                                .tracking(1.2)
-                            
-                            TextField("Enter your email", text: $email, onEditingChanged: { editing in
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    emailFieldFocused = editing
-                                    isTextFieldFocused = editing || passwordFieldFocused
-                                }
-                            })
-                            .textFieldStyle(EnhancedTextFieldStyle(isFocused: emailFieldFocused))
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        }
-                        
-                        // Password field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("PASSWORD")
-                                .font(.normaFinancial(11))
-                                .foregroundColor(.secondary)
-                                .tracking(1.2)
-                            
-                            HStack {
-                                if showPassword {
-                                    TextField("Enter your password", text: $password, onEditingChanged: { editing in
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            passwordFieldFocused = editing
-                                            isTextFieldFocused = editing || emailFieldFocused
-                                        }
-                                    })
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                } else {
-                                    SecureField("Enter your password", text: $password, onCommit: {
-                                        if !email.isEmpty && !password.isEmpty {
-                                            handleLogin()
-                                        }
-                                    })
-                                    .onTapGesture {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            passwordFieldFocused = true
-                                            isTextFieldFocused = true
-                                        }
-                                    }
-                                }
-                                
-                                Button(action: {
-                                    showPassword.toggle()
-                                }) {
-                                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                                        .foregroundColor(.secondary)
-                                        .font(.system(size: 16))
-                                }
-                            }
-                            .textFieldStyle(EnhancedTextFieldStyle(isFocused: passwordFieldFocused))
-                        }
-                    }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(.clear)
-                            .glassEffect(in: RoundedRectangle(cornerRadius: 20))
-                    )
-                    .padding(.horizontal, 24)
-                    .opacity(formOpacity)
-                    .offset(y: formOffset)
-                    .scaleEffect(isTextFieldFocused ? 1.02 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTextFieldFocused)
-                    
-                    // Forgot password
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            // Handle forgot password
-                        }) {
-                            Text("Forgot password?")
-                                .font(.normaInput(14))
-                                .foregroundColor(.secondary)
-                                .underline(color: Color.secondary.opacity(0.4))
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
-                    .opacity(formOpacity)
-                    
-                    Spacer()
-                        .frame(height: 20)
-                    
-                    // Sign in button
-                    Button(action: {
-                        handleLogin()
-                    }) {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Sign in")
-                                    .font(.normaHeadline(18))
-                            }
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color("NormaPastelPurple").opacity(0.7))
-                                .glassEffect(in: RoundedRectangle(cornerRadius: 14))
-                        )
-                    }
-                    .disabled(isLoading || email.isEmpty || password.isEmpty)
-                    .opacity((isLoading || email.isEmpty || password.isEmpty) ? 0.6 : 1)
-                    .padding(.horizontal, 24)
-                    .opacity(buttonOpacity)
-                    .scaleEffect(buttonScale)
-                    .onHover { hovering in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            buttonScale = hovering ? 1.02 : 0.95
-                        }
+                        errorBanner
+                            .padding(.bottom, 12)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
-                    // Divider
-                    HStack(spacing: 12) {
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.3))
-                            .frame(height: 1)
-                        Text("or")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.3))
-                            .frame(height: 1)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .opacity(buttonOpacity)
+                    formFields
+                        .opacity(formAppeared ? 1 : 0)
+                        .offset(y: formAppeared ? 0 : 12)
 
-                    // Sign in with Apple button
-                    Button(action: {
-                        handleAppleSignIn()
-                    }) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.black)
-                                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    Spacer().frame(height: 14)
 
-                            HStack(spacing: 12) {
-                                if isAppleSignInLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: "apple.logo")
-                                        .font(.system(size: 20, weight: .semibold))
-                                    Text("Sign in with Apple")
-                                        .font(.normaHeadline(16))
-                                }
-                            }
-                            .foregroundColor(.white)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                    }
-                    .disabled(isAppleSignInLoading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .opacity(buttonOpacity)
+                    forgotPassword
+                        .opacity(formAppeared ? 1 : 0)
 
-                    // Sign in with Google button
-                    Button(action: {
-                        handleGoogleSignIn()
-                    }) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    Spacer().frame(height: 24)
 
-                            HStack(spacing: 12) {
-                                if isGoogleSignInLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .gray))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    GoogleLogoView()
-                                        .frame(width: 20, height: 20)
-                                    Text("Sign in with Google")
-                                        .font(.normaHeadline(16))
-                                }
-                            }
-                            .foregroundColor(.black.opacity(0.87))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                    }
-                    .disabled(isGoogleSignInLoading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .opacity(buttonOpacity)
+                    signInButton
+                        .opacity(ctaAppeared ? 1 : 0)
+                        .offset(y: ctaAppeared ? 0 : 12)
 
-                    Spacer()
-                        .frame(height: 40)
+                    Spacer().frame(height: 28)
+
+                    divider
+                        .opacity(altAppeared ? 1 : 0)
+                        .padding(.bottom, 16)
+
+                    appleButton
+                        .opacity(altAppeared ? 1 : 0)
+                        .offset(y: altAppeared ? 0 : 8)
+                        .padding(.bottom, 10)
+
+                    googleButton
+                        .opacity(altAppeared ? 1 : 0)
+                        .offset(y: altAppeared ? 0 : 8)
+
+                    Spacer().frame(height: 40)
                 }
-                .padding(.bottom, 20)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle("Sign In")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        showSignUp = false
-                        onboardingViewModel.currentStep = .landing
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                }
+            .scrollIndicators(.hidden)
+
+            if isLoading {
+                loadingOverlay
+                    .transition(.opacity)
             }
-            .background(
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            colorScheme == .dark
-                                ? Color(red: 0.10, green: 0.06, blue: 0.16)
-                                : Color(red: 0.93, green: 0.90, blue: 0.98),
-                            colorScheme == .dark
-                                ? Color(red: 0.04, green: 0.02, blue: 0.08)
-                                : Color(red: 0.96, green: 0.94, blue: 0.98)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    DotGridPattern()
-                }
-                .ignoresSafeArea()
-            )
-            .overlay(
+        }
+        .preferredColorScheme(.dark)
+        .navigationBarBackButtonHidden(true)
+        .onAppear {
+            impactGenerator.prepare()
+            withAnimation(.easeOut(duration: 0.5).delay(0.10)) { titleAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.25)) { subtitleAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.40)) { formAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.55)) { ctaAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.70)) { altAppeared = true }
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var backButton: some View {
+        Button(action: {
+            impactGenerator.impactOccurred()
+            showSignUp = false
+            onboardingViewModel.currentStep = .landing
+        }) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(NormaPalette.ink)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(NormaPalette.ink.opacity(0.05))
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(NormaPalette.ink.opacity(0.10), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var titleView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("welcome")
+                .font(.system(size: 56, weight: .bold))
+                .foregroundStyle(NormaPalette.ink)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("back")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundStyle(NormaPalette.ink)
+                Text(".")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundStyle(NormaPalette.lavender)
+            }
+        }
+        .tracking(-1.5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var formFields: some View {
+        VStack(spacing: 12) {
+            fieldContainer(label: "email", isFocused: emailFocused) {
+                TextField("", text: $email, onEditingChanged: { editing in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        emailFocused = editing
+                    }
+                })
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .foregroundStyle(NormaPalette.ink)
+                .font(.system(size: 16))
+                .tint(NormaPalette.lavender)
+            }
+
+            fieldContainer(
+                label: "password",
+                isFocused: passwordFocused,
+                trailing: AnyView(
+                    Button(action: { showPassword.toggle() }) {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .font(.system(size: 14))
+                            .foregroundStyle(NormaPalette.inkSubtle)
+                    }
+                    .buttonStyle(.plain)
+                )
+            ) {
                 Group {
-                    if isLoading {
-                        ZStack {
-                            // Background blur
-                            Color.black.opacity(0.3)
-                                .ignoresSafeArea()
-                                .blur(radius: 5)
-                            
-                            // Loading content
-                            VStack(spacing: 24) {
-                                // Animated circle loader
-                                ZStack {
-                                    // Background circle
-                                    Circle()
-                                        .stroke(Color.gray.opacity(0.2), lineWidth: 4)
-                                        .frame(width: 60, height: 60)
-                                    
-                                    // Animated progress circle
-                                    Circle()
-                                        .trim(from: 0, to: 0.8)
-                                        .stroke(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.primary,
-                                                    Color.primary.opacity(0.5)
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                                        )
-                                        .frame(width: 60, height: 60)
-                                        .rotationEffect(Angle(degrees: loadingRotation))
-                                    
-                                    // Center icon
-                                    Image(systemName: "person.badge.shield.checkmark")
-                                        .font(.system(size: 24, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .scaleEffect(loadingScale)
-                                }
-                                
-                                Text("Signing you in...")
-                                    .font(.normaHeadline(16))
-                                    .foregroundColor(.primary)
+                    if showPassword {
+                        TextField("", text: $password, onEditingChanged: { editing in
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                passwordFocused = editing
                             }
-                            .padding(40)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color(UIColor.systemBackground))
-                                    .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
-                            )
-                            .scaleEffect(loadingScale)
-                            .opacity(loadingOpacity)
+                        })
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    } else {
+                        SecureField("", text: $password, onCommit: {
+                            if !email.isEmpty && !password.isEmpty {
+                                handleLogin()
+                            }
+                        })
+                        .onTapGesture {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                passwordFocused = true
+                            }
                         }
                     }
                 }
-            )
-            .onAppear {
-                // Trigger animations
-                withAnimation(.easeOut(duration: 0.6)) {
-                    titleOpacity = 1.0
-                }
-                
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4)) {
-                    formOpacity = 1.0
-                    formOffset = 0
-                }
-                
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.6)) {
-                    buttonOpacity = 1.0
-                    buttonScale = 1.0
-                }
+                .foregroundStyle(NormaPalette.ink)
+                .font(.system(size: 16))
+                .tint(NormaPalette.lavender)
             }
         }
     }
-    
+
+    @ViewBuilder
+    private func fieldContainer<Content: View>(
+        label: String,
+        isFocused: Bool,
+        trailing: AnyView? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(NormaPalette.inkSubtle)
+                .tracking(0.8)
+
+            HStack(spacing: 8) {
+                content()
+                if let trailing = trailing {
+                    trailing
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(red: 0.11, green: 0.11, blue: 0.125))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(
+                        isFocused ? NormaPalette.lavender : NormaPalette.ink.opacity(0.06),
+                        lineWidth: 1
+                    )
+            )
+        }
+    }
+
+    private var forgotPassword: some View {
+        HStack {
+            Spacer()
+            Button(action: {
+                // forgot password — placeholder
+            }) {
+                Text("forgot password?")
+                    .font(.system(size: 13))
+                    .foregroundStyle(NormaPalette.inkSubtle)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var canSubmit: Bool {
+        !email.isEmpty && !password.isEmpty && !isLoading
+    }
+
+    private var signInButton: some View {
+        Button(action: {
+            impactGenerator.impactOccurred()
+            handleLogin()
+        }) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: NormaPalette.canvas))
+                        .scaleEffect(0.85)
+                } else {
+                    Text("sign in")
+                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+            }
+            .foregroundStyle(NormaPalette.canvas)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                Capsule().fill(canSubmit
+                    ? NormaPalette.lavender
+                    : NormaPalette.lavender.opacity(0.40))
+            )
+            .shadow(
+                color: NormaPalette.lavender.opacity(canSubmit ? 0.40 : 0),
+                radius: 18, x: 0, y: 10
+            )
+        }
+        .disabled(!canSubmit)
+        .buttonStyle(.plain)
+    }
+
+    private var divider: some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(NormaPalette.ink.opacity(0.10))
+                .frame(height: 1)
+            Text("or")
+                .font(.system(size: 12))
+                .foregroundStyle(NormaPalette.inkSubtle)
+            Rectangle()
+                .fill(NormaPalette.ink.opacity(0.10))
+                .frame(height: 1)
+        }
+    }
+
+    private var appleButton: some View {
+        Button(action: {
+            impactGenerator.impactOccurred()
+            handleAppleSignIn()
+        }) {
+            HStack(spacing: 10) {
+                if isAppleSignInLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: NormaPalette.ink))
+                        .scaleEffect(0.85)
+                } else {
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("continue with apple")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+            }
+            .foregroundStyle(NormaPalette.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(red: 0.11, green: 0.11, blue: 0.125))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(NormaPalette.ink.opacity(0.10), lineWidth: 1)
+            )
+        }
+        .disabled(isAppleSignInLoading)
+        .buttonStyle(.plain)
+    }
+
+    private var googleButton: some View {
+        Button(action: {
+            impactGenerator.impactOccurred()
+            handleGoogleSignIn()
+        }) {
+            HStack(spacing: 10) {
+                if isGoogleSignInLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: NormaPalette.ink))
+                        .scaleEffect(0.85)
+                } else {
+                    GoogleLogoView()
+                        .frame(width: 16, height: 16)
+                    Text("continue with google")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+            }
+            .foregroundStyle(NormaPalette.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(red: 0.11, green: 0.11, blue: 0.125))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(NormaPalette.ink.opacity(0.10), lineWidth: 1)
+            )
+        }
+        .disabled(isGoogleSignInLoading)
+        .buttonStyle(.plain)
+    }
+
+    private var errorBanner: some View {
+        let warn = Color(red: 0.95, green: 0.55, blue: 0.55)
+        return HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13))
+            Text(errorMessage)
+                .font(.system(size: 13))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(warn)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(warn.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(warn.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private var loadingOverlay: some View {
+        ZStack {
+            NormaPalette.canvas.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: NormaPalette.lavender))
+                    .scaleEffect(1.1)
+
+                Text("signing you in...")
+                    .font(.system(size: 14))
+                    .foregroundStyle(NormaPalette.ink)
+            }
+            .padding(28)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(red: 0.11, green: 0.11, blue: 0.125))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(NormaPalette.ink.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Actions
+
     private func handleLogin() {
-        // Clear any previous errors
-        withAnimation {
-            showError = false
-        }
-        
+        withAnimation { showError = false }
         isLoading = true
-        
-        // Start loading animations
-        withAnimation(.easeInOut(duration: 0.3)) {
-            loadingOpacity = 1.0
-            loadingScale = 1.0
-        }
-        
-        // Start rotation animation
-        withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
-            loadingRotation = 360
-        }
-        
-        // Pulse animation for center icon
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            loadingScale = 1.1
-        }
-        
-        // Haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
-        
-        // Perform actual login
+
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
         Task {
             let success = await onboardingViewModel.signIn(email: email, password: password)
-            
+
             await MainActor.run {
-                // Hide loading overlay
-                withAnimation(.easeOut(duration: 0.3)) {
-                    loadingOpacity = 0.0
-                    loadingScale = 0.8
-                }
-                
-                // Reset rotation
-                loadingRotation = 0
-                
                 isLoading = false
-                
+
                 if success {
-                    // Login successful - the app coordinator will handle navigation
                     isAuthenticated = true
                 } else {
-                    // Show error
                     withAnimation {
-                        errorMessage = "Invalid email or password. Please try again."
+                        errorMessage = "invalid email or password. please try again."
                         showError = true
                     }
-                    
-                    // Auto-hide error after 5 seconds
+
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        withAnimation {
-                            showError = false
-                        }
+                        withAnimation { showError = false }
                     }
                 }
             }
@@ -467,19 +465,14 @@ struct LoginView: View {
     }
 
     private func handleAppleSignIn() {
-        // Clear any previous errors
-        withAnimation {
-            showError = false
-        }
-
+        withAnimation { showError = false }
         isAppleSignInLoading = true
 
-        // Haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
 
         Task {
-            let success = await onboardingViewModel.signInWithApple(fromPreviewMode: false)
+            let success = await onboardingViewModel.signInWithApple()
 
             await MainActor.run {
                 isAppleSignInLoading = false
@@ -487,28 +480,22 @@ struct LoginView: View {
                 if success {
                     isAuthenticated = true
                 } else {
-                    // Error is shown by OnboardingViewModel via alert
-                    let notificationFeedback = UINotificationFeedbackGenerator()
-                    notificationFeedback.notificationOccurred(.error)
+                    let notification = UINotificationFeedbackGenerator()
+                    notification.notificationOccurred(.error)
                 }
             }
         }
     }
 
     private func handleGoogleSignIn() {
-        // Clear any previous errors
-        withAnimation {
-            showError = false
-        }
-
+        withAnimation { showError = false }
         isGoogleSignInLoading = true
 
-        // Haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
 
         Task {
-            let success = await onboardingViewModel.signInWithGoogle(fromPreviewMode: false)
+            let success = await onboardingViewModel.signInWithGoogle()
 
             await MainActor.run {
                 isGoogleSignInLoading = false
@@ -516,9 +503,8 @@ struct LoginView: View {
                 if success {
                     isAuthenticated = true
                 } else {
-                    // Error is shown by OnboardingViewModel via alert
-                    let notificationFeedback = UINotificationFeedbackGenerator()
-                    notificationFeedback.notificationOccurred(.error)
+                    let notification = UINotificationFeedbackGenerator()
+                    notification.notificationOccurred(.error)
                 }
             }
         }
@@ -539,48 +525,24 @@ struct GoogleLogoView: View {
                     .stroke(
                         AngularGradient(
                             gradient: Gradient(colors: [
-                                Color(red: 0.91, green: 0.26, blue: 0.21), // Red
-                                Color(red: 0.98, green: 0.74, blue: 0.18), // Yellow
-                                Color(red: 0.20, green: 0.66, blue: 0.33), // Green
-                                Color(red: 0.26, green: 0.52, blue: 0.96), // Blue
-                                Color(red: 0.91, green: 0.26, blue: 0.21)  // Red again
+                                Color(red: 0.91, green: 0.26, blue: 0.21),
+                                Color(red: 0.98, green: 0.74, blue: 0.18),
+                                Color(red: 0.20, green: 0.66, blue: 0.33),
+                                Color(red: 0.26, green: 0.52, blue: 0.96),
+                                Color(red: 0.91, green: 0.26, blue: 0.21)
                             ]),
                             center: .center,
                             startAngle: .degrees(0),
                             endAngle: .degrees(360)
                         ),
-                        lineWidth: 3
+                        lineWidth: 2
                     )
 
                 Text("G")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96))
             }
         }
-    }
-}
-
-// Enhanced text field style matching app design
-struct EnhancedTextFieldStyle: TextFieldStyle {
-    var isFocused: Bool = false
-
-    func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(isFocused ? 0.08 : 0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                isFocused ? Color("NormaPastelTeal").opacity(0.3) : Color.gray.opacity(0.1),
-                                lineWidth: isFocused ? 1.5 : 1
-                            )
-                    )
-            )
-            .font(.system(size: 16))
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
     }
 }
 
@@ -588,7 +550,7 @@ struct EnhancedTextFieldStyle: TextFieldStyle {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
     let onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
-    
+
     return LoginView(isAuthenticated: .constant(false), showSignUp: .constant(false))
         .environmentObject(onboardingViewModel)
 }

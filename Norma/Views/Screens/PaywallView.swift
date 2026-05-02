@@ -2,7 +2,9 @@
 //  PaywallView.swift
 //  Norma
 //
-//  Created by Assistant on 7/31/25.
+//  D9/D10 dark editorial paywall: hero, feature list, plan cards, lavender
+//  CTA capsule. Replaces the warm pastel + coin-radar background with the
+//  flat dark language used by SettingsView, CalendarSheet, and BillsView.
 //
 
 import SwiftUI
@@ -10,19 +12,12 @@ import RevenueCat
 
 struct PaywallView: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
-    @EnvironmentObject private var coinColorViewModel: CoinColorViewModel
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+
     @State private var isPurchasing = false
     @State private var showError = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
-    @State private var showHeader = false
-    @State private var showFeatures = false
-    @State private var showSocialProof = false
-    @State private var showPlans = false
-    @State private var showCTA = false
-    @State private var shimmerOffset: CGFloat = -1.0
 
     enum BillingOption {
         case monthly
@@ -31,46 +26,23 @@ struct PaywallView: View {
 
     @State private var selectedBilling: BillingOption = .yearly
 
-    private let accentColor = Color("NormaPastelPurple")
+    private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let onAccent = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private let danger = Color(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255)
+
+    private var heroFont: Font { .system(size: 56, weight: .heavy) }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // Coin gradient background + radar rings
-            ZStack(alignment: .topTrailing) {
-                CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
+        VStack(spacing: 0) {
+            navBar
 
-                Canvas { context, size in
-                    let origin = CGPoint(x: size.width, y: 0)
-                    let ringCount = 8
-                    let maxRadius: CGFloat = 320
-                    let ringSpacing = maxRadius / CGFloat(ringCount)
-                    let tierColor = UIColor(coinColorViewModel.coinColor)
-                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                    tierColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-
-                    for i in 1...ringCount {
-                        let radius = CGFloat(i) * ringSpacing
-                        let opacity = 0.12 * (1.0 - CGFloat(i) / CGFloat(ringCount))
-                        let rect = CGRect(
-                            x: origin.x - radius,
-                            y: origin.y - radius,
-                            width: radius * 2,
-                            height: radius * 2
-                        )
-                        context.stroke(
-                            Path(ellipseIn: rect),
-                            with: .color(Color(red: r, green: g, blue: b).opacity(opacity)),
-                            lineWidth: 1
-                        )
-                    }
-                }
-                .allowsHitTesting(false)
-            }
-            .ignoresSafeArea()
-
-            ScrollView {
-                VStack(spacing: 28) {
-                    headerSection
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 28) {
+                    heroBlock
 
                     featureList
 
@@ -85,27 +57,11 @@ struct PaywallView: View {
                     legalRow
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 60)
-                .padding(.bottom, 40)
+                .padding(.bottom, 36)
             }
-            .scrollIndicators(.hidden)
-
-            // Close button
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color("NormaText").opacity(0.5))
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .fill(Color("NormaCard").opacity(0.8))
-                    )
-            }
-            .padding(.top, 16)
-            .padding(.trailing, 20)
         }
+        .background(bg.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .alert("Purchase Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
@@ -123,231 +79,202 @@ struct PaywallView: View {
                 title: "Privacy Policy"
             )
         }
-        .onAppear {
-            Task {
-                if subscriptionManager.availableProducts.isEmpty {
-                    await subscriptionManager.loadProducts()
-                }
-                await subscriptionManager.checkSubscriptionStatus()
+        .task {
+            if subscriptionManager.availableProducts.isEmpty {
+                await subscriptionManager.loadProducts()
             }
-            withAnimation(.easeOut(duration: 0.45).delay(0.1)) {
-                showHeader = true
-            }
-            withAnimation(.easeOut(duration: 0.45).delay(0.25)) {
-                showFeatures = true
-            }
-            withAnimation(.easeOut(duration: 0.4).delay(0.4)) {
-                showSocialProof = true
-            }
-            withAnimation(.easeOut(duration: 0.45).delay(0.5)) {
-                showPlans = true
-            }
-            withAnimation(.easeOut(duration: 0.45).delay(0.65)) {
-                showCTA = true
-            }
-            // Single CTA shimmer after content settles
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                withAnimation(.easeInOut(duration: 0.8)) {
-                    shimmerOffset = 1.0
-                }
-            }
+            await subscriptionManager.checkSubscriptionStatus()
         }
     }
 
-    // MARK: - Header
+    // MARK: - Nav
 
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 0) {
-                Text("Norma ")
-                    .font(.custom(FontFamily.Rubik.bold, size: 52))
-                    .foregroundColor(Color("NormaText"))
-
-                Text("Pro")
-                    .font(.custom(FontFamily.Rubik.bold, size: 52))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color("NormaPastelPurple"),
-                                Color("NormaPastelCoral")
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+    private var navBar: some View {
+        HStack {
+            Spacer()
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(cream.opacity(0.85))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-
-            Text("Financial clarity for\nwherever you call home.")
-                .font(.custom(FontFamily.Rubik.medium, size: 20))
-                .foregroundColor(Color("NormaText").opacity(0.6))
-                .lineSpacing(4)
+            .buttonStyle(.plain)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
-        .opacity(showHeader ? 1 : 0)
-        .offset(y: showHeader ? 0 : 16)
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
     }
 
-    // MARK: - Feature List
+    // MARK: - Hero
+
+    private var heroBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("subscription")
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(mutedText)
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("norma pro")
+                    .font(heroFont)
+                    .tracking(-2.24)
+                    .foregroundStyle(cream)
+                Text(".")
+                    .font(heroFont)
+                    .tracking(-2.24)
+                    .foregroundStyle(accentPurple)
+            }
+
+            Text("financial clarity for wherever you call home.")
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundStyle(mutedText)
+                .padding(.top, 2)
+        }
+    }
+
+    // MARK: - Feature list
 
     private var featureList: some View {
-        VStack(spacing: 8) {
-            PaywallFeatureRow(
-                icon: "brain.head.profile",
-                text: "AI companion for logging & insights"
-            )
-            PaywallFeatureRow(
-                icon: "shield.lefthalf.filled",
-                text: "Build Arcs of financial safety"
-            )
-            PaywallFeatureRow(
-                icon: "flame.fill",
-                text: "Spending challenges, streaks & rewards"
-            )
-            PaywallFeatureRow(
-                icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90",
-                text: "Live currency rates and conversions"
-            )
+        VStack(alignment: .leading, spacing: 6) {
+            Text("what you get")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                .tracking(0.88)
+                .textCase(.uppercase)
+                .foregroundStyle(cream)
+                .padding(.bottom, 4)
+
+            PaywallFeatureRow(icon: "brain.head.profile", text: "ai companion for logging & insights")
+            PaywallFeatureRow(icon: "shield.lefthalf.filled", text: "build arcs of financial safety")
+            PaywallFeatureRow(icon: "flame.fill", text: "voice-driven note capture")
+            PaywallFeatureRow(icon: "coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90", text: "live currency rates and conversions")
         }
-        .opacity(showFeatures ? 1 : 0)
-        .offset(y: showFeatures ? 0 : 16)
     }
 
-    // MARK: - Social Proof
+    // MARK: - Social proof
 
     private var socialProofLabel: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock.fill")
-                .font(.system(size: 11))
-            Text("Early adopter pricing — locked in forever")
-                .font(.custom(FontFamily.Rubik.medium, size: 13))
+        HStack(spacing: 8) {
+            Circle()
+                .fill(accentPurple)
+                .frame(width: 6, height: 6)
+            Text("early adopter pricing · locked in forever")
+                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                .tracking(0.44)
+                .textCase(.uppercase)
+                .foregroundStyle(mutedText)
         }
-        .foregroundColor(accentColor)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(showSocialProof ? 1 : 0)
-        .offset(y: showSocialProof ? 0 : 10)
     }
 
-    // MARK: - Plan Cards
+    // MARK: - Plan cards
 
     private var planCardsSection: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("choose a plan")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                .tracking(0.88)
+                .textCase(.uppercase)
+                .foregroundStyle(cream)
+                .padding(.bottom, 2)
+
             PaywallPlanCard(
-                title: "Annual",
+                title: "annual",
                 price: annualPriceText,
                 badge: annualBadgeText,
                 strikethroughPrice: annualStrikethroughText,
                 isSelected: selectedBilling == .yearly
             ) {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     selectedBilling = .yearly
                 }
             }
 
             PaywallPlanCard(
-                title: "Monthly",
+                title: "monthly",
                 price: monthlyPriceText,
                 isSelected: selectedBilling == .monthly
             ) {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     selectedBilling = .monthly
                 }
             }
         }
-        .opacity(showPlans ? 1 : 0)
-        .offset(y: showPlans ? 0 : 16)
     }
 
-    // MARK: - CTA Button
+    // MARK: - CTA
 
     private var ctaButton: some View {
         Button {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
             Task { await purchaseSelectedProduct() }
         } label: {
             Group {
                 if isPurchasing {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .progressViewStyle(CircularProgressViewStyle(tint: onAccent))
                 } else if subscriptionManager.isLoadingProducts {
                     HStack(spacing: 8) {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .progressViewStyle(CircularProgressViewStyle(tint: onAccent))
                             .scaleEffect(0.8)
-                        Text("Loading...")
-                            .font(.custom(FontFamily.Rubik.regular, size: 15))
+                        Text("loading…")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                     }
                 } else if subscriptionManager.availableProducts.isEmpty {
-                    Text("Tap to retry")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                    Text("tap to retry")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                 } else if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
-                    Text("Subscribe Now")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                    Text("subscribe now")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                 } else {
-                    Text("Start 7-Day Free Trial")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                    Text("start 7-day free trial")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                 }
             }
-            .foregroundColor(.white)
+            .foregroundStyle(onAccent)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(accentColor)
-
-                    // Shimmer overlay
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .white.opacity(0), location: 0),
-                                    .init(color: .white.opacity(0.25), location: 0.5),
-                                    .init(color: .white.opacity(0), location: 1)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .mask(
-                            RoundedRectangle(cornerRadius: 14)
-                        )
-                        .offset(x: shimmerOffset * 200)
-                        .clipped()
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .background(Capsule().fill(accentPurple))
+            .overlay(Capsule().stroke(accentPurple.opacity(0.7), lineWidth: 1))
+            .shadow(color: accentPurple.opacity(0.35), radius: 18, x: 0, y: 0)
+            .contentShape(Capsule())
         }
         .disabled(isPurchasing || subscriptionManager.isLoadingProducts)
         .buttonStyle(PaywallPressButtonStyle())
-        .opacity(showCTA ? 1 : 0)
-        .offset(y: showCTA ? 0 : 16)
     }
 
     // MARK: - Reassurance
 
     private var reassuranceText: some View {
-        Text("No payment now. Cancel anytime.")
-            .font(.custom(FontFamily.Rubik.regular, size: 13))
-            .foregroundColor(Color("NormaText").opacity(0.4))
+        Text("no payment now. cancel anytime.")
+            .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+            .foregroundStyle(dimText)
             .frame(maxWidth: .infinity)
-            .opacity(showCTA ? 1 : 0)
     }
 
-    // MARK: - Legal Row
+    // MARK: - Legal
 
     private var legalRow: some View {
-        HStack(spacing: 12) {
-            Button("Terms") { showTermsOfUse = true }
-            Text("·").foregroundColor(Color("NormaText").opacity(0.3))
-            Button("Privacy") { showPrivacyPolicy = true }
-            Text("·").foregroundColor(Color("NormaText").opacity(0.3))
-            Button("Restore Purchases") {
+        HStack(spacing: 14) {
+            Button("terms") { showTermsOfUse = true }
+            Text("·").foregroundStyle(dimText)
+            Button("privacy") { showPrivacyPolicy = true }
+            Text("·").foregroundStyle(dimText)
+            Button("restore purchases") {
                 Task { await restorePurchases() }
             }
         }
-        .font(.custom(FontFamily.Rubik.regular, size: 12))
-        .foregroundColor(Color("NormaText").opacity(0.4))
-        .opacity(showCTA ? 1 : 0)
+        .font(.custom(FontFamily.Rubik.medium, size: 12))
+        .foregroundStyle(mutedText)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Dynamic Pricing
@@ -373,19 +300,19 @@ struct PaywallView: View {
         return "\(product.priceString)/yr"
     }
 
-    /// The monthly price shown as a crossed-out reference on the annual card
+    /// The monthly price shown as a crossed-out reference on the annual card.
     private var annualStrikethroughText: String? {
         guard let monthly = monthlyProduct else { return "$9.99/mo" }
         return "\(monthly.priceString)/mo"
     }
 
     private var annualBadgeText: String? {
-        guard let annual = annualProduct else { return "Save 17%" }
+        guard let annual = annualProduct else { return "save 17%" }
         if let monthly = monthlyProduct {
             let monthlyPrice = (monthly.package.storeProduct.price as NSDecimalNumber).doubleValue
             let annualMonthly = (annual.package.storeProduct.price as NSDecimalNumber).doubleValue / 12
             let savings = ((monthlyPrice - annualMonthly) / monthlyPrice) * 100
-            return savings > 0 ? "Save \(Int(savings.rounded()))%" : nil
+            return savings > 0 ? "save \(Int(savings.rounded()))%" : nil
         }
         return annual.savingsPercentage
     }
@@ -450,5 +377,11 @@ struct PaywallPressButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    PaywallView()
+    Color.black
+        .ignoresSafeArea()
+        .sheet(isPresented: .constant(true)) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
 }

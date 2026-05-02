@@ -185,9 +185,6 @@ class ExpenseViewModel: ObservableObject {
 
             loadExpenses()
 
-            // Refresh the current month's snapshot
-            await dataManager.refreshCurrentMonthSnapshot()
-
             // Track expense created (only for non-bill payments)
             if billId == nil {
                 AnalyticsService.shared.track(.expenseCreated(

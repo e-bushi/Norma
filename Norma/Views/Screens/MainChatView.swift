@@ -16,7 +16,6 @@ struct MainChatView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var challengeViewModel: ChallengeViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
@@ -32,15 +31,12 @@ struct MainChatView: View {
 
     @State private var showIncomeEdit = false
     @State private var showArcDetail = false
-    @State private var showPendingTransactions = false
     @State private var showRemindersSheet = false
-    @State private var showBillHome = false
-    @State private var showActivity = false
-    @State private var showExpenses = false
     @State private var reminderCount: Int = 0
     @State private var navBarCapsulesVisible = false
     @State private var showIncomeDropdown = false
     @State private var inputGlowColor: Color? = nil
+    @State private var backgroundOpacity: Double = 0
 
     // Voice input state
     @State private var isRecording = false
@@ -95,39 +91,6 @@ struct MainChatView: View {
         }
     }
 
-    private var pendingCount: Int {
-        dataManager.getPendingTransactionsCount()
-    }
-
-    private var capsuleBillsFormatted: String {
-        profileViewModel.formatCurrencyTruncated(billViewModel.totalMonthlyBills)
-    }
-
-    private var capsuleWeeklySpendFormatted: String {
-        let calendar = Calendar.current
-        let today = Date()
-        let weekday = calendar.component(.weekday, from: today)
-        let startOfWeek = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(weekday - 2), to: today)!)
-        let spend = dataManager.expenses.filter { expense in
-            let formatter = ISO8601DateFormatter()
-            if let date = formatter.date(from: expense.expenseDate) {
-                return date >= startOfWeek && date <= today
-            }
-            return false
-        }.reduce(0) { $0 + $1.amount }
-        return profileViewModel.formatCurrencyTruncated(spend)
-    }
-
-    private var capsuleMonthlySpendFormatted: String {
-        profileViewModel.formatCurrencyTruncated(expenseViewModel.currentMonthExpenses)
-    }
-
-    private var capsuleShortMonth: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
-        return formatter.string(from: Date())
-    }
-
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -144,12 +107,7 @@ struct MainChatView: View {
     }
 
     private var toolExecutor: ChatToolExecutor {
-        ChatToolExecutor(
-            billViewModel: billViewModel,
-            expenseViewModel: expenseViewModel,
-            challengeViewModel: challengeViewModel,
-            dataManager: dataManager
-        )
+        ChatToolExecutor(dataManager: dataManager)
     }
 
     var body: some View {
@@ -175,11 +133,20 @@ struct MainChatView: View {
                 let coinColor = CoinTierService.currentCoinTier(for: arcCount).glowColor
 
                 ZStack {
+                    Color.black
+
                     CoinGradientBackground(coinColor: coinColor, colorScheme: colorScheme)
+                        .opacity(backgroundOpacity)
 
                     DotPatternView()
+                        .opacity(backgroundOpacity)
                 }
                 .ignoresSafeArea()
+                .onAppear {
+                    withAnimation(.easeIn(duration: 1.0)) {
+                        backgroundOpacity = 1
+                    }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -288,9 +255,6 @@ struct MainChatView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showPendingTransactions) {
-            PendingTransactionsSheet()
-        }
         .sheet(isPresented: $showRemindersSheet) {
             RemindersSheet(isPresented: $showRemindersSheet)
         }
@@ -310,9 +274,6 @@ struct MainChatView: View {
                 await triggerFirstChatWelcome()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPendingTransactions"))) { _ in
-            showPendingTransactions = true
-        }
         .sheet(isPresented: $showArcDetail) {
             ArcCountView(
                 arcCount: arcCount,
@@ -325,91 +286,6 @@ struct MainChatView: View {
             .environmentObject(expenseViewModel)
             .environmentObject(profileViewModel)
         }
-        .sheet(isPresented: $showBillHome) {
-            BillHomeView()
-        }
-        .sheet(isPresented: $showActivity) {
-            ActivityView()
-        }
-        .sheet(isPresented: $showExpenses) {
-            IncomeAndExpenseView()
-        }
-        // QuickActionsHubView overlay — commented out for later
-        // .overlay(alignment: .top) {
-        //     if showIncomeDropdown {
-        //         QuickActionsHubView(
-        //             onShowBills: {
-        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-        //                     showIncomeDropdown = false
-        //                 }
-        //                 showBillHome = true
-        //             },
-        //             onShowActivity: {
-        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-        //                     showIncomeDropdown = false
-        //                 }
-        //                 showActivity = true
-        //             },
-        //             onShowExpenses: {
-        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-        //                     showIncomeDropdown = false
-        //                 }
-        //                 showExpenses = true
-        //             },
-        //             onShowPendingTransactions: {
-        //                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-        //                     showIncomeDropdown = false
-        //                 }
-        //                 showPendingTransactions = true
-        //             },
-        //             pendingTransactionsCount: pendingCount
-        //         )
-        //         .padding(.horizontal, 12)
-        //         .padding(.vertical, 10)
-        //         .background(
-        //             RoundedRectangle(cornerRadius: 16)
-        //                 .fill(.clear)
-        //                 .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-        //         )
-        //         .overlay(
-        //             RoundedRectangle(cornerRadius: 16)
-        //                 .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-        //         )
-        //         .frame(maxWidth: 300)
-        //         .padding(.top, 56)
-        //         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
-        //         .transition(.asymmetric(
-        //             insertion: .opacity.combined(with: .move(edge: .top)),
-        //             removal: .opacity
-        //         ))
-        //         .zIndex(100)
-        //     }
-        // }
-    }
-
-    @ViewBuilder
-    private func inputNavCapsule(title: String, action: @escaping () -> Void) -> some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            action()
-        } label: {
-            Text(title)
-                .font(.normaFinancial(16))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(.clear)
-                        .glassEffect(in: Capsule())
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(Color.secondary.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
-                )
-        }
-        .buttonStyle(CapsulePressStyle())
     }
 
     private func hideKeyboard() {
@@ -422,12 +298,7 @@ struct MainChatView: View {
         if messages.isEmpty && !isLoading {
             ChatEmptyStateView(
                 arcCount: arcCount,
-                onCoinTapped: { showArcDetail = true },
-                onShowBills: { showBillHome = true },
-                onShowActivity: { showActivity = true },
-                onShowExpenses: { showExpenses = true },
-                onShowPendingTransactions: { showPendingTransactions = true },
-                pendingTransactionsCount: pendingCount
+                onCoinTapped: { showArcDetail = true }
             )
         } else {
             ScrollViewReader { proxy in
@@ -537,20 +408,6 @@ struct MainChatView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Navigation capsules — visible when chat has messages
-            if !messages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        inputNavCapsule(title: "Bills \(capsuleBillsFormatted)") { showBillHome = true }
-                        inputNavCapsule(title: "This week \(capsuleWeeklySpendFormatted)") { showActivity = true }
-                        inputNavCapsule(title: "\(capsuleShortMonth). Spend \(capsuleMonthlySpendFormatted)") { showExpenses = true }
-                        inputNavCapsule(title: pendingCount > 0 ? "Pending (\(pendingCount))" : "Pending") { showPendingTransactions = true }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.bottom, 2)
-            }
-
             ChatInputView(
                 text: $inputText,
                 isLoading: isLoading,
@@ -649,8 +506,7 @@ struct MainChatView: View {
                 currency: currency,
                 monthlyIncome: monthlyIncome,
                 freedomFund: freedomFund,
-                bills: billViewModel.bills,
-                challenge: challengeViewModel.activeChallenge
+                bills: billViewModel.bills
             )
 
             print("📋 System Prompt:")
@@ -701,8 +557,7 @@ struct MainChatView: View {
                     currency: currency,
                     monthlyIncome: monthlyIncome,
                     freedomFund: freedomFund,
-                    bills: billViewModel.bills,
-                    challenge: challengeViewModel.activeChallenge
+                    bills: billViewModel.bills
                 )
 
                 print("🤖 Requesting final AI response...")
@@ -927,8 +782,7 @@ struct MainChatView: View {
             currency: currency,
             monthlyIncome: monthlyIncome,
             freedomFund: freedomFund,
-            bills: billViewModel.bills,
-            challenge: challengeViewModel.activeChallenge
+            bills: billViewModel.bills
         )
 
         do {
@@ -1047,6 +901,13 @@ struct CoinGradientBackground: View {
     }
 }
 
+struct LastMessagePositionKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 #Preview {
     let dataManager = DataManager()
     let sessionViewModel = SessionViewModel(dataManager: dataManager)
@@ -1058,6 +919,5 @@ struct CoinGradientBackground: View {
         .environmentObject(conversationManager)
         .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-        .environmentObject(ChallengeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .preferredColorScheme(.dark)
 }
