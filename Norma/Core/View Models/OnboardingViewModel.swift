@@ -38,11 +38,24 @@ class OnboardingViewModel: ObservableObject {
     @Published var collectedData = UserOnboardingData()
 
     // Extended Onboarding Responses (Digital Nomad focused)
-    @Published var nomadType: String = ""
-    @Published var runwayStatus: String = ""
-    @Published var nomadChallenges: String = ""
-    @Published var moneyStoppedYou: String = ""
-    @Published var winningLooksLike: String = ""
+    // Onboarding answers (May 2026 — financial-journal positioning).
+    @Published var triedBefore: String = ""
+    @Published var messyMoney: [String] = []        // multi-select
+    @Published var writingFrequency: String = ""
+    @Published var incomeShape: String = ""
+    @Published var whatsWorking: String = ""
+
+    // Cash/card mix split (sums to 100). Defaults from O4a artboard.
+    @Published var cardPercent: Double = 60
+    @Published var cashPercent: Double = 30
+    @Published var transfersPercent: Double = 10
+
+    /// True once the user has reached the end of the question flow.
+    /// Used to distinguish Apple/Google sign-in from L1 (no answers yet)
+    /// vs. from the end-of-flow auth screen (answers in hand).
+    var hasAnsweredOnboarding: Bool {
+        !whatsWorking.isEmpty
+    }
 
     // MARK: - Dependencies
     private let sessionViewModel: SessionViewModel
@@ -50,9 +63,6 @@ class OnboardingViewModel: ObservableObject {
     private let supabaseService = SupabaseService.shared
     private let appleSignInManager = AppleSignInManager()
     private let googleSignInManager = GoogleSignInManager()
-
-    // Preview mode view model - owned here to persist throughout onboarding
-    var previewModeViewModel = PreviewModeViewModel()
 
     // MARK: - Initialization
 
@@ -223,29 +233,23 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
+    /// Called after email verification succeeds. Onboarding questions were
+    /// already answered before auth, so finalize directly.
     func proceedToWelcome() {
-        currentStep = .nomadWelcome
+        Task { await finalizeOnboarding() }
     }
 
-    /// Finalize onboarding by saving profile data from preview mode and completing
+    /// Finalize onboarding by saving profile data and completing
     func finalizeOnboarding() async {
-        await saveProfileDataFromPreviewMode()
+        await saveProfileData()
         completeOnboarding()
-    }
-
-    /// Handle preview mode completion for already-authenticated users
-    /// Saves collected data and proceeds to the welcome/question screens
-    func handleAuthenticatedPreviewModeCompletion() async {
-        await saveProfileDataFromPreviewMode()
-        currentStep = .nomadWelcome
     }
 
     // MARK: - Apple Sign In Methods
 
     /// Sign in with Apple
-    /// - Parameter fromPreviewMode: Whether this is being called from preview mode (to trigger data transfer)
     /// - Returns: True if sign-in was successful
-    func signInWithApple(fromPreviewMode: Bool = false) async -> Bool {
+    func signInWithApple() async -> Bool {
         isLoading = true
         clearError()
 
@@ -271,12 +275,7 @@ class OnboardingViewModel: ObservableObject {
             // Step 3: Store name if available (for profile creation)
             if let fullName = appleResult.fullName {
                 collectedData.name = fullName
-                previewModeViewModel.userName = fullName  // Sync to previewModeViewModel for profile save
                 print("🍎 Step 3: Stored name from Apple: \(fullName)")
-            } else if let userName = previewModeViewModel.userName {
-                // Fall back to preview mode name
-                collectedData.name = userName
-                print("🍎 Step 3: Using preview mode name: \(userName)")
             }
 
             // Store email if available
@@ -313,13 +312,6 @@ class OnboardingViewModel: ObservableObject {
                 }
             }
 
-            // Step 6: If from preview mode, save profile and transfer data
-            if fromPreviewMode {
-                print("🍎 Step 6: Saving profile from preview mode...")
-                await saveProfileDataFromPreviewMode()
-                print("🍎 Step 6 complete")
-            }
-
             isLoading = false
 
             // Track sign in completed
@@ -329,14 +321,14 @@ class OnboardingViewModel: ObservableObject {
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🍎 Returning user - navigating to main app")
                 currentStep = .complete
-            } else if fromPreviewMode {
-                // New user coming from preview mode - data already collected, proceed to welcome screens
-                print("🍎 New user from preview mode - navigating to nomad welcome")
-                currentStep = .nomadWelcome
+            } else if hasAnsweredOnboarding {
+                // User reached Apple sign-in from the end-of-flow auth screen.
+                // Persist their answers and go straight to the app.
+                print("🍎 New user with answers - finalizing")
+                await finalizeOnboarding()
             } else {
-                // New user who hasn't been through preview mode - send them through "Talk to Norma" first
-                print("🍎 New user - navigating to preview mode to collect info")
-                currentStep = .previewMode
+                print("🍎 New user - starting onboarding questions")
+                currentStep = .triedBefore
             }
 
             return true
@@ -360,17 +352,11 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
-    /// Sign in with Apple specifically from preview mode (handles data transfer)
-    func signInWithAppleFromPreviewMode() async {
-        _ = await signInWithApple(fromPreviewMode: true)
-    }
-
     // MARK: - Google Sign In Methods
 
     /// Sign in with Google
-    /// - Parameter fromPreviewMode: Whether this is being called from preview mode (to trigger data transfer)
     /// - Returns: True if sign-in was successful
-    func signInWithGoogle(fromPreviewMode: Bool = false) async -> Bool {
+    func signInWithGoogle() async -> Bool {
         isLoading = true
         clearError()
 
@@ -396,12 +382,7 @@ class OnboardingViewModel: ObservableObject {
             // Step 3: Store name if available (for profile creation)
             if let fullName = googleResult.fullName {
                 collectedData.name = fullName
-                previewModeViewModel.userName = fullName  // Sync to previewModeViewModel for profile save
                 print("🔵 Step 3: Stored name from Google: \(fullName)")
-            } else if let userName = previewModeViewModel.userName {
-                // Fall back to preview mode name
-                collectedData.name = userName
-                print("🔵 Step 3: Using preview mode name: \(userName)")
             }
 
             // Store email if available
@@ -438,13 +419,6 @@ class OnboardingViewModel: ObservableObject {
                 }
             }
 
-            // Step 6: If from preview mode, save profile and transfer data
-            if fromPreviewMode {
-                print("🔵 Step 6: Saving profile from preview mode...")
-                await saveProfileDataFromPreviewMode()
-                print("🔵 Step 6 complete")
-            }
-
             isLoading = false
 
             // Track sign in completed
@@ -454,14 +428,14 @@ class OnboardingViewModel: ObservableObject {
             if sessionViewModel.hasCompletedOnboarding && sessionViewModel.hasCompletedInitialSetup {
                 print("🔵 Returning user - navigating to main app")
                 currentStep = .complete
-            } else if fromPreviewMode {
-                // New user coming from preview mode - data already collected, proceed to welcome screens
-                print("🔵 New user from preview mode - navigating to nomad welcome")
-                currentStep = .nomadWelcome
+            } else if hasAnsweredOnboarding {
+                // User reached Google sign-in from the end-of-flow auth screen.
+                // Persist their answers and go straight to the app.
+                print("🔵 New user with answers - finalizing")
+                await finalizeOnboarding()
             } else {
-                // New user who hasn't been through preview mode - send them through "Talk to Norma" first
-                print("🔵 New user - navigating to preview mode to collect info")
-                currentStep = .previewMode
+                print("🔵 New user - starting onboarding questions")
+                currentStep = .triedBefore
             }
 
             return true
@@ -483,11 +457,6 @@ class OnboardingViewModel: ObservableObject {
             showError(error.localizedDescription)
             return false
         }
-    }
-
-    /// Sign in with Google specifically from preview mode (handles data transfer)
-    func signInWithGoogleFromPreviewMode() async {
-        _ = await signInWithGoogle(fromPreviewMode: true)
     }
 
     // MARK: - Chat Methods
@@ -724,7 +693,19 @@ class OnboardingViewModel: ObservableObject {
                 notificationsEnabled: collectedData.reminderPreference != "No reminders",
                 billReminderDays: reminderDays
             )
-            
+
+            // Capture the onboarding question answers for the JSONB insights column.
+            let insights = OnboardingInsights(
+                triedBefore: triedBefore.isEmpty ? nil : triedBefore,
+                messyMoney: messyMoney.isEmpty ? nil : messyMoney.joined(separator: ","),
+                writingFrequency: writingFrequency.isEmpty ? nil : writingFrequency,
+                incomeShape: incomeShape.isEmpty ? nil : incomeShape,
+                whatsWorking: whatsWorking.isEmpty ? nil : whatsWorking,
+                cardPercent: cardPercent,
+                cashPercent: cashPercent,
+                transfersPercent: transfersPercent
+            )
+
             // Check if profile already exists
             if var existingProfile = sessionViewModel.currentUser {
                 // Update existing profile
@@ -732,6 +713,7 @@ class OnboardingViewModel: ObservableObject {
                 existingProfile.freedomFund = collectedData.freedomFund
                 existingProfile.painPoint = collectedData.painPoint
                 existingProfile.settings = settings
+                existingProfile.onboardingInsights = insights
                 await sessionViewModel.updateUserProfile(existingProfile)
             } else {
                 // Create new profile
@@ -742,13 +724,11 @@ class OnboardingViewModel: ObservableObject {
                     monthlyIncome: collectedData.monthlyIncome,
                     freedomFund: collectedData.freedomFund,
                     painPoint: collectedData.painPoint,
-                    settings: settings
+                    settings: settings,
+                    onboardingInsights: insights
                 )
                 try await sessionViewModel.createUserProfile(newProfile)
             }
-
-            // Transfer preview mode data (bills, budgets, expenses) to the real account
-            await transferPreviewModeData(userId: supabaseUser.id.uuidString.lowercased())
 
         } catch {
             print("Failed to save profile data: \(error)")
@@ -756,148 +736,34 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
-    /// Save profile data using values collected in preview mode
-    private func saveProfileDataFromPreviewMode() async {
-        do {
-            // Get current authenticated user
-            guard let supabaseUser = supabaseService.currentUser else {
-                print("No authenticated user found — aborting profile save")
-                return
-            }
-
-            // Get data from preview mode view model
-            let name = previewModeViewModel.userName ?? collectedData.name
-            let currency = previewModeViewModel.userCurrency ?? "USD"
-            let monthlyIncome = previewModeViewModel.userIncome ?? 0
-            let freedomFund = previewModeViewModel.userFreedomFund ?? 0
-            let painPoint = ""
-
-            // Validation warnings for missing onboarding data
-            if monthlyIncome == 0 {
-                print("⚠️ WARNING: Monthly income not collected during onboarding!")
-            }
-            if freedomFund == 0 {
-                print("⚠️ WARNING: Freedom fund not collected during onboarding!")
-            }
-
-
-
-            // Default reminder days (can be customized later in settings)
-            let reminderDays = 3
-
-            // Create profile settings
-            let settings = ProfileSettings(
-                currency: currency,
-                monthlyIncome: monthlyIncome,
-                freedomFund: freedomFund,
-                painPoint: painPoint,
-                notificationsEnabled: true,
-                billReminderDays: reminderDays
-            )
-
-            // Create onboarding insights from question responses
-            let insights = OnboardingInsights(
-                nomadType: nomadType.isEmpty ? nil : nomadType,
-                runwayStatus: runwayStatus.isEmpty ? nil : runwayStatus,
-                nomadChallenges: nomadChallenges.isEmpty ? nil : nomadChallenges,
-                moneyStoppedYou: moneyStoppedYou.isEmpty ? nil : moneyStoppedYou,
-                winningLooksLike: winningLooksLike.isEmpty ? nil : winningLooksLike
-            )
-
-            // Check if profile exists in the database (must have an id)
-            let hasDbProfile = sessionViewModel.currentUser?.id != nil
-
-            if hasDbProfile, var existingProfile = sessionViewModel.currentUser {
-                // Update existing profile in database
-                existingProfile.monthlyIncome = monthlyIncome
-                existingProfile.freedomFund = freedomFund
-                existingProfile.painPoint = painPoint
-                existingProfile.settings = settings
-                existingProfile.onboardingInsights = insights
-                await sessionViewModel.updateUserProfile(existingProfile)
-            } else {
-                // Create new profile
-                let newProfile = Profile(
-                    userId: supabaseUser.id.uuidString.lowercased(),
-                    email: supabaseUser.email ?? "",
-                    name: name,
-                    monthlyIncome: monthlyIncome,
-                    freedomFund: freedomFund,
-                    painPoint: painPoint,
-                    settings: settings,
-                    onboardingInsights: insights
-                )
-                try await sessionViewModel.createUserProfile(newProfile)
-            }
-
-            // Transfer preview mode data (bills, budgets, expenses) to the real account
-            await transferPreviewModeData(userId: supabaseUser.id.uuidString.lowercased())
-
-        } catch {
-            print("Failed to save profile from preview mode: \(error)")
-        }
-    }
-
-    /// Transfer bills and expenses from preview mode to the real account
-    private func transferPreviewModeData(userId: String) async {
-        guard previewModeViewModel.hasUserDataToTransfer else {
-            print("📦 No preview mode data to transfer")
-            return
-        }
-
-        print("📦 Transferring preview mode data to user: \(userId)")
-
-        // Get the data ready for transfer (with real userId)
-        let billsToTransfer = previewModeViewModel.getUserBillsForTransfer(withUserId: userId)
-        let expensesToTransfer = previewModeViewModel.getUserExpensesForTransfer(withUserId: userId)
-
-        // Save bills (encrypted via Edge Function)
-        for bill in billsToTransfer {
-            do {
-                try await sessionViewModel.addBill(bill)
-                print("✅ Transferred bill: \(bill.name)")
-            } catch {
-                print("❌ Failed to transfer bill \(bill.name): \(error)")
-            }
-        }
-
-        // Save expenses (encrypted via Edge Function)
-        for expense in expensesToTransfer {
-            do {
-                try await sessionViewModel.addExpense(expense)
-                print("✅ Transferred expense: \(expense.name)")
-            } catch {
-                print("❌ Failed to transfer expense \(expense.name): \(error)")
-            }
-        }
-
-        print("📦 Preview mode data transfer complete")
-    }
 }
 
 // MARK: - Supporting Types
 
 enum OnboardingStep: CaseIterable {
     case landing
-    case previewMode
-    case authentication
-    case verification
 
-    // Welcome Section (2 screens) - Post-auth context setting
-    case nomadWelcome         // Stats: 40M+ nomads, 65+ visas, 3-5 currencies
-    case nomadType            // What kind of nomad are you?
+    // Brief animated interstitial after L1 "begin" — sets expectations
+    // before peppering the user with questions.
+    case intro
 
-    // Personal Section (4 screens) - Digital Nomad focused
-    case runwayCheck          // "Be honest — how's your runway?"
-    case nomadChallenges      // "What's actually hard about money on the road?"
-    case moneyStoppedYou      // "Has money ever stopped you?"
-    case winningLooksLike     // "What does winning look like?"
+    // Card-based questions — invest the user before asking for credentials.
+    // Order here drives flow order via `next()`.
+    case triedBefore          // O3  — "what have you tried before?"
+    case messyMoney           // O3c — "what's the messiest part of money?" (multi-select)
+    case writingFrequency     // O3b — "how often do you write things down?"
+    case incomeShape          // O4b — "how does your income show up?"
+    case whatsWorking         // O4c — "what would 'this is working' feel like?"
 
-    // Final Screens (2 screens)
-    case privacy              // Your data is safe - encryption, trust
-    case welcomeJourney       // Celebration - confetti, coins, "best decision"
+    // Quantitative questions.
+    case currencyIncome       // O4  — currency + optional monthly take-home
+    case cashCardMix          // O4a — drag-bar for card/cash/transfers split
 
-    case notifications
+    // Auth tail.
+    case saveAnswers          // O2  — apple/google or "prefer email? sign up"
+    case authentication       // email signup form (when chosen from saveAnswers)
+    case verification         // verify code (after email signup)
+
     case complete
 
     func next() -> OnboardingStep {

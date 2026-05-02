@@ -131,20 +131,6 @@ class SessionViewModel: ObservableObject {
         // Check if user has completed initial setup
         await checkInitialSetupStatus()
 
-        // Load reward milestones for this user
-        if let userId = currentUser?.userId {
-            await RewardMilestoneTracker.shared.loadMilestones(for: userId, dataManager: dataManager)
-
-            // Configure RewardQueueManager for backend sync
-            RewardQueueManager.shared.configure(
-                supabaseService: dataManager.supabaseService,
-                userId: userId
-            )
-
-            // Note: fetchAndQueuePendingRewards() is called later by AppCoordinator
-            // after runDailyCalculations() has created any pending rewards
-        }
-
         // Identify user in analytics
         if let profile = currentUser {
             AnalyticsService.shared.identify(profile: profile)
@@ -173,10 +159,6 @@ class SessionViewModel: ObservableObject {
             AnalyticsService.shared.track(.signOut)
 
             try await dataManager.signOut()
-
-            // Clear reward tracking state
-            RewardMilestoneTracker.shared.clearUser()
-            RewardQueueManager.shared.clearQueue()
 
             await handleNoAuthentication()
         } catch {
@@ -220,72 +202,6 @@ class SessionViewModel: ObservableObject {
         }
     }
 
-    /// Update user profile with arc change detection
-    /// If arc count increased, queues arc reward celebration
-    /// - Parameters:
-    ///   - profile: Updated profile with new freedom fund
-    ///   - bills: Current bills array for arc calculation
-    func updateUserProfileWithArcCheck(_ profile: Profile, bills: [Bill]) async {
-        // Calculate previous arc count before update
-        let previousFreedomFund = currentUser?.settings.freedomFund ?? 0
-        let previousArcCount = ArcCalculationService.calculateArcs(freedomFund: previousFreedomFund, bills: bills)
-
-        // Calculate new arc count
-        let newArcCount = ArcCalculationService.calculateArcs(freedomFund: profile.settings.freedomFund, bills: bills)
-
-        // Update the profile
-        currentUser = profile
-        do {
-            try await dataManager.updateUserProfile(profile)
-
-            // Check if arcs increased
-            if newArcCount > previousArcCount {
-                let coinTier = CoinTierService.currentCoinTier(for: newArcCount)
-                let reward = Reward.arcEarned(
-                    newArcCount: newArcCount,
-                    previousArcCount: previousArcCount,
-                    coinTier: coinTier
-                )
-                RewardQueueManager.shared.enqueue(reward)
-
-                // Update last known arc count
-                RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
-
-                // Track arc earned event
-                AnalyticsService.shared.track(.arcEarned(newCount: newArcCount, previousCount: previousArcCount))
-
-                print("🏆 Arc reward queued: \(previousArcCount) → \(newArcCount) arcs")
-            }
-        } catch {
-            showError("Failed to update profile")
-        }
-    }
-
-    /// Check for arc increase after bill changes (delete/reduce)
-    /// - Parameters:
-    ///   - bills: Updated bills array after change
-    func checkArcIncreaseAfterBillChange(bills: [Bill]) {
-        guard let profile = currentUser else { return }
-
-        let previousArcCount = RewardMilestoneTracker.shared.getLastArcCount()
-        let newArcCount = ArcCalculationService.calculateArcs(freedomFund: profile.settings.freedomFund, bills: bills)
-
-        if newArcCount > previousArcCount && previousArcCount > 0 {
-            let coinTier = CoinTierService.currentCoinTier(for: newArcCount)
-            let reward = Reward.arcEarned(
-                newArcCount: newArcCount,
-                previousArcCount: previousArcCount,
-                coinTier: coinTier
-            )
-            RewardQueueManager.shared.enqueue(reward)
-
-            // Update last known arc count
-            RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
-
-            print("🏆 Arc reward queued (bill change): \(previousArcCount) → \(newArcCount) arcs")
-        }
-    }
-
     // MARK: - Freedom Fund Management
 
     /// Deduct bill amount from freedom fund when a bill is paid
@@ -319,9 +235,6 @@ class SessionViewModel: ObservableObject {
 
             // Calculate new arc count
             let newArcCount = ArcCalculationService.calculateArcs(freedomFund: newFreedomFund, bills: bills)
-
-            // Update last known arc count
-            RewardMilestoneTracker.shared.setLastArcCount(newArcCount)
 
             // Case 2: Freedom fund is now depleted (reached 0)
             if newFreedomFund == 0 {

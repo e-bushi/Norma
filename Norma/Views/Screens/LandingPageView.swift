@@ -2,7 +2,9 @@
 //  LandingPageView.swift
 //  Norma
 //
-//  Created by Claude on 8/2/25.
+//  O1 — Landing. Lavender-dithered shader on dark canvas, n. logomark,
+//  hero "a place for the math in your head.", brand-voice subtitle, and
+//  a lavender begin button that segues into auth.
 //
 
 import SwiftUI
@@ -12,220 +14,162 @@ struct LandingPageView: View {
     @Binding var showSignIn: Bool
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
 
-    // Animation states
-    @State private var coinOpacity = 0.0
-    @State private var coinScale: CGFloat = 0.8
-    @State private var titleOpacity = 0.0
-    @State private var titleOffset: CGFloat = -20
-    @State private var subtitleOpacity = 0.0
-    @State private var subtitleOffset: CGFloat = 10
-    @State private var talkButtonOpacity = 0.0
-    @State private var talkButtonOffset: CGFloat = 30
-    @State private var signInOpacity = 0.0
-    @State private var signInOffset: CGFloat = 20
-    #if DEBUG
-    @State private var showDebugSignUp = false
-    #endif
+    @State private var logoAppeared = false
+    @State private var heroAppeared = false
+    @State private var subtitleAppeared = false
+    @State private var ctaAppeared = false
 
-    // Haptic generator
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
-
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // Purple-tinted gradient background (matches onboarding style)
+                NormaPalette.canvas.ignoresSafeArea()
+
+                DitherShaderView(intensity: 1.0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+
                 LinearGradient(
-                    colors: [
-                        colorScheme == .dark
-                            ? Color(red: 0.10, green: 0.06, blue: 0.16)
-                            : Color(red: 0.93, green: 0.90, blue: 0.98),
-                        colorScheme == .dark
-                            ? Color(red: 0.04, green: 0.02, blue: 0.08)
-                            : Color(red: 0.96, green: 0.94, blue: 0.98)
+                    stops: [
+                        .init(color: NormaPalette.canvas.opacity(0),    location: 0.00),
+                        .init(color: NormaPalette.canvas.opacity(0),    location: 0.18),
+                        .init(color: NormaPalette.canvas.opacity(0.55), location: 0.40),
+                        .init(color: NormaPalette.canvas.opacity(0.85), location: 0.62),
+                        .init(color: NormaPalette.canvas,               location: 0.88)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
 
-                // Dot pattern background (same as MainChatView)
-                DotPatternView()
-                    .ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    Spacer()
-                        .frame(height: 80)
-
-                    // Royalty coin at top — tilt-reactive
-                    MotionCoin3DView(fileName: "norma-coin-royalty")
-                        .frame(width: 200, height: 200)
-                        .opacity(coinOpacity)
-                        .scaleEffect(coinScale)
-
+                VStack(alignment: .leading, spacing: 0) {
                     Spacer()
 
-                    // Norma title — left-aligned, editorial size
-                    Text("Norma")
-                        .font(.normaTitle(80))
-                        .foregroundColor(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .opacity(titleOpacity)
-                        .offset(y: titleOffset)
-                        .padding(.horizontal, 24)
+                    logoMark
+                        .opacity(logoAppeared ? 1 : 0)
+                        .offset(y: logoAppeared ? 0 : 8)
+                        .padding(.bottom, 28)
 
-                    Spacer()
-                        .frame(height: 10)
+                    heroText
+                        .opacity(heroAppeared ? 1 : 0)
+                        .offset(y: heroAppeared ? 0 : 12)
+                        .padding(.bottom, 18)
 
-                    // Subtitle
-                    Text("Track your spending wherever the world takes you.")
-                        .font(.normaSubheadline(19))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .opacity(subtitleOpacity)
-                        .offset(y: subtitleOffset)
-                        .padding(.horizontal, 24)
+                    Text("a financial journal. absorbs the bookkeeping. shows what's actually happening.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(NormaPalette.inkSubtle)
+                        .lineSpacing(2)
+                        .frame(maxWidth: 320, alignment: .leading)
+                        .opacity(subtitleAppeared ? 1 : 0)
+                        .offset(y: subtitleAppeared ? 0 : 8)
+                        .padding(.bottom, 28)
 
-                    Spacer()
-                        .frame(height: 28)
+                    beginButton
+                        .opacity(ctaAppeared ? 1 : 0)
+                        .offset(y: ctaAppeared ? 0 : 16)
 
-                    // Bottom buttons
-                    VStack(spacing: 16) {
-                        // Talk to Norma
-                        Button(action: {
-                            impactGenerator.impactOccurred()
-                            onboardingViewModel.currentStep = .previewMode
-                        }) {
-                            Text("Talk to Norma to Sign Up")
-                                .font(.normaHeadline(18))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(Color("NormaPastelPurple").opacity(0.7))
-                                        .glassEffect(in: RoundedRectangle(cornerRadius: 14))
-                                )
-                        }
-                        .buttonStyle(LandingButtonStyle())
-                        .opacity(talkButtonOpacity)
-                        .offset(y: talkButtonOffset)
+                    Spacer().frame(height: 18)
 
-                        // Sign in link
-                        HStack(spacing: 4) {
-                            Text("Already have an account?")
-                                .font(.normaInput(14))
-                                .foregroundColor(.secondary)
+                    signInLink
+                        .opacity(ctaAppeared ? 1 : 0)
 
-                            Button(action: {
-                                showSignIn = true
-                                showSignUp = false
-                                onboardingViewModel.currentStep = .authentication
-                            }) {
-                                Text("Sign in here")
-                                    .font(.normaHeadline(14))
-                                    .foregroundColor(.primary)
-                                    .underline()
-                            }
-                        }
-                        .opacity(signInOpacity)
-                        .offset(y: signInOffset)
-
-                        #if DEBUG
-                        Button(action: {
-                            let vm = onboardingViewModel.previewModeViewModel
-
-                            // Simulate onboarding data
-                            vm.userName = "Chris"
-                            vm.userCurrency = "USD"
-                            vm.userIncome = 5000
-                            vm.userFreedomFund = 1000
-
-                            // Mock bill (Phase 2 collects at least one)
-                            let dueDate = Calendar.current.date(from: DateComponents(
-                                year: Calendar.current.component(.year, from: Date()),
-                                month: Calendar.current.component(.month, from: Date()),
-                                day: 1
-                            )) ?? Date()
-                            let bill = Bill(
-                                id: UUID().uuidString,
-                                userId: "preview-mode-user",
-                                name: "Rent",
-                                dueDate: dueDate,
-                                nextDueDate: Calendar.current.date(byAdding: .month, value: 1, to: dueDate),
-                                amount: 1200,
-                                status: .scheduled,
-                                frequency: .monthly
-                            )
-                            vm.bills.append(bill)
-
-                            showDebugSignUp = true
-                        }) {
-                            Text("Skip to Sign Up (Debug)")
-                                .font(.normaInput(14))
-                                .foregroundColor(.secondary)
-                        }
-                        #endif
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 34)
+                    Spacer().frame(height: 40)
                 }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(colorScheme == .dark
-                    ? Color(red: 0.04, green: 0.02, blue: 0.08)
-                    : Color(red: 0.96, green: 0.94, blue: 0.98))
         }
-        #if DEBUG
-        .sheet(isPresented: $showDebugSignUp) {
-            NotificationPermissionView(
-                onPermissionGranted: { showDebugSignUp = false },
-                onSkip: { showDebugSignUp = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-            .interactiveDismissDisabled()
-        }
-        #endif
+        .preferredColorScheme(.dark)
         .onAppear {
             impactGenerator.prepare()
+            withAnimation(.easeOut(duration: 0.5).delay(0.10)) { logoAppeared = true }
+            withAnimation(.easeOut(duration: 0.6).delay(0.25)) { heroAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.45)) { subtitleAppeared = true }
+            withAnimation(.easeOut(duration: 0.5).delay(0.60)) { ctaAppeared = true }
+        }
+    }
 
-            // Coin fades in and scales up
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.1)) {
-                coinOpacity = 1.0
-                coinScale = 1.0
+    private var logoMark: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(NormaPalette.canvas)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(NormaPalette.ink.opacity(0.08), lineWidth: 1)
+                )
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("n")
+                    .font(.system(size: 36, weight: .black))
+                    .foregroundStyle(NormaPalette.ink)
+                Text(".")
+                    .font(.system(size: 36, weight: .black))
+                    .foregroundStyle(NormaPalette.lavender)
             }
+            .offset(x: -1, y: 4)
+        }
+        .frame(width: 52, height: 52)
+    }
 
-            // Title drops in with spring
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.75).delay(0.3)) {
-                titleOpacity = 1.0
-                titleOffset = 0
+    private var heroText: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("a place for")
+                .font(.system(size: 56, weight: .bold))
+                .foregroundStyle(NormaPalette.ink)
+            Text("the math in")
+                .font(.system(size: 56, weight: .bold))
+                .foregroundStyle(NormaPalette.ink)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("your head")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundStyle(NormaPalette.ink)
+                Text(".")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundStyle(NormaPalette.lavender)
             }
+        }
+        .tracking(-1.5)
+    }
 
-            // Subtitle fades in with slight rise
-            withAnimation(.easeOut(duration: 0.6).delay(0.5)) {
-                subtitleOpacity = 1.0
-                subtitleOffset = 0
+    private var beginButton: some View {
+        Button(action: {
+            impactGenerator.impactOccurred()
+            onboardingViewModel.currentStep = .intro
+        }) {
+            HStack(spacing: 8) {
+                Text("begin")
+                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
             }
+            .foregroundStyle(NormaPalette.canvas)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(NormaPalette.lavender))
+            .shadow(color: NormaPalette.lavender.opacity(0.45), radius: 18, x: 0, y: 10)
+        }
+        .buttonStyle(LandingButtonStyle())
+    }
 
-            // Talk button slides up
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.7)) {
-                talkButtonOpacity = 1.0
-                talkButtonOffset = 0
-            }
-
-            // Sign in slides up last
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.85)) {
-                signInOpacity = 1.0
-                signInOffset = 0
+    private var signInLink: some View {
+        HStack(spacing: 6) {
+            Text("already have an account?")
+                .font(.system(size: 13))
+                .foregroundStyle(NormaPalette.inkMuted)
+            Button(action: {
+                showSignIn = true
+                showSignUp = false
+                onboardingViewModel.currentStep = .authentication
+            }) {
+                Text("sign in")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(NormaPalette.ink)
             }
         }
     }
 }
-
-// MARK: - Button Style
 
 private struct LandingButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

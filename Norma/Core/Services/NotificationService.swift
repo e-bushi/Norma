@@ -120,8 +120,8 @@ class NotificationService: NSObject, ObservableObject {
         // Remove existing notifications for this bill
         await cancelNotifications(for: bill)
         
-        // Use the bill's own reminder preference, default to 3 if not set
-        let reminderDays = bill.reminderDays ?? 3
+        // Use the bill's own reminder preference, default to 1 (day before) if not set
+        let reminderDays = bill.reminderDays ?? 1
         
         // Calculate notification dates based on bill frequency
         let notificationDates = calculateNotificationDates(for: bill, reminderDays: reminderDays)
@@ -176,35 +176,36 @@ class NotificationService: NSObject, ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        // Use the bill's current due date
-        let dueDateStart = calendar.startOfDay(for: bill.dueDate)
-        
+        // Use the bill's current cycle's due date (auto-rolls for recurring bills)
+        let effectiveDue = bill.effectiveDueDate
+        let dueDateStart = calendar.startOfDay(for: effectiveDue)
+
         // If today > bill due date, do nothing for now
         if today > dueDateStart {
             return dates
         }
-        
+
         // Calculate reminder date (due date - reminder days)
         if reminderDays > 0 {
             if let reminderDate = calendar.date(byAdding: .day, value: -reminderDays, to: dueDateStart) {
                 let reminderDateStart = calendar.startOfDay(for: reminderDate)
-                
+
                 if reminderDateStart > today {
                     // If reminderDate > today, schedule notification to trigger on reminderDate
                     if let notificationTime = setNotificationTime(for: reminderDateStart, hour: 9) {
-                        dates.append((notificationTime, bill.dueDate, false))
+                        dates.append((notificationTime, effectiveDue, false))
                     }
                 }
             }
         }
-        
+
         // Add due date notification if it's in the future
         if dueDateStart > today {
             if let notificationTime = setNotificationTime(for: dueDateStart, hour: 9) {
-                dates.append((notificationTime, bill.dueDate, true))
+                dates.append((notificationTime, effectiveDue, true))
             }
         }
-        
+
         return dates
     }
     
@@ -246,7 +247,8 @@ class NotificationService: NSObject, ObservableObject {
         message: String,
         remindAt: Date,
         reminderType: ReminderType = .general,
-        recurrence: Recurrence = .none
+        recurrence: Recurrence = .none,
+        identifier: String? = nil
     ) async -> Result<String, Error> {
         guard isNotificationsEnabled else {
             return .failure(NotificationError.permissionDenied)
@@ -272,8 +274,10 @@ class NotificationService: NSObject, ObservableObject {
         // Create appropriate date components based on recurrence
         let trigger = createTrigger(for: remindAt, recurrence: recurrence)
 
-        let identifier = "ai_reminder_\(UUID().uuidString)"
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        let resolvedIdentifier = identifier ?? "ai_reminder_\(UUID().uuidString)"
+        // Replace any existing notification under the same identifier so reschedules are idempotent.
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [resolvedIdentifier])
+        let request = UNNotificationRequest(identifier: resolvedIdentifier, content: content, trigger: trigger)
 
         do {
             try await notificationCenter.add(request)
@@ -282,7 +286,7 @@ class NotificationService: NSObject, ObservableObject {
             formatter.timeStyle = .short
             let recurrenceText = recurrence == .none ? "" : " (\(recurrence.rawValue))"
             print("Scheduled AI reminder '\(title)' for \(formatter.string(from: remindAt))\(recurrenceText)")
-            return .success(identifier)
+            return .success(resolvedIdentifier)
         } catch {
             print("Failed to schedule AI reminder: \(error)")
             return .failure(error)
@@ -461,27 +465,29 @@ extension Bill {
     
     private func getNextDueDate(from date: Date) -> Date? {
         let calendar = Calendar.current
-        
+
         var nextDate = self.dueDate
-        
+
         // Calculate next occurrence based on frequency
         switch self.frequency {
+        case .oneTime:
+            return nextDate >= date ? nextDate : nil
         case .monthly:
             while nextDate < date {
                 nextDate = calendar.date(byAdding: .month, value: 1, to: nextDate) ?? nextDate
             }
-            
+
         case .quarterly:
             while nextDate < date {
                 nextDate = calendar.date(byAdding: .month, value: 3, to: nextDate) ?? nextDate
             }
-            
+
         case .yearly:
             while nextDate < date {
                 nextDate = calendar.date(byAdding: .year, value: 1, to: nextDate) ?? nextDate
             }
         }
-        
+
         return nextDate
     }
 }

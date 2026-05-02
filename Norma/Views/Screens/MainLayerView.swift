@@ -13,7 +13,6 @@ struct MainLayerView: View {
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
-    @EnvironmentObject private var challengeViewModel: ChallengeViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
 
     @State private var isMenuOpen = false
@@ -58,10 +57,8 @@ struct MainLayerView: View {
                 screen = .chat
             case .settings:
                 screen = .settings
-            case .currencyConverter:
-                screen = .currencyConverter
-            case .moneyTasks:
-                screen = .moneyTasks
+            case .notes:
+                screen = .notes
             }
             AnalyticsService.shared.trackScreen(screen)
         }
@@ -73,10 +70,8 @@ struct MainLayerView: View {
                 screen = .chat
             case .settings:
                 screen = .settings
-            case .currencyConverter:
-                screen = .currencyConverter
-            case .moneyTasks:
-                screen = .moneyTasks
+            case .notes:
+                screen = .notes
             }
             AnalyticsService.shared.trackScreen(screen)
         }
@@ -174,25 +169,16 @@ struct MainLayerView: View {
                 .environmentObject(dataManager)
                 .environmentObject(billViewModel)
                 .environmentObject(expenseViewModel)
-                .environmentObject(challengeViewModel)
                 .environmentObject(profileViewModel)
 
         case .settings:
-            NavigationStack {
-                SettingsView(isMenuOpen: $isMenuOpen)
-                    .environmentObject(sessionViewModel)
-                    .environmentObject(dataManager)
-            }
+            SettingsView()
+                .environmentObject(sessionViewModel)
+                .environmentObject(dataManager)
+                .environmentObject(appCoordinator)
 
-        case .currencyConverter:
-            NavigationStack {
-                CurrencyConverterView(isMenuOpen: $isMenuOpen)
-            }
-
-        case .moneyTasks:
-            NavigationStack {
-                MoneyTasksView(isMenuOpen: $isMenuOpen)
-            }
+        case .notes:
+            NotesListScreen()
         }
     }
 }

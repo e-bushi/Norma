@@ -81,6 +81,8 @@ struct ArcCalculationService {
             let monthlyAmount: Double
 
             switch bill.frequency {
+            case .oneTime:
+                monthlyAmount = 0
             case .monthly:
                 monthlyAmount = bill.amount
             case .quarterly:

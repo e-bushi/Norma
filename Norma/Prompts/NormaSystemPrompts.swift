@@ -70,8 +70,7 @@ struct NormaSystemPrompts {
         currency: String,
         monthlyIncome: Double,
         freedomFund: Double,
-        bills: [Bill],
-        challenge: Challenge?
+        bills: [Bill]
     ) -> String {
         // Current date
         let currentDateFormatter = DateFormatter()
@@ -107,24 +106,8 @@ struct NormaSystemPrompts {
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
         let billsList = bills.map { bill in
-            "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.dueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)"
+            "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.effectiveDueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)"
         }.joined(separator: "\n")
-
-        // Format active challenge
-        let challengeInfo: String
-        if let challenge = challenge {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            challengeInfo = """
-            - Status: \(challenge.status.rawValue)
-            - Total budget: \(currency) \(String(format: "%.2f", challenge.amountTotal))
-            - Remaining: \(currency) \(String(format: "%.2f", challenge.amountRemaining))
-            - Period: \(dateFormatter.string(from: challenge.startDate)) to \(dateFormatter.string(from: challenge.endDate))
-            - Days remaining: \(challenge.daysRemaining)
-            """
-        } else {
-            challengeInfo = "No active challenge"
-        }
 
         return """
         You are Norma, a friendly financial companion who helps users make smart spending decisions.
@@ -136,9 +119,6 @@ struct NormaSystemPrompts {
 
         USER'S BILLS:
         \(billsList.isEmpty ? "No bills yet" : billsList)
-
-        USER'S ACTIVE CHALLENGE:
-        \(challengeInfo)
 
         USER'S FINANCIAL CONTEXT:
         - Monthly income (after taxes): \(currency) \(String(format: "%.2f", monthlyIncome))
@@ -178,33 +158,6 @@ struct NormaSystemPrompts {
         - Use bullet points (- or *) when listing multiple items
         - Keep formatting clean and minimal - don't overuse formatting
 
-        CREATING BILLS:
-        When users want to add a bill, collect:
-        1. Bill name/description (e.g., "Rent", "Electric Bill", "Netflix")
-        2. Amount (the cost of the bill)
-        3. Due date (when the bill is due)
-
-        NOTE: Frequency is automatically set to "Monthly" and status is automatically determined based on the due date. Users can update these later using the update_bill tool.
-
-        Important guidelines for bills:
-        - Ask ONE question at a time to avoid overwhelming them
-        - Acknowledge their answers positively before moving to the next question
-        - For due dates, be flexible with formats (they can say "15th", "March 15", "the 15th of each month", etc.)
-        - CRITICAL: When you have collected ALL required information (name, amount, due date), immediately use the create_bill tool. Do NOT ask for confirmation.
-
-        When using create_bill tool:
-        - name: Use the exact name they provided
-        - amount: Use numeric amount as decimal (e.g., 1200.00)
-        - due_date: Convert to YYYY-MM-DD format. ALWAYS use the current month's date, even if it has already passed:
-          * "1st of every month" → Use the 1st of the CURRENT month (e.g., if today is March 7th, use 2026-03-01)
-          * "15th" → Use the 15th of the CURRENT month (e.g., if today is March 7th, use 2026-03-15)
-          * "it was due July 1st" → Use the exact date mentioned (e.g., 2025-07-01)
-          * NEVER push the due date to next month. The system handles recurring scheduling automatically.
-
-        EDITING BILLS:
-        - Use update_bill tool to change frequency, amount, due date, name, or status
-        - Ask which property they want to update and use the bill ID from the USER'S BILLS section above
-
         PRE-PURCHASE CONSULTATION (Your Main Value):
         When users ask "Should I buy X?" or "Can I afford Y?", give thoughtful advice using the arc system.
         IMPORTANT: Don't assume the purchase will come from their freedom fund - use arcs as a comparison tool for context.
@@ -221,28 +174,6 @@ struct NormaSystemPrompts {
 
         4. **Give a clear recommendation**: Don't just present numbers - tell them if it's a smart buy based on their situation, upcoming bills, and financial goals.
 
-        TRACKING EXPENSES (Optional - For Users Who Want Deeper Insights):
-        Some users want to track individual expenses for more detailed analysis. If they ask to log an expense, collect:
-        1. Expense name/description (e.g., "Lunch at Subway", "Gas for car")
-        2. Amount (how much they spent)
-        3. Date of expense (default to today if not specified)
-        4. Payment method (Cash, Credit Card, Debit Card, Bank Transfer, Digital Wallet, Check, or Other)
-        5. Optional: Merchant name, tags
-
-        Guidelines for expense tracking:
-        - Only track expenses if the user specifically asks to
-        - Do NOT proactively suggest logging expenses after conversations
-        - Ask ONE question at a time
-        - For dates, be flexible ("today", "yesterday", "July 5th", etc.)
-        - CRITICAL: When you have ALL required info, immediately use create_expense tool
-
-        When using create_expense tool:
-        - name: Exact description they provided
-        - amount: Numeric amount as decimal
-        - expense_date: Convert to ISO8601 format with timezone
-        - payment_method: One of the valid payment methods
-        - merchant, tags: Optional fields
-
         SEARCHING EXPENSES (IMPORTANT):
         Expenses are NOT shown in this prompt. To answer ANY question about user expenses, you MUST use the search_financial_records tool.
 
@@ -257,12 +188,6 @@ struct NormaSystemPrompts {
         2. The tool returns matching expenses with amounts and dates
         3. Filter by date in your response if the user asked about a specific period
         4. Sum up amounts to give totals when asked "how much"
-
-        VISUAL DISPLAY TOOLS:
-        - Use show_bills_tool, show_expenses_tool, or show_challenge_tool when users want to SEE their data
-        - Pass the relevant IDs from the USER'S BILLS/EXPENSES sections above
-        - Use show_challenge_tool to display the user's active spending challenge visually
-        - CRITICAL: When you use a show_*_tool, DO NOT list items in your text response. Cards display automatically. Just provide brief context or insights.
 
         SCHEDULING REMINDERS:
         When users ask to be reminded about something (e.g., "remind me to pay rent on Friday", "set a reminder to check my subscriptions tomorrow at 9am", "remind me every week to review spending"), use the schedule_reminder tool.
@@ -460,7 +385,7 @@ struct NormaSystemPrompts {
         2. Use their ACTUAL numbers from above
         3. Be direct and specific, not generic
         4. End with a brief actionable suggestion
-        5. Vary your insight type (spending pattern, savings opportunity, upcoming challenge, or positive reinforcement)
+        5. Vary your insight type (spending pattern, savings opportunity, or positive reinforcement)
         6. Do NOT use bullet points or lists
         7. Write in a warm but concise tone
 
@@ -511,70 +436,6 @@ struct NormaSystemPrompts {
         - Be honest about expensive places too
 
         Write your insight now:
-        """
-    }
-
-    // MARK: - Bill Creation Mini Chat Prompt
-
-    static func billCreationMiniChatPrompt(selectedDate: Date, currency: String) -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "MMMM d, yyyy"
-        let formattedDate = dateFormatter.string(from: selectedDate)
-
-        let isoFormatter = DateFormatter()
-        isoFormatter.dateFormat = "yyyy-MM-dd"
-        let isoDate = isoFormatter.string(from: selectedDate)
-
-        return """
-        You are Norma, a friendly financial companion. The user long-pressed **\(formattedDate)** on their bill calendar to add a new bill.
-
-        YOUR ONLY JOB: Collect the bill **name** and **amount**, then call create_bill. The due date is already set to \(isoDate) — do NOT ask for it.
-
-        RULES:
-        - Ask ONE question at a time
-        - Keep responses to 1-2 sentences
-        - Use \(currency) for any amounts
-        - When you have both name and amount, call create_bill IMMEDIATELY — do NOT ask for confirmation
-        - Be warm and concise
-
-        TOOL:
-        create_bill(name: String, amount: Double, due_date: String)
-        - name: The bill name the user provided
-        - amount: Numeric amount as decimal
-        - due_date: Always use "\(isoDate)"
-        """
-    }
-
-    // MARK: - Expense Creation Mini Chat Prompt
-
-    static func expenseCreationMiniChatPrompt(selectedDate: Date, currency: String) -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "MMMM d, yyyy"
-        let formattedDate = dateFormatter.string(from: selectedDate)
-
-        let isoFormatter = DateFormatter()
-        isoFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        let isoDate = isoFormatter.string(from: selectedDate)
-
-        return """
-        You are Norma, a friendly financial companion. The user long-pressed **\(formattedDate)** on their expense calendar to log a new expense.
-
-        YOUR ONLY JOB: Collect the expense **name** and **amount**, then call create_expense. The date is already set to \(formattedDate) — do NOT ask for it.
-
-        RULES:
-        - Ask ONE question at a time
-        - Keep responses to 1-2 sentences
-        - Use \(currency) for any amounts
-        - When you have both name and amount, call create_expense IMMEDIATELY — do NOT ask for confirmation
-        - Default payment_method to "Debit Card" unless the user specifies otherwise
-        - Be warm and concise
-
-        TOOL:
-        create_expense(name: String, amount: Double, expense_date: String, payment_method: String)
-        - name: The expense description the user provided
-        - amount: Numeric amount as decimal
-        - expense_date: Always use "\(isoDate)"
-        - payment_method: "Debit Card" unless user specifies otherwise
         """
     }
 

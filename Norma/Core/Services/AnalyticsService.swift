@@ -38,13 +38,11 @@ enum AnalyticsScreen: String {
     case notificationsPermission = "Notifications Permission"
     case normaChat = "Norma Chat"
     case onboardingComplete = "Onboarding Complete"
-    case previewMode = "Preview Mode"
 
     // Main App
     case chat = "Chat"
     case settings = "Settings"
-    case currencyConverter = "Currency Converter"
-    case moneyTasks = "Money Tasks"
+    case notes = "Notes"
 
     // Bills
     case myBills = "My Bills"
@@ -59,9 +57,6 @@ enum AnalyticsScreen: String {
 
     // Income
     case incomeDetail = "Income Detail"
-
-    // Challenges
-    case challenges = "Challenges"
 
     // Other
     case paywall = "Paywall"
@@ -88,8 +83,6 @@ enum AnalyticsEvent {
     case onboardingStepViewed(step: String, index: Int)
     case onboardingStepCompleted(step: String, index: Int)
     case onboardingCompleted(durationSeconds: Double)
-    case previewModeStarted
-    case previewModeDataTransferred(billCount: Int, expenseCount: Int)
 
     // Bill Events
     case billCreated(amount: Double, frequency: String, hasReminder: Bool, source: CreationSource)
@@ -107,20 +100,6 @@ enum AnalyticsEvent {
     case incomeCreated(amount: Double, frequency: String, source: CreationSource)
     case incomeUpdated(incomeId: String, field: String)
     case incomeDeleted(incomeId: String)
-
-    // Challenge Events
-    case challengeStarted(difficulty: String, amount: Double, durationDays: Int)
-    case challengeCompleted(difficulty: String, pointsEarned: Int, underBudgetAmount: Double)
-    case challengeFailed(difficulty: String, overBudgetAmount: Double)
-    case challengeExpenseRecorded(amount: Double, remainingBudget: Double)
-
-    // Reward Events
-    case rewardEarned(type: String, points: Int)
-    case rewardViewed(type: String)
-    case rewardDismissed(type: String)
-    case tierUnlocked(tier: String, totalPoints: Int)
-    case streakExtended(streakDays: Int)
-    case arcEarned(newCount: Int, previousCount: Int)
 
     // Feature Usage
     case chatMessageSent(isVoice: Bool, hasToolUse: Bool)
@@ -158,8 +137,6 @@ enum AnalyticsEvent {
         case .onboardingStepViewed: return "onboarding_step_viewed"
         case .onboardingStepCompleted: return "onboarding_step_completed"
         case .onboardingCompleted: return "onboarding_completed"
-        case .previewModeStarted: return "preview_mode_started"
-        case .previewModeDataTransferred: return "preview_mode_data_transferred"
 
         // Bills
         case .billCreated: return "bill_created"
@@ -177,20 +154,6 @@ enum AnalyticsEvent {
         case .incomeCreated: return "income_created"
         case .incomeUpdated: return "income_updated"
         case .incomeDeleted: return "income_deleted"
-
-        // Challenges
-        case .challengeStarted: return "challenge_started"
-        case .challengeCompleted: return "challenge_completed"
-        case .challengeFailed: return "challenge_failed"
-        case .challengeExpenseRecorded: return "challenge_expense_recorded"
-
-        // Rewards
-        case .rewardEarned: return "reward_earned"
-        case .rewardViewed: return "reward_viewed"
-        case .rewardDismissed: return "reward_dismissed"
-        case .tierUnlocked: return "tier_unlocked"
-        case .streakExtended: return "streak_extended"
-        case .arcEarned: return "arc_earned"
 
         // Features
         case .chatMessageSent: return "chat_message_sent"
@@ -241,10 +204,6 @@ enum AnalyticsEvent {
             return ["step": step, "step_index": index]
         case .onboardingCompleted(let durationSeconds):
             return ["duration_seconds": durationSeconds]
-        case .previewModeStarted:
-            return [:]
-        case .previewModeDataTransferred(let billCount, let expenseCount):
-            return ["bill_count": billCount, "expense_count": expenseCount]
 
         // Bills
         case .billCreated(let amount, let frequency, let hasReminder, let source):
@@ -273,30 +232,6 @@ enum AnalyticsEvent {
             return ["income_id": incomeId, "field": field]
         case .incomeDeleted(let incomeId):
             return ["income_id": incomeId]
-
-        // Challenges
-        case .challengeStarted(let difficulty, let amount, let durationDays):
-            return ["difficulty": difficulty, "amount": amount, "duration_days": durationDays]
-        case .challengeCompleted(let difficulty, let pointsEarned, let underBudgetAmount):
-            return ["difficulty": difficulty, "points_earned": pointsEarned, "under_budget_amount": underBudgetAmount]
-        case .challengeFailed(let difficulty, let overBudgetAmount):
-            return ["difficulty": difficulty, "over_budget_amount": overBudgetAmount]
-        case .challengeExpenseRecorded(let amount, let remainingBudget):
-            return ["amount": amount, "remaining_budget": remainingBudget]
-
-        // Rewards
-        case .rewardEarned(let type, let points):
-            return ["reward_type": type, "points": points]
-        case .rewardViewed(let type):
-            return ["reward_type": type]
-        case .rewardDismissed(let type):
-            return ["reward_type": type]
-        case .tierUnlocked(let tier, let totalPoints):
-            return ["tier": tier, "total_points": totalPoints]
-        case .streakExtended(let streakDays):
-            return ["streak_days": streakDays]
-        case .arcEarned(let newCount, let previousCount):
-            return ["new_count": newCount, "previous_count": previousCount]
 
         // Features
         case .chatMessageSent(let isVoice, let hasToolUse):
@@ -351,7 +286,7 @@ class AnalyticsService: ObservableObject {
         PostHogSDK.shared.identify(userId, userProperties: properties)
     }
 
-    func identify(profile: Profile, stats: ChallengeStats? = nil) {
+    func identify(profile: Profile) {
         self.userId = profile.userId
 
         var properties: [String: Any] = [
@@ -362,13 +297,6 @@ class AnalyticsService: ObservableObject {
             "freedom_fund": profile.settings.freedomFund,
             "notifications_enabled": profile.settings.notificationsEnabled
         ]
-
-        if let stats = stats {
-            properties["tier"] = stats.currentTier.rawValue
-            properties["total_points"] = stats.totalPoints
-            properties["current_streak"] = stats.currentStreak
-            properties["challenges_completed"] = stats.totalCompleted
-        }
 
         if let createdAt = profile.createdAt {
             properties["created_at"] = createdAt

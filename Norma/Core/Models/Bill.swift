@@ -203,70 +203,113 @@ enum BillStatus: String, Codable, CaseIterable {
 
 // Bill frequency enum
 enum BillFrequency: String, Codable, CaseIterable {
+    case oneTime = "OneTime"
     case monthly = "Monthly"
     case quarterly = "Quarterly"
     case yearly = "Yearly"
 }
 
+// MARK: - Recurrence (anchor-day model)
+extension Bill {
+
+    /// Day-of-month anchor derived from the original due date. Recurring bills
+    /// fall on this day every cycle.
+    var dayOfMonth: Int {
+        Calendar.current.component(.day, from: dueDate)
+    }
+
+    /// The due date for the bill's *current* billing cycle (the cycle containing
+    /// today). For `.oneTime`, this is just the literal anchor. For recurring
+    /// bills, the anchor is projected into the current calendar period — month,
+    /// quarter, or year — clamping day-of-month to the last day where needed.
+    var effectiveDueDate: Date {
+        let now = Date()
+        switch frequency {
+        case .oneTime:
+            return dueDate
+        case .monthly:
+            return Self.projectAnchor(dueDate, into: now, period: .month, monthStride: 1) ?? dueDate
+        case .quarterly:
+            return Self.projectAnchor(dueDate, into: now, period: .quarter, monthStride: 3) ?? dueDate
+        case .yearly:
+            return Self.projectAnchor(dueDate, into: now, period: .year, monthStride: 12) ?? dueDate
+        }
+    }
+
+    /// Is the given expense date inside the bill's current billing cycle (the
+    /// period containing today)? `.oneTime` bills accept any expense.
+    func isInCurrentCycle(expenseDate: Date) -> Bool {
+        let cal = Calendar.current
+        let now = Date()
+        switch frequency {
+        case .oneTime:
+            return true
+        case .monthly:
+            return cal.isDate(expenseDate, equalTo: now, toGranularity: .month)
+        case .quarterly:
+            return cal.isDate(expenseDate, equalTo: now, toGranularity: .quarter)
+        case .yearly:
+            return cal.isDate(expenseDate, equalTo: now, toGranularity: .year)
+        }
+    }
+
+    private static func projectAnchor(
+        _ anchor: Date,
+        into reference: Date,
+        period: Calendar.Component,
+        monthStride: Int
+    ) -> Date? {
+        let cal = Calendar.current
+        if cal.isDate(anchor, equalTo: reference, toGranularity: period) {
+            return clampToMonth(anchor, dayOfMonth: cal.component(.day, from: anchor))
+        }
+        let day = cal.component(.day, from: anchor)
+        var current = anchor
+        let step = anchor < reference ? monthStride : -monthStride
+        for _ in 0..<2400 { // safety: ~200 years of monthly steps
+            guard let next = cal.date(byAdding: .month, value: step, to: current) else { return current }
+            current = next
+            if cal.isDate(current, equalTo: reference, toGranularity: period) {
+                return clampToMonth(current, dayOfMonth: day)
+            }
+        }
+        return current
+    }
+
+    private static func clampToMonth(_ date: Date, dayOfMonth: Int) -> Date {
+        let cal = Calendar.current
+        var comps = cal.dateComponents([.year, .month], from: date)
+        let lastDay = cal.range(of: .day, in: .month, for: date)?.last ?? 28
+        comps.day = min(dayOfMonth, lastDay)
+        return cal.date(from: comps) ?? date
+    }
+}
+
 // MARK: - Bill Status Calculation
 extension Bill {
-    
-    /// Calculate the bill status based on payment history (expenses with matching billId)
-    func calculateStatus(from expenses: [Expense]) -> BillStatus {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        // Check if bill was paid this billing period
-        let dateFormatter = ISO8601DateFormatter()
-        let billPayments = expenses.filter { expense in
-            guard expense.billId == self.id,
-                  let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
-            return isSameBillingPeriod(expenseDate: expenseDate, billDueDate: self.dueDate)
-        }
-        
-        // If we found payment(s), bill is paid
-        if !billPayments.isEmpty {
-            return .paid
-        }
-        
-        // No payments found - check if overdue
-        if dueDate < now {
-            return .overdue
-        }
-        
-        // Future or today's due date with no payment = scheduled
-        return .scheduled
-    }
-    
-    /// Check if an expense date is in the current billing period for this bill
-    private func isSameBillingPeriod(expenseDate: Date, billDueDate: Date) -> Bool {
-        let calendar = Calendar.current
 
-        switch frequency {
-        case .monthly:
-            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .month)
-        case .quarterly:
-            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .quarter)
-        case .yearly:
-            return calendar.isDate(expenseDate, equalTo: billDueDate, toGranularity: .year)
-        }
+    /// Calculate the bill status from payment history. Recurring bills auto-roll:
+    /// once today passes the cycle's effective due date with no matching expense,
+    /// the bill is overdue for that cycle.
+    func calculateStatus(from expenses: [Expense]) -> BillStatus {
+        if isFullyPaid(from: expenses) { return .paid }
+        return effectiveDueDate < Date() ? .overdue : .scheduled
     }
-    
-    /// Get the total amount paid for this bill in the current billing period
+
+    /// Total amount paid for this bill in the current billing cycle.
     func getAmountPaidThisPeriod(from expenses: [Expense]) -> Double {
         let dateFormatter = ISO8601DateFormatter()
         return expenses
             .filter { expense in
                 guard expense.billId == self.id,
                       let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
-                return isSameBillingPeriod(expenseDate: expenseDate, billDueDate: self.dueDate)
+                return self.isInCurrentCycle(expenseDate: expenseDate)
             }
             .reduce(0) { $0 + $1.amount }
     }
-    
-    /// Check if this bill is fully paid this period
+
+    /// Has the bill's current cycle been fully paid?
     func isFullyPaid(from expenses: [Expense]) -> Bool {
-        let amountPaid = getAmountPaidThisPeriod(from: expenses)
-        return amountPaid >= amount
+        getAmountPaidThisPeriod(from: expenses) >= amount
     }
 }

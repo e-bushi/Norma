@@ -148,7 +148,7 @@ struct BillSelectionRow: View {
                         Text("•")
                             .foregroundColor(.secondary)
                         
-                        Text("Due \(bill.dueDate, format: .dateTime.month().day())")
+                        Text("Due \(bill.effectiveDueDate, format: .dateTime.month().day())")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     }

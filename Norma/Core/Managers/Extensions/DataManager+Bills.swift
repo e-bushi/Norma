@@ -113,30 +113,32 @@ extension DataManager {
     
     func getActiveBills() -> [Bill] {
         // Show all bills (scheduled, overdue, and paid)
-        return bills.sorted { $0.dueDate < $1.dueDate }
+        return bills.sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
-    
+
     func getUpcomingBills(days: Int = 7) -> [Bill] {
         let endDate = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        
+
         return getActiveBills().filter { bill in
-            bill.dueDate >= Date() && bill.dueDate <= endDate
+            bill.effectiveDueDate >= Date() && bill.effectiveDueDate <= endDate
         }
     }
-    
+
     func getOverdueBills() -> [Bill] {
         return bills.filter { $0.status == .overdue }
-            .sorted { $0.dueDate < $1.dueDate }
+            .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
-    
+
     func getBillsByStatus(_ status: BillStatus) -> [Bill] {
         return bills.filter { $0.status == status }
-            .sorted { $0.dueDate < $1.dueDate }
+            .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
-    
+
     func getTotalMonthlyBills() -> Double {
         return getActiveBills().reduce(0) { total, bill in
             switch bill.frequency {
+            case .oneTime:
+                return total
             case .monthly:
                 return total + bill.amount
             case .quarterly:
@@ -146,29 +148,30 @@ extension DataManager {
             }
         }
     }
-    
+
     func getBillsDueSoon(within days: Int = 3) -> [Bill] {
         let endDate = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        
+
         return getActiveBills().filter { bill in
-            bill.dueDate >= Date() && bill.dueDate <= endDate
+            bill.effectiveDueDate >= Date() && bill.effectiveDueDate <= endDate
         }
     }
-    
+
     func getNextBillDue() -> Bill? {
         return getActiveBills()
-            .filter { $0.dueDate >= Date() }
-            .min { $0.dueDate < $1.dueDate }
+            .filter { $0.effectiveDueDate >= Date() }
+            .min { $0.effectiveDueDate < $1.effectiveDueDate }
     }
     
     func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async throws {
         // First, create an expense record for this payment
         if let billId = bill.id {
             // Convert bill frequency to expense frequency
-            let expenseFrequency: ExpenseFrequency = {
+            let expenseFrequency: ExpenseFrequency? = {
                 switch bill.frequency {
+                case .oneTime: return nil
                 case .monthly: return .monthly
-                case .quarterly: return .quarterly  
+                case .quarterly: return .quarterly
                 case .yearly: return .annually
                 }
             }()
@@ -186,7 +189,7 @@ extension DataManager {
                 expenseDate: todayString,
                 billId: billId,
                 paymentMethod: paymentMethod,
-                isRecurring: true,
+                isRecurring: bill.frequency != .oneTime,
                 recurringFrequency: expenseFrequency,
                 merchant: bill.merchant ?? bill.name,
                 location: nil,
@@ -200,38 +203,17 @@ extension DataManager {
             try await addExpenseWithEncryption(expense)
         }
         
-        // Then update the bill status and set next due date
+        // Mark this cycle paid. Recurrence rolls forward automatically via
+        // Bill.effectiveDueDate the next time the bill is read in a new cycle.
         var updatedBill = bill
         updatedBill.status = .paid
-        
-        // For recurring bills, calculate next due date and store it in nextDueDate field
-        // Keep the original dueDate as the current period due date
-        let calculatedNextDueDate = calculateNextDueDate(for: bill)
-        updatedBill.nextDueDate = calculatedNextDueDate
-        
-        print("🔍 [DEBUG] markBillAsPaid - Original due date: \(bill.dueDate)")
-        print("🔍 [DEBUG] markBillAsPaid - Calculated next due date: \(calculatedNextDueDate)")
-        print("🔍 [DEBUG] markBillAsPaid - Updated bill next due date: \(updatedBill.nextDueDate ?? Date())")
-        
+
         try await updateBillWithEncryption(updatedBill)
-        
-        // If bill has reminders enabled, reschedule notifications for the next period
+
+        // If bill has reminders enabled, reschedule notifications for the next cycle.
         if updatedBill.isReminderOn {
             let notificationService = NotificationService.shared
             await notificationService.scheduleBillReminders(for: updatedBill)
-        }
-    }
-    
-    private func calculateNextDueDate(for bill: Bill) -> Date {
-        let calendar = Calendar.current
-        
-        switch bill.frequency {
-        case .monthly:
-            return calendar.date(byAdding: .month, value: 1, to: bill.dueDate) ?? bill.dueDate
-        case .quarterly:
-            return calendar.date(byAdding: .month, value: 3, to: bill.dueDate) ?? bill.dueDate
-        case .yearly:
-            return calendar.date(byAdding: .year, value: 1, to: bill.dueDate) ?? bill.dueDate
         }
     }
     

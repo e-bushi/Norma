@@ -2,21 +2,26 @@
 //  SettingsView.swift
 //  Norma
 //
-//  Created by Claude on 5/9/25.
+//  Settings sheet — matches the dark editorial language of D10/Forecast.
+//  Sectioned list (profile / subscription / support / security / account)
+//  with destructive actions in coral. Presented as a sheet from the gear
+//  icon in the notes-list bottom bar.
 //
 
 import SwiftUI
+import SwiftData
 import UIKit
+import LinkKit
 
 struct SettingsView: View {
-    @Binding var isMenuOpen: Bool
-
     @EnvironmentObject var sessionViewModel: SessionViewModel
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var appCoordinator: AppCoordinator
-    @EnvironmentObject var coinColorViewModel: CoinColorViewModel
-    @Environment(\.colorScheme) private var colorScheme
+    @SwiftUI.Environment(\.modelContext) private var modelContext
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @StateObject private var plaidService = PlaidService.shared
     @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
     @State private var showDeleteAccountConfirmation = false
@@ -25,45 +30,65 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .dark
-
-    // Security/Encryption states
     @State private var showRecoveryPhraseSheet = false
 
+    // Plaid state
+    @State private var isLoadingLinkToken = false
+    @State private var isExchangingToken = false
+    @State private var plaidHandler: Handler?
+    @State private var showPlaidError = false
+    @State private var plaidErrorMessage = ""
+    @State private var showDisconnectConfirmation = false
+    @State private var isInstitutionExpanded = false
+
+    private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private let danger = Color(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255)
+
+    private var heroFont: Font { .system(size: 56, weight: .heavy) }
+
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                welcomeSection
-                profileSection
-                subscriptionSection
-                supportSection
-                securitySection
-                accountSection
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-        }
-        .background {
-            CoinGradientBackground(coinColor: coinColorViewModel.coinColor, colorScheme: colorScheme)
-                .ignoresSafeArea()
-        }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    let impactMedium = UIImpactFeedbackGenerator(style: .medium)
-                    impactMedium.impactOccurred()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isMenuOpen = true
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 20))
-                        .foregroundColor(.primary)
+        VStack(spacing: 0) {
+            navBar
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    heroBlock
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 20)
+
+                    profileSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    subscriptionSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    bankingSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    supportSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    securitySection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    accountSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
                 }
             }
         }
+        .background(bg.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .alert("Sign Out", isPresented: $showLogoutAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Sign Out", role: .destructive) {
@@ -104,357 +129,553 @@ struct SettingsView: View {
         .sheet(isPresented: $showRecoveryPhraseSheet) {
             RecoveryPhraseSheet(dataManager: dataManager)
         }
+        .alert("Connection Error", isPresented: $showPlaidError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(plaidErrorMessage)
+        }
+        .alert("Disconnect Bank", isPresented: $showDisconnectConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Disconnect", role: .destructive) { disconnectBank() }
+        } message: {
+            Text("Disconnect \(plaidService.institutionName ?? "your bank")? Your existing data will be kept.")
+        }
     }
 
-    // MARK: - Extracted Sections
+    // MARK: - Nav
 
-    private var welcomeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 16) {
-                // Royalty coin with device motion effect
-                MotionCoin3DView(fileName: "norma-coin-royalty")
-                    .frame(width: 64, height: 64)
+    private var navBar: some View {
+        HStack {
+            Spacer()
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(cream.opacity(0.85))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Norma")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 24))
-                        .foregroundColor(.primary)
-                    Text("Thanks for joining us!")
-                        .font(.normaHeadline(18))
-                        .foregroundColor(Color("NormaPastelPurple"))
-                }
+    // MARK: - Hero
 
-                Spacer()
+    private var heroBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("account")
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(mutedText)
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("settings")
+                    .font(heroFont)
+                    .tracking(-2.24)
+                    .foregroundStyle(cream)
+                Text(".")
+                    .font(heroFont)
+                    .tracking(-2.24)
+                    .foregroundStyle(accentPurple)
             }
 
-            Text("We're so glad you're here. Your path to financial peace of mind matters to us — and we'll be with you every step of the way.")
-                .font(.normaInput(16))
-                .foregroundColor(.secondary)
-                .lineSpacing(4)
-        }
-        .padding(16)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.clear)
-                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
-
-                DotPatternView(dotSize: 2, spacing: 14, dotOpacity: 0.15)
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .white, location: 0.15),
-                                .init(color: .white, location: 0.85),
-                                .init(color: .clear, location: 1)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .white, location: 0.15),
-                                    .init(color: .white, location: 0.85),
-                                    .init(color: .clear, location: 1)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .allowsHitTesting(false)
+            if let user = sessionViewModel.currentUser {
+                Text(user.email)
+                    .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
+                    .foregroundStyle(mutedText)
+                    .padding(.top, 2)
             }
         }
     }
+
+    // MARK: - Sections
 
     private var profileSection: some View {
-        SettingsSectionView(title: "Profile") {
+        section(title: "profile") {
             if let user = sessionViewModel.currentUser {
-                HStack {
-                    Image(systemName: "person.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(Color("NormaPastelPurple"))
-                    VStack(alignment: .leading) {
-                        Text(user.name)
-                            .font(.normaHeadline(17))
-                        Text(user.email)
-                            .font(.normaHeadline(13))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
+                listRow(
+                    icon: "person.crop.circle",
+                    iconColor: accentPurple,
+                    primary: user.name.lowercased(),
+                    secondary: user.email,
+                    showChevron: false
+                )
             }
-        }
-    }
-
-    private var appearanceSection: some View {
-        SettingsSectionView(title: "Appearance") {
-            HStack {
-                Text("Mode")
-                    .font(.normaHeadline(17))
-                Spacer()
-                Picker("", selection: $appearanceMode) {
-                    ForEach(AppearanceMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-        }
-    }
-
-    private var subscriptionSection: some View {
-        SettingsSectionView(title: "Subscription") {
-            subscriptionContent
         }
     }
 
     @ViewBuilder
-    private var subscriptionContent: some View {
-        if subscriptionManager.isInFreeTrial {
-            trialStatusView
-        } else if subscriptionManager.hasActiveSubscription {
-            activeSubscriptionView
-        } else {
-            noSubscriptionView
-        }
-    }
-
-    private var trialStatusView: some View {
-        HStack {
-            Image(systemName: "sparkles")
-                .foregroundColor(Color("NormaPastelPurple"))
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Free Trial")
-                    .font(.normaHeadline(17))
-                if let daysRemaining = subscriptionManager.trialDaysRemaining {
-                    Text("\(daysRemaining) day\(daysRemaining == 1 ? "" : "s") remaining")
-                        .font(.normaHeadline(13))
-                        .foregroundColor(.secondary)
-                }
-            }
-            Spacer()
-            Button("View Plans") { showPaywall = true }
-                .font(.normaHeadline(13))
-                .buttonStyle(.borderedProminent)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var activeSubscriptionView: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(Color("NormaPastelTeal"))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Premium")
-                        .font(.normaHeadline(17))
-                    if let expirationDate = subscriptionManager.subscriptionStatus.expirationDate {
-                        if subscriptionManager.subscriptionStatus.willRenew {
-                            Text("Renews \(expirationDate, style: .date)")
-                                .font(.normaHeadline(13))
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Expires \(expirationDate, style: .date)")
-                                .font(.normaHeadline(13))
-                                .foregroundColor(.orange)
-                        }
+    private var subscriptionSection: some View {
+        section(title: "subscription") {
+            if subscriptionManager.isInFreeTrial {
+                listRow(
+                    icon: "sparkles",
+                    iconColor: accentPurple,
+                    primary: "free trial",
+                    secondary: subscriptionManager.trialDaysRemaining.map {
+                        "\($0) day\($0 == 1 ? "" : "s") remaining"
+                    },
+                    trailingLabel: "view plans",
+                    showChevron: false,
+                    action: { showPaywall = true }
+                )
+            } else if subscriptionManager.hasActiveSubscription {
+                listRow(
+                    icon: "checkmark.seal",
+                    iconColor: accentPurple,
+                    primary: "premium",
+                    secondary: subscriptionStatusLine,
+                    showChevron: false
+                )
+                tappableRow(icon: "creditcard", title: "manage subscription") {
+                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                        UIApplication.shared.open(url)
                     }
                 }
-                Spacer()
-            }
-            .padding(.vertical, 4)
-
-            Button(action: {
-                if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                    UIApplication.shared.open(url)
-                }
-            }) {
-                HStack {
-                    Image(systemName: "creditcard")
-                        .foregroundColor(Color("NormaPastelPurple"))
-                    Text("Manage Subscription")
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Image(systemName: "arrow.up.forward.square")
-                        .foregroundColor(.secondary)
-                        .font(.normaHeadline(13))
+            } else {
+                listRow(
+                    icon: "lock",
+                    iconColor: dimText,
+                    primary: "limited access",
+                    secondary: "unlock all norma features",
+                    trailingLabel: "subscribe",
+                    showChevron: false,
+                    action: { showPaywall = true }
+                )
+                tappableRow(icon: "arrow.clockwise.circle", title: "restore purchases") {
+                    Task {
+                        do { try await subscriptionManager.restorePurchases() }
+                        catch { print("Failed to restore purchases: \(error)") }
+                    }
                 }
             }
         }
     }
 
-    private var noSubscriptionView: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "lock.fill")
-                    .foregroundColor(.gray)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Limited Access")
-                        .font(.normaHeadline(17))
-                    Text("Unlock all Norma features")
-                        .font(.normaHeadline(13))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button("Subscribe") { showPaywall = true }
-                    .font(.normaHeadline(13))
-                    .buttonStyle(.borderedProminent)
-            }
-            .padding(.vertical, 4)
+    private var subscriptionStatusLine: String? {
+        guard let expirationDate = subscriptionManager.subscriptionStatus.expirationDate else { return nil }
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        let prefix = subscriptionManager.subscriptionStatus.willRenew ? "renews" : "expires"
+        return "\(prefix) \(f.string(from: expirationDate).lowercased())"
+    }
 
-            Button(action: {
-                Task {
-                    do { try await subscriptionManager.restorePurchases() }
-                    catch { print("Failed to restore purchases: \(error)") }
+    @ViewBuilder
+    private var bankingSection: some View {
+        section(title: "banking") {
+            if !plaidService.connectedAccounts.isEmpty {
+                connectedBankRow
+                if isInstitutionExpanded {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(plaidService.connectedAccounts) { account in
+                            accountRow(account: account)
+                        }
+                        destructiveRow(icon: "link.badge.plus", title: "disconnect bank") {
+                            showDisconnectConfirmation = true
+                        }
+                    }
+                    .padding(.leading, 36)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-            }) {
-                HStack {
-                    Image(systemName: "arrow.clockwise.circle")
-                        .foregroundColor(Color("NormaPastelPurple"))
-                    Text("Restore Purchases")
-                        .foregroundColor(.primary)
-                    Spacer()
+
+                // Always-visible affordance to add another institution.
+                tappableRow(
+                    icon: isLoadingLinkToken ? "ellipsis" : "plus",
+                    title: isLoadingLinkToken ? "preparing link…" : "connect another bank",
+                    action: { if !isLoadingLinkToken { connectBank() } }
+                )
+            } else if isExchangingToken {
+                connectingBankRow
+            } else {
+                listRow(
+                    icon: "building.columns",
+                    iconColor: accentPurple,
+                    primary: "connect your bank",
+                    secondary: "u.s. only · for savings tracking",
+                    trailingLabel: isLoadingLinkToken ? nil : "connect",
+                    showChevron: false,
+                    action: isLoadingLinkToken ? nil : { connectBank() }
+                )
+                if isLoadingLinkToken {
+                    HStack(spacing: 10) {
+                        ProgressView().tint(accentPurple)
+                        Text("preparing link…")
+                            .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+                            .foregroundStyle(mutedText)
+                    }
+                    .padding(.leading, 36)
+                    .padding(.bottom, 8)
                 }
             }
         }
+    }
+
+    private var connectedBankRow: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                isInstitutionExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "building.columns.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(accentPurple)
+                    .frame(width: 22, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text((plaidService.institutionName ?? "bank").lowercased())
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(cream)
+                    Text(formatBalance(totalFunds, currency: plaidService.connectedAccounts.first?.balances.isoCurrencyCode ?? "USD"))
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundStyle(mutedText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(dimText)
+                    .rotationEffect(.degrees(isInstitutionExpanded ? 90 : 0))
+                    .frame(width: 16, alignment: .trailing)
+            }
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var connectingBankRow: some View {
+        HStack(spacing: 14) {
+            ProgressView()
+                .tint(accentPurple)
+                .frame(width: 22, alignment: .leading)
+            Text("connecting account…")
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundStyle(cream)
+            Spacer()
+        }
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private func accountRow(account: PlaidService.PlaidAccount) -> some View {
+        HStack(spacing: 12) {
+            Text(account.name.lowercased())
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundStyle(cream)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let mask = account.mask {
+                Text("··\(mask)")
+                    .font(.custom(FontFamily.Rubik.regular, size: 11))
+                    .foregroundStyle(mutedText)
+            }
+            Spacer(minLength: 8)
+            if let current = account.balances.current {
+                Text(formatBalance(current, currency: account.balances.isoCurrencyCode ?? "USD"))
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundStyle(mutedText)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var totalFunds: Double {
+        plaidService.connectedAccounts.compactMap { $0.balances.current }.reduce(0, +)
+    }
+
+    private func formatBalance(_ amount: Double, currency: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$\(String(format: "%.2f", amount))"
     }
 
     private var supportSection: some View {
-        SettingsSectionView(title: "Support") {
-            settingsButton(icon: "questionmark.circle.fill", title: "Help & Support", color: Color("NormaPastelPurple")) {
-                showHelpSupport = true
-            }
-            settingsButton(icon: "doc.text.fill", title: "Terms of Use", color: Color("NormaPastelPurple")) {
-                showTermsOfUse = true
-            }
-            settingsButton(icon: "lock.shield.fill", title: "Privacy Policy", color: Color("NormaPastelPurple")) {
-                showPrivacyPolicy = true
-            }
+        section(title: "support") {
+            tappableRow(icon: "questionmark.circle", title: "help & support") { showHelpSupport = true }
+            tappableRow(icon: "doc.text", title: "terms of use") { showTermsOfUse = true }
+            tappableRow(icon: "lock.shield", title: "privacy policy") { showPrivacyPolicy = true }
         }
     }
 
     private var securitySection: some View {
-        SettingsSectionView(title: "Security") {
-            settingsButton(icon: "key.fill", title: "View Recovery Phrase", color: Color("NormaPastelTeal")) {
-                showRecoveryPhraseSheet = true
-            }
-
-            Text("Your data is encrypted with your personal key. Keep your recovery phrase safe to restore access.")
-                .font(.normaHeadline(12))
-                .foregroundColor(.secondary)
+        section(title: "security") {
+            tappableRow(icon: "key", title: "view recovery phrase") { showRecoveryPhraseSheet = true }
+            Text("your data is encrypted with your personal key. keep your recovery phrase safe to restore access.")
+                .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+                .foregroundStyle(dimText)
+                .padding(.top, 4)
                 .padding(.horizontal, 4)
         }
     }
 
     private var accountSection: some View {
-        SettingsSectionView(title: "Account") {
-            Button(action: { showLogoutAlert = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 16))
-                        .foregroundColor(.red)
-                    Text("Sign Out")
-                        .font(.normaHeadline(16))
-                        .foregroundColor(.red)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.red.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.red.opacity(0.1), lineWidth: 1)
-                        )
-                )
+        section(title: "account", titleColor: danger.opacity(0.9), dividerColor: danger.opacity(0.25)) {
+            destructiveRow(icon: "rectangle.portrait.and.arrow.right", title: "sign out") {
+                showLogoutAlert = true
             }
-            .buttonStyle(PlainButtonStyle())
-
-            Button(action: { showDeleteAccountAlert = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16))
-                        .foregroundColor(.red)
-                    Text("Delete Account")
-                        .font(.normaHeadline(16))
-                        .foregroundColor(.red)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.red.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.red.opacity(0.1), lineWidth: 1)
-                        )
-                )
+            destructiveRow(icon: "trash", title: "delete account") {
+                showDeleteAccountAlert = true
             }
             .disabled(isDeletingAccount)
-            .buttonStyle(PlainButtonStyle())
+            .opacity(isDeletingAccount ? 0.5 : 1.0)
         }
     }
 
-    // MARK: - Helper Views
+    // MARK: - Section + row helpers
 
-    private func settingsButton(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
+    @ViewBuilder
+    private func section<Content: View>(
+        title: String,
+        titleColor: Color? = nil,
+        dividerColor: Color? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                .tracking(0.88)
+                .textCase(.uppercase)
+                .foregroundStyle(titleColor ?? cream)
+                .padding(.bottom, 6)
+
+            content()
+        }
+    }
+
+    @ViewBuilder
+    private func listRow(
+        icon: String,
+        iconColor: Color,
+        primary: String,
+        secondary: String? = nil,
+        trailingLabel: String? = nil,
+        showChevron: Bool = true,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        let content = HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(iconColor)
+                .frame(width: 22, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(primary)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundStyle(cream)
+                if let secondary {
+                    Text(secondary)
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundStyle(mutedText)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let trailingLabel {
+                Text(trailingLabel)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+                    .foregroundStyle(onAccentText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(accentPurple))
+            }
+            if showChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(dimText)
+                    .frame(width: 16, alignment: .trailing)
+            }
+        }
+        .padding(.vertical, 14)
+
+        if let action {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                action()
+            } label: {
+                content.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func tappableRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(color)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(accentPurple)
+                    .frame(width: 22, alignment: .leading)
                 Text(title)
-                    .font(.normaHeadline(16))
-                    .foregroundColor(color)
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundStyle(cream)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(dimText)
+                    .frame(width: 16, alignment: .trailing)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(color.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(color.opacity(0.2), lineWidth: 1)
-                    )
-            )
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
-}
 
-// MARK: - Supporting Views
+    // MARK: - Plaid actions
 
-struct SettingsSectionView<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.normaHeadline(13))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 4)
-
-            VStack(spacing: 12) {
-                content
-            }
-            .padding()
-            .background(Color.clear)
+    private func connectBank() {
+        guard let userId = sessionViewModel.currentUser?.userId else {
+            plaidErrorMessage = "Please sign in to connect your bank."
+            showPlaidError = true
+            return
         }
+
+        isLoadingLinkToken = true
+        Task {
+            do {
+                let linkToken = try await PlaidService.shared.createLinkToken(userId: userId)
+                await MainActor.run {
+                    isLoadingLinkToken = false
+                    openPlaidLink(with: linkToken)
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingLinkToken = false
+                    plaidErrorMessage = error.localizedDescription
+                    showPlaidError = true
+                }
+            }
+        }
+    }
+
+    private func openPlaidLink(with linkToken: String) {
+        var config = LinkTokenConfiguration(token: linkToken) { success in
+            let institutionName = success.metadata.institution.name
+            self.handleLinkSuccess(publicToken: success.publicToken, institutionName: institutionName)
+        }
+
+        config.onExit = { exit in
+            if let error = exit.error {
+                self.plaidErrorMessage = "Link exited: \(error.localizedDescription)"
+                self.showPlaidError = true
+            }
+            self.plaidHandler = nil
+        }
+
+        let result = Plaid.create(config)
+        switch result {
+        case .success(let handler):
+            self.plaidHandler = handler
+            handler.open(presentUsing: .viewController(UIApplication.shared.connectedScenes
+                .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
+                .first!))
+        case .failure(let error):
+            plaidErrorMessage = "Failed to open Plaid Link: \(error.localizedDescription)"
+            showPlaidError = true
+        }
+    }
+
+    private func handleLinkSuccess(publicToken: String, institutionName: String? = nil) {
+        guard let userId = sessionViewModel.currentUser?.userId else { return }
+
+        isExchangingToken = true
+        plaidHandler = nil
+
+        Task {
+            do {
+                let itemId = try await plaidService.exchangeToken(userId: userId, publicToken: publicToken, institutionName: institutionName)
+                let accounts = try await plaidService.fetchBalances(userId: userId)
+
+                await MainActor.run {
+                    plaidService.connectedAccounts = accounts
+                    plaidService.isConnected = true
+                    plaidService.institutionName = institutionName
+                    plaidService.itemId = itemId
+                    isExchangingToken = false
+
+                    // If the freedom fund is wired to a Plaid account, log
+                    // any balance change for the activity ledger.
+                    if let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId,
+                       let account = accounts.first(where: { $0.accountId == arcAccountId }),
+                       let balance = account.balances.current {
+                        FreedomFundLedger.recordIfChanged(
+                            in: modelContext,
+                            userId: userId,
+                            newBalance: balance,
+                            source: .linkedAccountSync
+                        )
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isExchangingToken = false
+                    plaidErrorMessage = error.localizedDescription
+                    showPlaidError = true
+                }
+            }
+        }
+    }
+
+    private func disconnectBank() {
+        guard let userId = sessionViewModel.currentUser?.userId,
+              let itemId = plaidService.itemId else { return }
+
+        Task {
+            do {
+                try await plaidService.disconnect(userId: userId, itemId: itemId)
+            } catch {
+                await MainActor.run {
+                    plaidErrorMessage = error.localizedDescription
+                    showPlaidError = true
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destructiveRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            action()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(danger)
+                    .frame(width: 22, alignment: .leading)
+                Text(title)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundStyle(danger)
+                Spacer()
+            }
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
 #Preview {
-    let appCoordinator = AppCoordinator()
-    NavigationStack {
-        SettingsView(isMenuOpen: .constant(false))
-            .environmentObject(appCoordinator.sessionViewModel)
-            .environmentObject(appCoordinator.dataManager)
-            .environmentObject(appCoordinator)
-    }
+    Color.black
+        .ignoresSafeArea()
+        .sheet(isPresented: .constant(true)) {
+            SettingsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
 }

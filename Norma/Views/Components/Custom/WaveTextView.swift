@@ -16,6 +16,16 @@ struct WaveTextView: View {
     let color: Color
     let isAnimating: Bool
     var alignment: HorizontalAlignment = .center
+    /// Optional accent word appended after `text` (e.g., a trailing "?" or ".").
+    var accentSuffix: String? = nil
+    /// Color used for the accent suffix (defaults to lavender brand accent).
+    var accentColor: Color = Color(red: 0.588, green: 0.463, blue: 0.851)
+    /// Negative tightens letter-spacing on each word.
+    var tracking: CGFloat = 0
+    /// Horizontal spacing between adjacent words.
+    var wordSpacing: CGFloat = 4
+    /// Vertical spacing between wrapped lines.
+    var lineSpacing: CGFloat = 6
 
     /// Animation configuration
     private let wordDelay: Double = 0.06
@@ -25,17 +35,29 @@ struct WaveTextView: View {
 
     @State private var animatedWordCount: Int = 0
 
-    private var words: [String] {
-        text.split(separator: " ").map(String.init)
+    private struct Segment {
+        let text: String
+        let color: Color
+    }
+
+    private var segments: [Segment] {
+        var segs = text
+            .split(separator: " ")
+            .map { Segment(text: String($0), color: color) }
+        if let suffix = accentSuffix, !suffix.isEmpty {
+            segs.append(Segment(text: suffix, color: accentColor))
+        }
+        return segs
     }
 
     var body: some View {
-        WaveFlowLayout(spacing: 4, lineSpacing: 6, alignment: alignment) {
-            ForEach(Array(words.enumerated()), id: \.offset) { index, word in
+        WaveFlowLayout(spacing: wordSpacing, lineSpacing: lineSpacing, alignment: alignment) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, seg in
                 WaveWord(
-                    word: word,
+                    word: seg.text,
                     font: font,
-                    color: color,
+                    color: seg.color,
+                    tracking: tracking,
                     isAnimated: index < animatedWordCount,
                     initialOffset: initialOffset,
                     initialBlur: initialBlur,
@@ -60,7 +82,7 @@ struct WaveTextView: View {
         animatedWordCount = 0
 
         // Animate each word with staggered delay
-        for index in 0..<words.count {
+        for index in 0..<segments.count {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * wordDelay) {
                 withAnimation(.spring(response: animationDuration, dampingFraction: 0.75)) {
                     animatedWordCount = index + 1
@@ -75,6 +97,7 @@ private struct WaveWord: View {
     let word: String
     let font: Font
     let color: Color
+    var tracking: CGFloat = 0
     let isAnimated: Bool
     let initialOffset: CGFloat
     let initialBlur: CGFloat
@@ -83,6 +106,7 @@ private struct WaveWord: View {
     var body: some View {
         Text(word)
             .font(font)
+            .tracking(tracking)
             .foregroundColor(color)
             .opacity(isAnimated ? 1 : 0)
             .offset(y: isAnimated ? 0 : initialOffset)

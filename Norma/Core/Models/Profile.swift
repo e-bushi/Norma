@@ -69,32 +69,46 @@ struct Profile: Identifiable, Codable, Equatable {
 }
 
 struct OnboardingInsights: Codable, Equatable {
-    var nomadType: String?            // slowmad, explorer, base_trips, nomad_family
-    var runwayStatus: String?
-    var nomadChallenges: String?      // comma-separated for multi-select
-    var moneyStoppedYou: String?
-    var winningLooksLike: String?     // comma-separated for multi-select
+    var triedBefore: String?
+    var messyMoney: String?           // comma-separated for multi-select
+    var writingFrequency: String?
+    var incomeShape: String?
+    var whatsWorking: String?
+
+    // Quantitative answers from O4a (cash/card mix). Stored as Doubles 0-100.
+    var cardPercent: Double?
+    var cashPercent: Double?
+    var transfersPercent: Double?
 
     enum CodingKeys: String, CodingKey {
-        case nomadType = "nomad_type"
-        case runwayStatus = "runway_status"
-        case nomadChallenges = "nomad_challenges"
-        case moneyStoppedYou = "money_stopped_you"
-        case winningLooksLike = "winning_looks_like"
+        case triedBefore = "tried_before"
+        case messyMoney = "messy_money"
+        case writingFrequency = "writing_frequency"
+        case incomeShape = "income_shape"
+        case whatsWorking = "whats_working"
+        case cardPercent = "card_percent"
+        case cashPercent = "cash_percent"
+        case transfersPercent = "transfers_percent"
     }
 
     init(
-        nomadType: String? = nil,
-        runwayStatus: String? = nil,
-        nomadChallenges: String? = nil,
-        moneyStoppedYou: String? = nil,
-        winningLooksLike: String? = nil
+        triedBefore: String? = nil,
+        messyMoney: String? = nil,
+        writingFrequency: String? = nil,
+        incomeShape: String? = nil,
+        whatsWorking: String? = nil,
+        cardPercent: Double? = nil,
+        cashPercent: Double? = nil,
+        transfersPercent: Double? = nil
     ) {
-        self.nomadType = nomadType
-        self.runwayStatus = runwayStatus
-        self.nomadChallenges = nomadChallenges
-        self.moneyStoppedYou = moneyStoppedYou
-        self.winningLooksLike = winningLooksLike
+        self.triedBefore = triedBefore
+        self.messyMoney = messyMoney
+        self.writingFrequency = writingFrequency
+        self.incomeShape = incomeShape
+        self.whatsWorking = whatsWorking
+        self.cardPercent = cardPercent
+        self.cashPercent = cashPercent
+        self.transfersPercent = transfersPercent
     }
 }
 
