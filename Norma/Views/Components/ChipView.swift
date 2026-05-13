@@ -64,7 +64,7 @@ struct ChipView: View {
 
             if style == .inline, let counterparty = token.counterparty {
                 separator
-                Text(counterparty.uppercased())
+                Text(Self.truncatedChipText(counterparty).uppercased())
                     .font(.system(size: labelSize, weight: .medium))
                     .tracking(1.6)
                     .foregroundStyle(NormaPalette.lavender)
@@ -105,7 +105,7 @@ struct ChipView: View {
 
             if let subject = token.subject, !subject.isEmpty {
                 separator
-                Text(Self.truncatedSubject(subject))
+                Text(Self.truncatedChipText(subject))
                     .font(.system(size: bodySize))
                     .foregroundStyle(NormaPalette.lavenderText)
                     .lineLimit(1)
@@ -195,19 +195,23 @@ struct ChipView: View {
             return token.category?.displayName.uppercased()
         case .reminder:
             return "REMINDER"
+        case .intent:
+            return "INTENTION"
+        case .commit:
+            return "COMMITMENT"
+        case .billPayment:
+            return token.subject.map { Self.truncatedChipText($0).uppercased() }
         }
     }
 
-    /// Cap reminder subjects so the chip stays inside one row of the canvas.
-    /// 28 characters comfortably fits "submit q3 expense report" and similar
-    /// realistic action phrases; anything longer truncates with an ellipsis.
-    /// Adjust this if the LLM consistently produces longer-form actions.
-    static let reminderSubjectMaxLength = 28
+    /// Cap user-derived chip text (subject, counterparty) so the chip stays
+    /// inside one row of the canvas regardless of what the LLM extracts.
+    static let chipTextMaxLength = 12
 
-    static func truncatedSubject(_ subject: String) -> String {
-        let trimmed = subject.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > reminderSubjectMaxLength else { return trimmed }
-        let head = trimmed.prefix(reminderSubjectMaxLength - 1)
+    static func truncatedChipText(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > chipTextMaxLength else { return trimmed }
+        let head = trimmed.prefix(chipTextMaxLength - 1)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(head)…"
     }

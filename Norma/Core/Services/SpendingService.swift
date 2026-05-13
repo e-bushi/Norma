@@ -20,6 +20,16 @@ import SwiftData
 struct SpendingService {
     let context: ModelContext
     let currency: String
+    /// User's bills, used to filter expense tokens that look like bill
+    /// payments slipped through the AI prompt rule. Pass an empty array if
+    /// you don't have access to the bill list — the filter becomes a no-op.
+    let bills: [Bill]
+
+    init(context: ModelContext, currency: String, bills: [Bill] = []) {
+        self.context = context
+        self.currency = currency
+        self.bills = bills
+    }
 
     // MARK: - Totals
 
@@ -60,14 +70,53 @@ struct SpendingService {
         return buckets
     }
 
+    // MARK: - Forecast aggregates
+
+    /// Commitment tokens whose due date falls in the given month.
+    func commitmentTokens(inMonthOf reference: Date) -> [NoteToken] {
+        tokens(of: .commit, in: monthBounds(for: reference))
+    }
+
+    /// Intention tokens whose creation date falls in the given month.
+    /// Intentions are scoped to the month they were written in.
+    func intentionTokens(inMonthOf reference: Date) -> [NoteToken] {
+        tokens(of: .intent, in: monthBounds(for: reference))
+    }
+
+    func totalCommitments(inMonthOf reference: Date) -> Double {
+        commitmentTokens(inMonthOf: reference).reduce(0) { $0 + amount(for: $1) }
+    }
+
+    func totalIntentions(inMonthOf reference: Date) -> Double {
+        intentionTokens(inMonthOf: reference).reduce(0) { $0 + amount(for: $1) }
+    }
+
+    /// Date of the most recent expense token in the displayed month, used to
+    /// drive the freshness signal in the spending pace section.
+    func latestExpenseDate(inMonthOf reference: Date) -> Date? {
+        expenseTokens(in: monthBounds(for: reference))
+            .map(\.occurredAt)
+            .max()
+    }
+
     // MARK: - Internals
 
     private func expenseTokens(in range: ClosedRange<Date>) -> [NoteToken] {
+        let raw = tokens(of: .expense, in: range)
+        guard !bills.isEmpty else { return raw }
+        // Defensive filter: if a token looks like a bill payment that slipped
+        // through the AI prompt rule, drop it from the spending pace cumulative.
+        // The bill amount is already pre-deducted from breathing room.
+        return raw.filter { !BillPaymentMatcher.looksLikeBillPayment($0, against: bills) }
+    }
+
+    private func tokens(of kind: NoteToken.Kind, in range: ClosedRange<Date>) -> [NoteToken] {
         let lower = range.lowerBound
         let upper = range.upperBound
+        let raw = kind.rawValue
         let descriptor = FetchDescriptor<NoteToken>(
             predicate: #Predicate { token in
-                token.kindRaw == "expense" &&
+                token.kindRaw == raw &&
                 token.occurredAt >= lower &&
                 token.occurredAt <= upper
             }

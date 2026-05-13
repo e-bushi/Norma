@@ -123,6 +123,12 @@ class ProfileViewModel: ObservableObject {
         isEditingProfile = false
         updateCurrencyInfo()
 
+        // Keep SessionViewModel.currentUser in sync — views read settings from
+        // it and stale reads make changes look like nothing happened.
+        if sessionViewModel.currentUser?.userId == updatedProfile.userId {
+            sessionViewModel.currentUser = updatedProfile
+        }
+
         isLoading = false
     }
 
@@ -206,6 +212,17 @@ class ProfileViewModel: ObservableObject {
     func updateMonthlyIncome(_ newIncome: Double) {
         guard var currentProfile = profile else { return }
         currentProfile.settings.monthlyIncome = newIncome
+        Task {
+            await updateProfile(currentProfile)
+        }
+    }
+
+    /// Sets the user's daily-rate baseline used to fill empty days in the
+    /// forecast. Pass `nil` to revert to the auto-calculated default
+    /// (breathing room ÷ days left in month).
+    func updateDailyRate(_ newRate: Double?) {
+        guard var currentProfile = profile else { return }
+        currentProfile.settings.dailyRate = newRate
         Task {
             await updateProfile(currentProfile)
         }

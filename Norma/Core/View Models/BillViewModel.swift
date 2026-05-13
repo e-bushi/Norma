@@ -231,6 +231,30 @@ class BillViewModel: ObservableObject {
         }
     }
     
+    /// Batch mark-paid for the journal-driven bills flow. Sets `paidAt` on each
+    /// bill so the BillsView reflects paid status for the current cycle. The
+    /// matching `.billPayment` NoteToken creation is handled by the caller (it
+    /// needs `ModelContext`).
+    func markBillsAsPaid(_ bills: [Bill]) async {
+        guard !bills.isEmpty else { return }
+        isLoading = true
+        clearError()
+
+        let now = Date()
+        for bill in bills {
+            var updated = bill
+            updated.paidAt = now
+            updated.status = .paid
+            do {
+                try await dataManager.updateBillWithEncryption(updated)
+            } catch {
+                showError("Failed to mark bill paid: \(error.localizedDescription)")
+            }
+        }
+        loadBills()
+        isLoading = false
+    }
+
     func updateBill(_ bill: Bill) async {
         isLoading = true
         clearError()

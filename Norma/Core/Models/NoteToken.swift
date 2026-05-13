@@ -35,6 +35,9 @@ final class NoteToken {
     /// Only meaningful for `.reminder` kind.
     var confirmedAt: Date?
 
+    /// Source bill ID for `.billPayment` tokens. Nil for all other kinds.
+    var billId: String?
+
     var note: Note?
 
     enum Kind: String, Codable, CaseIterable {
@@ -46,6 +49,18 @@ final class NoteToken {
         /// "remind me to call mom friday." `occurredAt` doubles as the fire time;
         /// `subject` carries the message body. `amount`/`currency` are unused.
         case reminder
+        /// Tentative future spend extracted from intent prose like "thinking about
+        /// a $200 Bali stay." `occurredAt` is the creation date; the token is
+        /// scoped to the month it was created in and swept at month-end.
+        case intent
+        /// Firm one-shot obligation, upgraded from an `.intent` token by the user.
+        /// `occurredAt` is the due date; auto-removed after that date passes.
+        case commit
+        /// Created when the user marks a bill paid in BillsView. Lives in today's
+        /// note as a chip (the audit trail) but is excluded from spending pace
+        /// totals — the bill is already pre-deducted from breathing room. Carries
+        /// `billId` linking back to the source bill.
+        case billPayment
     }
 
     /// Fixed taxonomy enforced at extraction time. Anything that doesn't fit
@@ -108,7 +123,8 @@ final class NoteToken {
         sourceEnd: Int = 0,
         isProvisional: Bool = false,
         remindAt: Date? = nil,
-        confirmedAt: Date? = nil
+        confirmedAt: Date? = nil,
+        billId: String? = nil
     ) {
         self.id = id
         self.kindRaw = kind.rawValue
@@ -125,6 +141,7 @@ final class NoteToken {
         self.isProvisional = isProvisional
         self.remindAt = remindAt
         self.confirmedAt = confirmedAt
+        self.billId = billId
     }
 }
 

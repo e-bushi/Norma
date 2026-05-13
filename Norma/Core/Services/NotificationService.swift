@@ -248,7 +248,8 @@ class NotificationService: NSObject, ObservableObject {
         remindAt: Date,
         reminderType: ReminderType = .general,
         recurrence: Recurrence = .none,
-        identifier: String? = nil
+        identifier: String? = nil,
+        userInfo: [String: Any] = [:]
     ) async -> Result<String, Error> {
         guard isNotificationsEnabled else {
             return .failure(NotificationError.permissionDenied)
@@ -264,12 +265,15 @@ class NotificationService: NSObject, ObservableObject {
         content.body = message
         content.sound = .default
         content.categoryIdentifier = aiReminderCategory
-        content.userInfo = [
+        var mergedUserInfo: [String: Any] = [
             "reminderType": reminderType.rawValue,
             "scheduledAt": Date().timeIntervalSince1970,
             "source": "ai_assistant",
-            "recurrence": recurrence.rawValue
+            "recurrence": recurrence.rawValue,
+            "subject": title
         ]
+        for (k, v) in userInfo { mergedUserInfo[k] = v }
+        content.userInfo = mergedUserInfo
 
         // Create appropriate date components based on recurrence
         let trigger = createTrigger(for: remindAt, recurrence: recurrence)
