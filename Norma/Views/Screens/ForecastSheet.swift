@@ -11,15 +11,15 @@ import SwiftUI
 import SwiftData
 
 struct ForecastSheet: View {
-    enum Tab { case thisMonth, nextMonth }
-
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
 
-    @State private var selectedTab: Tab = .thisMonth
     @State private var showBills = false
+    @State private var whatIfMode = false
+    @State private var showDailyRate = false
 
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
@@ -28,45 +28,47 @@ struct ForecastSheet: View {
     private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
     private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
 
-    private var heroFont: Font { .system(size: 56, weight: .heavy) }
-
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     heroBlock
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
-
-                    filterCapsules
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
-
-                    nextBillSection
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
-
-                    viewAllPill
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 32)
 
                     weeklySpendingSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
+
+                    nextBillSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
+
+                    if !commitments.isEmpty {
+                        commitmentsSection
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 32)
+                    }
+
+                    if !intentions.isEmpty {
+                        intentionsSection
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 48)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         let impact = UIImpactFeedbackGenerator(style: .light)
                         impact.impactOccurred()
-                        // TODO: present forecast info / explainer
+                        showDailyRate = true
                     } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 18, weight: .medium))
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(cream.opacity(0.85))
                     }
                 }
@@ -81,51 +83,60 @@ struct ForecastSheet: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
+        .sheet(isPresented: $showDailyRate) {
+            DailyRateSheet()
+                .environmentObject(sessionViewModel)
+                .environmentObject(billViewModel)
+                .environmentObject(profileViewModel)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Hero
 
     private var heroBlock: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(monthLabel)
-                .font(.custom(FontFamily.Rubik.medium, size: 18))
+        VStack(alignment: .leading, spacing: 14) {
+            Text(heroLabel)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                .tracking(0.66)
                 .foregroundStyle(mutedText)
-                .padding(.bottom, 6)
-
-            Text(formatCurrency(breathingRoom))
-                .font(heroFont)
-                .tracking(-2.24)
-                .foregroundStyle(cream)
-
-            Text("in breathing")
-                .font(heroFont)
-                .tracking(-2.24)
-                .foregroundStyle(cream)
 
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("room")
-                    .font(heroFont)
-                    .tracking(-2.24)
+                Text(formatCurrency(displayedBreathingRoom))
+                    .font(.system(size: 72, weight: .heavy))
+                    .tracking(-3.24)
                     .foregroundStyle(cream)
                 Text(".")
-                    .font(.system(size: 56, weight: .bold))
-                    .tracking(-2.24)
+                    .font(.system(size: 72, weight: .heavy))
+                    .tracking(-3.24)
                     .foregroundStyle(accentPurple)
             }
+
+            modeToggle
+                .padding(.top, 4)
         }
     }
 
-    // MARK: - Filter Capsules
+    private var heroLabel: String {
+        whatIfMode
+            ? "IF EVERY INTENTION LANDS"
+            : "\(monthShortLabel.uppercased())'S BREATHING ROOM"
+    }
 
-    private var filterCapsules: some View {
-        HStack(spacing: 8) {
-            tabPill("this month", active: selectedTab == .thisMonth) { selectedTab = .thisMonth }
-            tabPill("next month", active: selectedTab == .nextMonth) { selectedTab = .nextMonth }
+    // MARK: - Mode toggle
+
+    private var modeToggle: some View {
+        HStack(spacing: 0) {
+            modePill("now", active: !whatIfMode) { whatIfMode = false }
+            modePill("what if", active: whatIfMode) { whatIfMode = true }
         }
+        .padding(4)
+        .background(Capsule().fill(cream.opacity(0.04)))
     }
 
     @ViewBuilder
-    private func tabPill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func modePill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
@@ -134,19 +145,14 @@ struct ForecastSheet: View {
             }
         } label: {
             Text(label)
-                .font(.custom(active ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 13))
-                .foregroundStyle(active ? onAccentText : cream)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
+                .font(.custom(active ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 12))
+                .tracking(-0.06)
+                .foregroundStyle(active ? onAccentText : mutedText)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
                 .background {
                     if active { Capsule().fill(accentPurple) }
                 }
-                .overlay(
-                    Capsule().stroke(
-                        active ? accentPurple : cream.opacity(0.32),
-                        style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [3, 3])
-                    )
-                )
         }
         .buttonStyle(.plain)
     }
@@ -155,7 +161,7 @@ struct ForecastSheet: View {
 
     @ViewBuilder
     private var nextBillSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("next bill up")
                 .font(.custom(FontFamily.Rubik.medium, size: 18))
                 .foregroundStyle(mutedText)
@@ -164,6 +170,11 @@ struct ForecastSheet: View {
                 nextBillCard(bill)
             } else {
                 noBillsCard
+            }
+
+            if !monthlyBills.isEmpty {
+                viewAllPill
+                    .padding(.top, 8)
             }
         }
     }
@@ -206,7 +217,7 @@ struct ForecastSheet: View {
     }
 
     private var noBillsCard: some View {
-        Text("nothing due \(selectedTab == .thisMonth ? "this month" : "next month")")
+        Text("nothing due this month")
             .font(.custom(FontFamily.Rubik.medium, size: 13))
             .foregroundStyle(dimText)
             .padding(18)
@@ -252,11 +263,11 @@ struct ForecastSheet: View {
     private var weeklySpendingSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text("weekly spending")
+                Text("spending pace")
                     .font(.custom(FontFamily.Rubik.medium, size: 18))
                     .foregroundStyle(mutedText)
                 Spacer()
-                Text("\(formatCurrency(weeklyLimit)) limit")
+                Text("\(formatCurrency(displayedBreathingRoom)) cap")
                     .font(.custom(FontFamily.Rubik.medium, size: 11))
                     .tracking(0.44)
                     .textCase(.uppercase)
@@ -277,6 +288,49 @@ struct ForecastSheet: View {
                     if i < weeks.count - 1 { Spacer() }
                 }
             }
+
+            HStack {
+                Spacer()
+                freshnessChip
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var freshnessChip: some View {
+        if daysBehind == 0 {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(mutedText)
+                    .frame(width: 5, height: 5)
+                Text("up to date")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundStyle(mutedText)
+            }
+        } else {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(accentPurple)
+                    .frame(width: 5, height: 5)
+                Text("\(daysBehind) \(daysBehind == 1 ? "day" : "days") behind")
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundStyle(cream)
+                Text("·")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundStyle(mutedText)
+                Text("\(formatCurrency(gapFillEstimate)) estimated")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundStyle(mutedText)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(accentPurple.opacity(0.03)))
+            .overlay(
+                Capsule().stroke(accentPurple, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            )
         }
     }
 
@@ -286,6 +340,98 @@ struct ForecastSheet: View {
         case weeks.count - 1: return .trailing
         default: return .center
         }
+    }
+
+    // MARK: - Commitments
+
+    private var commitmentsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("commitments")
+                    .font(.custom(FontFamily.Rubik.medium, size: 18))
+                    .foregroundStyle(mutedText)
+                Spacer()
+                Text("\(commitments.count) · \(formatCurrency(totalCommitmentsForMonth))")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .tracking(0.44)
+                    .foregroundStyle(mutedText)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(commitments, id: \.id) { token in
+                    commitmentRow(token)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func commitmentRow(_ token: NoteToken) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(formatCurrency(token.amount))
+                .font(.system(size: 30, weight: .bold))
+                .tracking(-0.75)
+                .foregroundStyle(cream)
+                .frame(width: 100, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(token.subject ?? "commitment")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundStyle(cream)
+                Text("due \(shortDate(token.occurredAt))")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundStyle(mutedText)
+            }
+        }
+    }
+
+    // MARK: - Intentions
+
+    private var intentionsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("intentions")
+                    .font(.custom(FontFamily.Rubik.medium, size: 18))
+                    .foregroundStyle(mutedText)
+                Spacer()
+                Text("\(intentions.count) · \(formatCurrency(totalIntentionsForMonth))")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .tracking(0.44)
+                    .foregroundStyle(mutedText)
+            }
+
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(intentions, id: \.id) { token in
+                    intentionChip(token)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func intentionChip(_ token: NoteToken) -> some View {
+        let hardened = whatIfMode
+        HStack(spacing: 8) {
+            Circle()
+                .strokeBorder(accentPurple, lineWidth: hardened ? 0 : 1)
+                .background(Circle().fill(hardened ? accentPurple : Color.clear))
+                .frame(width: 5, height: 5)
+            Text(token.subject ?? "intention")
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(hardened ? cream : cream)
+            Text(formatCurrency(token.amount))
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundStyle(hardened ? cream : mutedText)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 9)
+        .background(Capsule().fill(accentPurple.opacity(hardened ? 0.12 : 0.03)))
+        .overlay(
+            Capsule().stroke(
+                accentPurple,
+                style: StrokeStyle(lineWidth: 1, dash: hardened ? [] : [3, 3])
+            )
+        )
     }
 
     @ViewBuilder
@@ -315,16 +461,12 @@ struct ForecastSheet: View {
     private var displayedMonthDate: Date {
         let cal = Calendar.current
         let comps = cal.dateComponents([.year, .month], from: Date())
-        let firstOfThisMonth = cal.date(from: comps) ?? Date()
-        if selectedTab == .nextMonth {
-            return cal.date(byAdding: .month, value: 1, to: firstOfThisMonth) ?? firstOfThisMonth
-        }
-        return firstOfThisMonth
+        return cal.date(from: comps) ?? Date()
     }
 
-    private var monthLabel: String {
+    private var monthShortLabel: String {
         let f = DateFormatter()
-        f.dateFormat = "MMMM yyyy"
+        f.dateFormat = "MMMM"
         return f.string(from: displayedMonthDate).lowercased()
     }
 
@@ -351,21 +493,73 @@ struct ForecastSheet: View {
     }
 
     private var spendingService: SpendingService {
-        SpendingService(context: modelContext, currency: currency)
+        SpendingService(context: modelContext, currency: currency, bills: billViewModel.bills)
     }
 
-    /// Spending for the displayed month, sourced from NoteTokens. Next-month
-    /// view shows $0 (nothing spent yet) — projection logic lives in `weeks`.
-    private var spentSoFarForMonth: Double {
-        selectedTab == .thisMonth ? spendingService.totalSpent(inMonthOf: displayedMonthDate) : 0
+    private var commitments: [NoteToken] {
+        spendingService.commitmentTokens(inMonthOf: displayedMonthDate)
+    }
+
+    private var intentions: [NoteToken] {
+        spendingService.intentionTokens(inMonthOf: displayedMonthDate)
+    }
+
+    private var totalCommitmentsForMonth: Double {
+        spendingService.totalCommitments(inMonthOf: displayedMonthDate)
+    }
+
+    private var totalIntentionsForMonth: Double {
+        spendingService.totalIntentions(inMonthOf: displayedMonthDate)
+    }
+
+    // MARK: - Freshness + gap-fill
+
+    /// Number of days between the user's last expense entry and today, capped
+    /// to days inside the displayed month. Zero = up to date.
+    private var daysBehind: Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let latest = spendingService.latestExpenseDate(inMonthOf: displayedMonthDate) else {
+            // No entries yet this month: treat as fresh, not stale.
+            return 0
+        }
+        let latestDay = cal.startOfDay(for: latest)
+        guard latestDay < today else { return 0 }
+        let days = cal.dateComponents([.day], from: latestDay, to: today).day ?? 0
+        // Cap to days within the displayed month (in case latest is in a prior month edge case).
+        return max(0, days)
+    }
+
+    /// Effective daily rate used for gap-fill — the user's manual setting if
+    /// present, otherwise breathing room ÷ days remaining in month.
+    private var effectiveDailyRate: Double {
+        if let manual = sessionViewModel.currentUser?.settings.dailyRate, manual > 0 {
+            return manual
+        }
+        let cal = Calendar.current
+        let now = Date()
+        let totalDays = cal.range(of: .day, in: .month, for: now)?.count ?? 30
+        let currentDay = cal.component(.day, from: now)
+        let daysLeft = max(1, totalDays - currentDay + 1)
+        return breathingRoom / Double(daysLeft)
+    }
+
+    /// Estimated spend across missed days, used by the freshness signal and
+    /// folded into the cumulative spending pace line.
+    private var gapFillEstimate: Double {
+        Double(daysBehind) * effectiveDailyRate
     }
 
     private var breathingRoom: Double {
-        max(0, monthlyIncome - totalBillsForMonth - spentSoFarForMonth)
+        max(0, monthlyIncome - totalBillsForMonth - totalCommitmentsForMonth)
+    }
+
+    private var displayedBreathingRoom: Double {
+        whatIfMode ? max(0, breathingRoom - totalIntentionsForMonth) : breathingRoom
     }
 
     private var weeklyLimit: Double {
-        monthlyIncome / 4
+        displayedBreathingRoom / 4
     }
 
     /// Earliest unpaid bill in the displayed month. Falls back to nil if none.
@@ -393,7 +587,7 @@ struct ForecastSheet: View {
         let monthStart = displayedMonthDate
 
         // Bucket actual expenses by week-of-month, sourced from NoteTokens.
-        let actualByWeek = spendingService.weeklyActuals(inMonthOf: monthStart)
+        var actualByWeek = spendingService.weeklyActuals(inMonthOf: monthStart)
 
         // Day ranges per week (closed): used for current-week detection
         let daysInMonth = cal.range(of: .day, in: .month, for: monthStart)?.last ?? 30
@@ -403,6 +597,23 @@ struct ForecastSheet: View {
             15...21,
             22...daysInMonth
         ]
+
+        // Fold gap-fill into the appropriate week buckets so the trajectory line
+        // doesn't lie about empty days. Each missing day adds the daily rate to
+        // the bucket containing that day.
+        if daysBehind > 0,
+           let latest = spendingService.latestExpenseDate(inMonthOf: monthStart) {
+            let latestDay = cal.component(.day, from: latest)
+            let today = cal.component(.day, from: now)
+            let firstMissing = latestDay + 1
+            if firstMissing <= today {
+                for day in firstMissing...today {
+                    if let idx = ranges.firstIndex(where: { $0.contains(day) }) {
+                        actualByWeek[idx] += effectiveDailyRate
+                    }
+                }
+            }
+        }
 
         // Determine which week index "now" falls into, but only if displaying current month.
         let isDisplayingCurrentMonth = cal.isDate(now, equalTo: monthStart, toGranularity: .month)
@@ -466,6 +677,56 @@ struct ForecastSheet: View {
         if days < 0 { return "overdue \(-days) \(-days == 1 ? "day" : "days")" }
         if days == 0 { return "due today" }
         return "due in \(days) \(days == 1 ? "day" : "days")"
+    }
+}
+
+// MARK: - Flow Layout
+
+/// Minimal wrapping HStack — places each subview on the current line if it fits,
+/// otherwise wraps to a new line. Used for the intention chip flow.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                y += lineHeight + lineSpacing
+                x = 0
+                lineHeight = 0
+            }
+            x += size.width + spacing
+            totalWidth = max(totalWidth, x - spacing)
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return CGSize(width: totalWidth, height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
+        var x: CGFloat = bounds.minX
+        var y: CGFloat = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.minX + maxWidth {
+                y += lineHeight + lineSpacing
+                x = bounds.minX
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
     }
 }
 

@@ -26,6 +26,10 @@ struct Bill: Identifiable, Codable, Equatable {
     var notes: String?
     var verificationDate: String?
     var isMostCritical: Bool? // Marks the most important bill (usually rent/mortgage) for arc calculation
+    /// Timestamp of the most recent mark-paid action. The bill's display status
+    /// is derived: paid for the cycle containing `paidAt`, scheduled/overdue
+    /// otherwise. Auto-renews when the calendar moves past the cycle.
+    var paidAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -46,6 +50,7 @@ struct Bill: Identifiable, Codable, Equatable {
         case notes
         case verificationDate = "verification_date"
         case isMostCritical = "is_most_critical"
+        case paidAt = "paid_at"
     }
     
     // Custom decoding to handle date formats from Supabase
@@ -68,6 +73,12 @@ struct Bill: Identifiable, Codable, Equatable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         verificationDate = try container.decodeIfPresent(String.self, forKey: .verificationDate)
         isMostCritical = try container.decodeIfPresent(Bool.self, forKey: .isMostCritical)
+
+        if let paidAtString = try container.decodeIfPresent(String.self, forKey: .paidAt) {
+            paidAt = ISO8601DateFormatter().date(from: paidAtString)
+        } else {
+            paidAt = nil
+        }
 
         // Handle date decoding with multiple formats
         let dueDateString = try container.decode(String.self, forKey: .dueDate)
@@ -139,6 +150,10 @@ struct Bill: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
         try container.encodeIfPresent(isMostCritical, forKey: .isMostCritical)
 
+        if let paidAt {
+            try container.encode(ISO8601DateFormatter().string(from: paidAt), forKey: .paidAt)
+        }
+
         // Encode dates as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -171,7 +186,8 @@ struct Bill: Identifiable, Codable, Equatable {
         updatedAt: String? = nil,
         notes: String? = nil,
         verificationDate: String? = nil,
-        isMostCritical: Bool? = nil
+        isMostCritical: Bool? = nil,
+        paidAt: Date? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -191,6 +207,7 @@ struct Bill: Identifiable, Codable, Equatable {
         self.notes = notes
         self.verificationDate = verificationDate
         self.isMostCritical = isMostCritical
+        self.paidAt = paidAt
     }
 }
 
@@ -288,10 +305,24 @@ extension Bill {
 // MARK: - Bill Status Calculation
 extension Bill {
 
-    /// Calculate the bill status from payment history. Recurring bills auto-roll:
-    /// once today passes the cycle's effective due date with no matching expense,
-    /// the bill is overdue for that cycle.
+    /// Derived status for the current cycle. The stored `paidAt` carries the
+    /// most recent mark-paid timestamp; once the calendar moves past that
+    /// cycle, the bill auto-flips back to `.scheduled` (or `.overdue`) without
+    /// any background work — the cycle filter narrows what counts.
+    func calculateStatus(now: Date = Date()) -> BillStatus {
+        if let paidAt, isInCurrentCycle(expenseDate: paidAt) {
+            return .paid
+        }
+        return effectiveDueDate < now ? .overdue : .scheduled
+    }
+
+    /// Legacy compatibility shim: the old expense-driven calculator. Kept for
+    /// callsites still wired into the legacy Expense ledger (UpcomingBillsSection).
+    /// New code should prefer the no-arg `calculateStatus(now:)` above.
     func calculateStatus(from expenses: [Expense]) -> BillStatus {
+        if let paidAt, isInCurrentCycle(expenseDate: paidAt) {
+            return .paid
+        }
         if isFullyPaid(from: expenses) { return .paid }
         return effectiveDueDate < Date() ? .overdue : .scheduled
     }

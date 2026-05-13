@@ -112,7 +112,10 @@ struct NoteSegmentsView: View {
     }
 
     private var collapsedKinds: Set<NoteToken.Kind> {
-        Set(tokensByKind.filter { $0.value.count >= 3 }.keys)
+        // Reminders never collapse: each chip carries its own confirmation
+        // state and tap-to-edit picker, and a summary pill would hide
+        // unconfirmed reminders behind a non-interactive total.
+        Set(tokensByKind.filter { $0.key != .reminder && $0.value.count >= 3 }.keys)
     }
 
     @ViewBuilder

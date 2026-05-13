@@ -52,6 +52,9 @@ struct GroupChipView: View {
         case .income:   noun = "INCOME"
         case .transfer: noun = count == 1 ? "TRANSFER" : "TRANSFERS"
         case .reminder: noun = count == 1 ? "REMINDER" : "REMINDERS"
+        case .intent:   noun = count == 1 ? "INTENTION" : "INTENTIONS"
+        case .commit:   noun = count == 1 ? "COMMITMENT" : "COMMITMENTS"
+        case .billPayment: noun = count == 1 ? "BILL PAID" : "BILLS PAID"
         }
         return "\(count) \(noun)"
     }

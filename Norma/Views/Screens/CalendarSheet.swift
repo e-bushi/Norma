@@ -15,7 +15,7 @@ struct CalendarSheet: View {
     enum Tab { case thisMonth, nextMonth }
 
     @State private var selectedTab: Tab = .thisMonth
-    @State private var selectedDay: Int = 1
+    @State private var selectedDay: Int = Calendar.current.component(.day, from: Date())
     @State private var allReminders: [Reminder] = []
     @Environment(\.modelContext) private var modelContext
 
@@ -112,7 +112,7 @@ struct CalendarSheet: View {
         HStack(spacing: 8) {
             tabPill("this month", active: selectedTab == .thisMonth) {
                 selectedTab = .thisMonth
-                selectedDay = activeReminders.keys.sorted().first ?? 1
+                selectedDay = Calendar.current.component(.day, from: Date())
             }
             tabPill("next month", active: selectedTab == .nextMonth) {
                 selectedTab = .nextMonth
@@ -181,6 +181,7 @@ struct CalendarSheet: View {
     private func dayCell(day: Int?) -> some View {
         let hasReminder = day.map { activeReminders[$0] != nil } ?? false
         let isSelected = day == selectedDay && day != nil
+        let isToday = day.map { isCellToday($0) } ?? false
         VStack(spacing: 4) {
             if let day {
                 Button {
@@ -193,10 +194,19 @@ struct CalendarSheet: View {
                     ZStack {
                         if isSelected {
                             Circle().fill(accentPurple).frame(width: 32, height: 32)
+                        } else if isToday {
+                            Circle()
+                                .stroke(accentPurple.opacity(0.85), lineWidth: 1)
+                                .frame(width: 32, height: 32)
                         }
                         Text("\(day)")
-                            .font(.custom(isSelected ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 14))
-                            .foregroundStyle(isSelected ? onAccentText : cream)
+                            .font(.custom(
+                                (isSelected || isToday) ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium,
+                                size: 14
+                            ))
+                            .foregroundStyle(
+                                isSelected ? onAccentText : (isToday ? accentPurple : cream)
+                            )
                     }
                     .frame(width: 32, height: 32)
                 }
@@ -212,6 +222,17 @@ struct CalendarSheet: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 48)
+    }
+
+    /// True only when `day` falls on the actual current calendar date AND we
+    /// are looking at this month's grid. Prevents the "1" cell on the
+    /// next-month tab from getting a today ring.
+    private func isCellToday(_ day: Int) -> Bool {
+        guard selectedTab == .thisMonth else { return false }
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month, .day], from: Date())
+        let target = cal.dateComponents([.year, .month], from: displayedMonthDate)
+        return comps.day == day && comps.year == target.year && comps.month == target.month
     }
 
     // MARK: - Selected day label
@@ -330,11 +351,16 @@ struct CalendarSheet: View {
                 return nil
             }()
 
-            // Bills carry the friendlier name in userInfo; default to the
-            // notification title for AI-extracted reminders.
+            // Bills carry the friendlier name in userInfo; AI reminders
+            // carry the action subject in userInfo too. Fall back to the
+            // notification title only for legacy entries that predate the
+            // userInfo["subject"] convention.
             let title: String = {
                 if isBill, let billName = req.content.userInfo["billName"] as? String, !billName.isEmpty {
                     return billName
+                }
+                if let subject = req.content.userInfo["subject"] as? String, !subject.isEmpty {
+                    return subject
                 }
                 return req.content.title
             }()

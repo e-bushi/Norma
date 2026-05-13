@@ -77,8 +77,8 @@ final class NoteExtractionService {
     private static let tokenObjectProperties: [String: AnthropicToolProperty] = [
         "kind": AnthropicToolProperty(
             type: "string",
-            description: "expense | bill | income | transfer | reminder",
-            enum: ["expense", "bill", "income", "transfer", "reminder"]
+            description: "expense | bill | income | transfer | reminder | intent",
+            enum: ["expense", "bill", "income", "transfer", "reminder", "intent"]
         ),
         "amount": AnthropicToolProperty(type: "number", description: "Numeric amount, e.g., 450. Required for financial kinds, omit for reminders."),
         "currency": AnthropicToolProperty(type: "string", description: "ISO 4217 code: USD, EUR, THB, etc. Required for financial kinds, omit for reminders."),
@@ -110,16 +110,20 @@ final class NoteExtractionService {
     private static let systemPrompt = """
     You extract structured entities from short personal notes. Each entity becomes a chip in the user's planning canvas.
 
-    Two families of entities:
+    Three families of entities:
 
-    1) FINANCIAL — explicit amounts of money.
+    1) FINANCIAL — explicit amounts of money for events that have already happened or are firm obligations.
        - Only extract amounts EXPLICITLY written in the text. Never guess, infer, or hallucinate amounts.
        - Each amount is one token. "lunch 450฿ and coffee 80฿" produces two tokens.
        - kind:
          * income — user received money ("got paid", "received", "deposited", or +amount sign)
          * bill — amount paired with a recurrence keyword (monthly, weekly, /mo, every month, etc.)
          * transfer — explicitly described as moving money between own accounts
-         * expense — default
+         * expense — default for completed/past discretionary spending
+       - DO NOT extract a token for prose describing the *payment* of a recurring obligation (e.g., "paid rent today", "sent verizon $80", "paid the electric bill"). Bills are tracked separately via the bills view; emitting an expense for a bill payment double-counts against the user's budget. Skip the extraction entirely.
+         * Common recurring-obligation keywords to suppress: rent, mortgage, utilities, electric, water, gas, internet, phone, verizon, comcast, spotify, netflix, insurance, subscription, hoa, cable, wifi.
+         * "I paid rent $920" → emit nothing.
+         * "$2,000 rent monthly" → still emit a `bill` token (this is creating the recurring bill record, not paying it).
        - currency: ISO 4217 codes. Symbol map: $ → USD, ฿ → THB, € → EUR, £ → GBP, ¥ → JPY, ₹ → INR, ₩ → KRW, ₫ → VND, ₱ → PHP. Default USD if ambiguous.
        - category: pick the closest match from the enum. "other" if nothing fits.
        - subject: short noun phrase describing what the money is for. Do not include the amount itself in the subject.
@@ -128,7 +132,17 @@ final class NoteExtractionService {
        - usd_equivalent: only if you can confidently convert. Omit otherwise.
        - occurred_at: for bills with a due-day hint ("due 31", "due 1", "on the 4th", "every 14th"), resolve to the next future ISO 8601 date on that day relative to "Now". Pick current month if the day hasn't passed yet, otherwise next month. Omit for expenses without an explicit date or for bills without a due-day hint.
 
-    2) REMINDER — the user expresses an intent to be reminded of something.
+    2) INTENTION — tentative future spend the user is considering but hasn't committed to.
+       - Triggers: tentative language about a future amount.
+         Examples: "thinking about a $200 bali stay", "maybe ~$120 for a scuba day", "considering a $170 camera lens", "want to do a visa run, ~$150", "might do dinner with friends, $80", "planning a $300 getaway", "eyeing a $400 jacket".
+         Soft markers: thinking, maybe, considering, want to, planning, hoping to, would like, eyeing, looking at, might, debating, possibly.
+       - kind: "intent"
+       - amount, currency, subject, usd_equivalent: same shape as financial tokens.
+       - subject: short noun phrase ("bali stay", "camera lens", "scuba day"). Do not include the amount or tentative wording.
+       - Do not set recurrence or occurred_at — intentions are one-shot and scoped to the month they're written in; the client handles month-bucketing automatically.
+       - When in doubt between expense and intent: did the money already leave the user's wallet? If yes, expense. If they're musing about a future spend, intent.
+
+    3) REMINDER — the user expresses an intent to be reminded of something (non-financial).
        - Triggers: "remind me to X", "don't forget to Y", "[task] tomorrow at 3pm", "call mom friday", "i need to file taxes".
        - Emit when there's a clear action intent. The user will confirm and (if missing) fill in the time before any notification fires.
        - kind: "reminder"

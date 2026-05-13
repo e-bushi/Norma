@@ -96,6 +96,9 @@ struct RibbonView: View {
         case .income: return "INCOME"
         case .transfer: return "TRANSFERS"
         case .reminder: return "REMINDERS"
+        case .intent: return "INTENTIONS"
+        case .commit: return "COMMITMENTS"
+        case .billPayment: return "BILLS PAID"
         }
     }
 

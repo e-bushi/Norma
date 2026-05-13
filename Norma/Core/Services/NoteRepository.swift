@@ -88,37 +88,73 @@ final class NoteRepository {
     /// can rewrite a note's tokens. Caller is responsible for `context.save()`
     /// and any sync bookkeeping.
     ///
-    /// Reminder reconciliation:
-    /// - The user's confirmation (`confirmedAt`) is preserved across re-extractions
-    ///   by matching old vs new reminder tokens on (subject, remindAt). When the
-    ///   LLM re-emits the same reminder, the carry-over keeps the chip in its
-    ///   confirmed state and re-arms the OS notification under the new token id.
-    /// - All old reminder notifications are cancelled first to keep a clean slate;
-    ///   only new reminders that carry confirmation forward get re-scheduled.
+    /// Reminder reconciliation across re-extractions:
+    ///
+    /// - When the LLM re-emits a reminder (subject matches an old one), we
+    ///   carry forward the user's `confirmedAt` and chosen `remindAt`/
+    ///   `occurredAt` onto the freshly-emitted token, then re-schedule the
+    ///   OS notification under the new token id. The user-picked time wins
+    ///   over whatever the LLM re-infers from the prose.
+    ///
+    /// - When the LLM drops a previously-confirmed reminder (subject no
+    ///   longer present in new emission), we treat the user's confirmation
+    ///   as sticky: the old token survives the swap, its OS notification is
+    ///   left alone, and it remains attached to the note. The LLM's
+    ///   extraction can drift across edits (rephrasing, dropped phrases,
+    ///   ambiguous prose) — confirmation is the source of truth, and the
+    ///   only way to remove a confirmed reminder is the explicit cancel
+    ///   button on the reminders sheet.
     static func applyExtractedTokens(
         _ tokens: [NoteToken],
         to note: Note,
         in context: ModelContext
     ) {
+        struct Carry { let confirmedAt: Date; let remindAt: Date }
         let outgoingReminders = note.tokens.filter { $0.kind == .reminder }
-        let confirmedLookup: [ReminderKey: Date] = Dictionary(
-            uniqueKeysWithValues: outgoingReminders.compactMap { token -> (ReminderKey, Date)? in
+
+        let confirmedLookup: [String: Carry] = Dictionary(
+            outgoingReminders.compactMap { token -> (String, Carry)? in
                 guard let confirmedAt = token.confirmedAt,
-                      let key = reminderKey(for: token)
+                      let remindAt = token.remindAt,
+                      let subject = normalizedSubject(for: token)
                 else { return nil }
-                return (key, confirmedAt)
+                return (subject, Carry(confirmedAt: confirmedAt, remindAt: remindAt))
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let newReminderSubjects: Set<String> = Set(
+            tokens.compactMap { $0.kind == .reminder ? normalizedSubject(for: $0) : nil }
+        )
+
+        // Sticky old reminders: confirmed by the user and not represented in the
+        // new emission. Keep these tokens, leave their OS notifications alone.
+        let stickyIds: Set<UUID> = Set(
+            outgoingReminders.compactMap { token -> UUID? in
+                guard token.confirmedAt != nil,
+                      let subject = normalizedSubject(for: token),
+                      !newReminderSubjects.contains(subject)
+                else { return nil }
+                return token.id
             }
         )
 
-        for id in outgoingReminders.map(\.id) {
-            NotificationService.shared.cancelAIReminder(identifier: reminderIdentifier(tokenId: id))
+        // Cancel only the outgoing reminders we won't preserve as-is.
+        for old in outgoingReminders where !stickyIds.contains(old.id) {
+            NotificationService.shared.cancelAIReminder(identifier: reminderIdentifier(tokenId: old.id))
         }
-        for old in note.tokens { context.delete(old) }
-        note.tokens = tokens
+        // Delete only non-sticky tokens. Sticky reminder tokens stay attached.
+        let stickyTokens = note.tokens.filter { stickyIds.contains($0.id) }
+        for old in note.tokens where !stickyIds.contains(old.id) {
+            context.delete(old)
+        }
+        note.tokens = tokens + stickyTokens
 
         for token in tokens where token.kind == .reminder {
-            if let key = reminderKey(for: token), let prior = confirmedLookup[key] {
-                token.confirmedAt = prior
+            if let subject = normalizedSubject(for: token), let prior = confirmedLookup[subject] {
+                token.confirmedAt = prior.confirmedAt
+                token.remindAt = prior.remindAt
+                token.occurredAt = prior.remindAt
                 scheduleReminder(token, on: note)
             }
         }
@@ -133,13 +169,20 @@ final class NoteRepository {
     /// (if the chip was in "needs info" state and the user just picked one),
     /// and schedules the OS notification. Idempotent — calling again replaces
     /// any existing scheduled notification with the new time.
+    ///
+    /// Does NOT re-enqueue the LLM extractor: the note's prose hasn't changed,
+    /// only the user's confirmation state on an existing token. Re-extracting
+    /// would replace this token with a fresh one (new UUID) and drop the
+    /// confirmation if the user picked a time different from what the LLM
+    /// originally inferred — the chip would visibly flip back to dashed.
     func confirmReminder(_ token: NoteToken, remindAt: Date, on note: Note) {
         guard token.kind == .reminder else { return }
         token.remindAt = remindAt
         token.occurredAt = remindAt
         token.confirmedAt = Date()
+        note.updatedAt = Date()
         Self.scheduleReminder(token, on: note)
-        touch(note)
+        save()
     }
 
     /// Inverse of confirmReminder — used when the user dismisses a reminder
@@ -196,38 +239,38 @@ final class NoteRepository {
 
     static let reminderIdentifierPrefix = "ai_reminder_note_"
 
-    /// Identity for matching reminders across re-extractions. Subject is
-    /// normalized (trimmed + lowercased) and paired with the fire time so a
-    /// "pay rent at 9am may 5" stays matched even if surrounding prose changes.
-    /// Returns nil for reminders that don't have enough info to identify
-    /// stably — those start fresh as unconfirmed each extraction.
-    struct ReminderKey: Hashable {
-        let subject: String
-        let remindAt: Date
-    }
-
-    static func reminderKey(for token: NoteToken) -> ReminderKey? {
+    /// Normalized subject used as the identity key for matching reminders
+    /// across re-extractions. Returns nil when the subject is missing or
+    /// blank — those tokens start fresh as unconfirmed each extraction.
+    static func normalizedSubject(for token: NoteToken) -> String? {
         guard let subject = token.subject?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-              !subject.isEmpty,
-              let remindAt = token.remindAt
+              !subject.isEmpty
         else { return nil }
-        return ReminderKey(subject: subject, remindAt: remindAt)
+        return subject
     }
 
     static func scheduleReminder(_ token: NoteToken, on note: Note) {
         guard let fireDate = token.remindAt else { return }
-        let title = (note.title?.isEmpty == false ? note.title : nil) ?? "reminder"
-        let body = token.subject ?? "reminder"
+        let subject = token.subject?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedSubject = (subject?.isEmpty == false ? subject! : "reminder")
+        let noteTitle = note.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = (noteTitle?.isEmpty == false) ? "from your '\(noteTitle!)' note" : ""
         let identifier = reminderIdentifier(tokenId: token.id)
         let recurrence = mapRecurrence(token.recurrence)
+        let userInfo: [String: Any] = [
+            "subject": resolvedSubject,
+            "noteId": note.id.uuidString,
+            "tokenId": token.id.uuidString
+        ]
         Task { @MainActor in
             _ = await NotificationService.shared.scheduleAIReminder(
-                title: title,
+                title: resolvedSubject,
                 message: body,
                 remindAt: fireDate,
                 reminderType: .general,
                 recurrence: recurrence,
-                identifier: identifier
+                identifier: identifier,
+                userInfo: userInfo
             )
         }
     }

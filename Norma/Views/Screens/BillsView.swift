@@ -17,11 +17,15 @@ struct BillsView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
 
+    @Environment(\.modelContext) private var modelContext
+
     @State private var selectedTab: Tab = .thisMonth
     @State private var isSelecting: Bool = false
     @State private var selectedBillIds: Set<String> = []
     @State private var showDeleteConfirm: Bool = false
+    @State private var showMarkPaidConfirm: Bool = false
     @State private var isDeleting: Bool = false
+    @State private var isMarkingPaid: Bool = false
 
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
@@ -60,6 +64,12 @@ struct BillsView: View {
             } message: {
                 Text("this will remove \(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") permanently.")
             }
+            .alert("mark as paid?", isPresented: $showMarkPaidConfirm) {
+                Button("cancel", role: .cancel) {}
+                Button("mark paid") { performBulkMarkPaid() }
+            } message: {
+                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle and added to today's note.")
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -82,20 +92,36 @@ struct BillsView: View {
             }
 
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    showDeleteConfirm = true
+                Menu {
+                    Button {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        showMarkPaidConfirm = true
+                    } label: {
+                        Label("mark paid", systemImage: "checkmark.circle")
+                    }
+                    .disabled(selectedBillIds.isEmpty || isMarkingPaid)
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("delete", systemImage: "trash")
+                    }
+                    .disabled(selectedBillIds.isEmpty || isDeleting)
                 } label: {
                     Text(selectedBillIds.isEmpty
-                         ? "delete"
-                         : "delete (\(selectedBillIds.count))")
+                         ? "actions"
+                         : "actions (\(selectedBillIds.count))")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(selectedBillIds.isEmpty
-                                         ? Color.red.opacity(0.4)
-                                         : Color.red)
+                                         ? cream.opacity(0.4)
+                                         : accentPurple)
                 }
-                .disabled(selectedBillIds.isEmpty || isDeleting)
+                .disabled(selectedBillIds.isEmpty)
             }
         } else {
             if !billViewModel.bills.isEmpty {
@@ -163,6 +189,26 @@ struct BillsView: View {
             }
             await MainActor.run {
                 isDeleting = false
+                exitSelection()
+            }
+        }
+    }
+
+    private func performBulkMarkPaid() {
+        let toMark = billViewModel.bills.filter { bill in
+            bill.id.map { selectedBillIds.contains($0) } ?? false
+        }
+        guard !toMark.isEmpty else { return }
+        isMarkingPaid = true
+        Task {
+            await billViewModel.markBillsAsPaid(toMark)
+            await MainActor.run {
+                BillPaymentJournal.appendBillPayments(
+                    toMark,
+                    currency: sessionViewModel.currentUser?.settings.currency ?? "USD",
+                    in: modelContext
+                )
+                isMarkingPaid = false
                 exitSelection()
             }
         }

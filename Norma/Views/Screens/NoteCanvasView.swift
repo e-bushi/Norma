@@ -9,6 +9,7 @@
 
 import SwiftUI
 import AVFoundation
+import CoreHaptics
 
 struct NoteCanvasView: View {
     @Bindable var note: Note
@@ -30,6 +31,8 @@ struct NoteCanvasView: View {
     @State private var syncQueue = NoteSyncQueue.shared
     @State private var appeared: Bool = false
     @State private var waveScale: CGFloat = 0
+    @State private var hapticEngine: CHHapticEngine?
+    @State private var hapticPlayer: CHHapticAdvancedPatternPlayer?
     @FocusState private var focusedField: Field?
 
     // Voice transcription state — Deepgram streams into bodyText while active.
@@ -148,14 +151,21 @@ struct NoteCanvasView: View {
             withAnimation(.spring(response: 1.1, dampingFraction: 0.78)) {
                 waveScale = thinking ? 1.0 : 0
             }
+            if thinking {
+                startThinkingHaptic()
+            } else {
+                stopThinkingHaptic()
+            }
         }
         .onAppear {
             appeared = true
+            if isThinking { startThinkingHaptic() }
         }
         .onDisappear {
             if isRecording {
                 stopVoiceInput()
             }
+            stopThinkingHaptic()
         }
     }
 
@@ -459,6 +469,84 @@ struct NoteCanvasView: View {
 
     private static func defaultTitle(for note: Note) -> String {
         NoteTitleGenerator.title(for: note.id)
+    }
+
+    // MARK: - Thinking haptic
+
+    /// Continuous "whirling" haptic that runs while the AI extractor is
+    /// thinking. Uses CoreHaptics to play a looped pattern with intensity
+    /// and sharpness curves — gives the sensation of an ongoing process
+    /// rather than a sequence of discrete taps. Falls back to nothing on
+    /// devices without haptic support (older iPads, simulator).
+    private func startThinkingHaptic() {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+        guard hapticPlayer == nil else { return }
+
+        do {
+            if hapticEngine == nil {
+                let engine = try CHHapticEngine()
+                engine.resetHandler = { [weak engine] in
+                    try? engine?.start()
+                }
+                engine.stoppedHandler = { _ in }
+                try engine.start()
+                hapticEngine = engine
+            }
+
+            // 1.4-second loop. Intensity oscillates 0.4 → 1.0 → 0.5 → 1.0 → 0.4
+            // and sharpness rotates 0.3 → 0.8 → 0.3, producing a rolling /
+            // whirling feel rather than a steady buzz.
+            let duration: TimeInterval = 1.4
+            let event = CHHapticEvent(
+                eventType: .hapticContinuous,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+                ],
+                relativeTime: 0,
+                duration: duration
+            )
+            let intensityCurve = CHHapticParameterCurve(
+                parameterID: .hapticIntensityControl,
+                controlPoints: [
+                    .init(relativeTime: 0.0, value: 0.4),
+                    .init(relativeTime: 0.35, value: 1.0),
+                    .init(relativeTime: 0.7, value: 0.5),
+                    .init(relativeTime: 1.05, value: 1.0),
+                    .init(relativeTime: 1.4, value: 0.4)
+                ],
+                relativeTime: 0
+            )
+            let sharpnessCurve = CHHapticParameterCurve(
+                parameterID: .hapticSharpnessControl,
+                controlPoints: [
+                    .init(relativeTime: 0.0, value: 0.3),
+                    .init(relativeTime: 0.7, value: 0.85),
+                    .init(relativeTime: 1.4, value: 0.3)
+                ],
+                relativeTime: 0
+            )
+
+            let pattern = try CHHapticPattern(
+                events: [event],
+                parameterCurves: [intensityCurve, sharpnessCurve]
+            )
+            let player = try hapticEngine?.makeAdvancedPlayer(with: pattern)
+            player?.loopEnabled = true
+            try player?.start(atTime: CHHapticTimeImmediate)
+            hapticPlayer = player
+        } catch {
+            print("ThinkingHaptic: failed to start — \(error)")
+        }
+    }
+
+    private func stopThinkingHaptic() {
+        do {
+            try hapticPlayer?.stop(atTime: CHHapticTimeImmediate)
+        } catch {
+            print("ThinkingHaptic: failed to stop — \(error)")
+        }
+        hapticPlayer = nil
     }
 }
 

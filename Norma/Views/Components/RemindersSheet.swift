@@ -34,6 +34,12 @@ struct RemindersSheet: View {
         let recurrence: String? // "daily" | "weekly" | "monthly" | nil
     }
 
+    private struct DaySection: Identifiable {
+        let id: Date  // start-of-day
+        let label: String
+        let items: [LoadedReminder]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             dragHandle
@@ -72,6 +78,12 @@ struct RemindersSheet: View {
 
     private var heroBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text(Self.todayKicker())
+                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                .tracking(1.6)
+                .foregroundStyle(accentPurple)
+                .padding(.bottom, 2)
+
             Text("reminders.")
                 .font(heroFont)
                 .tracking(-2.24)
@@ -82,6 +94,12 @@ struct RemindersSheet: View {
                 .foregroundStyle(mutedText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private static func todayKicker() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "'TODAY · 'EEE MMM d"
+        return f.string(from: Date()).uppercased()
     }
 
     private var eyebrowText: String {
@@ -100,12 +118,49 @@ struct RemindersSheet: View {
         } else if reminders.isEmpty {
             emptyState
         } else {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(reminders) { reminder in
-                    reminderCard(reminder)
+            VStack(alignment: .leading, spacing: 22) {
+                ForEach(daySections) { section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(section.label)
+                            .font(.custom(FontFamily.Rubik.medium, size: 11))
+                            .tracking(1.6)
+                            .foregroundStyle(mutedText)
+                            .padding(.bottom, 2)
+                        ForEach(section.items) { reminder in
+                            reminderCard(reminder)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var daySections: [DaySection] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: reminders) { cal.startOfDay(for: $0.date) }
+        return grouped.keys.sorted().map { day in
+            let items = grouped[day] ?? []
+            return DaySection(
+                id: day,
+                label: Self.dayHeader(for: day, calendar: cal),
+                items: items.sorted { $0.date < $1.date }
+            )
+        }
+    }
+
+    private static func dayHeader(for day: Date, calendar: Calendar) -> String {
+        let now = Date()
+        let f = DateFormatter()
+        if calendar.isDateInToday(day) {
+            f.dateFormat = "'TODAY · 'EEE MMM d"
+        } else if calendar.isDateInTomorrow(day) {
+            f.dateFormat = "'TOMORROW · 'EEE MMM d"
+        } else if calendar.isDate(day, equalTo: now, toGranularity: .weekOfYear) {
+            f.dateFormat = "EEEE' · 'MMM d"
+        } else {
+            f.dateFormat = "EEE' · 'MMM d"
+        }
+        return f.string(from: day).uppercased()
     }
 
     private var emptyState: some View {
@@ -165,25 +220,17 @@ struct RemindersSheet: View {
     }
 
     private func subtitleLabel(for item: LoadedReminder) -> String {
-        let prefix = formattedDate(for: item.date)
+        let prefix = formattedTime(item.date)
         if let rec = item.recurrence {
             return "\(prefix) · \(rec)"
         }
         return "\(prefix) · \(item.kindLabel)"
     }
 
-    private func formattedDate(for date: Date) -> String {
-        let cal = Calendar.current
+    private func formattedTime(_ date: Date) -> String {
+        let comps = Calendar.current.dateComponents([.minute], from: date)
         let f = DateFormatter()
-        if cal.isDateInToday(date) {
-            f.dateFormat = "'today at' h:mm a"
-        } else if cal.isDateInTomorrow(date) {
-            f.dateFormat = "'tomorrow at' h:mm a"
-        } else if cal.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
-            f.dateFormat = "EEEE 'at' h:mm a"
-        } else {
-            f.dateFormat = "MMM d 'at' h:mm a"
-        }
+        f.dateFormat = (comps.minute == 0) ? "h a" : "h:mm a"
         return f.string(from: date).lowercased()
     }
 
@@ -216,6 +263,9 @@ struct RemindersSheet: View {
             let title: String = {
                 if isBill, let billName = req.content.userInfo["billName"] as? String, !billName.isEmpty {
                     return billName
+                }
+                if let subject = req.content.userInfo["subject"] as? String, !subject.isEmpty {
+                    return subject
                 }
                 return req.content.title
             }()
