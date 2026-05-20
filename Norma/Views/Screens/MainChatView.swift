@@ -15,7 +15,6 @@ struct MainChatView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var conversationManager: ConversationManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
@@ -283,7 +282,6 @@ struct MainChatView: View {
             )
             .environmentObject(sessionViewModel)
             .environmentObject(billViewModel)
-            .environmentObject(expenseViewModel)
             .environmentObject(profileViewModel)
         }
     }
@@ -918,6 +916,5 @@ struct LastMessagePositionKey: PreferenceKey {
         .environmentObject(sessionViewModel)
         .environmentObject(conversationManager)
         .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-        .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         .preferredColorScheme(.dark)
 }

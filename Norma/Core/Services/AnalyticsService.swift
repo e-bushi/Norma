@@ -50,11 +50,6 @@ enum AnalyticsScreen: String {
     case createBill = "Create Bill"
     case editBill = "Edit Bill"
 
-    // Expenses
-    case myExpenses = "My Expenses"
-    case expenseDetail = "Expense Detail"
-    case createExpense = "Create Expense"
-
     // Income
     case incomeDetail = "Income Detail"
 
@@ -88,13 +83,8 @@ enum AnalyticsEvent {
     case billCreated(amount: Double, frequency: String, hasReminder: Bool, source: CreationSource)
     case billUpdated(billId: String, field: String)
     case billDeleted(billId: String)
-    case billMarkedPaid(amount: Double, paymentMethod: String, daysBeforeDue: Int)
+    case billMarkedPaid(amount: Double, daysBeforeDue: Int)
     case billMarkedUnpaid(billId: String)
-
-    // Expense Events
-    case expenseCreated(amount: Double, paymentMethod: String, hasCategory: Bool, source: CreationSource)
-    case expenseUpdated(expenseId: String, field: String)
-    case expenseDeleted(expenseId: String)
 
     // Income Events
     case incomeCreated(amount: Double, frequency: String, source: CreationSource)
@@ -144,11 +134,6 @@ enum AnalyticsEvent {
         case .billDeleted: return "bill_deleted"
         case .billMarkedPaid: return "bill_marked_paid"
         case .billMarkedUnpaid: return "bill_marked_unpaid"
-
-        // Expenses
-        case .expenseCreated: return "expense_created"
-        case .expenseUpdated: return "expense_updated"
-        case .expenseDeleted: return "expense_deleted"
 
         // Income
         case .incomeCreated: return "income_created"
@@ -212,18 +197,10 @@ enum AnalyticsEvent {
             return ["bill_id": billId, "field": field]
         case .billDeleted(let billId):
             return ["bill_id": billId]
-        case .billMarkedPaid(let amount, let paymentMethod, let daysBeforeDue):
-            return ["amount": amount, "payment_method": paymentMethod, "days_before_due": daysBeforeDue]
+        case .billMarkedPaid(let amount, let daysBeforeDue):
+            return ["amount": amount, "days_before_due": daysBeforeDue]
         case .billMarkedUnpaid(let billId):
             return ["bill_id": billId]
-
-        // Expenses
-        case .expenseCreated(let amount, let paymentMethod, let hasCategory, let source):
-            return ["amount": amount, "payment_method": paymentMethod, "has_category": hasCategory, "source": source.rawValue]
-        case .expenseUpdated(let expenseId, let field):
-            return ["expense_id": expenseId, "field": field]
-        case .expenseDeleted(let expenseId):
-            return ["expense_id": expenseId]
 
         // Income
         case .incomeCreated(let amount, let frequency, let source):

@@ -316,31 +316,4 @@ extension Bill {
         return effectiveDueDate < now ? .overdue : .scheduled
     }
 
-    /// Legacy compatibility shim: the old expense-driven calculator. Kept for
-    /// callsites still wired into the legacy Expense ledger (UpcomingBillsSection).
-    /// New code should prefer the no-arg `calculateStatus(now:)` above.
-    func calculateStatus(from expenses: [Expense]) -> BillStatus {
-        if let paidAt, isInCurrentCycle(expenseDate: paidAt) {
-            return .paid
-        }
-        if isFullyPaid(from: expenses) { return .paid }
-        return effectiveDueDate < Date() ? .overdue : .scheduled
-    }
-
-    /// Total amount paid for this bill in the current billing cycle.
-    func getAmountPaidThisPeriod(from expenses: [Expense]) -> Double {
-        let dateFormatter = ISO8601DateFormatter()
-        return expenses
-            .filter { expense in
-                guard expense.billId == self.id,
-                      let expenseDate = dateFormatter.date(from: expense.expenseDate) else { return false }
-                return self.isInCurrentCycle(expenseDate: expenseDate)
-            }
-            .reduce(0) { $0 + $1.amount }
-    }
-
-    /// Has the bill's current cycle been fully paid?
-    func isFullyPaid(from expenses: [Expense]) -> Bool {
-        getAmountPaidThisPeriod(from: expenses) >= amount
-    }
 }

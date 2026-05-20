@@ -121,7 +121,6 @@ extension DataManager {
     /// Migration result counts
     struct MigrationCounts {
         let bills: Int
-        let expenses: Int
         let income: Int
         let budgets: Int
         let chatConversations: Int
@@ -147,7 +146,6 @@ extension DataManager {
 
         print("✅ Migration complete:")
         print("   - Bills: \(migrated.bills)")
-        print("   - Expenses: \(migrated.expenses)")
         print("   - Income: \(migrated.income)")
         print("   - Budgets: \(migrated.budgets)")
         print("   - Chat conversations: \(migrated.chatConversations)")
@@ -155,13 +153,11 @@ extension DataManager {
 
         // Refresh local data to get encrypted versions
         try await fetchBillsWithEncryption(userId: userId)
-        try await fetchExpensesWithEncryption(userId: userId)
 
         print("✅ Successfully migrated all data to encrypted format")
 
         return MigrationCounts(
             bills: migrated.bills,
-            expenses: migrated.expenses,
             income: migrated.income,
             budgets: migrated.budgets,
             chatConversations: migrated.chatConversations,

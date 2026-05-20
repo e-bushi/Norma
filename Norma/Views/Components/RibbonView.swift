@@ -91,7 +91,6 @@ struct RibbonView: View {
 
     private var kindLabel: String {
         switch kind {
-        case .expense: return "EXPENSES"
         case .bill: return "BILLS"
         case .income: return "INCOME"
         case .transfer: return "TRANSFERS"

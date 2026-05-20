@@ -137,6 +137,5 @@ struct SendButtonStyle: ButtonStyle {
     )
     .environmentObject(ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
-    .environmentObject(ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
     .background(Color("NormaBackground"))
 }

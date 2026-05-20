@@ -26,16 +26,18 @@ final class NoteRepository {
 
     // MARK: - Reads (one-shot)
 
-    /// The note for the current local day. Convenience wrapper around `note(forDate:)`.
-    func today(calendar: Calendar = .current) -> Note {
+    /// The note for the current local day, if one exists. Convenience wrapper
+    /// around `note(forDate:)`. Returns nil when the user has not yet created
+    /// a note today — notes are only created through explicit user action.
+    func today(calendar: Calendar = .current) -> Note? {
         note(forDate: Date(), calendar: calendar)
     }
 
-    /// The earliest note created on the day of `date`. If none exists, a fresh
-    /// note is inserted with `createdAt` pinned to start-of-day for that date.
-    /// "Earliest" means the daily note auto-created on first launch — confirmed
-    /// transactions land there, not in whichever thematic note happens to be newest.
-    func note(forDate date: Date, calendar: Calendar = .current) -> Note {
+    /// The earliest note created on the day of `date`, or nil if none exists.
+    /// "Earliest" means the first note the user wrote that day — confirmed
+    /// transactions and bill-payment chips land there, not in whichever
+    /// thematic note happens to be newest.
+    func note(forDate date: Date, calendar: Calendar = .current) -> Note? {
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
 
@@ -44,17 +46,7 @@ final class NoteRepository {
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
 
-        if let existing = try? context.fetch(descriptor).first {
-            return existing
-        }
-
-        let fresh = Note()
-        fresh.createdAt = startOfDay
-        fresh.updatedAt = startOfDay
-        context.insert(fresh)
-        save()
-        syncQueue.enqueueUpsert(noteId: fresh.id)
-        return fresh
+        return try? context.fetch(descriptor).first
     }
 
     // MARK: - Writes

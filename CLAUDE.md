@@ -12,21 +12,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a SwiftUI-based iOS app for managing bills and expenses, using a standard MVVM-like architecture:
+This is a SwiftUI-based iOS app for managing bills via a notes-first canvas, using a standard MVVM-like architecture. Expense tracking has been removed — the app no longer logs day-to-day spending in any form.
 
 ### Directory Structure
-- **Core/Models**: Data models like `Bill` with enums for status and frequency
-- **Core/Services**: Business logic and data services (to be implemented)
-- **Core/View Models**: View models for state management (to be implemented)
-- **Views/Components**: Reusable UI components (`BillCardView`, `ExpenseCardView`, etc.)
-- **Views/Screens**: Top-level screens (`BillHomeView`, `IncomeAndExpenseView`, etc.)
+- **Core/Models**: Data models (`Bill`, `Note`, `NoteToken`, etc.)
+- **Core/Services**: Business logic and data services
+- **Core/View Models**: View models for state management
+- **Views/Components**: Reusable UI components (`BillCardView`, `ChipView`, etc.)
+- **Views/Screens**: Top-level screens (`NotesListScreen`, `NoteCanvasView`, `BillsView`, etc.)
 - **Utilities**: Extensions and helpers for common functionality
 
 ### Navigation Flow
-The app uses a `TabView` as the root with three main tabs:
-1. **My Bills**: Shows bill overview and management
-2. **Expenses**: Displays income and expense tracking
-3. **Settings**: App configuration (placeholder)
+The notes list is the primary surface. Bills, forecast (income vs bills), and settings open as sheets from there.
 
 ### Key Design Patterns
 - Component composition for reusable UI elements

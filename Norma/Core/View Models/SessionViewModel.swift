@@ -266,9 +266,6 @@ class SessionViewModel: ObservableObject {
             return
         }
 
-        // Ensure default categories are created for authenticated users
-        await ensureDefaultCategoriesExist()
-
         // Check if user has completed initial financial setup
         // Only require monthlyIncome to be set - painPoint is optional for legacy users
         // Check both settings.monthlyIncome AND top-level monthlyIncome as fallback
@@ -283,31 +280,6 @@ class SessionViewModel: ObservableObject {
         } else {
             hasCompletedInitialSetup = false
             hasCompletedOnboarding = false
-        }
-    }
-    
-    func ensureDefaultCategoriesExist() async {
-        do {
-            // Fetch all categories (shared across all users)
-            try await dataManager.fetchCategories()
-
-            // Clean up any duplicate categories
-            try await dataManager.removeDuplicateCategories()
-
-            // Check if we have any system categories (default categories)
-            let systemCategories = dataManager.getSystemCategories()
-
-            if systemCategories.isEmpty {
-                print("📝 Creating default categories (shared globally)")
-                try await dataManager.createDefaultCategories()
-                print("✅ Default categories created successfully")
-            } else {
-                print("✅ Default categories already exist (\(systemCategories.count) found)")
-            }
-
-        } catch {
-            print("❌ Failed to ensure default categories exist: \(error.localizedDescription)")
-            // Don't throw the error - we want the app to continue working even if category setup fails
         }
     }
     
@@ -335,10 +307,6 @@ class SessionViewModel: ObservableObject {
 
     func addBill(_ bill: Bill) async throws {
         try await dataManager.addBillWithEncryption(bill)
-    }
-
-    func addExpense(_ expense: Expense) async throws {
-        try await dataManager.addExpenseWithEncryption(expense)
     }
 
     var supabaseService: SupabaseService {

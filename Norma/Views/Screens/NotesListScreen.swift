@@ -17,7 +17,6 @@ struct NotesListScreen: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var appCoordinator: AppCoordinator
     @ObservedObject private var plaidService = PlaidService.shared
@@ -35,7 +34,6 @@ struct NotesListScreen: View {
     @State private var showCalendar = false
     @State private var showConverter = false
     @State private var showSettings = false
-    @State private var showPending = false
 
     // Entrance choreography
     @State private var hasAnimated = false
@@ -136,9 +134,7 @@ struct NotesListScreen: View {
         .preferredColorScheme(.dark)
         .task {
             if repo == nil {
-                let r = NoteRepository(context: modelContext)
-                self.repo = r
-                _ = r.today()
+                self.repo = NoteRepository(context: modelContext)
             }
             runEntranceAnimation()
         }
@@ -155,7 +151,6 @@ struct NotesListScreen: View {
             ForecastSheet()
                 .environmentObject(sessionViewModel)
                 .environmentObject(billViewModel)
-                .environmentObject(expenseViewModel)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
@@ -177,12 +172,6 @@ struct NotesListScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
-        .sheet(isPresented: $showPending) {
-            PendingTransactionsSheet()
-                .environmentObject(dataManager)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
     }
 
     // MARK: - Top nav
@@ -201,27 +190,6 @@ struct NotesListScreen: View {
 
     private var defaultNav: some View {
         HStack {
-            Button {
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                showPending = true
-            } label: {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(NormaPalette.ink.opacity(0.85))
-                        .frame(width: 32, height: 32)
-                    if dataManager.pendingTransactions.count > 0 {
-                        Circle()
-                            .fill(NormaPalette.lavender)
-                            .frame(width: 7, height: 7)
-                            .overlay(Circle().stroke(NormaPalette.canvas, lineWidth: 1.5))
-                            .offset(x: -4, y: 4)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
             Spacer()
 
             Button {

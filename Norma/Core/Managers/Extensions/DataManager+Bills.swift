@@ -163,46 +163,7 @@ extension DataManager {
             .min { $0.effectiveDueDate < $1.effectiveDueDate }
     }
     
-    func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async throws {
-        // First, create an expense record for this payment
-        if let billId = bill.id {
-            // Convert bill frequency to expense frequency
-            let expenseFrequency: ExpenseFrequency? = {
-                switch bill.frequency {
-                case .oneTime: return nil
-                case .monthly: return .monthly
-                case .quarterly: return .quarterly
-                case .yearly: return .annually
-                }
-            }()
-            
-            // Format today's date as ISO8601 string for expense_date in local timezone
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.timeZone = TimeZone.current
-            let todayString = dateFormatter.string(from: Date())
-            
-            let expense = Expense(
-                id: nil,
-                userId: bill.userId,
-                name: bill.name,
-                amount: bill.amount,
-                expenseDate: todayString,
-                billId: billId,
-                paymentMethod: paymentMethod,
-                isRecurring: bill.frequency != .oneTime,
-                recurringFrequency: expenseFrequency,
-                merchant: bill.merchant ?? bill.name,
-                location: nil,
-                tags: ["Bill Payment"],
-                createdAt: nil,
-                updatedAt: nil,
-                notes: notes ?? "Bill payment for \(bill.name)",
-                attachmentUrls: []
-            )
-            
-            try await addExpenseWithEncryption(expense)
-        }
-        
+    func markBillAsPaid(_ bill: Bill, notes: String? = nil) async throws {
         // Mark this cycle paid. Recurrence rolls forward automatically via
         // Bill.effectiveDueDate the next time the bill is read in a new cycle.
         var updatedBill = bill

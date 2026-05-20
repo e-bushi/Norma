@@ -15,7 +15,6 @@ struct BillsView: View {
 
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
 
     @Environment(\.modelContext) private var modelContext
 

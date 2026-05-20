@@ -15,15 +15,14 @@ extension DataManager {
     /// Results from semantic search - contains decrypted records relevant to the query
     struct SemanticSearchResults {
         let bills: [Bill]
-        let expenses: [Expense]
         let income: [Income]
 
         var isEmpty: Bool {
-            bills.isEmpty && expenses.isEmpty && income.isEmpty
+            bills.isEmpty && income.isEmpty
         }
 
         var totalCount: Int {
-            bills.count + expenses.count + income.count
+            bills.count + income.count
         }
     }
 
@@ -54,22 +53,19 @@ extension DataManager {
             endDate: endDate
         )
 
-        print("🔍 [SemanticSearch] Found IDs - Bills: \(searchResults.bills.count), Expenses: \(searchResults.expenses.count), Income: \(searchResults.income.count)")
+        print("🔍 [SemanticSearch] Found IDs - Bills: \(searchResults.bills.count), Income: \(searchResults.income.count)")
 
         // Fetch and decrypt matching records
         async let matchingBills = fetchBillsByIds(searchResults.bills, masterKey: masterKey)
-        async let matchingExpenses = fetchExpensesByIds(searchResults.expenses, masterKey: masterKey)
         async let matchingIncome = fetchIncomeByIds(searchResults.income, masterKey: masterKey)
 
         let bills = try await matchingBills
-        let expenses = try await matchingExpenses
         let income = try await matchingIncome
 
-        print("🔍 [SemanticSearch] Decrypted - Bills: \(bills.count), Expenses: \(expenses.count), Income: \(income.count)")
+        print("🔍 [SemanticSearch] Decrypted - Bills: \(bills.count), Income: \(income.count)")
 
         return SemanticSearchResults(
             bills: bills,
-            expenses: expenses,
             income: income
         )
     }
@@ -81,13 +77,6 @@ extension DataManager {
 
         let encryptedBills = try await supabaseService.fetchBillsByIds(ids)
         return encryptedBills.compactMap { $0.toBill(using: masterKey) }
-    }
-
-    private func fetchExpensesByIds(_ ids: [String], masterKey: SymmetricKey) async throws -> [Expense] {
-        guard !ids.isEmpty else { return [] }
-
-        let encryptedExpenses = try await supabaseService.fetchExpensesByIds(ids)
-        return encryptedExpenses.compactMap { $0.toExpense(using: masterKey) }
     }
 
     private func fetchIncomeByIds(_ ids: [String], masterKey: SymmetricKey) async throws -> [Income] {

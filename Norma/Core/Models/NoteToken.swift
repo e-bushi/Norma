@@ -41,7 +41,6 @@ final class NoteToken {
     var note: Note?
 
     enum Kind: String, Codable, CaseIterable {
-        case expense
         case bill
         case income
         case transfer
@@ -94,7 +93,10 @@ final class NoteToken {
     }
 
     var kind: Kind {
-        get { Kind(rawValue: kindRaw) ?? .expense }
+        // Fallback is `.bill` so any legacy tokens persisted with the
+        // removed `.expense` kindRaw remain readable as the most generic
+        // financial chip rather than crashing on a missing case.
+        get { Kind(rawValue: kindRaw) ?? .bill }
         set { kindRaw = newValue.rawValue }
     }
 

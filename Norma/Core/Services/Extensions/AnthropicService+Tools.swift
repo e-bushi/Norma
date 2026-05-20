@@ -99,41 +99,6 @@ extension AnthropicService {
             return result as! T
         }
         
-        // Handle VoiceExpenseData
-        if type == VoiceExpenseData.self {
-            guard let name = input["name"] as? String else {
-                throw AnthropicError.dataParsingError
-            }
-            guard let amount = input["amount"] as? Double else {
-                throw AnthropicError.dataParsingError
-            }
-            guard let expenseDate = input["expenseDate"] as? String else {
-                throw AnthropicError.dataParsingError
-            }
-            guard let paymentMethodString = input["paymentMethod"] as? String else {
-                throw AnthropicError.dataParsingError
-            }
-            
-            let paymentMethod = PaymentMethod(rawValue: paymentMethodString) ?? .other
-            let merchant = input["merchant"] as? String ?? ""
-            let location = input["location"] as? String ?? ""
-            let tags = input["tags"] as? [String] ?? []
-            let notes = input["notes"] as? String ?? ""
-            
-            let result = VoiceExpenseData(
-                name: name,
-                amount: amount,
-                expenseDate: expenseDate,
-                paymentMethod: paymentMethod,
-                merchant: merchant,
-                location: location,
-                tags: tags,
-                notes: notes
-            )
-            
-            return result as! T
-        }
-        
         // Handle VoiceBillData
         if type == VoiceBillData.self {
             guard let name = input["name"] as? String else {
@@ -175,17 +140,6 @@ extension AnthropicService {
 }
 
 // MARK: - Voice Agent Data Models
-
-struct VoiceExpenseData: Codable {
-    let name: String
-    let amount: Double
-    let expenseDate: String
-    let paymentMethod: PaymentMethod
-    let merchant: String
-    let location: String
-    let tags: [String]
-    let notes: String
-}
 
 struct VoiceBillData: Codable {
     let name: String

@@ -20,11 +20,8 @@ class DataManager: ObservableObject {
     @Published var profiles: [Profile] = []
     
     // Financial Data
-    @Published var expenses: [Expense] = []
     @Published var income: [Income] = []
-    @Published var categories: [Category] = []
     @Published var bills: [Bill] = []
-    @Published var pendingTransactions: [PendingTransaction] = []
 
     // Data State
     @Published var isLoading = false
@@ -142,13 +139,10 @@ class DataManager: ObservableObject {
         
         // Fetch all data concurrently (with encryption support)
         try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { try await self.fetchExpensesWithEncryption(userId: userId) }
             group.addTask { try await self.fetchBillsWithEncryption(userId: userId) }
-            group.addTask { try await self.fetchPendingTransactions(userId: userId) }
 
             // These don't need encryption yet
             group.addTask { try await self.fetchIncomes(userId: userId) }
-            group.addTask { try await self.fetchCategories() }
 
             // Wait for all tasks to complete
             try await group.waitForAll()
@@ -174,11 +168,8 @@ class DataManager: ObservableObject {
     
     func clearAllData() {
         currentProfile = nil
-        expenses.removeAll()
         income.removeAll()
-        categories.removeAll()
         bills.removeAll()
-        pendingTransactions.removeAll()
         hasUnsyncedChanges = false
         lastSyncDate = nil
     }
@@ -188,21 +179,9 @@ class DataManager: ObservableObject {
     var totalMonthlyIncome: Double {
         getTotalMonthlyIncome()
     }
-    
-    var totalMonthlyExpenses: Double {
-        getTotalExpenses(for: nil)
-    }
-    
+
     var totalMonthlyBills: Double {
         getTotalMonthlyBills()
-    }
-    
-    var netMonthlyIncome: Double {
-        totalMonthlyIncome - totalMonthlyExpenses - totalMonthlyBills
-    }
-    
-    var hasFinancialData: Bool {
-        !expenses.isEmpty || !income.isEmpty || !bills.isEmpty
     }
 
     // MARK: - Private Methods

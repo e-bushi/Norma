@@ -94,8 +94,7 @@ final class BillTokenBridge {
 
     /// NoteToken recurrence (daily/weekly/biweekly/monthly/quarterly/yearly)
     /// collapses onto BillFrequency's coarser enum (monthly/quarterly/yearly).
-    /// Sub-monthly cadences are stored as monthly bills — same precedent as
-    /// RecurringBillsReviewView's Plaid stream import.
+    /// Sub-monthly cadences are stored as monthly bills.
     private static func mapFrequency(_ recurrence: NoteToken.Recurrence?) -> BillFrequency? {
         guard let recurrence else { return nil }
         switch recurrence {

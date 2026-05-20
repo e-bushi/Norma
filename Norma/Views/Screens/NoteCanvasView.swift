@@ -550,28 +550,8 @@ struct NoteCanvasView: View {
     }
 }
 
-#Preview("D4 — base") {
-    NoteCanvasView(note: NoteCanvasSample.mixed)
-}
-
-#Preview("D4a — single") {
-    NoteCanvasView(note: NoteCanvasSample.singleExpense)
-}
-
 #Preview("D4b — bill") {
     NoteCanvasView(note: NoteCanvasSample.recurringBill)
-}
-
-#Preview("D4c — grouped expenses") {
-    NoteCanvasView(note: NoteCanvasSample.groupedExpenses)
-}
-
-#Preview("D4d — prose + numbers") {
-    NoteCanvasView(note: NoteCanvasSample.proseAndNumbers)
-}
-
-#Preview("D4e — multi-group ribbons") {
-    NoteCanvasView(note: NoteCanvasSample.multipleGroups)
 }
 
 #Preview("D4f — income & projection") {
@@ -579,39 +559,6 @@ struct NoteCanvasView: View {
 }
 
 enum NoteCanvasSample {
-    static let mixed: Note = {
-        let raw = "lunch with marcus at peppermint, 450฿ "
-        let end = raw.utf16.count
-        let token = NoteToken(
-            kind: .expense,
-            amount: 450,
-            currency: "THB",
-            usdEquivalent: 13.50,
-            category: .takeout,
-            subject: "lunch at peppermint",
-            counterparty: "marcus",
-            sourceStart: end,
-            sourceEnd: end
-        )
-        return Note(title: "today", rawText: raw, tokens: [token], tags: ["food", "marcus"])
-    }()
-
-    static let singleExpense: Note = {
-        let raw = "scooter for the day, 250฿ "
-        let end = raw.utf16.count
-        let token = NoteToken(
-            kind: .expense,
-            amount: 250,
-            currency: "THB",
-            usdEquivalent: 7.40,
-            category: .transport,
-            subject: "scooter",
-            sourceStart: end,
-            sourceEnd: end
-        )
-        return Note(title: "today", rawText: raw, tokens: [token])
-    }()
-
     static let recurringBill: Note = {
         let raw = "split rent with marcus, 18,000฿ monthly "
         let end = raw.utf16.count
@@ -628,31 +575,6 @@ enum NoteCanvasSample {
             sourceEnd: end
         )
         return Note(title: "today", rawText: raw, tokens: [token])
-    }()
-
-    static let groupedExpenses: Note = {
-        let raw = "out and about all day. "
-        let end = raw.utf16.count
-        func t(_ amount: Double, _ usd: Double, _ category: NoteToken.Category, _ subject: String) -> NoteToken {
-            NoteToken(
-                kind: .expense,
-                amount: amount,
-                currency: "THB",
-                usdEquivalent: usd,
-                category: category,
-                subject: subject,
-                sourceStart: end,
-                sourceEnd: end
-            )
-        }
-        let tokens: [NoteToken] = [
-            t(320, 9.50, .takeout, "breakfast at the cafe"),
-            t(250, 7.40, .transport, "scooter for the day"),
-            t(1200, 35.50, .leisure, "beach club entry"),
-            t(480, 14.20, .takeout, "dinner with the crew"),
-            t(180, 5.30, .takeout, "one drink at home")
-        ]
-        return Note(title: "today", rawText: raw, tokens: tokens)
     }()
 
     static let incomeBiweekly: Note = {
@@ -672,62 +594,5 @@ enum NoteCanvasSample {
             sourceEnd: end
         )
         return Note(title: "today", rawText: raw, tokens: [token])
-    }()
-
-    static let multipleGroups: Note = {
-        let raw = "rolling month-end. closing out a few things. "
-        let end = raw.utf16.count
-        func e(_ amount: Double, _ usd: Double, _ category: NoteToken.Category, _ subject: String) -> NoteToken {
-            NoteToken(
-                kind: .expense, amount: amount, currency: "THB", usdEquivalent: usd,
-                category: category, subject: subject,
-                sourceStart: end, sourceEnd: end
-            )
-        }
-        func b(_ amount: Double, _ usd: Double, _ subject: String) -> NoteToken {
-            NoteToken(
-                kind: .bill, amount: amount, currency: "THB", usdEquivalent: usd,
-                category: .utilities, subject: subject,
-                recurrence: .monthly,
-                sourceStart: end, sourceEnd: end
-            )
-        }
-        let tokens: [NoteToken] = [
-            e(320, 9.50, .takeout, "breakfast at the cafe"),
-            e(250, 7.40, .transport, "scooter for the day"),
-            e(1200, 35.50, .leisure, "beach club entry"),
-            e(480, 14.20, .takeout, "dinner with the crew"),
-            e(180, 5.30, .takeout, "one drink at home"),
-            b(18000, 540, "rent"),
-            b(1800, 53, "internet"),
-            b(42500, 1247, "coworking annual")
-        ]
-        return Note(title: "today", rawText: raw, tokens: tokens)
-    }()
-
-    static let proseAndNumbers: Note = {
-        let raw = "great day at the beach club. 1,200฿ for entry, plus 480฿ for dinner with the crew. "
-        let end = raw.utf16.count
-        let entry = NoteToken(
-            kind: .expense,
-            amount: 1200,
-            currency: "THB",
-            usdEquivalent: 35.50,
-            category: .leisure,
-            subject: "beach club entry",
-            sourceStart: end,
-            sourceEnd: end
-        )
-        let dinner = NoteToken(
-            kind: .expense,
-            amount: 480,
-            currency: "THB",
-            usdEquivalent: 14.20,
-            category: .takeout,
-            subject: "dinner",
-            sourceStart: end,
-            sourceEnd: end
-        )
-        return Note(title: "today", rawText: raw, tokens: [entry, dinner])
     }()
 }

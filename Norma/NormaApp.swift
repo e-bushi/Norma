@@ -24,9 +24,6 @@ struct NormaApp: App {
                     Note.self,
                     NoteToken.self,
                     CachedBill.self,
-                    CachedExpense.self,
-                    CachedCategory.self,
-                    CachedPendingTransaction.self,
                     FreedomFundEntry.self
             )
             // Start the note sync queue's network monitor at launch and bind it

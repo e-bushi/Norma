@@ -14,8 +14,9 @@ import SwiftData
 @MainActor
 enum BillPaymentJournal {
     /// Append a `.billPayment` token to today's note for each bill in `bills`.
-    /// Finds-or-creates the daily note via NoteRepository so the chip lands
-    /// alongside whatever else the user has written today.
+    /// No-ops when the user hasn't created a note today — notes are only
+    /// created through explicit user action, so the journal write is
+    /// best-effort.
     static func appendBillPayments(
         _ bills: [Bill],
         currency: String,
@@ -24,7 +25,7 @@ enum BillPaymentJournal {
         guard !bills.isEmpty else { return }
 
         let repository = NoteRepository(context: context)
-        let todayNote = repository.today()
+        guard let todayNote = repository.today() else { return }
         let now = Date()
 
         // Append tokens at the end of the note's text. sourceStart == sourceEnd

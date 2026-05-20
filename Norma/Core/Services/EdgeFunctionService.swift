@@ -60,7 +60,6 @@ class EdgeFunctionService {
 
         struct MigratedCounts: Decodable {
             let bills: Int
-            let expenses: Int
             let income: Int
             let budgets: Int
             let chatConversations: Int
@@ -68,7 +67,6 @@ class EdgeFunctionService {
 
             enum CodingKeys: String, CodingKey {
                 case bills
-                case expenses
                 case income
                 case budgets
                 case chatConversations = "chat_conversations"
@@ -85,7 +83,6 @@ class EdgeFunctionService {
 
         struct SearchResults: Decodable {
             let bills: [String]
-            let expenses: [String]
             let income: [String]
             let budgets: [String]
             let chatConversations: [String]
@@ -93,7 +90,6 @@ class EdgeFunctionService {
 
             enum CodingKeys: String, CodingKey {
                 case bills
-                case expenses
                 case income
                 case budgets
                 case chatConversations = "chat_conversations"
@@ -141,54 +137,6 @@ class EdgeFunctionService {
             encryptionKey: encryptionKey.base64Encoded,
             userId: bill.userId,
             recordId: billId
-        )
-
-        let response: EdgeFunctionResponse = try await invokeFunction(request)
-
-        guard response.success else {
-            throw EdgeFunctionError.operationFailed(response.error ?? "Unknown error")
-        }
-    }
-
-    // MARK: - Expense Operations
-
-    /// Create a new expense via Edge Function (encrypts server-side)
-    func createExpense(_ expense: Expense, encryptionKey: SymmetricKey) async throws -> String {
-        let keyData = expense.toEdgeFunctionData()
-
-        let request = EdgeFunctionRequest(
-            action: "create",
-            table: "expenses",
-            data: keyData,
-            encryptionKey: encryptionKey.base64Encoded,
-            userId: expense.userId,
-            recordId: nil
-        )
-
-        let response: EdgeFunctionResponse = try await invokeFunction(request)
-
-        guard response.success, let id = response.id else {
-            throw EdgeFunctionError.operationFailed(response.error ?? "Unknown error")
-        }
-
-        return id
-    }
-
-    /// Update an existing expense via Edge Function (encrypts server-side)
-    func updateExpense(_ expense: Expense, encryptionKey: SymmetricKey) async throws {
-        guard let expenseId = expense.id else {
-            throw EdgeFunctionError.missingId
-        }
-
-        let keyData = expense.toEdgeFunctionData()
-
-        let request = EdgeFunctionRequest(
-            action: "update",
-            table: "expenses",
-            data: keyData,
-            encryptionKey: encryptionKey.base64Encoded,
-            userId: expense.userId,
-            recordId: expenseId
         )
 
         let response: EdgeFunctionResponse = try await invokeFunction(request)
@@ -501,49 +449,6 @@ extension Bill {
         }
         if let isActive = isActive {
             data["is_active"] = AnyCodable(isActive)
-        }
-
-        return data
-    }
-}
-
-extension Expense {
-    /// Convert Expense to dictionary for Edge Function
-    func toEdgeFunctionData() -> [String: AnyCodable] {
-        var data: [String: AnyCodable] = [
-            "name": AnyCodable(name),
-            "amount": AnyCodable(amount),
-            "expense_date": AnyCodable(expenseDate),
-            "payment_method": AnyCodable(paymentMethod.rawValue),
-            "is_recurring": AnyCodable(isRecurring),
-            "tags": AnyCodable(tags),
-            "attachment_urls": AnyCodable(attachmentUrls),
-            "source": AnyCodable(source),
-            "pending": AnyCodable(pending)
-        ]
-
-        if let budgetId = budgetId {
-            data["budget_id"] = AnyCodable(budgetId)
-        }
-        if let billId = billId {
-            data["bill_id"] = AnyCodable(billId)
-        }
-        if let recurringFrequency = recurringFrequency {
-            data["recurring_frequency"] = AnyCodable(recurringFrequency.rawValue)
-        }
-        if let merchant = merchant {
-            data["merchant"] = AnyCodable(merchant)
-        }
-        if let location = location {
-            data["location"] = AnyCodable(location)
-        }
-        if let notes = notes {
-            data["notes"] = AnyCodable(notes)
-        }
-        if let bankDetail = bankDetail,
-           let jsonData = try? JSONEncoder().encode(bankDetail),
-           let jsonDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-            data["bank_detail"] = AnyCodable(jsonDict)
         }
 
         return data

@@ -101,7 +101,6 @@ struct ViewModelContainer<Content: View>: View {
     let content: Content
 
     @StateObject private var billViewModel: BillViewModel
-    @StateObject private var expenseViewModel: ExpenseViewModel
     @StateObject private var incomeViewModel: IncomeViewModel
     @StateObject private var profileViewModel: ProfileViewModel
     @StateObject private var coinColorViewModel: CoinColorViewModel
@@ -113,7 +112,6 @@ struct ViewModelContainer<Content: View>: View {
 
         let billVM = BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel)
         self._billViewModel = StateObject(wrappedValue: billVM)
-        self._expenseViewModel = StateObject(wrappedValue: ExpenseViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._incomeViewModel = StateObject(wrappedValue: IncomeViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._profileViewModel = StateObject(wrappedValue: ProfileViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
         self._coinColorViewModel = StateObject(wrappedValue: CoinColorViewModel(sessionViewModel: sessionViewModel, billViewModel: billVM))
@@ -124,7 +122,6 @@ struct ViewModelContainer<Content: View>: View {
             .environmentObject(dataManager)
             .environmentObject(sessionViewModel)
             .environmentObject(billViewModel)
-            .environmentObject(expenseViewModel)
             .environmentObject(incomeViewModel)
             .environmentObject(profileViewModel)
             .environmentObject(coinColorViewModel)

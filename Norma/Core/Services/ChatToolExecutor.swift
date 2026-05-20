@@ -161,26 +161,11 @@ class ChatToolExecutor {
                 }
             }
 
-            if recordType == "all" || recordType == "expenses" {
-                if searchResults.expenses.isEmpty {
-                    resultText += "No matching expenses found.\n"
-                } else {
-                    resultText += "MATCHING EXPENSES (\(searchResults.expenses.count)):\n"
-                    for expense in searchResults.expenses {
-                        resultText += "- \(expense.name): $\(String(format: "%.2f", expense.amount)), date: \(expense.expenseDate)"
-                        if let merchant = expense.merchant {
-                            resultText += ", merchant: \(merchant)"
-                        }
-                        resultText += "\n"
-                    }
-                }
-            }
-
             if resultText.isEmpty {
                 return "No matching records found for '\(query)'"
             }
 
-            print("✅ [SearchTool] Found \(searchResults.bills.count) bills, \(searchResults.expenses.count) expenses")
+            print("✅ [SearchTool] Found \(searchResults.bills.count) bills")
             return resultText
 
         } catch {

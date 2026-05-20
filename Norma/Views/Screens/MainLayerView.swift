@@ -12,7 +12,6 @@ struct MainLayerView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var dataManager: DataManager
     @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
 
     @State private var isMenuOpen = false
@@ -168,7 +167,6 @@ struct MainLayerView: View {
                 .environmentObject(sessionViewModel)
                 .environmentObject(dataManager)
                 .environmentObject(billViewModel)
-                .environmentObject(expenseViewModel)
                 .environmentObject(profileViewModel)
 
         case .settings:

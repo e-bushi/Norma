@@ -197,7 +197,7 @@ struct ChatToolsProvider {
     static func getSearchFinancialRecordsTool() -> AnthropicTool {
         AnthropicTool(
             name: "search_financial_records",
-            description: "Search the user's financial records (bills, expenses) using semantic search with optional date filtering. Use this tool when you need to find specific records based on the user's question - especially for questions about past expenses, specific merchants, categories, or time periods. The search finds records by meaning, not just exact text matches. Returns matching records with full details including dates and amounts. IMPORTANT: When the user asks about a specific date or time period (e.g., 'January expenses', 'last week', 'on the 15th'), always include start_date and/or end_date parameters.",
+            description: "Search the user's bills using semantic search with optional date filtering. Use this tool when you need to find specific bills based on the user's question. The search finds records by meaning, not just exact text matches. Returns matching records with full details including dates and amounts. IMPORTANT: When the user asks about a specific date or time period, always include start_date and/or end_date parameters.",
             inputSchema: AnthropicToolSchema(
                 type: "object",
                 properties: [
@@ -207,7 +207,7 @@ struct ChatToolsProvider {
                     ),
                     "record_type": AnthropicToolProperty(
                         type: "string",
-                        description: "Type of records to search: 'bills', 'expenses', or 'all'. Defaults to 'all' if not specified."
+                        description: "Type of records to search: 'bills' or 'all'. Defaults to 'all' if not specified."
                     ),
                     "limit": AnthropicToolProperty(
                         type: "number",

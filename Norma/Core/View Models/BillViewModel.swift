@@ -299,12 +299,12 @@ class BillViewModel: ObservableObject {
         isLoading = false
     }
     
-    func markBillAsPaid(_ bill: Bill, paymentMethod: PaymentMethod = .debitCard, notes: String? = nil) async {
+    func markBillAsPaid(_ bill: Bill, notes: String? = nil) async {
         isLoading = true
         clearError()
 
         do {
-            try await dataManager.markBillAsPaid(bill, paymentMethod: paymentMethod, notes: notes)
+            try await dataManager.markBillAsPaid(bill, notes: notes)
             loadBills()
 
             // Calculate days before due
@@ -314,7 +314,6 @@ class BillViewModel: ObservableObject {
             // Track bill marked as paid
             AnalyticsService.shared.track(.billMarkedPaid(
                 amount: bill.amount,
-                paymentMethod: paymentMethod.rawValue,
                 daysBeforeDue: daysBeforeDue
             ))
 
@@ -343,12 +342,6 @@ class BillViewModel: ObservableObject {
             updatedBill.updatedAt = dateFormatter.string(from: Date())
 
             try await dataManager.updateBillWithEncryption(updatedBill)
-
-            // Delete the associated expense payment(s).
-            let expenses = dataManager.expenses.filter { $0.billId == bill.id }
-            for expense in expenses {
-                try await dataManager.deleteExpense(expense)
-            }
 
             loadBills()
 
@@ -414,27 +407,6 @@ class BillViewModel: ObservableObject {
     
     var overdueTotal: Double {
         overdueBills.reduce(0) { $0 + $1.amount }
-    }
-    
-    /// Calculate paid bills this month based on expense payments
-    func paidBillsThisMonth(expenses: [Expense]) -> Double {
-        return bills
-            .filter { bill in
-                // Use calculated status based on expense payments
-                bill.calculateStatus(from: expenses) == .paid
-            }
-            .filter { bill in
-                // Only include bills whose current cycle falls in this month
-                Calendar.current.isDate(bill.effectiveDueDate, equalTo: Date(), toGranularity: .month)
-            }
-            .reduce(0) { $0 + $1.amount }
-    }
-    
-    /// Get bills with their calculated status based on expenses
-    func getBillsWithCalculatedStatus(expenses: [Expense]) -> [(bill: Bill, status: BillStatus)] {
-        return bills.map { bill in
-            (bill: bill, status: bill.calculateStatus(from: expenses))
-        }
     }
     
     // MARK: - Helper Methods

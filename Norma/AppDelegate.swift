@@ -66,25 +66,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("Failed to register for remote notifications: \(error)")
     }
 
-    // MARK: - Handle Notification Tap
-
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse) async {
-        let userInfo = response.notification.request.content.userInfo
-
-        // Check if this is a pending transaction notification
-        if let type = userInfo["type"] as? String, type == "pending_transaction" {
-            // Post notification to show pending transactions popover
-            await MainActor.run {
-                NotificationCenter.default.post(
-                    name: Notification.Name("ShowPendingTransactions"),
-                    object: nil,
-                    userInfo: userInfo
-                )
-            }
-        }
-    }
-
     // MARK: - Handle Foreground Notification
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,

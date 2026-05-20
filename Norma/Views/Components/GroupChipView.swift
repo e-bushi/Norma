@@ -47,7 +47,6 @@ struct GroupChipView: View {
         let count = tokens.count
         let noun: String
         switch kind {
-        case .expense:  noun = count == 1 ? "EXPENSE"  : "EXPENSES"
         case .bill:     noun = count == 1 ? "BILL"     : "BILLS"
         case .income:   noun = "INCOME"
         case .transfer: noun = count == 1 ? "TRANSFER" : "TRANSFERS"

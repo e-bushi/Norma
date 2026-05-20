@@ -191,7 +191,7 @@ struct ChipView: View {
             return "INCOME"
         case .transfer:
             return "TRANSFER"
-        case .expense, .bill:
+        case .bill:
             return token.category?.displayName.uppercased()
         case .reminder:
             return "REMINDER"
