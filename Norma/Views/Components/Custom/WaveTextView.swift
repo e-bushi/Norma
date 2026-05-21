@@ -26,6 +26,10 @@ struct WaveTextView: View {
     var wordSpacing: CGFloat = 4
     /// Vertical spacing between wrapped lines.
     var lineSpacing: CGFloat = 6
+    /// Optional per-word callback fired in sync with each word's reveal.
+    /// Used by callers (e.g. onboarding interstitials) to layer haptics on
+    /// top of the visual wave.
+    var onWordAppear: ((Int) -> Void)? = nil
 
     /// Animation configuration
     private let wordDelay: Double = 0.06
@@ -87,6 +91,7 @@ struct WaveTextView: View {
                 withAnimation(.spring(response: animationDuration, dampingFraction: 0.75)) {
                     animatedWordCount = index + 1
                 }
+                onWordAppear?(index)
             }
         }
     }

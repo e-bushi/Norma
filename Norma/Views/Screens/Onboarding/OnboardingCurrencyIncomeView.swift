@@ -13,13 +13,11 @@ import UIKit
 struct OnboardingCurrencyIncomeView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
     let onContinue: () -> Void
-    let onBack: () -> Void
 
     @State private var currencyCode: String = "USD"
     @State private var incomeText: String = ""
     @FocusState private var incomeFocused: Bool
 
-    @State private var subtitleAppeared = false
     @State private var formAppeared = false
     @State private var ctaAppeared = false
 
@@ -50,19 +48,9 @@ struct OnboardingCurrencyIncomeView: View {
             NormaPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
-                backButton
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                Spacer().frame(height: 56)
 
                 titleView
-                    .padding(.bottom, 12)
-
-                Text("just helps norma show useful numbers. skip anything you'd rather not share.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(NormaPalette.inkSubtle)
-                    .lineSpacing(2)
-                    .opacity(subtitleAppeared ? 1 : 0)
-                    .offset(y: subtitleAppeared ? 0 : 8)
                     .padding(.bottom, 36)
 
                 currencyField
@@ -96,7 +84,6 @@ struct OnboardingCurrencyIncomeView: View {
             if onboardingViewModel.collectedData.monthlyIncome > 0 {
                 incomeText = formattedNumber(onboardingViewModel.collectedData.monthlyIncome)
             }
-            withAnimation(.easeOut(duration: 0.5).delay(0.40)) { subtitleAppeared = true }
             withAnimation(.easeOut(duration: 0.5).delay(0.55)) { formAppeared = true }
             withAnimation(.easeOut(duration: 0.5).delay(0.70)) { ctaAppeared = true }
         }
@@ -104,32 +91,17 @@ struct OnboardingCurrencyIncomeView: View {
 
     // MARK: - Subviews
 
-    private var backButton: some View {
-        Button(action: {
-            impactGenerator.impactOccurred()
-            onBack()
-        }) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(NormaPalette.ink)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(NormaPalette.ink.opacity(0.05)))
-                .overlay(Circle().strokeBorder(NormaPalette.ink.opacity(0.10), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
     private var titleView: some View {
         WaveTextView(
-            text: "what's the rhythm",
-            font: .system(size: 38, weight: .bold),
+            text: "what's your rhythm",
+            font: .system(size: 56, weight: .bold),
             color: NormaPalette.ink,
             isAnimating: true,
             alignment: .leading,
-            accentSuffix: "?",
+            accentSuffix: ".",
             accentColor: NormaPalette.lavender,
-            tracking: -1.2,
-            wordSpacing: 6,
+            tracking: -1.5,
+            wordSpacing: 12,
             lineSpacing: 0
         )
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,16 +154,10 @@ struct OnboardingCurrencyIncomeView: View {
 
     private var incomeField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("monthly take-home")
-                    .font(.system(size: 11, weight: .medium))
-                    .tracking(0.8)
-                    .foregroundStyle(NormaPalette.inkSubtle)
-                Text("· optional")
-                    .font(.system(size: 11))
-                    .tracking(0.8)
-                    .foregroundStyle(NormaPalette.inkMuted)
-            }
+            Text("monthly take-home")
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.8)
+                .foregroundStyle(NormaPalette.inkSubtle)
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(currencySymbol(currencyCode))
@@ -203,6 +169,7 @@ struct OnboardingCurrencyIncomeView: View {
                         Text("0")
                             .font(.system(size: 56, weight: .bold))
                             .foregroundStyle(NormaPalette.inkMuted.opacity(0.5))
+                            .allowsHitTesting(false)
                     }
                     TextField("", text: $incomeText)
                         .font(.system(size: 56, weight: .bold))
@@ -210,7 +177,6 @@ struct OnboardingCurrencyIncomeView: View {
                         .tint(NormaPalette.lavender)
                         .keyboardType(.numberPad)
                         .focused($incomeFocused)
-                        .fixedSize(horizontal: true, vertical: false)
                         .onChange(of: incomeText) { _, newValue in
                             // Strip non-digits, then re-format with commas.
                             let digits = newValue.filter(\.isNumber)
@@ -224,8 +190,16 @@ struct OnboardingCurrencyIncomeView: View {
                             }
                         }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .tracking(-1.2)
+            // Make the whole row a focus target so taps anywhere on it (incl.
+            // the visible "0" placeholder or whitespace next to the symbol)
+            // bring up the keyboard. Without this, an empty TextField had ~0pt
+            // hit area and a currency change could shift the tap zone away
+            // from where the user expected it.
+            .contentShape(Rectangle())
+            .onTapGesture { incomeFocused = true }
 
             Text("helps norma show what's left after bills.")
                 .font(.system(size: 12))
@@ -234,35 +208,31 @@ struct OnboardingCurrencyIncomeView: View {
     }
 
     private var continueBlock: some View {
-        VStack(spacing: 14) {
-            Button(action: {
-                impactGenerator.impactOccurred()
-                saveAndContinue()
-            }) {
-                HStack(spacing: 8) {
-                    Text("save and continue")
-                        .font(.system(size: 15, weight: .semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(NormaPalette.canvas)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Capsule().fill(NormaPalette.lavender))
-                .shadow(color: NormaPalette.lavender.opacity(0.40), radius: 18, x: 0, y: 10)
+        Button(action: {
+            impactGenerator.impactOccurred()
+            saveAndContinue()
+        }) {
+            HStack(spacing: 8) {
+                Text("save and continue")
+                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
             }
-            .buttonStyle(.plain)
-
-            Button(action: {
-                impactGenerator.impactOccurred()
-                skip()
-            }) {
-                Text("skip for now")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(NormaPalette.inkSubtle)
-            }
-            .buttonStyle(.plain)
+            .foregroundStyle(NormaPalette.canvas)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Capsule().fill(canProceed ? NormaPalette.lavender : NormaPalette.lavender.opacity(0.40)))
+            .shadow(color: NormaPalette.lavender.opacity(canProceed ? 0.40 : 0), radius: 18, x: 0, y: 10)
         }
+        .buttonStyle(.plain)
+        .disabled(!canProceed)
+    }
+
+    /// Income is now required — the user must enter at least one digit before
+    /// continue unlocks. Currency defaults to USD so it always validates.
+    private var canProceed: Bool {
+        let digits = incomeText.filter(\.isNumber)
+        return !digits.isEmpty
     }
 
     // MARK: - Actions
@@ -271,13 +241,6 @@ struct OnboardingCurrencyIncomeView: View {
         onboardingViewModel.collectedData.currency = currencyCode
         let parsed = Double(incomeText.filter(\.isNumber)) ?? 0
         onboardingViewModel.collectedData.monthlyIncome = parsed
-        incomeFocused = false
-        onContinue()
-    }
-
-    private func skip() {
-        // Currency still defaults; income remains 0.
-        onboardingViewModel.collectedData.currency = currencyCode
         incomeFocused = false
         onContinue()
     }
@@ -301,6 +264,6 @@ struct OnboardingCurrencyIncomeView: View {
 }
 
 #Preview {
-    OnboardingCurrencyIncomeView(onContinue: {}, onBack: {})
+    OnboardingCurrencyIncomeView(onContinue: {})
         .environmentObject(OnboardingViewModel(sessionViewModel: SessionViewModel(dataManager: DataManager())))
 }

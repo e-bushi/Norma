@@ -57,7 +57,7 @@ struct LandingPageView: View {
                         .offset(y: heroAppeared ? 0 : 12)
                         .padding(.bottom, 18)
 
-                    Text("a financial journal. absorbs the bookkeeping. shows what's actually happening.")
+                    Text("a financial journal for what's due, what's coming, and what you keep meaning to buy.")
                         .font(.system(size: 14))
                         .foregroundStyle(NormaPalette.inkSubtle)
                         .lineSpacing(2)
@@ -115,14 +115,14 @@ struct LandingPageView: View {
 
     private var heroText: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("a place for")
+            Text("now there's")
                 .font(.system(size: 56, weight: .bold))
                 .foregroundStyle(NormaPalette.ink)
-            Text("the math in")
+            Text("a place to")
                 .font(.system(size: 56, weight: .bold))
                 .foregroundStyle(NormaPalette.ink)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("your head")
+                Text("write it down")
                     .font(.system(size: 56, weight: .bold))
                     .foregroundStyle(NormaPalette.ink)
                 Text(".")

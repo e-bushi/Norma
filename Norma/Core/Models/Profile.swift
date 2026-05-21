@@ -75,10 +75,10 @@ struct OnboardingInsights: Codable, Equatable {
     var incomeShape: String?
     var whatsWorking: String?
 
-    // Quantitative answers from O4a (cash/card mix). Stored as Doubles 0-100.
-    var cardPercent: Double?
-    var cashPercent: Double?
-    var transfersPercent: Double?
+    // Money-shaped-thoughts answers (O3e/f/g).
+    var moneyShapedThoughts: String?
+    var tabsCartsCameraRoll: String?
+    var thoughtsCameBack: String?
 
     enum CodingKeys: String, CodingKey {
         case triedBefore = "tried_before"
@@ -86,9 +86,9 @@ struct OnboardingInsights: Codable, Equatable {
         case writingFrequency = "writing_frequency"
         case incomeShape = "income_shape"
         case whatsWorking = "whats_working"
-        case cardPercent = "card_percent"
-        case cashPercent = "cash_percent"
-        case transfersPercent = "transfers_percent"
+        case moneyShapedThoughts = "money_shaped_thoughts"
+        case tabsCartsCameraRoll = "tabs_carts_camera_roll"
+        case thoughtsCameBack = "thoughts_came_back"
     }
 
     init(
@@ -97,18 +97,18 @@ struct OnboardingInsights: Codable, Equatable {
         writingFrequency: String? = nil,
         incomeShape: String? = nil,
         whatsWorking: String? = nil,
-        cardPercent: Double? = nil,
-        cashPercent: Double? = nil,
-        transfersPercent: Double? = nil
+        moneyShapedThoughts: String? = nil,
+        tabsCartsCameraRoll: String? = nil,
+        thoughtsCameBack: String? = nil
     ) {
         self.triedBefore = triedBefore
         self.messyMoney = messyMoney
         self.writingFrequency = writingFrequency
         self.incomeShape = incomeShape
         self.whatsWorking = whatsWorking
-        self.cardPercent = cardPercent
-        self.cashPercent = cashPercent
-        self.transfersPercent = transfersPercent
+        self.moneyShapedThoughts = moneyShapedThoughts
+        self.tabsCartsCameraRoll = tabsCartsCameraRoll
+        self.thoughtsCameBack = thoughtsCameBack
     }
 }
 

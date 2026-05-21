@@ -197,8 +197,15 @@ struct OnboardingCoordinatorView: View {
     @EnvironmentObject var sessionViewModel: SessionViewModel
     
     var body: some View {
-        Group {
-            switch onboardingViewModel.currentStep {
+        ZStack {
+            // Persistent backdrop so the screen never flashes a different
+            // color while the next step's own background (canvas + dither
+            // + gradient) is mounting. Without this, the swap between
+            // question screens reads as a tiny "blink."
+            NormaPalette.canvas.ignoresSafeArea()
+
+            Group {
+                switch onboardingViewModel.currentStep {
             case .landing:
                 LandingPageView(
                     showSignUp: $onboardingViewModel.showSignUp,
@@ -247,7 +254,7 @@ struct OnboardingCoordinatorView: View {
 
             case .triedBefore:
                 NormaCardQuestionView(question: .triedBefore) { selected in
-                    onboardingViewModel.triedBefore = selected.first ?? ""
+                    onboardingViewModel.triedBefore = Array(selected)
                     onboardingViewModel.moveToNextStep()
                 }
 
@@ -263,6 +270,36 @@ struct OnboardingCoordinatorView: View {
                     onboardingViewModel.moveToNextStep()
                 }
 
+            case .celebrationOne:
+                OnboardingCelebrationView(
+                    phrase: "nice. norma's starting to know you.",
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
+            case .moneyShapedThoughts:
+                NormaCardQuestionView(question: .moneyShapedThoughts) { selected in
+                    onboardingViewModel.moneyShapedThoughts = selected.first ?? ""
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .tabsCartsCameraRoll:
+                NormaCardQuestionView(question: .tabsCartsCameraRoll) { selected in
+                    onboardingViewModel.tabsCartsCameraRoll = selected.first ?? ""
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .thoughtsCameBack:
+                NormaCardQuestionView(question: .thoughtsCameBack) { selected in
+                    onboardingViewModel.thoughtsCameBack = selected.first ?? ""
+                    onboardingViewModel.moveToNextStep()
+                }
+
+            case .celebrationTwo:
+                OnboardingCelebrationView(
+                    phrase: "halfway there. one more set.",
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
             case .incomeShape:
                 NormaCardQuestionView(question: .incomeShape) { selected in
                     onboardingViewModel.incomeShape = selected.first ?? ""
@@ -275,21 +312,29 @@ struct OnboardingCoordinatorView: View {
                     onboardingViewModel.moveToNextStep()
                 }
 
+            case .voicePracticeIntro:
+                OnboardingIntroInterstitialView(
+                    phases: [
+                        "now let's try something different.",
+                        "say a money thought out loud — norma will catch it."
+                    ],
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
+            case .voicePractice:
+                OnboardingVoicePracticeView(
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
+            case .celebrationThree:
+                OnboardingCelebrationView(
+                    phrase: "you've got the hang of it.",
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
             case .currencyIncome:
                 OnboardingCurrencyIncomeView(
-                    onContinue: { onboardingViewModel.moveToNextStep() },
-                    onBack: {
-                        withAnimation { onboardingViewModel.currentStep = .whatsWorking }
-                    }
-                )
-                .environmentObject(onboardingViewModel)
-
-            case .cashCardMix:
-                OnboardingCashCardMixView(
-                    onContinue: { onboardingViewModel.moveToNextStep() },
-                    onBack: {
-                        withAnimation { onboardingViewModel.currentStep = .currencyIncome }
-                    }
+                    onContinue: { onboardingViewModel.moveToNextStep() }
                 )
                 .environmentObject(onboardingViewModel)
 
@@ -300,7 +345,7 @@ struct OnboardingCoordinatorView: View {
                         withAnimation { onboardingViewModel.currentStep = .authentication }
                     },
                     onBack: {
-                        withAnimation { onboardingViewModel.currentStep = .cashCardMix }
+                        withAnimation { onboardingViewModel.currentStep = .currencyIncome }
                     }
                 )
                 .environmentObject(onboardingViewModel)
@@ -309,7 +354,15 @@ struct OnboardingCoordinatorView: View {
                 // Transition to main app
                 EmptyView()
             }
+            }
+            // Each step gets its own identity so SwiftUI treats the swap
+            // as a remove+insert and runs the crossfade. The transition is
+            // deliberately short — entrance animations on the new screen
+            // handle the rest of the choreography.
+            .id(onboardingViewModel.currentStep)
+            .transition(.opacity)
         }
+        .animation(.easeInOut(duration: 0.28), value: onboardingViewModel.currentStep)
         .onChange(of: onboardingViewModel.currentStep) { _, newStep in
             // Track onboarding step viewed
             let stepIndex = OnboardingStep.allCases.firstIndex(of: newStep) ?? 0

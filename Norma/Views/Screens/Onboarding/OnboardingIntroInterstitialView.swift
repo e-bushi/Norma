@@ -12,17 +12,29 @@ import SwiftUI
 import UIKit
 
 struct OnboardingIntroInterstitialView: View {
+    let phases: [String]
     let onContinue: () -> Void
 
-    private let phases: [String] = [
-        "first, a few questions.",
-        "no wrong answers. just helps norma fit you."
-    ]
+    /// Default phrases for the very first interstitial in the onboarding flow.
+    /// New callers should pass their own phrases — the defaults stay for
+    /// backwards compatibility with the existing `.intro` step.
+    init(
+        phases: [String] = [
+            "first, a few questions.",
+            "no wrong answers. just helps norma fit you."
+        ],
+        onContinue: @escaping () -> Void
+    ) {
+        self.phases = phases
+        self.onContinue = onContinue
+    }
 
     @State private var phaseIndex: Int = 0
     @State private var didFinish: Bool = false
 
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+    /// Soft tick that fires per word as the wave reveals it.
+    private let wordHaptic = UIImpactFeedbackGenerator(style: .soft)
 
     var body: some View {
         ZStack {
@@ -42,7 +54,11 @@ struct OnboardingIntroInterstitialView: View {
                 alignment: .leading,
                 tracking: -1.5,
                 wordSpacing: 12,
-                lineSpacing: 0
+                lineSpacing: 0,
+                onWordAppear: { _ in
+                    wordHaptic.impactOccurred(intensity: 0.55)
+                    wordHaptic.prepare()
+                }
             )
             .id(phaseIndex)
             .transition(.opacity)
@@ -53,6 +69,7 @@ struct OnboardingIntroInterstitialView: View {
         .navigationBarBackButtonHidden(true)
         .onAppear {
             impactGenerator.prepare()
+            wordHaptic.prepare()
             schedulePhaseAdvance()
         }
     }

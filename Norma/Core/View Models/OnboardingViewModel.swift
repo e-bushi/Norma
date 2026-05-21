@@ -39,16 +39,16 @@ class OnboardingViewModel: ObservableObject {
 
     // Extended Onboarding Responses (Digital Nomad focused)
     // Onboarding answers (May 2026 — financial-journal positioning).
-    @Published var triedBefore: String = ""
+    @Published var triedBefore: [String] = []      // multi-select
     @Published var messyMoney: [String] = []        // multi-select
     @Published var writingFrequency: String = ""
     @Published var incomeShape: String = ""
     @Published var whatsWorking: String = ""
 
-    // Cash/card mix split (sums to 100). Defaults from O4a artboard.
-    @Published var cardPercent: Double = 60
-    @Published var cashPercent: Double = 30
-    @Published var transfersPercent: Double = 10
+    // Money-shaped-thoughts questions (O3e/f/g).
+    @Published var moneyShapedThoughts: String = ""
+    @Published var tabsCartsCameraRoll: String = ""
+    @Published var thoughtsCameBack: String = ""
 
     /// True once the user has reached the end of the question flow.
     /// Used to distinguish Apple/Google sign-in from L1 (no answers yet)
@@ -696,14 +696,14 @@ class OnboardingViewModel: ObservableObject {
 
             // Capture the onboarding question answers for the JSONB insights column.
             let insights = OnboardingInsights(
-                triedBefore: triedBefore.isEmpty ? nil : triedBefore,
+                triedBefore: triedBefore.isEmpty ? nil : triedBefore.joined(separator: ","),
                 messyMoney: messyMoney.isEmpty ? nil : messyMoney.joined(separator: ","),
                 writingFrequency: writingFrequency.isEmpty ? nil : writingFrequency,
                 incomeShape: incomeShape.isEmpty ? nil : incomeShape,
                 whatsWorking: whatsWorking.isEmpty ? nil : whatsWorking,
-                cardPercent: cardPercent,
-                cashPercent: cashPercent,
-                transfersPercent: transfersPercent
+                moneyShapedThoughts: moneyShapedThoughts.isEmpty ? nil : moneyShapedThoughts,
+                tabsCartsCameraRoll: tabsCartsCameraRoll.isEmpty ? nil : tabsCartsCameraRoll,
+                thoughtsCameBack: thoughtsCameBack.isEmpty ? nil : thoughtsCameBack
             )
 
             // Check if profile already exists
@@ -749,15 +749,39 @@ enum OnboardingStep: CaseIterable {
 
     // Card-based questions — invest the user before asking for credentials.
     // Order here drives flow order via `next()`.
-    case triedBefore          // O3  — "what have you tried before?"
-    case messyMoney           // O3c — "what's the messiest part of money?" (multi-select)
-    case writingFrequency     // O3b — "how often do you write things down?"
-    case incomeShape          // O4b — "how does your income show up?"
-    case whatsWorking         // O4c — "what would 'this is working' feel like?"
+    case triedBefore           // O3  — "what have you tried before?"
+    case messyMoney            // O3c — "what's the messiest part of money?" (multi-select)
+    case writingFrequency      // O3b — "how often do you write things down?"
+
+    // Milestone celebration #1 — after 3 questions. Dither pulse + a single
+    // line of celebratory copy; auto-advances.
+    case celebrationOne
+
+    case moneyShapedThoughts   // O3e — "money-shaped thoughts you didn't write down"
+    case tabsCartsCameraRoll   // O3f — "tabs, carts, camera roll waiting for a decision"
+    case thoughtsCameBack      // O3g — "money thoughts that came back twice"
+
+    // Milestone celebration #2 — after 6 questions.
+    case celebrationTwo
+
+    case incomeShape           // O4b — "how does your income show up?"
+    case whatsWorking          // O4c — "what would 'this is working' feel like?"
+
+    // Short interstitial that primes the user for the voice practice — same
+    // typographic pattern as the very first intro, just different phrases.
+    case voicePracticeIntro
+
+    // Practice screen — voice → AI extraction demo so users feel the product
+    // before the auth wall.
+    case voicePractice
+
+    // Milestone celebration #3 — right after the practice attempt, before
+    // the quantitative ask. A capstone celebration with personalized insight
+    // is planned for after auth but lives elsewhere (TBD).
+    case celebrationThree
 
     // Quantitative questions.
-    case currencyIncome       // O4  — currency + optional monthly take-home
-    case cashCardMix          // O4a — drag-bar for card/cash/transfers split
+    case currencyIncome        // O4  — currency + optional monthly take-home
 
     // Auth tail.
     case saveAnswers          // O2  — apple/google or "prefer email? sign up"
