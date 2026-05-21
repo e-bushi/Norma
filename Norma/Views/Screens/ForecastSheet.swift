@@ -2,22 +2,52 @@
 //  ForecastSheet.swift
 //  Norma
 //
-//  Income vs bills overview. Reached via the chart icon in the notes-list
-//  bottom bar.
+//  Combined income-vs-bills overview + full bills list for the selected
+//  month. Reached via the chart icon in the notes-list bottom bar.
 //
 
 import SwiftUI
+import SwiftData
 
 struct ForecastSheet: View {
+    enum Tab { case thisMonth, nextMonth }
+    enum SelectionScope { case bills, intentions }
+
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
 
-    @State private var showBills = false
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: \NoteToken.occurredAt) private var allTokens: [NoteToken]
+
+    @State private var selectedTab: Tab = .thisMonth
+    @State private var showInfoPopover = false
+
+    /// "If I committed everything" — independent toggle that subtracts the
+    /// intentions total from the hero net. Styled in the tab row as a third
+    /// pill, but functionally independent of the month selector so the user
+    /// can stack it with either this-month or next-month.
+    @State private var includeIntentions: Bool = false
+
+    // Bulk-select state — shared between bills and intentions; the scope
+    // disambiguates which kind of row is selectable in the current mode.
+    @State private var isSelecting: Bool = false
+    @State private var selectionScope: SelectionScope = .bills
+    @State private var selectedBillIds: Set<String> = []
+    @State private var selectedIntentionIds: Set<UUID> = []
+    @State private var showDeleteConfirm: Bool = false
+    @State private var showMarkPaidConfirm: Bool = false
+    @State private var showUpgradeSheet: Bool = false
+    @State private var upgradeDueDate: Date = Date()
+    @State private var isDeleting: Bool = false
+    @State private var isMarkingPaid: Bool = false
+    @State private var isUpgrading: Bool = false
 
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
+    private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
     private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
 
     var body: some View {
@@ -26,9 +56,13 @@ struct ForecastSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     heroBlock
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 32)
+                        .padding(.bottom, 24)
 
-                    nextBillSection
+                    filterCapsules
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 22)
+
+                    sectionsBlock
                         .padding(.horizontal, 24)
                         .padding(.bottom, 48)
                 }
@@ -36,14 +70,121 @@ struct ForecastSheet: View {
             }
             .background(bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .animation(.easeInOut(duration: 0.18), value: isSelecting)
+            .alert("delete bills?", isPresented: $showDeleteConfirm) {
+                Button("cancel", role: .cancel) {}
+                Button("delete", role: .destructive) { performBulkDelete() }
+            } message: {
+                Text("this will remove \(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") permanently.")
+            }
+            .alert("mark as paid?", isPresented: $showMarkPaidConfirm) {
+                Button("cancel", role: .cancel) {}
+                Button("mark paid") { performBulkMarkPaid() }
+            } message: {
+                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle and added to today's note.")
+            }
+            .sheet(isPresented: $showUpgradeSheet) {
+                upgradeSheet
+                    .presentationDetents([.height(360)])
+                    .presentationDragIndicator(.visible)
+            }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showBills) {
-            BillsView()
-                .environmentObject(sessionViewModel)
-                .environmentObject(billViewModel)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if isSelecting {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    exitSelection()
+                } label: {
+                    Text("cancel")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(cream.opacity(0.85))
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if selectionScope == .bills {
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            showMarkPaidConfirm = true
+                        } label: {
+                            Label("mark paid", systemImage: "checkmark.circle")
+                        }
+                        .disabled(!hasSelection || isMarkingPaid)
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("delete", systemImage: "trash")
+                        }
+                        .disabled(!hasSelection || isDeleting)
+                    } else {
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            // Seed with end-of-displayed-month as a sensible default.
+                            upgradeDueDate = defaultUpgradeDueDate()
+                            showUpgradeSheet = true
+                        } label: {
+                            Label("upgrade to commitment", systemImage: "arrow.up.circle")
+                        }
+                        .disabled(!hasSelection || isUpgrading)
+                    }
+                } label: {
+                    Text(hasSelection
+                         ? "actions (\(selectionCount))"
+                         : "actions")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(hasSelection
+                                         ? accentPurple
+                                         : cream.opacity(0.4))
+                }
+                .disabled(!hasSelection)
+            }
+        } else {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showInfoPopover = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 18))
+                        .foregroundStyle(mutedText)
+                }
+                .popover(isPresented: $showInfoPopover, arrowEdge: .top) {
+                    ForecastInfoPopover()
+                        .presentationCompactAdaptation(.popover)
+                }
+            }
+
+            if !billViewModel.bills.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(
+                        item: exportText,
+                        subject: Text("my bills"),
+                        message: Text("here are my bills")
+                    ) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(cream.opacity(0.85))
+                    }
+                }
+            }
         }
     }
 
@@ -61,131 +202,659 @@ struct ForecastSheet: View {
                     .font(.system(size: 72, weight: .heavy))
                     .tracking(-3.24)
                     .foregroundStyle(cream)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: netAfterBills)
                 Text(".")
                     .font(.system(size: 72, weight: .heavy))
                     .tracking(-3.24)
                     .foregroundStyle(accentPurple)
             }
 
-            HStack(spacing: 12) {
-                Text("\(formatCurrency(monthlyIncome)) income")
-                    .font(.custom(FontFamily.Rubik.medium, size: 12))
-                    .foregroundStyle(mutedText)
-                Text("·")
-                    .font(.custom(FontFamily.Rubik.medium, size: 12))
-                    .foregroundStyle(dimText)
-                Text("\(formatCurrency(totalBillsForMonth)) bills")
-                    .font(.custom(FontFamily.Rubik.medium, size: 12))
-                    .foregroundStyle(mutedText)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 10) {
+                    Text("\(formatCurrency(monthlyIncome)) income")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(cream)
+                    Text("·")
+                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .foregroundStyle(dimText)
+                    Text("\(formatCurrency(totalDeductionsForMonth)) out")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(cream)
+                }
+                if includeIntentions && !monthlyIntentions.isEmpty {
+                    Text("includes \(formatCurrency(totalIntentions)) of intentions")
+                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .foregroundStyle(accentPurple.opacity(0.85))
+                }
             }
         }
     }
 
-    // MARK: - Next Bill
+    // MARK: - Filter capsules
 
-    @ViewBuilder
-    private var nextBillSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("next bill up")
-                .font(.custom(FontFamily.Rubik.medium, size: 18))
-                .foregroundStyle(mutedText)
-
-            if let bill = nextBill {
-                nextBillCard(bill)
-            } else {
-                noBillsCard
-            }
-
-            if !monthlyBills.isEmpty {
-                viewAllPill
-                    .padding(.top, 8)
+    private var filterCapsules: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                tabPill("this month", active: selectedTab == .thisMonth) { selectedTab = .thisMonth }
+                tabPill("next month", active: selectedTab == .nextMonth) { selectedTab = .nextMonth }
+                // Independent toggle styled as a third pill. When `monthlyIntentions`
+                // is empty we keep it disabled so it can't be turned on without effect.
+                togglePill(
+                    "if i committed everything",
+                    active: includeIntentions,
+                    disabled: monthlyIntentions.isEmpty
+                ) {
+                    includeIntentions.toggle()
+                }
             }
         }
     }
 
     @ViewBuilder
-    private func nextBillCard(_ bill: Bill) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func tabPill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                action()
+            }
+        } label: {
+            Text(label)
+                .font(.custom(active ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(active ? onAccentText : cream)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background {
+                    if active { Capsule().fill(accentPurple) }
+                }
+                .overlay(
+                    Capsule().stroke(
+                        active ? accentPurple : cream.opacity(0.32),
+                        style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [3, 3])
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Independent toggle styled as a pill. Distinguished from `tabPill` by a
+    /// small leading indicator so users register it as a switch rather than a
+    /// mutually-exclusive month selection.
+    @ViewBuilder
+    private func togglePill(
+        _ label: String,
+        active: Bool,
+        disabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                action()
+            }
+        } label: {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(accentPurple)
-                    .frame(width: 6, height: 6)
-                Text(dueLabel(for: bill))
+                    .fill(active ? cream : .clear)
+                    .overlay(Circle().stroke(active ? cream : cream.opacity(0.45), lineWidth: 1.2))
+                    .frame(width: 9, height: 9)
+                Text(label)
+                    .font(.custom(active ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 13))
+                    .foregroundStyle(active ? cream : cream.opacity(disabled ? 0.35 : 0.85))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background {
+                if active { Capsule().fill(cream.opacity(0.12)) }
+            }
+            .overlay(
+                Capsule().stroke(
+                    active ? cream.opacity(0.55) : cream.opacity(0.22),
+                    style: StrokeStyle(lineWidth: 1, dash: active ? [] : [3, 3])
+                )
+            )
+            .opacity(disabled ? 0.55 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder
+    private var sectionsBlock: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if monthlyBillRows.isEmpty && monthlyIntentions.isEmpty {
+                emptyState
+            } else if !monthlyBillRows.isEmpty {
+                if !overdueRows.isEmpty {
+                    section(
+                        title: "overdue",
+                        titleColor: accentPurple,
+                        dividerColor: accentPurple.opacity(0.25),
+                        rows: overdueRows,
+                        kind: .overdue
+                    )
+                }
+                if !upcomingRows.isEmpty {
+                    section(
+                        title: "upcoming",
+                        titleColor: cream,
+                        dividerColor: cream.opacity(0.12),
+                        rows: upcomingRows,
+                        kind: .upcoming
+                    )
+                    .padding(.top, overdueRows.isEmpty ? 0 : 14)
+                }
+                if !paidRows.isEmpty {
+                    section(
+                        title: "paid",
+                        titleColor: dimText,
+                        dividerColor: cream.opacity(0.08),
+                        rows: paidRows,
+                        kind: .paid
+                    )
+                    .padding(.top, (overdueRows.isEmpty && upcomingRows.isEmpty) ? 0 : 14)
+                }
+            }
+
+            if !monthlyIntentions.isEmpty {
+                intentionsSection
+                    .padding(.top, monthlyBillRows.isEmpty ? 0 : 28)
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("nothing \(selectedTab == .thisMonth ? "this month" : "next month")")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                .foregroundStyle(cream.opacity(0.7))
+            Text("bills, commitments, and intentions written in your notes show up here.")
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundStyle(mutedText)
+        }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func section(
+        title: String,
+        titleColor: Color,
+        dividerColor: Color,
+        rows: [BillRow],
+        kind: RowKind
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                    .tracking(0.88)
+                    .textCase(.uppercase)
+                    .foregroundStyle(titleColor)
+                Rectangle()
+                    .fill(dividerColor)
+                    .frame(height: 1)
+                Text("\(rows.count)")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .tracking(0.44)
+                    .foregroundStyle(dimText)
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                billRowView(row, kind: kind, showTopDivider: index > 0)
+            }
+        }
+    }
+
+    // MARK: - Intentions section
+
+    private var intentionsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("intentions")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 11))
                     .tracking(0.88)
                     .textCase(.uppercase)
                     .foregroundStyle(accentPurple)
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(formatCurrency(bill.amount))
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.64)
-                    .foregroundStyle(accentPurple)
-                Text(bill.name.lowercased())
-                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                    .foregroundStyle(cream)
-                Text(shortDate(bill.effectiveDueDate))
-                    .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                Rectangle()
+                    .fill(accentPurple.opacity(0.25))
+                    .frame(height: 1)
+                Text("\(monthlyIntentions.count)")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .tracking(0.44)
                     .foregroundStyle(dimText)
             }
-            .padding(.top, 2)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+
+            ForEach(Array(monthlyIntentions.enumerated()), id: \.element.id) { index, token in
+                intentionRow(token, showTopDivider: index > 0)
+            }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 18).fill(accentPurple.opacity(0.08)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(accentPurple.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+    }
+
+    @ViewBuilder
+    private func intentionRow(_ token: NoteToken, showTopDivider: Bool) -> some View {
+        let inIntentionsSelection = isSelecting && selectionScope == .intentions
+        let isSelected = selectedIntentionIds.contains(token.id)
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            if inIntentionsSelection {
+                toggleIntentionSelection(token)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                if inIntentionsSelection {
+                    selectionIndicator(selected: isSelected)
+                } else {
+                    Circle()
+                        .stroke(accentPurple.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .frame(width: 8, height: 8)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text((token.subject ?? "intention").lowercased())
+                        .font(.custom(FontFamily.Rubik.medium, size: 16))
+                        .tracking(-0.16)
+                        .foregroundStyle(cream.opacity(0.8))
+                        .lineLimit(1)
+
+                    Text("thinking · \(shortDate(token.occurredAt))")
+                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .tracking(0.48)
+                        .textCase(.uppercase)
+                        .foregroundStyle(accentPurple.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(formatCurrency(token.amount))
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .tracking(-0.18)
+                    .foregroundStyle(accentPurple.opacity(0.85))
+
+                if !isSelecting {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(dimText)
+                        .frame(width: 16, alignment: .trailing)
+                }
+            }
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) {
+                if showTopDivider {
+                    Rectangle()
+                        .fill(cream.opacity(0.08))
+                        .frame(height: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    guard !isSelecting else { return }
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    enterIntentionsSelection(with: token)
+                }
         )
     }
 
-    private var noBillsCard: some View {
-        Text("nothing due this month")
-            .font(.custom(FontFamily.Rubik.medium, size: 13))
-            .foregroundStyle(dimText)
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18).fill(cream.opacity(0.04)))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(cream.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            )
+    // MARK: - Row
+
+    private enum RowKind { case overdue, upcoming, paid }
+
+    @ViewBuilder
+    private func billRowView(_ row: BillRow, kind: RowKind, showTopDivider: Bool) -> some View {
+        let isCommit = { if case .commitment = row { return true } else { return false } }()
+        let inBillsSelection = isSelecting && selectionScope == .bills
+        let isSelected = row.billId.map { selectedBillIds.contains($0) } ?? false
+        let canSelect = !isCommit
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            if inBillsSelection, case .bill(let bill) = row {
+                toggleSelection(bill)
+            } else {
+                // TODO: open bill detail / edit sheet (or jump to source note for commits)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                if inBillsSelection && canSelect {
+                    selectionIndicator(selected: isSelected)
+                } else {
+                    statusDot(for: kind)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(row.name.lowercased())
+                            .font(.custom(kind == .paid ? FontFamily.Rubik.medium : FontFamily.Rubik.semiBold, size: 16))
+                            .tracking(-0.16)
+                            .foregroundStyle(kind == .paid ? mutedText : cream)
+                            .lineLimit(1)
+                        if isCommit {
+                            Text("commit")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 9))
+                                .tracking(0.66)
+                                .textCase(.uppercase)
+                                .foregroundStyle(accentPurple)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .overlay(
+                                    Capsule().stroke(accentPurple.opacity(0.45), lineWidth: 0.8)
+                                )
+                        }
+                    }
+
+                    HStack(spacing: 6) {
+                        Text(eyebrowText(forDate: row.dueDate, kind: kind))
+                            .font(.custom(FontFamily.Rubik.medium, size: 12))
+                            .tracking(0.48)
+                            .textCase(.uppercase)
+                            .foregroundStyle(eyebrowColor(for: kind))
+                        if kind != .paid {
+                            Text(shortDate(row.dueDate))
+                                .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+                                .foregroundStyle(dimText)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(formatCurrency(row.amount))
+                    .font(.custom(kind == .paid ? FontFamily.Rubik.medium : FontFamily.Rubik.bold, size: 18))
+                    .tracking(-0.18)
+                    .foregroundStyle(amountColor(for: kind))
+                    .strikethrough(kind == .paid, color: dimText)
+
+                if !isSelecting {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(dimText)
+                        .frame(width: 16, alignment: .trailing)
+                }
+            }
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) {
+                if showTopDivider {
+                    Rectangle()
+                        .fill(cream.opacity(0.08))
+                        .frame(height: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    guard !isSelecting, case .bill(let bill) = row else { return }
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    enterBillsSelection(with: bill)
+                }
+        )
     }
 
-    private var viewAllPill: some View {
-        HStack {
-            Spacer()
-            Button {
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                showBills = true
-            } label: {
-                HStack(spacing: 10) {
-                    Text("view all \(monthlyBills.count) \(monthlyBills.count == 1 ? "bill" : "bills")")
-                        .font(.custom(FontFamily.Rubik.medium, size: 13))
-                        .foregroundStyle(cream)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(cream)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .overlay(
-                    Capsule().stroke(cream.opacity(0.32), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                )
+    private func selectionIndicator(selected: Bool) -> some View {
+        ZStack {
+            Circle()
+                .stroke(selected ? accentPurple : cream.opacity(0.32), lineWidth: 1.5)
+                .frame(width: 18, height: 18)
+            if selected {
+                Circle()
+                    .fill(accentPurple)
+                    .frame(width: 12, height: 12)
             }
-            .buttonStyle(.plain)
-            Spacer()
+        }
+        .frame(width: 18, height: 18)
+    }
+
+    private func statusDot(for kind: RowKind) -> some View {
+        Group {
+            switch kind {
+            case .overdue:
+                Circle().fill(accentPurple)
+            case .upcoming:
+                Circle().fill(cream.opacity(0.65))
+            case .paid:
+                Circle()
+                    .stroke(dimText, lineWidth: 1)
+            }
+        }
+        .frame(width: 8, height: 8)
+    }
+
+    private func eyebrowColor(for kind: RowKind) -> Color {
+        switch kind {
+        case .overdue: return accentPurple
+        case .upcoming: return mutedText
+        case .paid: return dimText
         }
     }
 
-    // MARK: - Computed
+    private func amountColor(for kind: RowKind) -> Color {
+        switch kind {
+        case .overdue: return accentPurple
+        case .upcoming: return cream
+        case .paid: return dimText
+        }
+    }
+
+    // MARK: - Selection mode
+
+    private func enterBillsSelection(with bill: Bill) {
+        guard let id = bill.id else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isSelecting = true
+            selectionScope = .bills
+            selectedBillIds.insert(id)
+        }
+    }
+
+    private func enterIntentionsSelection(with token: NoteToken) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isSelecting = true
+            selectionScope = .intentions
+            selectedIntentionIds.insert(token.id)
+        }
+    }
+
+    private func toggleSelection(_ bill: Bill) {
+        guard let id = bill.id else { return }
+        if selectedBillIds.contains(id) {
+            selectedBillIds.remove(id)
+        } else {
+            selectedBillIds.insert(id)
+        }
+    }
+
+    private func toggleIntentionSelection(_ token: NoteToken) {
+        if selectedIntentionIds.contains(token.id) {
+            selectedIntentionIds.remove(token.id)
+        } else {
+            selectedIntentionIds.insert(token.id)
+        }
+    }
+
+    private func exitSelection() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isSelecting = false
+            selectedBillIds.removeAll()
+            selectedIntentionIds.removeAll()
+            selectionScope = .bills
+        }
+    }
+
+    private var hasSelection: Bool {
+        switch selectionScope {
+        case .bills: return !selectedBillIds.isEmpty
+        case .intentions: return !selectedIntentionIds.isEmpty
+        }
+    }
+
+    private var selectionCount: Int {
+        switch selectionScope {
+        case .bills: return selectedBillIds.count
+        case .intentions: return selectedIntentionIds.count
+        }
+    }
+
+    private func performBulkDelete() {
+        let toDelete = billViewModel.bills.filter { bill in
+            bill.id.map { selectedBillIds.contains($0) } ?? false
+        }
+        isDeleting = true
+        Task {
+            for bill in toDelete {
+                await billViewModel.deleteBill(bill)
+            }
+            await MainActor.run {
+                isDeleting = false
+                exitSelection()
+            }
+        }
+    }
+
+    // MARK: - Upgrade sheet
+
+    private var upgradeSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("upgrade to commitment")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 22))
+                        .foregroundStyle(cream)
+                    Text("\(selectedIntentionIds.count) \(selectedIntentionIds.count == 1 ? "intention" : "intentions") · \(formatCurrency(selectedIntentionsTotal))")
+                        .font(.custom(FontFamily.Rubik.medium, size: 13))
+                        .foregroundStyle(mutedText)
+                }
+
+                DatePicker(
+                    "due date",
+                    selection: $upgradeDueDate,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .tint(accentPurple)
+
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    performUpgradeToCommitment()
+                } label: {
+                    Text(isUpgrading ? "upgrading…" : "upgrade")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(onAccentText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Capsule().fill(accentPurple))
+                }
+                .buttonStyle(.plain)
+                .disabled(isUpgrading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(bg.ignoresSafeArea())
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var selectedIntentionsTotal: Double {
+        monthlyIntentions
+            .filter { selectedIntentionIds.contains($0.id) }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private func defaultUpgradeDueDate() -> Date {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: displayedMonthDate)
+        let firstOfMonth = cal.date(from: comps) ?? Date()
+        return cal.date(byAdding: DateComponents(month: 1, day: -1), to: firstOfMonth) ?? Date()
+    }
+
+    private func performUpgradeToCommitment() {
+        let targets = allTokens.filter { selectedIntentionIds.contains($0.id) && $0.kind == .intent }
+        guard !targets.isEmpty else { return }
+        isUpgrading = true
+        let due = upgradeDueDate
+        Task {
+            await MainActor.run {
+                for token in targets {
+                    token.kindRaw = NoteToken.Kind.commit.rawValue
+                    token.occurredAt = due
+                }
+                try? modelContext.save()
+                isUpgrading = false
+                showUpgradeSheet = false
+                exitSelection()
+            }
+        }
+    }
+
+    private func performBulkMarkPaid() {
+        let toMark = billViewModel.bills.filter { bill in
+            bill.id.map { selectedBillIds.contains($0) } ?? false
+        }
+        guard !toMark.isEmpty else { return }
+        isMarkingPaid = true
+        Task {
+            await billViewModel.markBillsAsPaid(toMark)
+            await MainActor.run {
+                BillPaymentJournal.appendBillPayments(
+                    toMark,
+                    currency: sessionViewModel.currentUser?.settings.currency ?? "USD",
+                    in: modelContext
+                )
+                isMarkingPaid = false
+                exitSelection()
+            }
+        }
+    }
+
+    /// Plain-text export of bills for sharing via iMessage / mail / etc.
+    private var exportText: String {
+        let amountFormatter = NumberFormatter()
+        amountFormatter.numberStyle = .currency
+        amountFormatter.currencyCode = currency
+        amountFormatter.maximumFractionDigits = 2
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d, yyyy"
+
+        let lines = billViewModel.bills
+            .sorted { $0.dueDate < $1.dueDate }
+            .map { bill -> String in
+                let amount = amountFormatter.string(from: NSNumber(value: bill.amount))
+                    ?? String(format: "$%.2f", bill.amount)
+                let date = dateFormatter.string(from: bill.dueDate)
+                return "\(bill.name) — \(amount) — due \(date)"
+            }
+
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Computed: month context
 
     private var displayedMonthDate: Date {
         let cal = Calendar.current
         let comps = cal.dateComponents([.year, .month], from: Date())
-        return cal.date(from: comps) ?? Date()
+        let firstOfThisMonth = cal.date(from: comps) ?? Date()
+        if selectedTab == .nextMonth {
+            return cal.date(byAdding: .month, value: 1, to: firstOfThisMonth) ?? firstOfThisMonth
+        }
+        return firstOfThisMonth
     }
 
     private var monthShortLabel: String {
@@ -193,6 +862,8 @@ struct ForecastSheet: View {
         f.dateFormat = "MMMM"
         return f.string(from: displayedMonthDate).lowercased()
     }
+
+    // MARK: - Computed: bills
 
     private var monthlyIncome: Double {
         sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
@@ -204,23 +875,131 @@ struct ForecastSheet: View {
 
     private var monthlyBills: [Bill] {
         let cal = Calendar.current
-        return billViewModel.bills.filter { bill in
-            cal.isDate(bill.effectiveDueDate, equalTo: displayedMonthDate, toGranularity: .month)
+        return billViewModel.bills
+            .filter { bill in
+                cal.isDate(bill.effectiveDueDate, equalTo: displayedMonthDate, toGranularity: .month)
+            }
+            .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
+    }
+
+    /// `.commit` tokens whose due date (`occurredAt`) falls in the displayed
+    /// month. Folded into the bill sections so they read as one-time bills.
+    private var monthlyCommitments: [NoteToken] {
+        let cal = Calendar.current
+        return allTokens.filter { token in
+            token.kind == .commit
+            && cal.isDate(token.occurredAt, equalTo: displayedMonthDate, toGranularity: .month)
         }
+    }
+
+    /// `.intent` tokens whose creation date falls in the displayed month.
+    /// Filter by `occurredAt` since for intents that field carries the
+    /// creation date (see NoteToken.Kind.intent docs).
+    private var monthlyIntentions: [NoteToken] {
+        let cal = Calendar.current
+        return allTokens
+            .filter { token in
+                token.kind == .intent
+                && cal.isDate(token.occurredAt, equalTo: displayedMonthDate, toGranularity: .month)
+            }
+            .sorted { $0.occurredAt < $1.occurredAt }
     }
 
     private var totalBillsForMonth: Double {
         monthlyBills.reduce(0) { $0 + $1.amount }
     }
 
-    private var netAfterBills: Double {
-        max(0, monthlyIncome - totalBillsForMonth)
+    private var totalCommitments: Double {
+        monthlyCommitments.reduce(0) { $0 + $1.amount }
     }
 
-    private var nextBill: Bill? {
-        monthlyBills
-            .filter { $0.status != .paid }
-            .min(by: { $0.effectiveDueDate < $1.effectiveDueDate })
+    private var totalIntentions: Double {
+        monthlyIntentions.reduce(0) { $0 + $1.amount }
+    }
+
+    /// Total subtracted from income on the hero. Always counts bills and
+    /// commitments. Counts intentions only when the toggle is on.
+    private var totalDeductionsForMonth: Double {
+        var sum = totalBillsForMonth + totalCommitments
+        if includeIntentions { sum += totalIntentions }
+        return sum
+    }
+
+    private var netAfterBills: Double {
+        max(0, monthlyIncome - totalDeductionsForMonth)
+    }
+
+    // MARK: - Unified bill rows (Bill + commit NoteToken)
+    //
+    // Each row in the bills sections is either a real Bill or a `.commit`
+    // token rendered to look identical. We wrap both in a single enum so
+    // ordering and section bucketing read off one list.
+
+    enum BillRow: Identifiable {
+        case bill(Bill)
+        case commitment(NoteToken)
+
+        var id: String {
+            switch self {
+            case .bill(let b): return "bill-\(b.id ?? UUID().uuidString)"
+            case .commitment(let t): return "commit-\(t.id.uuidString)"
+            }
+        }
+
+        var name: String {
+            switch self {
+            case .bill(let b): return b.name
+            case .commitment(let t): return t.subject ?? "commitment"
+            }
+        }
+
+        var amount: Double {
+            switch self {
+            case .bill(let b): return b.amount
+            case .commitment(let t): return t.amount
+            }
+        }
+
+        var dueDate: Date {
+            switch self {
+            case .bill(let b): return b.effectiveDueDate
+            case .commitment(let t): return t.occurredAt
+            }
+        }
+
+        var isPaid: Bool {
+            switch self {
+            case .bill(let b): return b.status == .paid
+            case .commitment: return false
+            }
+        }
+
+        /// Underlying bill ID (used for selection). Nil for commitments —
+        /// commitments aren't selectable in the bills scope.
+        var billId: String? {
+            if case .bill(let b) = self { return b.id }
+            return nil
+        }
+    }
+
+    private var monthlyBillRows: [BillRow] {
+        let billRows = monthlyBills.map { BillRow.bill($0) }
+        let commitRows = monthlyCommitments.map { BillRow.commitment($0) }
+        return (billRows + commitRows).sorted { $0.dueDate < $1.dueDate }
+    }
+
+    private var overdueRows: [BillRow] {
+        let now = Calendar.current.startOfDay(for: Date())
+        return monthlyBillRows.filter { !$0.isPaid && Calendar.current.startOfDay(for: $0.dueDate) < now }
+    }
+
+    private var upcomingRows: [BillRow] {
+        let now = Calendar.current.startOfDay(for: Date())
+        return monthlyBillRows.filter { !$0.isPaid && Calendar.current.startOfDay(for: $0.dueDate) >= now }
+    }
+
+    private var paidRows: [BillRow] {
+        monthlyBillRows.filter { $0.isPaid }
     }
 
     // MARK: - Formatting
@@ -239,14 +1018,103 @@ struct ForecastSheet: View {
         return f.string(from: date).lowercased()
     }
 
-    private func dueLabel(for bill: Bill) -> String {
+    private func eyebrowText(forDate dueDate: Date, kind: RowKind) -> String {
         let cal = Calendar.current
         let now = cal.startOfDay(for: Date())
-        let due = cal.startOfDay(for: bill.effectiveDueDate)
+        let due = cal.startOfDay(for: dueDate)
         let days = cal.dateComponents([.day], from: now, to: due).day ?? 0
-        if days < 0 { return "overdue \(-days) \(-days == 1 ? "day" : "days")" }
-        if days == 0 { return "due today" }
-        return "due in \(days) \(days == 1 ? "day" : "days")"
+        switch kind {
+        case .overdue:
+            let n = max(0, -days)
+            return "overdue \(n)d"
+        case .upcoming:
+            if days == 0 { return "due today" }
+            return "in \(days) \(days == 1 ? "day" : "days")"
+        case .paid:
+            return "paid \(shortDate(dueDate))"
+        }
+    }
+}
+
+// MARK: - Info Popover
+
+struct ForecastInfoPopover: View {
+    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
+    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color("NormaPastelTeal"))
+
+                    Text("your month")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                        .foregroundColor(.primary)
+                }
+
+                Text("the hero shows what's left after everything due this month — income minus bills and commitments. switch between this month and next month to plan ahead.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color("NormaPastelPurple"))
+
+                    Text("intentions")
+                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .foregroundColor(.primary)
+                }
+
+                Text("an intention is something you're thinking about spending on — picked up from notes like \"thinking about a $200 trip.\" they don't count against your month unless you upgrade them.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.seal")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color("NormaPastelPurple"))
+
+                    Text("commitments")
+                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .foregroundColor(.primary)
+                }
+
+                Text("when you're ready to act on an intention, long-press it and upgrade it to a commitment. commitments act like one-time bills — they get a due date and show up in the bills sections.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "switch.2")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color("NormaPastelPurple"))
+
+                    Text("what-if toggle")
+                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .foregroundColor(.primary)
+                }
+
+                Text("flip \"if i committed everything\" to see your month with all intentions counted. handy for sanity-checking before you upgrade anything.")
+                    .font(.normaInput(14))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(20)
+        }
+        .frame(width: 320, height: 500)
+        .background(Color("NormaBackground"))
     }
 }
 

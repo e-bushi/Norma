@@ -95,7 +95,6 @@ enum AnalyticsEvent {
     case chatMessageSent(isVoice: Bool, hasToolUse: Bool)
     case voiceModeActivated
     case voiceModeDeactivated(durationSeconds: Double)
-    case currencyConverterUsed(fromCurrency: String, toCurrency: String)
     case reminderToggled(enabled: Bool, daysBefore: Int)
 
     // Notification Events
@@ -144,7 +143,6 @@ enum AnalyticsEvent {
         case .chatMessageSent: return "chat_message_sent"
         case .voiceModeActivated: return "voice_mode_activated"
         case .voiceModeDeactivated: return "voice_mode_deactivated"
-        case .currencyConverterUsed: return "currency_converter_used"
         case .reminderToggled: return "reminder_toggled"
 
         // Notifications
@@ -217,8 +215,6 @@ enum AnalyticsEvent {
             return [:]
         case .voiceModeDeactivated(let durationSeconds):
             return ["duration_seconds": durationSeconds]
-        case .currencyConverterUsed(let fromCurrency, let toCurrency):
-            return ["from_currency": fromCurrency, "to_currency": toCurrency]
         case .reminderToggled(let enabled, let daysBefore):
             return ["enabled": enabled, "days_before": daysBefore]
 

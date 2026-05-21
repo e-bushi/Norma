@@ -12,6 +12,7 @@
 
 import SwiftUI
 import SwiftData
+import AVFoundation
 
 struct NotesListScreen: View {
     @Environment(\.modelContext) private var modelContext
@@ -24,15 +25,33 @@ struct NotesListScreen: View {
 
     @State private var titleText: String = "your notes"
     @State private var repo: NoteRepository?
-    @State private var activeTag: String = "#all"
+    /// Last fully-settled arc count, persisted across launches. Used as the
+    /// cold-launch placeholder so the hero doesn't flicker from a stale 0
+    /// while bills + Plaid balance are still in flight.
+    @AppStorage("cachedArcCount") private var cachedArcCount: Int = 0
+    /// Last fully-settled freedom-fund balance, persisted across launches so
+    /// the nav-bar capsule renders immediately with a correct number instead
+    /// of jumping when the Plaid balance lands ~3-5s later. Written from
+    /// onChange(of: freedomFund) once Plaid (if wired) has resolved.
+    @AppStorage("cachedFreedomFund") private var cachedFreedomFund: Double = 0
+
+    // Voice dictation (waveform button in bottom bar). Streams a Deepgram
+    // transcript and appends the final text to the most recent note — or
+    // creates a fresh note if the list is empty. Same Deepgram + AVAudioEngine
+    // wiring as the NoteCanvasView FAB.
+    @StateObject private var deepgramService = DeepgramService.shared
+    @State private var isRecording: Bool = false
+    @State private var voicePulse: Bool = false
+    @State private var voiceTranscript: String = ""
+    @State private var voiceAudioEngine: AVAudioEngine?
+
+    /// Observed for the per-row "extraction in progress" pulsing dot.
+    @State private var syncQueue = NoteSyncQueue.shared
     @State private var path: [Note] = []
     @State private var showArcDetail = false
-    @State private var isSearching = false
     @State private var searchText: String = ""
-    @FocusState private var searchFieldFocused: Bool
     @State private var showForecast = false
     @State private var showCalendar = false
-    @State private var showConverter = false
     @State private var showSettings = false
 
     // Entrance choreography
@@ -41,7 +60,6 @@ struct NotesListScreen: View {
     @State private var showHeroLine1 = false
     @State private var showHeroLine2 = false
     @State private var showHeroCount = false
-    @State private var showTags = false
     @State private var showList = false
     @State private var showBottom = false
 
@@ -52,6 +70,17 @@ struct NotesListScreen: View {
             return balance
         }
         return sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    /// The freedom-fund value used by the nav-bar capsule. Falls back to the
+    /// cached amount during the window between cold launch and the live
+    /// Plaid balance landing, so the capsule never renders zero or a stale
+    /// settings value just to flip moments later.
+    private var displayedFreedomFund: Double {
+        if isPlaidPending && cachedFreedomFund > 0 {
+            return cachedFreedomFund
+        }
+        return freedomFund
     }
 
     private var currency: String {
@@ -71,6 +100,29 @@ struct NotesListScreen: View {
         return 0
     }
 
+    /// The value rendered in the hero. Prefers the cached count until bills
+    /// have arrived; once live data is ready the computed value takes over.
+    private var displayedArcCount: Int {
+        isBillDataReady ? arcCount : cachedArcCount
+    }
+
+    /// Bills are loaded once we have any non-empty list — or once the data
+    /// manager has completed at least one sync (covers the "user genuinely
+    /// has zero bills" case so we don't shimmer forever).
+    private var isBillDataReady: Bool {
+        !billViewModel.bills.isEmpty || dataManager.lastSyncDate != nil
+    }
+
+    /// Plaid is pending when the user has wired a specific account to the
+    /// freedom fund but the live balance hasn't been fetched yet. Shimmer
+    /// runs during this window so the user knows the number may shift.
+    private var isPlaidPending: Bool {
+        guard let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId else {
+            return false
+        }
+        return !PlaidService.shared.connectedAccounts.contains(where: { $0.accountId == arcAccountId })
+    }
+
     private var filteredNotes: [Note] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return notes }
@@ -85,36 +137,21 @@ struct NotesListScreen: View {
         NavigationStack(path: $path) {
             ZStack(alignment: .bottom) {
                 NormaPalette.canvas.ignoresSafeArea()
+                // Subtle lavender wash over the canvas — gives the screen a
+                // slight purple cast without changing NormaPalette.canvas
+                // itself (other screens stay neutral). 4% opacity is enough
+                // to register on a dark surface without competing with the
+                // lavender accents on chips and capsules.
+                NormaPalette.lavender.opacity(0.04).ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 0) {
-                    topNav
-                        .opacity(showNav ? 1 : 0)
-                        .offset(y: showNav ? 0 : -8)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        heroBlock
 
-                    heroBlock
-
-                    tagRow
-                        .opacity(showTags ? 1 : 0)
-                        .offset(y: showTags ? 0 : 12)
-
-                    ZStack(alignment: .top) {
-                        ScrollView(showsIndicators: false) {
-                            listBody
-                                .padding(.bottom, 140)
-                        }
-                        .opacity(showList ? 1 : 0)
-                        .offset(y: showList ? 0 : 16)
-
-                        LinearGradient(
-                            colors: [
-                                NormaPalette.canvas,
-                                NormaPalette.canvas.opacity(0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 28)
-                        .allowsHitTesting(false)
+                        listBody
+                            .padding(.bottom, 140)
+                            .opacity(showList ? 1 : 0)
+                            .offset(y: showList ? 0 : 16)
                     }
                 }
 
@@ -123,11 +160,24 @@ struct NotesListScreen: View {
                     .offset(y: showBottom ? 0 : 24)
                     .scaleEffect(showBottom ? 1 : 0.96, anchor: .bottom)
             }
-            .navigationBarHidden(true)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    freedomFundToolbarItem
+                        .opacity(showNav ? 1 : 0)
+                }
+                .sharedBackgroundVisibility(.hidden)
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    settingsToolbarItem
+                        .opacity(showNav ? 1 : 0)
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
             .navigationDestination(for: Note.self) { note in
                 if let repo {
                     NoteCanvasView(note: note, repo: repo)
-                        .navigationBarHidden(true)
                 }
             }
         }
@@ -137,6 +187,42 @@ struct NotesListScreen: View {
                 self.repo = NoteRepository(context: modelContext)
             }
             runEntranceAnimation()
+        }
+        .onChange(of: arcCount) { _, newValue in
+            // Persist the fully-settled value as the cold-launch placeholder
+            // for the next session. Only write once bill data has arrived
+            // and Plaid (if applicable) has resolved, so we never cache a
+            // mid-load number.
+            if isBillDataReady && !isPlaidPending {
+                cachedArcCount = newValue
+            }
+        }
+        .onChange(of: freedomFund) { _, newValue in
+            // Mirror the arc-count writeback for the underlying fund amount.
+            // Only cache once Plaid (if wired) has resolved so we never
+            // persist the stale settings.freedomFund fallback.
+            if !isPlaidPending && newValue > 0 {
+                cachedFreedomFund = newValue
+            }
+            // Also re-write the arc count here. The standalone onChange(of:
+            // arcCount) only fires when the integer transitions, which
+            // misses the common case where bills landed first (count was
+            // computed and blocked by isPlaidPending) and Plaid then
+            // resolves to a value that produces the same arcCount — no
+            // arcCount transition, no cache write.
+            if isBillDataReady && !isPlaidPending {
+                cachedArcCount = arcCount
+            }
+        }
+        .onChange(of: path) { _, newPath in
+            // Safety net: if the user navigates into a note (or anywhere
+            // else) while dictation is live, stop the recording and append
+            // whatever was captured. Without this, a stray tap on a row
+            // mid-recording would leave Deepgram streaming in the
+            // background after the user has moved on.
+            if !newPath.isEmpty && isRecording {
+                stopVoiceRecording()
+            }
         }
         .sheet(isPresented: $showArcDetail) {
             ArcCountView(
@@ -159,11 +245,6 @@ struct NotesListScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
-        .sheet(isPresented: $showConverter) {
-            ConverterSheet()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(sessionViewModel)
@@ -174,186 +255,144 @@ struct NotesListScreen: View {
         }
     }
 
-    // MARK: - Top nav
+    // MARK: - Toolbar
 
-    private var topNav: some View {
-        Group {
-            if isSearching {
-                searchBar
-            } else {
-                defaultNav
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-    }
-
-    private var defaultNav: some View {
-        HStack {
-            Spacer()
-
-            Button {
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                showArcDetail = true
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(arcCount)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(NormaPalette.ink)
-                    Text(arcCount == 1 ? "month left" : "months left")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(NormaPalette.ink.opacity(0.6))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(Color.white.opacity(0.04)))
-                .overlay(Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var searchBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(NormaPalette.ink.opacity(0.5))
-                TextField("search notes", text: $searchText)
-                    .focused($searchFieldFocused)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14, weight: .medium))
+    /// Leading toolbar item: Norma's custom capsule pattern ("freedom fund · $X")
+    /// that opens ArcCountView. The system's per-item Liquid Glass wrap is
+    /// suppressed via `.sharedBackgroundVisibility(.hidden)` on the
+    /// ToolbarItem itself, so this capsule's own fill + stroke render
+    /// directly against the nav bar's glass material.
+    private var freedomFundToolbarItem: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showArcDetail = true
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("freedom fund")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(NormaPalette.ink.opacity(0.6))
+                Text("·")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(NormaPalette.ink.opacity(0.4))
+                Text(formatCapsuleCurrency(displayedFreedomFund))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(NormaPalette.ink)
-                    .tint(NormaPalette.lavender)
-                    .submitLabel(.search)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(NormaPalette.ink.opacity(0.4))
-                    }
-                    .buttonStyle(.plain)
-                }
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.5, dampingFraction: 0.82), value: displayedFreedomFund)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 7)
             .background(Capsule().fill(Color.white.opacity(0.04)))
             .overlay(Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1))
-
-            Button {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-                    isSearching = false
-                    searchText = ""
-                }
-                searchFieldFocused = false
-            } label: {
-                Text("cancel")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(NormaPalette.ink.opacity(0.7))
-            }
-            .buttonStyle(.plain)
+            .fixedSize()
         }
+        .buttonStyle(.plain)
+    }
+
+    /// Trailing toolbar item: settings gear with a live dither shader as its
+    /// background. Sized to match the leading freedom-fund capsule so both
+    /// nav-bar pills read as part of the same family. iOS 26's default glass
+    /// wrap is suppressed via `.sharedBackgroundVisibility(.hidden)` on the
+    /// ToolbarItem.
+    private var settingsToolbarItem: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showSettings = true
+        } label: {
+            Color.clear
+                .frame(width: 14, height: 14)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    DitherShaderView(intensity: 1.0, dotSize: 0.8)
+                        .clipShape(Capsule())
+                )
+                .overlay(Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func formatCapsuleCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(currency) \(Int(amount))"
     }
 
     // MARK: - Hero
 
     private var heroBlock: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("your")
-                .font(heroFont)
-                .tracking(-2.88)  // -0.04em × 72
-                .foregroundStyle(NormaPalette.ink)
-                .opacity(showHeroLine1 ? 1 : 0)
-                .offset(y: showHeroLine1 ? 0 : 18)
-                .blur(radius: showHeroLine1 ? 0 : 6)
-
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("notes")
-                    .font(heroFont)
-                    .tracking(-2.88)
-                    .foregroundStyle(NormaPalette.ink)
-                    .opacity(showHeroLine2 ? 1 : 0)
-                    .offset(y: showHeroLine2 ? 0 : 18)
-                    .blur(radius: showHeroLine2 ? 0 : 6)
-                Text(".")
-                    .font(heroFont)
-                    .foregroundStyle(NormaPalette.lavender)
-                    .padding(.trailing, 12)
-                    .opacity(showHeroLine2 ? 1 : 0)
-                    .offset(y: showHeroLine2 ? 0 : 18)
-                Text("/\(notes.count)")
-                    .font(.system(size: 30, weight: .regular))
-                    .tracking(-0.6)
-                    .foregroundStyle(NormaPalette.inkMuted)
-                    .opacity(showHeroCount ? 1 : 0)
-                    .offset(y: showHeroCount ? 0 : 12)
+        Group {
+            if freedomFund > 0 {
+                heroAffordability
+            } else {
+                heroEmptyFund
             }
         }
         .padding(.horizontal, 24)
-        .padding(.top, 26)
+        .padding(.top, 0)
         .padding(.bottom, 22)
     }
 
-    private var heroFont: Font { .system(size: 72, weight: .bold) }
-
-    // MARK: - Tag row
-
-    private var tagRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(allTags, id: \.self) { tag in
-                    tagPill(tag, active: tag == activeTag)
-                }
+    private var heroAffordability: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            heroLine("you can pay", visible: showHeroLine1)
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text("\(displayedArcCount)")
+                    .font(heroFont)
+                    .tracking(-2.56)
+                    .foregroundStyle(NormaPalette.ink)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.5, dampingFraction: 0.82), value: displayedArcCount)
+                    .modifier(ShimmerModifier(active: isPlaidPending))
+                    .opacity(showHeroLine2 ? 1 : 0)
+                    .offset(y: showHeroLine2 ? 0 : 18)
+                    .blur(radius: showHeroLine2 ? 0 : 6)
+                heroLine(displayedArcCount == 1 ? "month" : "months", visible: showHeroLine2)
             }
-            .padding(.horizontal, 24)
-        }
-        .padding(.bottom, 22)
-    }
-
-    /// Combines #all with the union of all tags across notes (deduped, ordered).
-    private var allTags: [String] {
-        var seen: Set<String> = []
-        var out: [String] = ["#all"]
-        for note in notes {
-            for tag in note.tags {
-                let key = tag.hasPrefix("#") ? tag : "#\(tag)"
-                if seen.insert(key).inserted { out.append(key) }
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                heroLine("of bills", visible: showHeroCount)
+                heroAccentPeriod(visible: showHeroCount)
             }
         }
-        return out
     }
 
-    private func tagPill(_ tag: String, active: Bool) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-                activeTag = tag
+    private var heroEmptyFund: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            heroLine("add cash", visible: showHeroLine1)
+            heroLine("to your", visible: showHeroLine2)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                heroLine("freedom fund", visible: showHeroCount)
+                heroAccentPeriod(visible: showHeroCount)
             }
-        } label: {
-            Text(tag)
-                .font(.system(size: 13, weight: active ? .semibold : .medium))
-                .foregroundStyle(active ? NormaPalette.canvas : NormaPalette.ink)
-                .padding(.vertical, 9)
-                .padding(.horizontal, 16)
-                .background {
-                    if active {
-                        Capsule().fill(NormaPalette.lavender)
-                    }
-                }
-                .overlay {
-                    Capsule().stroke(
-                        active ? NormaPalette.lavender : NormaPalette.ink.opacity(0.32),
-                        style: StrokeStyle(
-                            lineWidth: 1,
-                            dash: active ? [] : [3, 3]
-                        )
-                    )
-                }
         }
-        .buttonStyle(.plain)
     }
+
+    @ViewBuilder
+    private func heroLine(_ text: String, visible: Bool) -> some View {
+        Text(text)
+            .font(heroFont)
+            .tracking(-2.56)
+            .foregroundStyle(NormaPalette.ink)
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 18)
+            .blur(radius: visible ? 0 : 6)
+    }
+
+    @ViewBuilder
+    private func heroAccentPeriod(visible: Bool) -> some View {
+        Text(".")
+            .font(heroFont)
+            .foregroundStyle(NormaPalette.lavender)
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 18)
+    }
+
+    private var heroFont: Font { .system(size: 64, weight: .bold) }
 
     // MARK: - List body
 
@@ -428,11 +467,15 @@ struct NotesListScreen: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(displayTitle(for: note))
-                    .font(.system(size: 18, weight: .bold))
-                    .tracking(-0.18)  // -0.01em × 18
-                    .foregroundStyle(NormaPalette.ink)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(displayTitle(for: note))
+                        .font(.system(size: 18, weight: .bold))
+                        .tracking(-0.18)  // -0.01em × 18
+                        .foregroundStyle(NormaPalette.ink)
+                        .lineLimit(1)
+
+                    extractionPulseDot(for: note)
+                }
 
                 if let preview = previewText(for: note) {
                     Text(preview)
@@ -461,6 +504,22 @@ struct NotesListScreen: View {
         }
     }
 
+    /// Small lavender dot that fades in and pulses while the AI extractor
+    /// is running for this note. Mirrors NoteCanvasView's DitherShader hint
+    /// in a compact form — gives the list-view a heartbeat indicator so the
+    /// user can see that just-dictated text is being processed without
+    /// having to open the note.
+    @ViewBuilder
+    private func extractionPulseDot(for note: Note) -> some View {
+        let isSyncing = syncQueue.state(for: note.id) == .syncing
+        Circle()
+            .fill(NormaPalette.lavender)
+            .frame(width: 6, height: 6)
+            .modifier(ShimmerModifier(active: isSyncing))
+            .opacity(isSyncing ? 1 : 0)
+            .animation(.easeInOut(duration: 0.25), value: isSyncing)
+    }
+
     // MARK: - Bottom bar
 
     private var bottomBar: some View {
@@ -476,46 +535,188 @@ struct NotesListScreen: View {
                     impact.impactOccurred()
                     showCalendar = true
                 }
-                bottomIcon(systemName: "arrow.left.arrow.right") {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .glassEffect(in: Capsule())
+            .overlay(
+                Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1)
+            )
+
+            HStack(spacing: 0) {
+                bottomIcon(systemName: "plus") {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
                     impact.impactOccurred()
-                    showConverter = true
-                }
-                bottomIcon(systemName: "gearshape") {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    showSettings = true
+                    createNewNote()
                 }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
             .glassEffect(in: Capsule())
             .overlay(
-                Capsule().stroke(
-                    NormaPalette.ink.opacity(0.32),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
+                Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1)
             )
 
             Spacer()
 
-            Button(action: {
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
-                createNewNote()
-            }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(NormaPalette.lavender)
-                    .frame(width: 56, height: 56)
-                    .glassEffect(in: Circle())
-                    .overlay(Circle().stroke(NormaPalette.lavender.opacity(0.7), lineWidth: 1))
-                    .shadow(color: NormaPalette.lavender.opacity(0.35), radius: 18, x: 0, y: 0)
-            }
-            .buttonStyle(PressScaleButtonStyle())
+            voiceButton
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 32)
+        .padding(.bottom, 8)
+    }
+
+    /// Voice-dictation button. Tapping starts a Deepgram live transcription;
+    /// tapping again stops it and appends the final transcript to the most
+    /// recent note (or creates a new note if the list is empty), then shows
+    /// a confirmation toast. Mirrors the visual states of NoteCanvasView's
+    /// voiceFAB: lavender fill + pulse while recording, glass otherwise.
+    private var voiceButton: some View {
+        Button(action: handleVoiceTap) {
+            ZStack {
+                if isRecording {
+                    DitherShaderView(intensity: 1.0, dotSize: 0.8)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(.clear)
+                        .glassEffect(in: Circle())
+                }
+
+                Image(systemName: isRecording ? "stop.fill" : "waveform")
+                    .font(.system(size: isRecording ? 18 : 22, weight: .medium))
+                    .foregroundStyle(isRecording ? Color.white : NormaPalette.lavender)
+            }
+            .frame(width: 56, height: 56)
+            .overlay(
+                Circle().stroke(
+                    NormaPalette.lavender.opacity(0.7),
+                    lineWidth: 1
+                )
+            )
+            .shadow(
+                color: NormaPalette.lavender.opacity(isRecording ? 0.65 : 0.35),
+                radius: isRecording ? 24 : 18,
+                x: 0, y: 0
+            )
+            .scaleEffect(voicePulse ? 1.08 : 1.0)
+            // Extend the hit area beyond the 56pt visual so taps that land
+            // just outside the circle (common with thumbs at the bottom of
+            // the screen, especially mid-recording when the user is trying
+            // to stop) still register on the button instead of falling
+            // through to a note row underneath.
+            .frame(width: 80, height: 80)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .onChange(of: isRecording) { _, recording in
+            if recording {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    voicePulse = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    voicePulse = false
+                }
+            }
+        }
+    }
+
+    private func handleVoiceTap() {
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+
+        if isRecording {
+            stopVoiceRecording()
+        } else {
+            startVoiceRecording()
+        }
+    }
+
+    private func startVoiceRecording() {
+        AVAudioApplication.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                guard granted else {
+                    print("NotesListScreen: microphone permission denied")
+                    return
+                }
+                self.beginVoiceTranscription()
+            }
+        }
+    }
+
+    private func beginVoiceTranscription() {
+        voiceTranscript = ""
+        isRecording = true
+
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+
+            let engine = AVAudioEngine()
+            voiceAudioEngine = engine
+
+            try deepgramService.startLiveTranscription(
+                audioEngine: engine,
+                onPartialResult: { transcript in
+                    self.voiceTranscript = transcript
+                },
+                onFinalResult: { transcript in
+                    self.voiceTranscript = transcript
+                },
+                onError: { error in
+                    print("NotesListScreen: deepgram error: \(error)")
+                    self.stopVoiceRecording()
+                }
+            )
+        } catch {
+            print("NotesListScreen: failed to start voice input: \(error)")
+            isRecording = false
+        }
+    }
+
+    private func stopVoiceRecording() {
+        deepgramService.stopTranscription()
+        isRecording = false
+        voiceAudioEngine = nil
+
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("NotesListScreen: failed to deactivate audio session: \(error)")
+        }
+
+        let captured = voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        voiceTranscript = ""
+        guard !captured.isEmpty else { return }
+
+        appendDictationToLatestNote(captured)
+    }
+
+    /// Appends the captured transcript to the most-recent note (the @Query is
+    /// already sorted by updatedAt desc, so notes.first is the latest). If
+    /// the list is empty, a fresh note is created to hold the transcript.
+    /// Bumps updatedAt so the note bubbles to the top of the list, then
+    /// shows a confirmation toast.
+    private func appendDictationToLatestNote(_ text: String) {
+        guard let repo else { return }
+
+        let target: Note
+        if let latest = notes.first {
+            target = latest
+            let trimmedExisting = latest.rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let newText = trimmedExisting.isEmpty
+                ? text
+                : latest.rawText + (latest.rawText.hasSuffix("\n") ? "" : "\n") + text
+            repo.updateText(newText, on: latest)
+        } else {
+            let fresh = Note()
+            modelContext.insert(fresh)
+            target = fresh
+            repo.updateText(text, on: fresh)
+        }
+
+        ToastManager.shared.show(.noteProcessing(noteTitle: target.title))
     }
 
     private func bottomIcon(systemName: String, action: (() -> Void)? = nil) -> some View {
@@ -566,9 +767,8 @@ struct NotesListScreen: View {
         let line1 = DispatchTime.now() + 0.18
         let line2 = DispatchTime.now() + 0.32
         let count = DispatchTime.now() + 0.46
-        let tags = DispatchTime.now() + 0.55
-        let list = DispatchTime.now() + 0.65
-        let bottom = DispatchTime.now() + 0.78
+        let list = DispatchTime.now() + 0.55
+        let bottom = DispatchTime.now() + 0.68
 
         DispatchQueue.main.asyncAfter(deadline: nav) {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showNav = true }
@@ -581,9 +781,6 @@ struct NotesListScreen: View {
         }
         DispatchQueue.main.asyncAfter(deadline: count) {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showHeroCount = true }
-        }
-        DispatchQueue.main.asyncAfter(deadline: tags) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showTags = true }
         }
         DispatchQueue.main.asyncAfter(deadline: list) {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { showList = true }
@@ -665,6 +862,38 @@ private struct PressScaleButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
             .animation(.spring(response: 0.28, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+/// Soft opacity pulse applied to a single chunk of text — used on the hero
+/// digit while Plaid's balance fetch is still in flight, signalling that the
+/// value may shift. Pulsing rather than gradient-sweeping because the digit
+/// is small; a sweep would barely register on one or two characters.
+struct ShimmerModifier: ViewModifier {
+    let active: Bool
+    @State private var pulsing: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(active ? (pulsing ? 0.45 : 1.0) : 1.0)
+            .onChange(of: active) { _, isActive in
+                if isActive {
+                    pulsing = false
+                    withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                        pulsing = true
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        pulsing = false
+                    }
+                }
+            }
+            .onAppear {
+                guard active else { return }
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    pulsing = true
+                }
+            }
     }
 }
 

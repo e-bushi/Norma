@@ -16,6 +16,11 @@ struct DitherShaderView: View {
     /// `.animation(.easeInOut(duration: 0.4), value: intensity)` on the parent.
     var intensity: Double = 1.0
 
+    /// Points per dither cell. 2.0 = original full-screen canvas look;
+    /// drop to 0.7–1.0 for finer dots on small surfaces (toolbar pills,
+    /// badges) where the default cells read as chunky squares.
+    var dotSize: Double = 2.0
+
     @State private var startDate = Date()
 
     var body: some View {
@@ -29,7 +34,8 @@ struct DitherShaderView: View {
                         ShaderLibrary.normaDither(
                             .float2(geo.size.width, geo.size.height),
                             .float(Float(time)),
-                            .float(Float(intensity))
+                            .float(Float(intensity)),
+                            .float(Float(dotSize))
                         )
                     )
             }

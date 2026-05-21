@@ -26,7 +26,7 @@ struct ArcCountView: View {
     @State private var pillVisible = false
     @State private var rangeVisible = false
     @State private var activityVisible = false
-    private let heroWordTotal = 8
+    private var heroWordTotal: Int { arcCount > 0 ? 5 : 4 }
 
     private let bg = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
@@ -145,20 +145,26 @@ struct ArcCountView: View {
                 .offset(y: pillVisible ? 0 : 8)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 14) {
-                        waveWord("you", index: 0)
-                        waveWord("can", index: 1)
-                        waveWord("pay", index: 2)
-                    }
-                    HStack(spacing: 14) {
-                        waveWord("\(arcCount)", index: 3)
-                        waveWord(arcCount == 1 ? "month" : "months", index: 4)
-                    }
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        waveWord("of", index: 5)
+                    if arcCount > 0 {
+                        HStack(spacing: 14) {
+                            waveWord("\(arcCount)", index: 0)
+                            waveWord(arcCount == 1 ? "month" : "months", index: 1)
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            waveWord("of", index: 2)
+                            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                                waveWord("runway", index: 3)
+                                waveWord(".", index: 4, color: accentPurple)
+                            }
+                        }
+                    } else {
+                        HStack(spacing: 14) {
+                            waveWord("time", index: 0)
+                            waveWord("to", index: 1)
+                        }
                         HStack(alignment: .firstTextBaseline, spacing: 0) {
-                            waveWord("bills", index: 6)
-                            waveWord(".", index: 7, color: accentPurple)
+                            waveWord("refill", index: 2)
+                            waveWord(".", index: 3, color: accentPurple)
                         }
                     }
                 }
@@ -880,25 +886,23 @@ struct IncomeEditSheet: View {
 struct ArcInfoPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
             HStack(spacing: 10) {
                 Image(systemName: "shield.fill")
                     .font(.system(size: 24))
                     .foregroundColor(Color("NormaPastelTeal"))
 
-                Text("What are Arcs?")
+                Text("your runway")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                     .foregroundColor(.primary)
             }
 
-            // Explanation
             VStack(alignment: .leading, spacing: 12) {
-                Text("An arc represents one month of bills covered by your Freedom Fund.")
+                Text("runway is how many months your freedom fund can cover your bills.")
                     .font(.normaInput(14))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("For example, if your monthly bills are $1,500 and you have $4,500 saved, you have 3 arcs — meaning you're covered for 3 months.")
+                Text("if your monthly bills are $1,500 and you have $4,500 saved, you have 3 months of runway.")
                     .font(.normaInput(14))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -906,36 +910,17 @@ struct ArcInfoPopover: View {
 
             Divider()
 
-            // Coin reward section
             HStack(spacing: 10) {
-                Image(systemName: "star.circle.fill")
+                Image(systemName: "building.columns.fill")
                     .font(.system(size: 20))
                     .foregroundColor(Color("NormaPastelPurple"))
 
-                Text("Coin Rewards")
+                Text("connect an account")
                     .font(.custom(FontFamily.Rubik.medium, size: 15))
                     .foregroundColor(.primary)
             }
 
-            Text("Each time you earn a new arc, you unlock a new coin. As you save more, your coins evolve — celebrating your progress toward financial freedom.")
-                .font(.normaInput(14))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-
-            // Remember section
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color("NormaPastelBeige"))
-
-                Text("Remember")
-                    .font(.custom(FontFamily.Rubik.medium, size: 15))
-                    .foregroundColor(.primary)
-            }
-
-            Text("You'll lose 1 arc each month as bills come due. Keep adding to your Freedom Fund to stay protected.")
+            Text("link a bank account and your balance becomes your freedom fund automatically — no manual updates.")
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

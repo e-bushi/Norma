@@ -72,12 +72,15 @@ constant int bayer8[64] = {
     half4 currentColor,
     float2 size,
     float time,
-    float intensity
+    float intensity,
+    float dotSize
 ) {
     // Tuned to visually match Paper's <Dithering /> output — chunkier dots,
     // sparser coverage, larger noise blobs than the bare Paper params imply.
     const float speedParam = 0.55;
-    const float dotSize    = 2.0;   // points per dither cell — smaller = blobs read more solid
+    // dotSize comes in from the caller (points per dither cell — smaller
+    // values give finer, denser dots). 2.0 matches the original full-screen
+    // canvas; smaller surfaces (toolbar pills, badges) can pass 0.7–1.0.
     const float noiseFreq  = 2.6;   // blobs per screen width (was ~7.8)
     // Bias noise downward so only the brightest peaks light dots — gives
     // the sparse "cloud" feel instead of full 50% coverage.

@@ -14,41 +14,61 @@ struct ToastView: View {
     var body: some View {
         VStack {
             if toastManager.isShowing, let toast = toastManager.currentToast {
-                HStack(spacing: 10) {
-                    // Icon
-                    Image(systemName: toast.icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(toast.iconColor)
-
-                    // Message text
-                    Text(toast.message)
-                        .font(.custom(FontFamily.Rubik.medium, size: 14))
-                        .foregroundColor(.primary)
-
-                    // Detail text (if any)
-                    if let detail = toast.detail {
-                        Text("·")
-                            .foregroundColor(.secondary)
-                        Text(detail)
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
-                            .foregroundColor(.secondary)
+                HStack(alignment: .top, spacing: 12) {
+                    // Leading icon, rendered like an iOS notification app glyph.
+                    // Image assets render bare with a rounded corner (the asset
+                    // is its own visual); SF Symbols sit inside a tinted chip.
+                    if let asset = toast.imageAsset {
+                        Image(asset)
+                            .resizable()
+                            .renderingMode(.original)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 38, height: 38)
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    } else {
+                        Image(systemName: toast.icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(toast.iconColor)
+                            .frame(width: 38, height: 38)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(toast.iconColor.opacity(0.18))
+                            )
                     }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toast.message)
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .foregroundColor(.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        if let detail = toast.detail {
+                            Text(detail)
+                                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background(
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .fill(Color.gray.opacity(0.08))
-                        .glassEffect(in: Capsule())
+                        .glassEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 )
                 .overlay(
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 )
-                .padding(.horizontal, 20)
+                .shadow(color: Color.black.opacity(0.25), radius: 18, x: 0, y: 8)
+                .padding(.horizontal, 12)
                 .padding(.top, 8)
                 .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)),
+                    insertion: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
                     removal: .move(edge: .top).combined(with: .opacity)
                 ))
                 .onTapGesture {
@@ -58,7 +78,7 @@ struct ToastView: View {
 
             Spacer()
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: toastManager.isShowing)
+        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: toastManager.isShowing)
     }
 }
 

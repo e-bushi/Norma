@@ -102,41 +102,49 @@ struct NoteCanvasView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 0) {
-                topNav.appears(appeared, delay: 0.04)
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 0) {
                         dateLabel.appears(appeared, delay: 0.10)
                         heroTitle.appears(appeared, delay: 0.16)
-                        Group {
-                            if isEditable {
-                                editableBody
-                            } else {
-                                VStack(alignment: .leading, spacing: 24) {
-                                    noteBody
-                                    cursor
-                                }
+                    }
+                    Group {
+                        if isEditable {
+                            editableBody
+                        } else {
+                            VStack(alignment: .leading, spacing: 24) {
+                                noteBody
+                                cursor
                             }
                         }
-                        .appears(appeared, delay: 0.24)
-                        Spacer(minLength: 200)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                    .padding(.bottom, 120)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        focusedField = nil
-                    }
+                    .appears(appeared, delay: 0.24)
+                    Spacer(minLength: 200)
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 120)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    focusedField = nil
+                }
             }
+            .scrollDismissesKeyboard(.interactively)
 
             voiceFAB
                 .popAppears(appeared, delay: 0.32)
                 .padding(.trailing, 20)
                 .padding(.bottom, 28)
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                backToolbarItem
+            }
+            .sharedBackgroundVisibility(.hidden)
         }
         .preferredColorScheme(.dark)
         .task(id: note.id) {
@@ -169,29 +177,28 @@ struct NoteCanvasView: View {
         }
     }
 
-    private var topNav: some View {
-        HStack(spacing: 8) {
-            Button(action: { if let onBack { onBack() } else { dismiss() } }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("notes")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundStyle(NormaPalette.ink.opacity(0.92))
-                .padding(.vertical, 8)
-                .padding(.horizontal, 14)
-                .glassEffect(in: Capsule())
-                .overlay(
-                    Capsule().stroke(NormaPalette.ink.opacity(0.25), lineWidth: 1)
-                )
+    /// Leading toolbar item: custom "← notes" capsule that mirrors the
+    /// freedom-fund capsule on the list screen. The `ToolbarItem` opts out
+    /// of iOS 26's shared Liquid Glass wrap so our capsule's own fill +
+    /// stroke render directly against the nav bar's glass material.
+    private var backToolbarItem: some View {
+        Button(action: { if let onBack { onBack() } else { dismiss() } }) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("notes")
+                    .font(.system(size: 13, weight: .medium))
             }
-            .buttonStyle(.plain)
-            Spacer()
+            .foregroundStyle(NormaPalette.ink.opacity(0.92))
+            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .glassEffect(in: Capsule())
+            .overlay(
+                Capsule().stroke(NormaPalette.ink.opacity(0.25), lineWidth: 1)
+            )
+            .fixedSize()
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .buttonStyle(.plain)
     }
 
     private var dateLabel: some View {
@@ -225,7 +232,7 @@ struct NoteCanvasView: View {
         Group {
             if focusedField == .title {
                 TextField("", text: $titleText, axis: .vertical)
-                    .font(.system(size: 56, weight: .bold))
+                    .font(.system(size: 56, weight: .heavy))
                     .foregroundStyle(.white)
                     .textFieldStyle(.plain)
                     .lineLimit(1...3)
@@ -241,7 +248,7 @@ struct NoteCanvasView: View {
                  +
                  Text(".")
                     .foregroundColor(NormaPalette.lavender))
-                    .font(.system(size: 56, weight: .bold))
+                    .font(.system(size: 56, weight: .heavy))
                     .lineLimit(1...3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())

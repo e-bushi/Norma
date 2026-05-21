@@ -67,6 +67,27 @@ struct Toast: Identifiable, Equatable {
     let icon: String
     let iconColor: Color
     let duration: Double
+    /// Optional asset-catalog image name. When set, the toast renders this
+    /// image in the leading icon slot instead of the SF Symbol in `icon`.
+    /// Used for Norma-branded toasts (e.g. note-processing) where the logo
+    /// reads better than a system glyph.
+    let imageAsset: String?
+
+    init(
+        message: String,
+        detail: String? = nil,
+        icon: String,
+        iconColor: Color,
+        duration: Double,
+        imageAsset: String? = nil
+    ) {
+        self.message = message
+        self.detail = detail
+        self.icon = icon
+        self.iconColor = iconColor
+        self.duration = duration
+        self.imageAsset = imageAsset
+    }
 
     static func == (lhs: Toast, rhs: Toast) -> Bool {
         lhs.id == rhs.id
@@ -144,6 +165,28 @@ struct Toast: Identifiable, Equatable {
             icon: "checkmark.circle.fill",
             iconColor: Color("NormaPastelTeal"),
             duration: 2.5
+        )
+    }
+
+    /// "Norma is processing your note" — shown after a voice-dictation
+    /// transcript is appended to a note from the list. Stays on screen
+    /// longer than the standard success toast so the user can read the
+    /// note title before it dismisses.
+    static func noteProcessing(noteTitle: String? = nil) -> Toast {
+        let trimmed = noteTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail: String
+        if let trimmed, !trimmed.isEmpty {
+            detail = "norma is processing '\(trimmed)' in the background"
+        } else {
+            detail = "norma is processing your note in the background"
+        }
+        return Toast(
+            message: "added to your note",
+            detail: detail,
+            icon: "sparkles", // fallback if image is missing at runtime
+            iconColor: Color(red: 0.588, green: 0.463, blue: 0.851), // lavender
+            duration: 5.0,
+            imageAsset: "norma-logo"
         )
     }
 }
