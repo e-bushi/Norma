@@ -783,6 +783,11 @@ enum OnboardingStep: CaseIterable {
     // Quantitative questions.
     case currencyIncome        // O4  — currency + optional monthly take-home
 
+    // Capstone insight — two sentences synthesized from the answer set
+    // (persona mirror + norma's role). Reuses the intro interstitial
+    // component to wave them in with per-word haptics.
+    case capstoneInsight
+
     // Auth tail.
     case saveAnswers          // O2  — apple/google or "prefer email? sign up"
     case authentication       // email signup form (when chosen from saveAnswers)

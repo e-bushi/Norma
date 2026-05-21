@@ -338,6 +338,27 @@ struct OnboardingCoordinatorView: View {
                 )
                 .environmentObject(onboardingViewModel)
 
+            case .capstoneInsight:
+                let insight = OnboardingInsightRubric.compute(
+                    .init(
+                        triedBefore: onboardingViewModel.triedBefore,
+                        messyMoney: onboardingViewModel.messyMoney,
+                        writingFrequency: onboardingViewModel.writingFrequency,
+                        moneyShapedThoughts: onboardingViewModel.moneyShapedThoughts,
+                        tabsCartsCameraRoll: onboardingViewModel.tabsCartsCameraRoll,
+                        thoughtsCameBack: onboardingViewModel.thoughtsCameBack,
+                        incomeShape: onboardingViewModel.incomeShape,
+                        whatsWorking: onboardingViewModel.whatsWorking
+                    )
+                )
+                OnboardingIntroInterstitialView(
+                    phases: [insight.mirror, insight.role],
+                    // Insights are denser than the standard intro lines —
+                    // give the user time to actually read each one.
+                    holdDuration: 3.5,
+                    onContinue: { onboardingViewModel.moveToNextStep() }
+                )
+
             case .saveAnswers:
                 OnboardingSaveAnswersView(
                     onEmailSignUp: {

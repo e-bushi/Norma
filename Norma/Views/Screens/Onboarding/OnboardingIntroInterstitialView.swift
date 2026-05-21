@@ -13,6 +13,11 @@ import UIKit
 
 struct OnboardingIntroInterstitialView: View {
     let phases: [String]
+    /// How long each phase lingers on screen after the wave-in completes
+    /// before advancing. Defaults are tuned for the initial onboarding
+    /// intro; callers (e.g. the capstone insight) can lengthen this so
+    /// the user has time to read a more meaningful line.
+    let holdDuration: Double
     let onContinue: () -> Void
 
     /// Default phrases for the very first interstitial in the onboarding flow.
@@ -23,9 +28,11 @@ struct OnboardingIntroInterstitialView: View {
             "first, a few questions.",
             "no wrong answers. just helps norma fit you."
         ],
+        holdDuration: Double = 1.7,
         onContinue: @escaping () -> Void
     ) {
         self.phases = phases
+        self.holdDuration = holdDuration
         self.onContinue = onContinue
     }
 
@@ -80,7 +87,6 @@ struct OnboardingIntroInterstitialView: View {
         // Wave-in finishes ~ (0.5 + (n - 1) * 0.06)s, plus a hold, then advance.
         let wordCount = phases[phaseIndex].split(separator: " ").count
         let inDuration = 0.5 + Double(max(0, wordCount - 1)) * 0.06
-        let holdDuration: Double = 1.7
         let totalShow = inDuration + holdDuration
 
         let snapshotIndex = phaseIndex
