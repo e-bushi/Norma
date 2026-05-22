@@ -167,12 +167,65 @@ class AppCoordinator: ObservableObject {
                 .environmentObject(dataManager)
         
         case .main:
-            RootView()
-                .environmentObject(dataManager)
-                .environmentObject(sessionViewModel)
-                .environmentObject(conversationManager)
-                .environmentObject(self)
+            // Wrap the main app in a paywall gate. Users without an active
+            // subscription or trial see the paywall full-screen instead of
+            // the app — purchase or restore is the only way past. Context
+            // depends on whether they've ever started a trial before.
+            PaywallGate {
+                RootView()
+                    .environmentObject(self.dataManager)
+                    .environmentObject(self.sessionViewModel)
+                    .environmentObject(self.conversationManager)
+                    .environmentObject(self)
+            }
         }
+    }
+}
+
+// MARK: - Paywall gate
+
+/// Wraps the main app and swaps in the PaywallView when the user is not
+/// subscribed and not in a trial. Observes SubscriptionManager so the gate
+/// dissolves automatically once a purchase or restore lands.
+struct PaywallGate<Content: View>: View {
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        ZStack {
+            if hasAccess {
+                content()
+                    .transition(.opacity)
+            } else {
+                PaywallView(context: paywallContext)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: hasAccess)
+        .task {
+            // Refresh subscription status on entry so a returning user's
+            // gate reflects the latest reality (trial may have expired
+            // server-side, purchase may have been made on another device).
+            await subscriptionManager.checkSubscriptionStatus()
+        }
+    }
+
+    private var hasAccess: Bool {
+        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
+    }
+
+    /// Returning users who've already burned their trial see the
+    /// "your trial wrapped" framing; everyone else sees the onboarding
+    /// trial-offer framing.
+    private var paywallContext: PaywallContext {
+        if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
+            return .trialExpired
+        }
+        return .onboarding
     }
 }
 

@@ -71,6 +71,18 @@ final class BillTokenBridge {
                 guard let dataManager else { return }
                 do {
                     try await dataManager.addBillWithEncryption(newBill)
+                    // Mirror the BillViewModel.addBill path: after the bill is
+                    // persisted, look it back up (so we have the server-assigned
+                    // ID) and schedule its OS reminders. Without this, notes-
+                    // sourced bills had isReminderOn = true but never actually
+                    // fired notifications.
+                    if let persisted = dataManager.bills.first(where: {
+                        $0.name == newBill.name
+                        && abs($0.amount - newBill.amount) < 0.01
+                        && $0.userId == newBill.userId
+                    }), persisted.isReminderOn {
+                        await NotificationService.shared.scheduleBillReminders(for: persisted)
+                    }
                 } catch {
                     print("BillTokenBridge: failed to persist bill from token — \(error)")
                 }
