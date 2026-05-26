@@ -377,12 +377,12 @@ struct PaywallView: View {
     }
 
     private var monthlyPriceText: String {
-        guard let product = monthlyProduct else { return "$9.99/mo" }
+        guard let product = monthlyProduct else { return "$3.99/mo" }
         return "\(product.priceString)/mo"
     }
 
     private var annualPriceText: String {
-        guard let product = annualProduct else { return "$8.33/mo, billed annually" }
+        guard let product = annualProduct else { return "$3.33/mo, billed annually" }
         if let monthlyEquiv = product.monthlyEquivalentPrice {
             return "\(monthlyEquiv)/mo, billed annually"
         }
@@ -390,12 +390,12 @@ struct PaywallView: View {
     }
 
     private var annualStrikethroughText: String? {
-        guard let monthly = monthlyProduct else { return "$9.99/mo" }
+        guard let monthly = monthlyProduct else { return "$3.99/mo" }
         return "\(monthly.priceString)/mo"
     }
 
     private var annualBadgeText: String? {
-        guard let annual = annualProduct else { return "save 17%" }
+        guard let annual = annualProduct else { return "save 16%" }
         if let monthly = monthlyProduct {
             let monthlyPrice = (monthly.package.storeProduct.price as NSDecimalNumber).doubleValue
             let annualMonthly = (annual.package.storeProduct.price as NSDecimalNumber).doubleValue / 12
