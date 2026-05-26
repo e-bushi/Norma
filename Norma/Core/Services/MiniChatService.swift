@@ -20,13 +20,21 @@ final class MiniChatService {
     func send(
         userText: String,
         noteContext: String,
+        profileContext: String = "",
         history: [MiniChatMessage]
     ) async throws -> String {
+        let profileBlock = profileContext.isEmpty ? "" : """
+
+        What norma knows about this user:
+        \(profileContext)
+        """
+
         let systemPrompt = """
         You are Norma, a concise financial companion embedded inside a note. The user is looking at a specific note and wants a quick exchange — a calculation, a clarification, or a suggestion.
 
         Context from the current note:
         \(noteContext)
+        \(profileBlock)
 
         Rules:
         - Keep responses under 120 characters. One sentence. No exceptions.
@@ -51,11 +59,18 @@ final class MiniChatService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
 
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 256,
-            "system": systemPrompt,
+            "system": [
+                [
+                    "type": "text",
+                    "text": systemPrompt,
+                    "cache_control": ["type": "ephemeral"]
+                ]
+            ],
             "messages": messages
         ]
 

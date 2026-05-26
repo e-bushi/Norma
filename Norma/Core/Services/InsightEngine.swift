@@ -157,22 +157,36 @@ final class InsightEngine {
             )
         )
 
-        let requestBody = AnthropicRequest(
-            model: model,
-            maxTokens: 1024,
-            system: systemPrompt,
-            messages: [AnthropicMessage(role: "user", content: .text(userMessage))],
-            tools: [tool],
-            toolChoice: AnthropicToolChoice(type: "tool", name: "record_insights"),
-            stream: nil
-        )
+        // Build request body with JSONSerialization so we can use the array
+        // form of `system` with cache_control for prompt caching.
+        let toolEncoder = JSONEncoder()
+        let toolData = try toolEncoder.encode(tool)
+        let toolDict = try JSONSerialization.jsonObject(with: toolData) as! [String: Any]
+
+        let body: [String: Any] = [
+            "model": model,
+            "max_tokens": 1024,
+            "system": [
+                [
+                    "type": "text",
+                    "text": systemPrompt,
+                    "cache_control": ["type": "ephemeral"]
+                ]
+            ],
+            "messages": [
+                ["role": "user", "content": userMessage]
+            ],
+            "tools": [toolDict],
+            "tool_choice": ["type": "tool", "name": "record_insights"]
+        ]
 
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.httpBody = try JSONEncoder().encode(requestBody)
+        request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, _) = try await URLSession.shared.data(for: request)
         return try parseResponse(data)

@@ -32,6 +32,10 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var showRecoveryPhraseSheet = false
 
+    // UserProfile
+    @Query private var userProfiles: [UserProfile]
+    private var userProfile: UserProfile? { userProfiles.first }
+
     // Plaid state
     @State private var isLoadingLinkToken = false
     @State private var isExchangingToken = false
@@ -70,6 +74,10 @@ struct SettingsView: View {
                         .padding(.bottom, 18)
 
                     bankingSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
+                    normaKnowsSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
 
@@ -394,6 +402,108 @@ struct SettingsView: View {
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$\(String(format: "%.2f", amount))"
+    }
+
+    // MARK: - What Norma Knows
+
+    @ViewBuilder
+    private var normaKnowsSection: some View {
+        let profile = userProfile
+        let hasFixedFields = profile != nil && (
+            profile!.currency != "USD" ||
+            profile!.incomeAmount != nil ||
+            profile!.payday != nil ||
+            profile!.runwayFloor != nil
+        )
+        let hasFacts = profile != nil && !profile!.facts.isEmpty
+        let hasAnything = hasFixedFields || hasFacts
+
+        section(title: "what norma knows") {
+            if !hasAnything {
+                Text("norma hasn't learned anything yet")
+                    .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                    .foregroundStyle(dimText)
+                    .padding(.vertical, 10)
+            } else {
+                // Fixed fields
+                if let profile {
+                    if profile.currency != "USD" {
+                        knowledgeRow(label: "currency", value: profile.currency.lowercased())
+                    }
+                    if let income = profile.incomeAmount {
+                        let freq = profile.incomeFrequency?.lowercased() ?? "unknown"
+                        knowledgeRow(label: "income", value: "\(formatBalance(income, currency: profile.currency)) \(freq)")
+                    }
+                    if let day = profile.payday {
+                        knowledgeRow(label: "payday", value: "day \(day) of month")
+                    }
+                    if let floor = profile.runwayFloor {
+                        let months = floor == 1.0 ? "month" : "months"
+                        knowledgeRow(label: "runway floor", value: "\(String(format: "%g", floor)) \(months)")
+                    }
+                }
+
+                // Freeform facts
+                if hasFacts {
+                    ForEach(profile!.facts) { fact in
+                        factRow(fact: fact)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func knowledgeRow(label: String, value: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(accentPurple)
+                .frame(width: 22, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundStyle(mutedText)
+                Text(value)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundStyle(cream)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func factRow(fact: FinancialFact) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(accentPurple)
+                .frame(width: 22, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(fact.fact.lowercased())
+                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                    .foregroundStyle(cream)
+                Text(fact.source.lowercased())
+                    .font(.custom(FontFamily.Rubik.regular, size: 11))
+                    .foregroundStyle(dimText)
+            }
+            Spacer(minLength: 8)
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    userProfile?.removeFact(id: fact.id)
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(dimText)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 10)
     }
 
     private var supportSection: some View {

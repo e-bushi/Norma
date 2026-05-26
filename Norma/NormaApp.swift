@@ -25,7 +25,8 @@ struct NormaApp: App {
                     NoteToken.self,
                     CachedBill.self,
                     FreedomFundEntry.self,
-                    Insight.self
+                    Insight.self,
+                    UserProfile.self
             )
             // Start the note sync queue's network monitor at launch and bind it
             // to the SwiftData container so flush() can persist extracted tokens.

@@ -11,15 +11,16 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct MiniChatView: View {
+    @Environment(\.modelContext) private var modelContext
     let note: Note
     var onDismiss: (() -> Void)? = nil
-    /// When Norma initiates the chat, pass a pre-filled message.
-    /// When the user initiates, leave nil for a generated greeting.
     var initialMessage: String? = nil
 
     @State private var history: [MiniChatMessage] = []
+    @State private var profile: UserProfile?
     @State private var responseText: String = ""
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
@@ -46,6 +47,7 @@ struct MiniChatView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             inputFocused = true
+            loadProfile()
             loadInitialMessage()
         }
     }
@@ -117,6 +119,18 @@ struct MiniChatView: View {
 
     // MARK: - Actions
 
+    private func loadProfile() {
+        let descriptor = FetchDescriptor<UserProfile>()
+        if let existing = try? modelContext.fetch(descriptor).first {
+            profile = existing
+        } else {
+            let newProfile = UserProfile()
+            modelContext.insert(newProfile)
+            try? modelContext.save()
+            profile = newProfile
+        }
+    }
+
     private func loadInitialMessage() {
         guard !didLoadInitial else { return }
         didLoadInitial = true
@@ -134,6 +148,7 @@ struct MiniChatView: View {
                     let response = try await chatService.send(
                         userText: "The user just opened the chat on this note. Give a brief, helpful opening line based on what's in the note — a quick observation, a calculation you noticed, or ask if they need help with something specific.",
                         noteContext: context,
+                        profileContext: profile?.aiContext ?? "",
                         history: []
                     )
                     let trimmed = String(response.prefix(maxResponseLength))
@@ -162,6 +177,7 @@ struct MiniChatView: View {
                 let response = try await chatService.send(
                     userText: text,
                     noteContext: context,
+                    profileContext: profile?.aiContext ?? "",
                     history: history
                 )
                 let trimmed = String(response.prefix(maxResponseLength))
