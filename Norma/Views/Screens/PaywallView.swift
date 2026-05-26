@@ -336,7 +336,7 @@ struct PaywallView: View {
     /// shown. We surface them here as a single quiet line under the CTA.
     private var disclosureCopy: String {
         guard let product = findProduct(isMonthly: selectedBilling == .monthly) else {
-            return "7 days free, then auto-renews. cancel anytime."
+            return "3 days free, then auto-renews. cancel anytime."
         }
         let price = product.priceString
         let cadence = product.isMonthly ? "month" : "year"
@@ -344,7 +344,7 @@ struct PaywallView: View {
         if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
             return "auto-renews at \(price)/\(cadence). cancel anytime."
         }
-        return "7 days free, then \(price)/\(cadence). cancel anytime."
+        return "3 days free, then \(price)/\(cadence). cancel anytime."
     }
 
     // MARK: - Legal
