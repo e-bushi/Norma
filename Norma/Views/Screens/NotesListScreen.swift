@@ -44,6 +44,8 @@ struct NotesListScreen: View {
     @State private var voicePulse: Bool = false
     @State private var voiceTranscript: String = ""
     @State private var voiceAudioEngine: AVAudioEngine?
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var showPaywall = false
 
     /// Observed for the per-row "extraction in progress" pulsing dot.
     @State private var syncQueue = NoteSyncQueue.shared
@@ -52,6 +54,7 @@ struct NotesListScreen: View {
     @State private var searchText: String = ""
     @State private var showForecast = false
     @State private var showCalendar = false
+    @State private var showInsights = false
     @State private var showSettings = false
 
     // Entrance choreography
@@ -62,6 +65,10 @@ struct NotesListScreen: View {
     @State private var showHeroCount = false
     @State private var showList = false
     @State private var showBottom = false
+
+    private var hasAccess: Bool {
+        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
+    }
 
     private var freedomFund: Double {
         if let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId,
@@ -187,6 +194,9 @@ struct NotesListScreen: View {
                 self.repo = NoteRepository(context: modelContext)
             }
             runEntranceAnimation()
+            Task.detached { @MainActor in
+                await InsightEngine.shared.analyzeIfNeeded(modelContext: modelContext)
+            }
         }
         .onChange(of: arcCount) { _, newValue in
             // Persist the fully-settled value as the cold-launch placeholder
@@ -240,8 +250,18 @@ struct NotesListScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
+        .sheet(isPresented: $showInsights) {
+            InsightsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
         .sheet(isPresented: $showCalendar) {
             CalendarSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
@@ -266,7 +286,11 @@ struct NotesListScreen: View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
-            showArcDetail = true
+            if hasAccess {
+                showArcDetail = true
+            } else {
+                showPaywall = true
+            }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("freedom fund")
@@ -410,13 +434,26 @@ struct NotesListScreen: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("nothing yet")
-                .font(.system(size: 16))
-                .foregroundStyle(NormaPalette.inkSubtle)
-            Text("tap today's note to start writing.")
-                .font(.system(size: 13))
-                .foregroundStyle(NormaPalette.inkMuted)
+        VStack(alignment: .leading, spacing: 20) {
+            Image(systemName: "text.page")
+                .font(.system(size: 36, weight: .thin))
+                .foregroundStyle(NormaPalette.lavender.opacity(0.5))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("nothing here yet")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(NormaPalette.ink)
+
+                (Text("tap ")
+                + Text(Image(systemName: "plus"))
+                    .foregroundColor(NormaPalette.lavender)
+                + Text(" to write a note or ")
+                + Text(Image(systemName: "waveform"))
+                    .foregroundColor(NormaPalette.lavender)
+                + Text(" to speak one"))
+                    .font(.system(size: 14))
+                    .foregroundStyle(NormaPalette.inkSubtle)
+            }
         }
         .padding(.top, 12)
     }
@@ -535,6 +572,11 @@ struct NotesListScreen: View {
                     impact.impactOccurred()
                     showCalendar = true
                 }
+                bottomIcon(systemName: "point.3.connected.trianglepath.dotted") {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showInsights = true
+                }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
@@ -547,7 +589,11 @@ struct NotesListScreen: View {
                 bottomIcon(systemName: "plus") {
                     let impact = UIImpactFeedbackGenerator(style: .medium)
                     impact.impactOccurred()
-                    createNewNote()
+                    if hasAccess {
+                        createNewNote()
+                    } else {
+                        showPaywall = true
+                    }
                 }
             }
             .padding(.vertical, 6)
@@ -627,8 +673,10 @@ struct NotesListScreen: View {
 
         if isRecording {
             stopVoiceRecording()
-        } else {
+        } else if hasAccess {
             startVoiceRecording()
+        } else {
+            showPaywall = true
         }
     }
 

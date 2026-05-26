@@ -167,17 +167,11 @@ class AppCoordinator: ObservableObject {
                 .environmentObject(dataManager)
         
         case .main:
-            // Wrap the main app in a paywall gate. Users without an active
-            // subscription or trial see the paywall full-screen instead of
-            // the app — purchase or restore is the only way past. Context
-            // depends on whether they've ever started a trial before.
-            PaywallGate {
-                RootView()
-                    .environmentObject(self.dataManager)
-                    .environmentObject(self.sessionViewModel)
-                    .environmentObject(self.conversationManager)
-                    .environmentObject(self)
-            }
+            RootView()
+                .environmentObject(self.dataManager)
+                .environmentObject(self.sessionViewModel)
+                .environmentObject(self.conversationManager)
+                .environmentObject(self)
         }
     }
 }

@@ -24,7 +24,8 @@ struct NormaApp: App {
                     Note.self,
                     NoteToken.self,
                     CachedBill.self,
-                    FreedomFundEntry.self
+                    FreedomFundEntry.self,
+                    Insight.self
             )
             // Start the note sync queue's network monitor at launch and bind it
             // to the SwiftData container so flush() can persist extracted tokens.
@@ -33,17 +34,17 @@ struct NormaApp: App {
                 NoteSyncQueue.shared.attach(modelContainer: container)
             }
 
-            Purchases.logLevel = .debug
+//            Purchases.logLevel = .debug
             Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf", appUserID: nil)
 
             // PostHog Analytics
-            let config = PostHogConfig(
-                apiKey: "phc_t1kD6Jxu4T8LtnVCEKP1vZW3SrVW8t03vJJ5dhY3ND9",
-                host: "https://us.i.posthog.com"
-            )
-            config.debug = true  // Enable debug logging to see events in console
-            config.flushAt = 1   // Flush after every event for testing (remove in production)
-            PostHogSDK.shared.setup(config)
+//            let config = PostHogConfig(
+//                apiKey: "phc_t1kD6Jxu4T8LtnVCEKP1vZW3SrVW8t03vJJ5dhY3ND9",
+//                host: "https://us.i.posthog.com"
+//            )
+//            config.debug = true  // Enable debug logging to see events in console
+//            config.flushAt = 1   // Flush after every event for testing (remove in production)
+//            PostHogSDK.shared.setup(config)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

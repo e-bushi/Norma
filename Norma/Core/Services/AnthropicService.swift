@@ -10,7 +10,7 @@ import Foundation
 class AnthropicService {
     static let shared = AnthropicService()
     
-    private let apiKey = "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"
+    let anthropicApiKey = "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"
     private let baseURL = "https://api.anthropic.com/v1/messages"
     
     // Model cascade in order of preference (optimized for quality and capability)
@@ -46,7 +46,7 @@ class AnthropicService {
                 var request = URLRequest(url: URL(string: baseURL)!)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                request.setValue(anthropicApiKey, forHTTPHeaderField: "x-api-key")
                 request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
                 
                 let requestBody = AnthropicRequest(
@@ -245,7 +245,7 @@ class AnthropicService {
                         var request = URLRequest(url: URL(string: baseURL)!)
                         request.httpMethod = "POST"
                         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                        request.setValue(anthropicApiKey, forHTTPHeaderField: "x-api-key")
                         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
                         
                         let requestBody = AnthropicRequest(
