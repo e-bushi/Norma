@@ -52,6 +52,13 @@ class NotificationService: NSObject, ObservableObject {
         notificationCenter.delegate = self
         setupNotificationCategories()
         checkNotificationPermission()
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.checkNotificationPermission()
+        }
     }
     
     // MARK: - Permission Management

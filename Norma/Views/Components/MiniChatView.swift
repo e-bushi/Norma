@@ -150,7 +150,7 @@ struct MiniChatView: View {
                     let response = try await chatService.send(
                         userText: "The user just opened the chat on this note. Give a brief, helpful opening line based on what's in the note — a quick observation, a calculation you noticed, or ask if they need help with something specific.",
                         noteContext: context,
-                        profileContext: profile?.aiContext ?? "",
+                        profileContext: profileContextString,
                         history: [],
                         toolContext: toolContext
                     )
@@ -180,7 +180,7 @@ struct MiniChatView: View {
                 let response = try await chatService.send(
                     userText: text,
                     noteContext: context,
-                    profileContext: profile?.aiContext ?? "",
+                    profileContext: profileContextString,
                     history: history,
                     toolContext: toolContext
                 )
@@ -207,10 +207,27 @@ struct MiniChatView: View {
             modelContext: modelContext,
             bills: billViewModel.bills,
             billViewModel: billViewModel,
+            sessionViewModel: sessionViewModel,
             freedomFund: freedomFund,
             totalMonthlyBills: totalMonthlyBills,
             note: note
         )
+    }
+
+    private var profileContextString: String {
+        var lines: [String] = []
+        if let settings = sessionViewModel.currentUser?.settings {
+            lines.append("currency: \(settings.currency)")
+            if settings.monthlyIncome > 0 { lines.append("monthly income: \(settings.monthlyIncome)") }
+            if settings.freedomFund > 0 { lines.append("freedom fund: \(settings.freedomFund)") }
+        }
+        if let p = profile {
+            if let day = p.payday { lines.append("payday: day \(day)") }
+            if let freq = p.incomeFrequency { lines.append("income frequency: \(freq)") }
+            if let floor = p.runwayFloor { lines.append("runway floor: \(floor) months") }
+            for fact in p.facts { lines.append("- \(fact.fact)") }
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func buildNoteContext() -> String {

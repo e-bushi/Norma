@@ -68,6 +68,14 @@ struct RootView: View {
                 plaidService.connectedAccounts = accounts
                 plaidService.isConnected = true
 
+                // Sync the Plaid balance back to settings.freedomFund so the
+                // entire app reads a consistent number.
+                if let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId,
+                   let account = accounts.first(where: { $0.accountId == arcAccountId }),
+                   let balance = account.balances.current {
+                    sessionViewModel.currentUser?.settings.freedomFund = balance
+                }
+
                 // If the user has wired a specific account to their freedom
                 // fund, record any balance change as a ledger entry.
                 recordArcBalanceIfChanged(userId: userId, accounts: accounts)

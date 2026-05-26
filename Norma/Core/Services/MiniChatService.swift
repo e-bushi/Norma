@@ -22,6 +22,7 @@ final class MiniChatService {
         let modelContext: ModelContext
         let bills: [Bill]
         let billViewModel: BillViewModel
+        let sessionViewModel: SessionViewModel
         let freedomFund: Double
         let totalMonthlyBills: Double
         let note: Note
@@ -123,6 +124,7 @@ final class MiniChatService {
                         modelContext: ctx.modelContext,
                         bills: ctx.bills,
                         billViewModel: ctx.billViewModel,
+                        sessionViewModel: ctx.sessionViewModel,
                         freedomFund: ctx.freedomFund,
                         totalMonthlyBills: ctx.totalMonthlyBills,
                         note: ctx.note

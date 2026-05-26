@@ -133,9 +133,23 @@ final class NoteSyncQueue {
             pendingUpserts.remove(noteId)
             noteStates[noteId] = .synced
             scheduleSyncedFade(noteId: noteId)
+
+            let hasNotifiable = tokens.contains { $0.kind == .bill || $0.kind == .reminder }
+            if hasNotifiable {
+                requestNotificationPermissionIfNeeded()
+            }
         } catch {
             print("NoteSyncQueue extract failed id=\(noteId) error=\(error)")
             noteStates[noteId] = .error
+        }
+    }
+
+    private func requestNotificationPermissionIfNeeded() {
+        let service = NotificationService.shared
+        guard !service.isNotificationsEnabled else { return }
+        guard service.notificationPermissionStatus == .notDetermined else { return }
+        Task {
+            _ = await service.requestNotificationPermission()
         }
     }
 

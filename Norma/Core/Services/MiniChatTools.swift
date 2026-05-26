@@ -140,6 +140,7 @@ final class MiniChatToolExecutor {
         modelContext: ModelContext,
         bills: [Bill],
         billViewModel: BillViewModel,
+        sessionViewModel: SessionViewModel,
         freedomFund: Double,
         totalMonthlyBills: Double,
         note: Note
@@ -152,11 +153,11 @@ final class MiniChatToolExecutor {
         case "get_freedom_fund":
             return executeFreedomFund(balance: freedomFund, monthlyBills: totalMonthlyBills)
         case "get_profile":
-            return executeGetProfile(modelContext: modelContext)
+            return executeGetProfile(modelContext: modelContext, sessionViewModel: sessionViewModel)
         case "save_fact":
             return executeSaveFact(input: input, modelContext: modelContext, note: note)
         case "update_profile":
-            return executeUpdateProfile(input: input, modelContext: modelContext)
+            return await executeUpdateProfile(input: input, modelContext: modelContext, sessionViewModel: sessionViewModel)
         default:
             return "unknown tool: \(name)"
         }
@@ -207,12 +208,40 @@ final class MiniChatToolExecutor {
         return "freedom fund: \(String(format: "%.2f", balance)). \(runway)."
     }
 
-    private static func executeGetProfile(modelContext: ModelContext) -> String {
-        let descriptor = FetchDescriptor<UserProfile>()
-        guard let profile = try? modelContext.fetch(descriptor).first else {
-            return "no profile saved yet."
+    private static func executeGetProfile(modelContext: ModelContext, sessionViewModel: SessionViewModel) -> String {
+        var lines: [String] = []
+
+        if let settings = sessionViewModel.currentUser?.settings {
+            lines.append("currency: \(settings.currency)")
+            if settings.monthlyIncome > 0 {
+                lines.append("monthly income: \(settings.monthlyIncome)")
+            }
+            if settings.freedomFund > 0 {
+                lines.append("freedom fund: \(settings.freedomFund)")
+            }
         }
-        return profile.aiContext
+
+        let descriptor = FetchDescriptor<UserProfile>()
+        if let userProfile = try? modelContext.fetch(descriptor).first {
+            if let day = userProfile.payday {
+                lines.append("payday: day \(day) of month")
+            }
+            if let freq = userProfile.incomeFrequency {
+                lines.append("income frequency: \(freq)")
+            }
+            if let floor = userProfile.runwayFloor {
+                lines.append("runway floor: \(floor) months")
+            }
+            if !userProfile.facts.isEmpty {
+                lines.append("")
+                lines.append("things norma knows:")
+                for fact in userProfile.facts {
+                    lines.append("- \(fact.fact) (from: \(fact.source))")
+                }
+            }
+        }
+
+        return lines.isEmpty ? "no profile saved yet." : lines.joined(separator: "\n")
     }
 
     private static func executeSaveFact(input: [String: Any], modelContext: ModelContext, note: Note) -> String {
@@ -235,39 +264,51 @@ final class MiniChatToolExecutor {
         return "saved: \(fact)"
     }
 
-    private static func executeUpdateProfile(input: [String: Any], modelContext: ModelContext) -> String {
-        let descriptor = FetchDescriptor<UserProfile>()
-        let profile: UserProfile
-        if let existing = try? modelContext.fetch(descriptor).first {
-            profile = existing
-        } else {
-            profile = UserProfile()
-            modelContext.insert(profile)
+    private static func executeUpdateProfile(input: [String: Any], modelContext: ModelContext, sessionViewModel: SessionViewModel) async -> String {
+        var updated: [String] = []
+
+        // Currency and income live on ProfileSettings (Supabase-backed)
+        if var profile = sessionViewModel.currentUser {
+            var changed = false
+            if let currency = input["currency"] as? String {
+                profile.settings.currency = currency
+                changed = true
+                updated.append("currency → \(currency)")
+            }
+            if let amount = input["income_amount"] as? Double {
+                profile.settings.monthlyIncome = amount
+                changed = true
+                updated.append("income → \(amount)")
+            }
+            if changed {
+                await sessionViewModel.updateUserProfile(profile)
+            }
         }
 
-        var updated: [String] = []
-        if let currency = input["currency"] as? String {
-            profile.currency = currency
-            updated.append("currency → \(currency)")
+        // Payday, frequency, runway floor live on UserProfile (local)
+        let descriptor = FetchDescriptor<UserProfile>()
+        let userProfile: UserProfile
+        if let existing = try? modelContext.fetch(descriptor).first {
+            userProfile = existing
+        } else {
+            userProfile = UserProfile()
+            modelContext.insert(userProfile)
         }
-        if let amount = input["income_amount"] as? Double {
-            profile.incomeAmount = amount
-            updated.append("income → \(amount)")
-        }
+
         if let freq = input["income_frequency"] as? String {
-            profile.incomeFrequency = freq
+            userProfile.incomeFrequency = freq
             updated.append("frequency → \(freq)")
         }
         if let day = input["payday"] as? Int {
-            profile.payday = day
+            userProfile.payday = day
             updated.append("payday → day \(day)")
         }
         if let floor = input["runway_floor"] as? Double {
-            profile.runwayFloor = floor
+            userProfile.runwayFloor = floor
             updated.append("runway floor → \(floor) months")
         }
 
-        profile.updatedAt = Date()
+        userProfile.updatedAt = Date()
         try? modelContext.save()
         return updated.isEmpty ? "nothing to update." : "updated: \(updated.joined(separator: ", "))"
     }
