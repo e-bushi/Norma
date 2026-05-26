@@ -65,6 +65,7 @@ struct NotesListScreen: View {
     @State private var showHeroCount = false
     @State private var showList = false
     @State private var showBottom = false
+    @State private var isVisible = false
 
     private var hasAccess: Bool {
         subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
@@ -189,6 +190,8 @@ struct NotesListScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
         .task {
             if repo == nil {
                 self.repo = NoteRepository(context: modelContext)
@@ -199,27 +202,16 @@ struct NotesListScreen: View {
             }
         }
         .onChange(of: arcCount) { _, newValue in
-            // Persist the fully-settled value as the cold-launch placeholder
-            // for the next session. Only write once bill data has arrived
-            // and Plaid (if applicable) has resolved, so we never cache a
-            // mid-load number.
+            guard isVisible else { return }
             if isBillDataReady && !isPlaidPending {
                 cachedArcCount = newValue
             }
         }
         .onChange(of: freedomFund) { _, newValue in
-            // Mirror the arc-count writeback for the underlying fund amount.
-            // Only cache once Plaid (if wired) has resolved so we never
-            // persist the stale settings.freedomFund fallback.
+            guard isVisible else { return }
             if !isPlaidPending && newValue > 0 {
                 cachedFreedomFund = newValue
             }
-            // Also re-write the arc count here. The standalone onChange(of:
-            // arcCount) only fires when the integer transitions, which
-            // misses the common case where bills landed first (count was
-            // computed and blocked by isPlaidPending) and Plaid then
-            // resolves to a value that produces the same arcCount — no
-            // arcCount transition, no cache write.
             if isBillDataReady && !isPlaidPending {
                 cachedArcCount = arcCount
             }
@@ -303,7 +295,7 @@ struct NotesListScreen: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(NormaPalette.ink)
                     .contentTransition(.numericText())
-                    .animation(.spring(response: 0.5, dampingFraction: 0.82), value: displayedFreedomFund)
+                    .animation(isVisible ? .spring(response: 0.5, dampingFraction: 0.82) : .none, value: displayedFreedomFund)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -371,7 +363,7 @@ struct NotesListScreen: View {
                     .tracking(-2.56)
                     .foregroundStyle(NormaPalette.ink)
                     .contentTransition(.numericText())
-                    .animation(.spring(response: 0.5, dampingFraction: 0.82), value: displayedArcCount)
+                    .animation(isVisible ? .spring(response: 0.5, dampingFraction: 0.82) : .none, value: displayedArcCount)
                     .modifier(ShimmerModifier(active: isPlaidPending))
                     .opacity(showHeroLine2 ? 1 : 0)
                     .offset(y: showHeroLine2 ? 0 : 18)

@@ -15,6 +15,8 @@ import SwiftData
 
 struct MiniChatView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
     let note: Note
     var onDismiss: (() -> Void)? = nil
     var initialMessage: String? = nil
@@ -149,7 +151,8 @@ struct MiniChatView: View {
                         userText: "The user just opened the chat on this note. Give a brief, helpful opening line based on what's in the note — a quick observation, a calculation you noticed, or ask if they need help with something specific.",
                         noteContext: context,
                         profileContext: profile?.aiContext ?? "",
-                        history: []
+                        history: [],
+                        toolContext: toolContext
                     )
                     let trimmed = String(response.prefix(maxResponseLength))
                     history.append(MiniChatMessage(role: .assistant, text: trimmed))
@@ -178,7 +181,8 @@ struct MiniChatView: View {
                     userText: text,
                     noteContext: context,
                     profileContext: profile?.aiContext ?? "",
-                    history: history
+                    history: history,
+                    toolContext: toolContext
                 )
                 let trimmed = String(response.prefix(maxResponseLength))
                 history.append(MiniChatMessage(role: .assistant, text: trimmed))
@@ -188,6 +192,25 @@ struct MiniChatView: View {
             }
             isLoading = false
         }
+    }
+
+    private var freedomFund: Double {
+        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    private var totalMonthlyBills: Double {
+        billViewModel.bills.reduce(0.0) { $0 + $1.amount }
+    }
+
+    private var toolContext: MiniChatService.ToolContext {
+        MiniChatService.ToolContext(
+            modelContext: modelContext,
+            bills: billViewModel.bills,
+            billViewModel: billViewModel,
+            freedomFund: freedomFund,
+            totalMonthlyBills: totalMonthlyBills,
+            note: note
+        )
     }
 
     private func buildNoteContext() -> String {

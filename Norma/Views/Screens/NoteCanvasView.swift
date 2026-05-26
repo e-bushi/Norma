@@ -23,6 +23,8 @@ struct NoteCanvasView: View {
     var onVoice: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
 
     @State private var titleText: String = ""
     @State private var bodyText: String = ""
@@ -153,6 +155,8 @@ struct NoteCanvasView: View {
         }
         .sheet(isPresented: $showMiniChat) {
             MiniChatView(note: note) { showMiniChat = false }
+                .environmentObject(billViewModel)
+                .environmentObject(sessionViewModel)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color(red: 0.075, green: 0.075, blue: 0.083))
