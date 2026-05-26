@@ -41,6 +41,7 @@ struct NoteCanvasView: View {
     @State private var isRecording: Bool = false
     @State private var voiceBaseText: String = ""
     @State private var voicePulse: Bool = false
+    @State private var showMiniChat: Bool = false
 
     enum Field: Hashable { case title, body }
 
@@ -132,10 +133,14 @@ struct NoteCanvasView: View {
             }
             .scrollDismissesKeyboard(.interactively)
 
-            voiceFAB
-                .popAppears(appeared, delay: 0.32)
-                .padding(.trailing, 20)
-                .padding(.bottom, 28)
+            HStack(spacing: 12) {
+                chatFAB
+                voiceFAB
+            }
+            .popAppears(appeared, delay: 0.32)
+            .padding(.trailing, 20)
+            .padding(.bottom, 28)
+
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -145,6 +150,12 @@ struct NoteCanvasView: View {
                 backToolbarItem
             }
             .sharedBackgroundVisibility(.hidden)
+        }
+        .sheet(isPresented: $showMiniChat) {
+            MiniChatView(note: note) { showMiniChat = false }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Color(red: 0.075, green: 0.075, blue: 0.083))
         }
         .preferredColorScheme(.dark)
         .task(id: note.id) {
@@ -337,6 +348,30 @@ struct NoteCanvasView: View {
         Rectangle()
             .fill(NormaPalette.lavender.opacity(0.7))
             .frame(width: 1.5, height: 22)
+    }
+
+    private var chatFAB: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.35)) { showMiniChat.toggle() }
+        } label: {
+            Circle()
+                .fill(.clear)
+                .glassEffect(in: Circle())
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "ellipsis.message")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(NormaPalette.ink)
+                )
+                .overlay(
+                    Circle().stroke(
+                        NormaPalette.ink.opacity(0.22),
+                        lineWidth: 1
+                    )
+                )
+        }
     }
 
     private var voiceFAB: some View {
