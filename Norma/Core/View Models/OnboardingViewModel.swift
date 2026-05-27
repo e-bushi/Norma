@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 
 @MainActor
 class OnboardingViewModel: ObservableObject {
@@ -63,6 +64,7 @@ class OnboardingViewModel: ObservableObject {
     private let supabaseService = SupabaseService.shared
     private let appleSignInManager = AppleSignInManager()
     private let googleSignInManager = GoogleSignInManager()
+    var modelContainer: ModelContainer?
 
     // MARK: - Initialization
 
@@ -730,12 +732,102 @@ class OnboardingViewModel: ObservableObject {
                 try await sessionViewModel.createUserProfile(newProfile)
             }
 
+            hydrateLocalProfile()
         } catch {
             print("Failed to save profile data: \(error)")
-            // Still allow completion view to show
+            hydrateLocalProfile()
         }
     }
 
+    /// Mirror onboarding answers into the local SwiftData UserProfile so the
+    /// AI always has context about the user — even offline.
+    private func hydrateLocalProfile() {
+        guard let container = modelContainer else { return }
+        let context = container.mainContext
+
+        let descriptor = FetchDescriptor<UserProfile>()
+        let profile: UserProfile
+        if let existing = try? context.fetch(descriptor).first {
+            profile = existing
+        } else {
+            profile = UserProfile()
+            context.insert(profile)
+        }
+
+        profile.currency = collectedData.currency
+        if collectedData.monthlyIncome > 0 {
+            profile.incomeAmount = collectedData.monthlyIncome
+        }
+
+        let onboardingFacts = buildOnboardingFacts()
+        profile.facts = profile.facts.filter { $0.source != "onboarding" } + onboardingFacts
+        profile.updatedAt = Date()
+        try? context.save()
+    }
+
+    private func buildOnboardingFacts() -> [FinancialFact] {
+        var facts: [FinancialFact] = []
+        let triedLabels: [String: String] = [
+            "budgeting_app": "a budgeting app", "spreadsheet": "spreadsheets",
+            "notes_app": "a notes app", "in_my_head": "mental math"
+        ]
+        let messyLabels: [String: String] = [
+            "no_clue": "not knowing where money goes", "bills_surprise": "bills surprising them",
+            "subs_creep": "subscriptions creeping up", "decisions": "decisions piling up"
+        ]
+        let freqLabels: [String: String] = [
+            "every_day": "writes things down every day",
+            "few_week": "writes things down a few times a week",
+            "sometimes": "writes things down sometimes",
+            "almost_never": "almost never writes things down"
+        ]
+        let shapeLabels: [String: String] = [
+            "steady": "steady paycheck", "lumpy": "lumpy/freelance income",
+            "mix": "mix of salary and extras", "no_fixed": "no fixed income right now"
+        ]
+        let workingLabels: [String: String] = [
+            "less_anx": "feeling less anxious about money",
+            "not_behind": "not feeling behind on bills",
+            "decisions": "acting on intentions instead of drifting",
+            "clarity": "knowing what they actually have"
+        ]
+        let thoughtsLabels: [String: String] = [
+            "few_3": "~3", "many_7": "~7", "lots_15": "~15", "uncount": "too many to count"
+        ]
+        let tabsLabels: [String: String] = [
+            "couple": "a couple", "handful": "a handful",
+            "many": "many", "lost": "lost count of"
+        ]
+        let loopLabels: [String: String] = [
+            "once_twice": "money thoughts rarely loop back",
+            "a_few": "a few money thoughts loop back unresolved",
+            "constant": "money thoughts constantly loop back",
+            "not_notice": "doesn't notice money thoughts looping anymore"
+        ]
+
+        func fact(_ text: String) { facts.append(FinancialFact(fact: text, source: "onboarding")) }
+
+        if !triedBefore.isEmpty {
+            let labels = triedBefore.compactMap { triedLabels[$0] }
+            if !labels.isEmpty { fact("has tried \(labels.joined(separator: ", ")) before") }
+        }
+        if !messyMoney.isEmpty {
+            let labels = messyMoney.compactMap { messyLabels[$0] }
+            if !labels.isEmpty { fact("messiest money issues: \(labels.joined(separator: ", "))") }
+        }
+        if let label = freqLabels[writingFrequency] { fact(label) }
+        if let label = shapeLabels[incomeShape] { fact("income shape: \(label)") }
+        if let label = workingLabels[whatsWorking] { fact("success = \(label)") }
+        if let label = thoughtsLabels[moneyShapedThoughts] {
+            fact("\(label) unwritten money thoughts per week")
+        }
+        if let label = tabsLabels[tabsCartsCameraRoll] {
+            fact("\(label) undecided items sitting in tabs/carts")
+        }
+        if let label = loopLabels[thoughtsCameBack] { fact(label) }
+
+        return facts
+    }
 }
 
 // MARK: - Supporting Types

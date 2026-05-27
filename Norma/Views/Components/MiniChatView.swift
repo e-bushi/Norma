@@ -26,7 +26,6 @@ struct MiniChatView: View {
     @State private var responseText: String = ""
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
-    @State private var showResponse: Bool = false
     @State private var didLoadInitial: Bool = false
     @FocusState private var inputFocused: Bool
 
@@ -34,18 +33,28 @@ struct MiniChatView: View {
     private let maxResponseLength = 120
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showResponse || isLoading {
-                responseArea
-                    .transition(.opacity.combined(with: .offset(y: 12)))
-                    .padding(.top, 40)
+        ZStack {
+            DitherShaderView(intensity: 1.0)
+                .blur(radius: 20)
+                .opacity(isLoading ? 1 : 0)
+                .animation(.easeInOut(duration: 0.5), value: isLoading)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    if !responseText.isEmpty && !isLoading {
+                        responseArea
+                            .transition(.opacity.combined(with: .offset(y: 12)))
+                            .padding(.top, 40)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                inputBar
             }
-
-            Spacer()
-
-            inputBar
+            .padding(.horizontal, 24)
         }
-        .padding(.horizontal, 24)
         .preferredColorScheme(.dark)
         .onAppear {
             inputFocused = true
@@ -57,30 +66,22 @@ struct MiniChatView: View {
     // MARK: - Response
 
     private var responseArea: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isLoading {
-                HStack(spacing: 6) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Circle()
-                            .fill(NormaPalette.ink.opacity(0.4))
-                            .frame(width: 8, height: 8)
-                    }
-                }
-            } else {
-                WaveTextView(
-                    text: responseText,
-                    font: .system(size: 28, weight: .bold),
-                    color: NormaPalette.ink,
-                    isAnimating: true,
-                    alignment: .leading,
-                    tracking: -0.8,
-                    wordSpacing: 8,
-                    lineSpacing: 4
-                )
-                .id(responseText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        WaveTextView(
+            text: responseText,
+            font: .system(size: 32, weight: .bold),
+            color: NormaPalette.ink,
+            isAnimating: true,
+            alignment: .leading,
+            tracking: -0.8,
+            wordSpacing: 8,
+            lineSpacing: 4,
+            onWordAppear: { _ in
+                UIImpactFeedbackGenerator(style: .soft)
+                    .impactOccurred(intensity: 0.4)
             }
-        }
+        )
+        .id(responseText)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Input
@@ -140,10 +141,8 @@ struct MiniChatView: View {
         if let message = initialMessage {
             responseText = String(message.prefix(maxResponseLength))
             history.append(MiniChatMessage(role: .assistant, text: responseText))
-            withAnimation(.easeOut(duration: 0.3)) { showResponse = true }
         } else {
             isLoading = true
-            withAnimation(.easeOut(duration: 0.2)) { showResponse = true }
             Task {
                 do {
                     let context = buildNoteContext()
@@ -156,11 +155,16 @@ struct MiniChatView: View {
                     )
                     let trimmed = String(response.prefix(maxResponseLength))
                     history.append(MiniChatMessage(role: .assistant, text: trimmed))
-                    withAnimation(.easeOut(duration: 0.25)) { responseText = trimmed }
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        responseText = trimmed
+                        isLoading = false
+                    }
                 } catch {
-                    withAnimation { responseText = "what can i help with?" }
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        responseText = "what can i help with?"
+                        isLoading = false
+                    }
                 }
-                isLoading = false
             }
         }
     }
@@ -171,8 +175,7 @@ struct MiniChatView: View {
 
         history.append(MiniChatMessage(role: .user, text: text))
         inputText = ""
-        isLoading = true
-        withAnimation(.easeOut(duration: 0.2)) { showResponse = true }
+        withAnimation(.easeOut(duration: 0.2)) { isLoading = true }
 
         Task {
             do {
@@ -186,11 +189,16 @@ struct MiniChatView: View {
                 )
                 let trimmed = String(response.prefix(maxResponseLength))
                 history.append(MiniChatMessage(role: .assistant, text: trimmed))
-                withAnimation(.easeOut(duration: 0.25)) { responseText = trimmed }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    responseText = trimmed
+                    isLoading = false
+                }
             } catch {
-                withAnimation { responseText = "something went wrong — try again." }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    responseText = "something went wrong — try again."
+                    isLoading = false
+                }
             }
-            isLoading = false
         }
     }
 

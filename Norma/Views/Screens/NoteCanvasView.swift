@@ -135,12 +135,13 @@ struct NoteCanvasView: View {
             }
             .scrollDismissesKeyboard(.interactively)
 
-            HStack(spacing: 12) {
+            HStack {
                 chatFAB
+                Spacer()
                 voiceFAB
             }
             .popAppears(appeared, delay: 0.32)
-            .padding(.trailing, 20)
+            .padding(.horizontal, 20)
             .padding(.bottom, 28)
 
         }
@@ -323,15 +324,18 @@ struct NoteCanvasView: View {
 
     private func scheduleBodySave(_ text: String) {
         guard let repo else { return }
-        // No-op if the text matches what's already persisted — prevents the
-        // initial mount's TextField rebind from firing a spurious save.
         guard text != note.rawText else { return }
+
+        // Immediately sync the model's rawText so the extraction race
+        // protection in NoteSyncQueue.processOne always compares against
+        // the latest user text — not the stale pre-debounce snapshot.
+        note.rawText = text
+
         saveTask?.cancel()
         saveTask = Task { @MainActor in
-            // Debounce typing so we don't fire an LLM call on every keystroke.
             try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled else { return }
-            repo.updateText(text, on: note)
+            repo.saveAndSync(note)
         }
     }
 
@@ -360,17 +364,15 @@ struct NoteCanvasView: View {
             impact.impactOccurred()
             withAnimation(.spring(response: 0.35)) { showMiniChat.toggle() }
         } label: {
-            Circle()
-                .fill(.clear)
-                .glassEffect(in: Circle())
-                .frame(width: 44, height: 44)
+            Text("Chat with Norma")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(NormaPalette.ink)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 18)
+                .background(.clear)
+                .glassEffect(in: Capsule())
                 .overlay(
-                    Image(systemName: "ellipsis.message")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(NormaPalette.ink)
-                )
-                .overlay(
-                    Circle().stroke(
+                    Capsule().stroke(
                         NormaPalette.ink.opacity(0.22),
                         lineWidth: 1
                     )

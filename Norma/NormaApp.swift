@@ -56,6 +56,9 @@ struct NormaApp: App {
             AppCoordinatorView()
                 .environmentObject(appCoordinator)
                 .modelContainer(modelContainer)
+                .task {
+                    appCoordinator.onboardingViewModel.modelContainer = modelContainer
+                }
         }
     }
 }

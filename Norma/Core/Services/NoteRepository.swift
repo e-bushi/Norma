@@ -59,6 +59,13 @@ final class NoteRepository {
         touch(note)
     }
 
+    /// Persist and enqueue a sync without overwriting rawText. Used when the
+    /// view has already set `note.rawText` immediately (for race protection)
+    /// and the debounced save just needs to flush to disk + trigger extraction.
+    func saveAndSync(_ note: Note) {
+        touch(note)
+    }
+
     /// Updates the user-editable hero title.
     func updateTitle(_ title: String?, on note: Note) {
         note.title = title
@@ -101,6 +108,13 @@ final class NoteRepository {
         to note: Note,
         in context: ModelContext
     ) {
+        // Deduplicate — the LLM occasionally emits the same entity twice
+        // when prose is ambiguous, contains typos, or rephrases the same fact.
+        let tokens: [NoteToken] = {
+            var seen = Set<String>()
+            return tokens.filter { seen.insert(deduplicationKey(for: $0)).inserted }
+        }()
+
         struct Carry { let confirmedAt: Date; let remindAt: Date }
         let outgoingReminders = note.tokens.filter { $0.kind == .reminder }
 
@@ -239,6 +253,18 @@ final class NoteRepository {
               !subject.isEmpty
         else { return nil }
         return subject
+    }
+
+    /// Fingerprint for deduplication within a single extraction batch.
+    /// Reminders key on kind+subject; financial tokens key on kind+amount+currency+subject+recurrence.
+    private static func deduplicationKey(for token: NoteToken) -> String {
+        let subject = normalizedSubject(for: token) ?? ""
+        if token.kind == .reminder {
+            return "reminder|\(subject)"
+        }
+        let amt = String(format: "%.2f", token.amount)
+        let rec = token.recurrence?.rawValue ?? ""
+        return "\(token.kind.rawValue)|\(amt)|\(token.currency.uppercased())|\(subject)|\(rec)"
     }
 
     static func scheduleReminder(_ token: NoteToken, on note: Note) {
