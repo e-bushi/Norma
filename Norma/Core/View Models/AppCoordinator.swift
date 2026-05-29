@@ -150,6 +150,18 @@ class AppCoordinator: ObservableObject {
         onboardingViewModel.startOnboardingFlow()
         currentView = .onboarding
     }
+
+    /// Mirrors `logout()` but performs the irreversible account-delete first.
+    /// Without resetting the onboarding flow + currentView here the app would
+    /// re-render the OnboardingViewModel at its last `currentStep` (often
+    /// "save answers"), since `sessionViewModel.deleteAccount` only flips the
+    /// auth flag — it doesn't know about the onboarding flow state.
+    func deleteAccount() async throws {
+        try await sessionViewModel.deleteAccount()
+        dataManager.clearAllData()
+        onboardingViewModel.startOnboardingFlow()
+        currentView = .onboarding
+    }
     
     // MARK: - View Building
     

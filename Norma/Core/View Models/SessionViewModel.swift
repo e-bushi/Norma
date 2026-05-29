@@ -266,15 +266,16 @@ class SessionViewModel: ObservableObject {
             return
         }
 
-        // Check if user has completed initial financial setup
-        // Only require monthlyIncome to be set - painPoint is optional for legacy users
-        // Check both settings.monthlyIncome AND top-level monthlyIncome as fallback
-        // (settings is an encrypted JSON blob that may fail to decrypt independently)
-        let hasIncome = user.settings.monthlyIncome > 0 || (user.monthlyIncome ?? 0) > 0
+        // The presence of a real DB-backed profile is the authoritative
+        // "completed onboarding" signal — it's only written after the user
+        // finishes the question cards on `OnboardingSaveAnswersView`. Income
+        // amount can legitimately be 0 (between gigs, just starting out), so
+        // don't gate on it. An in-memory fallback profile has `id == nil`.
+        let hasRealProfile = user.id != nil
 
-        print("📊 Setup check - settings.income: \(user.settings.monthlyIncome), profile.income: \(user.monthlyIncome ?? 0), painPoint: '\(user.settings.painPoint)', hasIncome: \(hasIncome)")
+        print("📊 Setup check - hasRealProfile: \(hasRealProfile), settings.income: \(user.settings.monthlyIncome), profile.income: \(user.monthlyIncome ?? 0), painPoint: '\(user.settings.painPoint)'")
 
-        if hasIncome {
+        if hasRealProfile {
             hasCompletedInitialSetup = true
             hasCompletedOnboarding = true
         } else {

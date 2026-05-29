@@ -89,11 +89,63 @@ class DataManager: ObservableObject {
     }
     
     func deleteAccount() async throws {
-        // Delete all user data from Supabase
+        // Capture userId *before* the remote delete clears the session, so we
+        // can use it to scope keychain / shared-keychain cleanup below.
+        let userId = currentProfile?.userId
+            ?? supabaseService.currentUser?.id.uuidString.lowercased()
+
+        // Delete all user data from Supabase (cascades through auth.users FKs)
         try await supabaseService.deleteAccount()
-        
-        // Clear all local data
+
+        // Wipe local persistence so a fresh sign-in starts from zero.
+        wipeLocalSwiftData()
+        wipeLocalKeychain(for: userId)
+        wipeLocalUserDefaults()
+
+        // Clear in-memory state.
         clearAllData()
+    }
+
+    /// Deletes every SwiftData entity managed by this app's container. Called
+    /// from `deleteAccount` so the next sign-in starts with an empty local
+    /// store. Failures are logged but don't block the delete — a partial wipe
+    /// is better than blocking the whole flow on a SwiftData hiccup.
+    private func wipeLocalSwiftData() {
+        guard let context = modelContext else {
+            print("⚠️ deleteAccount: no modelContext, skipping SwiftData wipe")
+            return
+        }
+        do {
+            try context.delete(model: Note.self)
+            try context.delete(model: NoteToken.self)
+            try context.delete(model: CachedBill.self)
+            try context.delete(model: FreedomFundEntry.self)
+            try context.delete(model: Insight.self)
+            try context.delete(model: UserProfile.self)
+            try context.save()
+            print("✅ deleteAccount: local SwiftData wiped")
+        } catch {
+            print("⚠️ deleteAccount: SwiftData wipe failed: \(error)")
+        }
+    }
+
+    private func wipeLocalKeychain(for userId: String?) {
+        if let userId {
+            KeychainHelper.clearAllKeys(for: userId)
+        }
+        SharedKeychainHelper.clearAllSharedData()
+        print("✅ deleteAccount: keychain wiped")
+    }
+
+    private func wipeLocalUserDefaults() {
+        let defaults = UserDefaults.standard
+        // User-scoped caches and engine state — anything that would mislead
+        // the next account signing in on this device.
+        defaults.removeObject(forKey: "cachedArcCount")
+        defaults.removeObject(forKey: "cachedFreedomFund")
+        defaults.removeObject(forKey: "insightEngine.lastRunAt")
+        defaults.removeObject(forKey: "insightEngine.lastNoteHash")
+        print("✅ deleteAccount: user-scoped UserDefaults cleared")
     }
     
     func updateUserProfile(_ profile: Profile) async throws {

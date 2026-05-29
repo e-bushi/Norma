@@ -472,7 +472,7 @@ struct LoginView: View {
         impact.impactOccurred()
 
         Task {
-            let success = await onboardingViewModel.signInWithApple()
+            let success = await onboardingViewModel.signInWithApple(requireExistingAccount: true)
 
             await MainActor.run {
                 isAppleSignInLoading = false
@@ -495,7 +495,7 @@ struct LoginView: View {
         impact.impactOccurred()
 
         Task {
-            let success = await onboardingViewModel.signInWithGoogle()
+            let success = await onboardingViewModel.signInWithGoogle(requireExistingAccount: true)
 
             await MainActor.run {
                 isGoogleSignInLoading = false

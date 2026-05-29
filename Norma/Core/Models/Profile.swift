@@ -11,7 +11,7 @@ struct Profile: Identifiable, Codable, Equatable {
     var id: String?
     let userId: String
     let email: String
-    let name: String
+    var name: String
     var createdAt: String?
     var updatedAt: String?
     var profileImageUrl: String?

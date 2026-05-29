@@ -78,6 +78,30 @@ class SupabaseService {
         )
     }
 
+    /// Returns true if an Apple identity with the given `sub` (userIdentifier) already
+    /// exists in `auth.identities`. Used by the login path to refuse silent account
+    /// creation when a user taps "Sign in with Apple" without an existing account.
+    func appleIdentityExists(appleSub: String) async throws -> Bool {
+        struct Args: Encodable { let apple_sub: String }
+        let exists: Bool = try await client
+            .rpc("apple_identity_exists", params: Args(apple_sub: appleSub))
+            .execute()
+            .value
+        return exists
+    }
+
+    /// Same as `appleIdentityExists` but for the Google provider. Apple/Google both
+    /// flow through `signInWithIdToken`, which auto-creates an `auth.users` row when
+    /// no identity matches — this pre-check lets the login path bail before that.
+    func googleIdentityExists(googleSub: String) async throws -> Bool {
+        struct Args: Encodable { let google_sub: String }
+        let exists: Bool = try await client
+            .rpc("google_identity_exists", params: Args(google_sub: googleSub))
+            .execute()
+            .value
+        return exists
+    }
+
     /// Sign in with Apple using ID token
     /// - Parameters:
     ///   - idToken: The identity token from Apple Sign In
@@ -171,50 +195,32 @@ extension SupabaseService {
         guard let userId = currentUser?.id else {
             throw AuthError.supabaseError("No user logged in")
         }
-        
-        // Delete user data from all tables
-        // The database should have CASCADE DELETE set up, but we'll be explicit
-        
-        // Delete bills
-        _ = try await client.from("bills")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Delete expenses
-        _ = try await client.from("expenses")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Delete income
-        _ = try await client.from("incomes")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Delete budgets
-        _ = try await client.from("budgets")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Delete categories
-        _ = try await client.from("categories")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Delete profile
-        _ = try await client.from("profiles")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        // Note: Supabase doesn't allow direct user deletion from client-side
-        // The user account will remain but all data is deleted
-        // You would typically call a server-side function or edge function for complete deletion
-        // For now, we'll sign out after deleting all user data
+        let userIdString = userId.uuidString
+
+        // Delete user-scoped rows from every public table currently in use.
+        // (The legacy expenses/budgets/categories/income tables were dropped
+        // during the May 2026 expense-removal cleanup — don't reference them.)
+        // All of these have ON DELETE CASCADE from auth.users, but the client
+        // can't delete the auth.users row itself (that needs service_role), so
+        // we sweep explicitly here.
+        let tables = [
+            "bills",
+            "chat_conversations",
+            "plaid_items",
+            "profiles",
+            "user_encryption_keys",
+        ]
+        for table in tables {
+            _ = try await client.from(table)
+                .delete()
+                .eq("user_id", value: userIdString)
+                .execute()
+        }
+
+        // NOTE: the auth.users row itself can't be deleted from the client.
+        // It needs to be cleaned up via the dashboard or an edge function with
+        // the service_role key. For now we sign out so the local session is
+        // cleared; the orphan auth row is harmless until then.
         try await signOut()
     }
     
@@ -237,6 +243,7 @@ enum AuthError: LocalizedError {
     case supabaseError(String)
     case appleSignInError(String)
     case googleSignInError(String)
+    case accountNotFound
     case unknownError
 
     var errorDescription: String? {
@@ -253,6 +260,8 @@ enum AuthError: LocalizedError {
             return "Apple Sign In failed: \(message)"
         case .googleSignInError(let message):
             return "Google Sign In failed: \(message)"
+        case .accountNotFound:
+            return "No account found. Please sign up first."
         case .unknownError:
             return "An unknown error occurred. Please try again."
         }

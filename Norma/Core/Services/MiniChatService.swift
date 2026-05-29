@@ -84,7 +84,7 @@ final class MiniChatService {
 
             var body: [String: Any] = [
                 "model": model,
-                "max_tokens": 512,
+                "max_tokens": 800,
                 "system": systemBlock,
                 "messages": messages
             ]

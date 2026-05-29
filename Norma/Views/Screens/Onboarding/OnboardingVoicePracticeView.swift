@@ -120,12 +120,17 @@ struct OnboardingVoicePracticeView: View {
                     .opacity(micAppeared ? 1 : 0)
                     .animation(Self.pageSpring, value: micAppeared)
                     .animation(Self.pageSpring, value: seenKinds)
-                continueButton
-                    .opacity(ctaAppeared && hasTried ? 1 : 0)
-                    .offset(y: ctaAppeared && hasTried ? 0 : 14)
-                    .animation(Self.pageSpring, value: ctaAppeared)
-                    .animation(Self.pageSpring, value: hasTried)
-                    .padding(.bottom, 32)
+                ZStack {
+                    continueButton
+                        .opacity(ctaAppeared && hasTried ? 1 : 0)
+                        .offset(y: ctaAppeared && hasTried ? 0 : 14)
+                    skipButton
+                        .opacity(ctaAppeared && !hasTried ? 1 : 0)
+                        .offset(y: ctaAppeared && !hasTried ? 0 : 14)
+                }
+                .animation(Self.pageSpring, value: ctaAppeared)
+                .animation(Self.pageSpring, value: hasTried)
+                .padding(.bottom, 32)
             }
             .padding(.horizontal, 24)
         }
@@ -413,6 +418,22 @@ struct OnboardingVoicePracticeView: View {
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
             .background(Capsule().fill(NormaPalette.lavender))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var skipButton: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            teardownIfNeeded()
+            onContinue()
+        } label: {
+            Text("skip")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(NormaPalette.ink.opacity(0.5))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
     }

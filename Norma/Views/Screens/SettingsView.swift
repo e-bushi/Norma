@@ -31,6 +31,8 @@ struct SettingsView: View {
     @State private var showHelpSupport = false
     @State private var isDeletingAccount = false
     @State private var showRecoveryPhraseSheet = false
+    @State private var showNormaKnowsEdit = false
+    @State private var showProfileMissingNameEdit = false
 
     // UserProfile
     @Query private var userProfiles: [UserProfile]
@@ -56,6 +58,20 @@ struct SettingsView: View {
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
 
     var body: some View {
+        ZStack {
+            settingsContent
+            if isDeletingAccount { deletingOverlay }
+        }
+        .sheet(isPresented: $showNormaKnowsEdit) {
+            NormaKnowsEditSheet(profile: userProfile)
+        }
+        .sheet(isPresented: $showProfileMissingNameEdit) {
+            ProfileSignupInfoSheet()
+                .environmentObject(sessionViewModel)
+        }
+    }
+
+    private var settingsContent: some View {
         VStack(spacing: 0) {
             navBar
 
@@ -116,9 +132,21 @@ struct SettingsView: View {
             Button("Delete My Account", role: .destructive) {
                 Task {
                     isDeletingAccount = true
-                    do { try await sessionViewModel.deleteAccount() }
-                    catch { print("Error deleting account: \(error)") }
-                    isDeletingAccount = false
+                    do {
+                        // Route through AppCoordinator so the onboarding flow
+                        // is reset to .landing (otherwise it stays at whatever
+                        // step the user was on — e.g. "save answers" — and the
+                        // user lands there instead of the landing screen).
+                        try await appCoordinator.deleteAccount()
+                        dismiss()
+                    } catch {
+                        print("❌ Error deleting account: \(error)")
+                        ToastManager.shared.show(.error(
+                            message: "Couldn't delete your account",
+                            detail: error.localizedDescription
+                        ))
+                        isDeletingAccount = false
+                    }
                 }
             }
         } message: {
@@ -200,18 +228,62 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Overlays
+
+    private var deletingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+            VStack(spacing: 14) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: accentPurple))
+                    .scaleEffect(1.1)
+                Text("deleting account…")
+                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                    .foregroundStyle(cream)
+            }
+            .padding(.horizontal, 26)
+            .padding(.vertical, 22)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(bg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(cream.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .transition(.opacity)
+    }
+
     // MARK: - Sections
 
     private var profileSection: some View {
         section(title: "profile") {
             if let user = sessionViewModel.currentUser {
-                listRow(
-                    icon: "person.crop.circle",
-                    iconColor: accentPurple,
-                    primary: user.name.lowercased(),
-                    secondary: user.email,
-                    showChevron: false
-                )
+                let trimmedName = user.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedName.isEmpty {
+                    // Apple Sign In sometimes doesn't return the user's name
+                    // (after a re-grant, or when the user picked "hide email"
+                    // and skipped the name prompt). Surface a friendly empty
+                    // state so they can fix it from settings.
+                    listRow(
+                        icon: "person.crop.circle.badge.questionmark",
+                        iconColor: accentPurple,
+                        primary: "sorry, we didn't get your name…",
+                        secondary: user.email,
+                        trailingLabel: "add",
+                        showChevron: false,
+                        action: { showProfileMissingNameEdit = true }
+                    )
+                } else {
+                    listRow(
+                        icon: "person.crop.circle",
+                        iconColor: accentPurple,
+                        primary: trimmedName.lowercased(),
+                        secondary: user.email,
+                        showChevron: false
+                    )
+                }
             }
         }
     }
@@ -408,49 +480,62 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var normaKnowsSection: some View {
-        let profile = userProfile
-        let hasFixedFields = profile != nil && (
-            profile!.currency != "USD" ||
-            profile!.incomeAmount != nil ||
-            profile!.payday != nil ||
-            profile!.runwayFloor != nil
-        )
-        let hasFacts = profile != nil && !profile!.facts.isEmpty
-        let hasAnything = hasFixedFields || hasFacts
-
         section(title: "what norma knows") {
-            if !hasAnything {
-                Text("norma hasn't learned anything yet")
-                    .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
-                    .foregroundStyle(dimText)
-                    .padding(.vertical, 10)
-            } else {
-                // Fixed fields
-                if let profile {
-                    if profile.currency != "USD" {
-                        knowledgeRow(label: "currency", value: profile.currency.lowercased())
-                    }
-                    if let income = profile.incomeAmount {
-                        let freq = profile.incomeFrequency?.lowercased() ?? "unknown"
-                        knowledgeRow(label: "income", value: "\(formatBalance(income, currency: profile.currency)) \(freq)")
-                    }
-                    if let day = profile.payday {
-                        knowledgeRow(label: "payday", value: "day \(day) of month")
-                    }
-                    if let floor = profile.runwayFloor {
-                        let months = floor == 1.0 ? "month" : "months"
-                        knowledgeRow(label: "runway floor", value: "\(String(format: "%g", floor)) \(months)")
-                    }
-                }
-
-                // Freeform facts
-                if hasFacts {
-                    ForEach(profile!.facts) { fact in
-                        factRow(fact: fact)
-                    }
-                }
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                showNormaKnowsEdit = true
+            } label: {
+                normaKnowsProse
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
+    }
+
+    /// Third-person summary read back from the user's UserProfile. Voice is
+    /// intentionally observational ("they use USD") to match the section
+    /// title — these are facts *norma* has learned, not first-person notes.
+    private var normaKnowsProse: some View {
+        let profile = userProfile
+        let currency = profile?.currency.lowercased() ?? "usd"
+        let incomeText: String = {
+            guard let amount = profile?.incomeAmount, amount > 0 else { return "—" }
+            return formatBalance(amount, currency: currency.uppercased())
+        }()
+        let frequency = profile?.incomeFrequency?.lowercased() ?? "—"
+        let paydayText = profile?.payday.map { "day \($0)" } ?? "—"
+        let runwayText: String = {
+            guard let floor = profile?.runwayFloor else { return "—" }
+            let unit = floor == 1.0 ? "month" : "months"
+            return "\(String(format: "%g", floor)) \(unit)"
+        }()
+
+        return (
+            Text("you think in ")
+                .foregroundStyle(mutedText)
+            + Text(currency).foregroundStyle(cream)
+            + Text(". you bring in about ")
+                .foregroundStyle(mutedText)
+            + Text(incomeText).foregroundStyle(cream)
+            + Text(", paid ")
+                .foregroundStyle(mutedText)
+            + Text(frequency).foregroundStyle(cream)
+            + Text(", on ")
+                .foregroundStyle(mutedText)
+            + Text(paydayText).foregroundStyle(cream)
+            + Text(". your runway floor is ")
+                .foregroundStyle(mutedText)
+            + Text(runwayText).foregroundStyle(cream)
+            + Text(". ")
+                .foregroundStyle(mutedText)
+            + Text("tap to edit")
+                .foregroundStyle(accentPurple)
+        )
+        .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
+        .lineSpacing(4)
     }
 
     @ViewBuilder

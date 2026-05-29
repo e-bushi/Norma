@@ -33,9 +33,17 @@ extension DataManager {
     /// Setup encryption for a new user during signup
     func setupEncryption(password: String) async throws -> String {
         print("📍 [DEBUG] DataManager.setupEncryption: Starting...")
-        
-        guard let userId = currentProfile?.userId else {
-            print("❌ [DEBUG] DataManager.setupEncryption: No current profile/userId")
+
+        // For brand-new sign-ups the profile row hasn't been created yet, so
+        // `currentProfile` is nil. Fall back to the authenticated Supabase
+        // session, which is the source of truth for the userId at this point.
+        let userId: String
+        if let profileUserId = currentProfile?.userId {
+            userId = profileUserId
+        } else if let authUserId = supabaseService.currentUser?.id.uuidString.lowercased() {
+            userId = authUserId
+        } else {
+            print("❌ [DEBUG] DataManager.setupEncryption: No userId from profile or auth session")
             throw EncryptionError.noEncryptionKeys
         }
         

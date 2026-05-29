@@ -349,7 +349,8 @@ struct NotesListScreen: View {
                 heroEmptyFund
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.leading, 24)
+        .padding(.trailing, 16)
         .padding(.top, 0)
         .padding(.bottom, 22)
     }
@@ -381,8 +382,9 @@ struct NotesListScreen: View {
         VStack(alignment: .leading, spacing: 0) {
             heroLine("add cash", visible: showHeroLine1)
             heroLine("to your", visible: showHeroLine2)
+            heroLine("freedom", visible: showHeroCount)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                heroLine("freedom fund", visible: showHeroCount)
+                heroLine("fund", visible: showHeroCount)
                 heroAccentPeriod(visible: showHeroCount)
             }
         }
@@ -422,7 +424,7 @@ struct NotesListScreen: View {
                 }
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 16)
     }
 
     private var emptyState: some View {
@@ -938,6 +940,14 @@ struct ShimmerModifier: ViewModifier {
 }
 
 #Preview("notes list") {
+    let dataManager = DataManager()
+    let sessionViewModel = SessionViewModel(dataManager: dataManager)
+
     NotesListScreen()
         .modelContainer(for: [Note.self, NoteToken.self], inMemory: true)
+        .environmentObject(dataManager)
+        .environmentObject(sessionViewModel)
+        .environmentObject(BillViewModel(dataManager: dataManager, sessionViewModel: sessionViewModel))
+        .environmentObject(AppCoordinator())
+        .preferredColorScheme(.dark)
 }

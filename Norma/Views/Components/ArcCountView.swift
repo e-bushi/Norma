@@ -234,6 +234,7 @@ struct ArcCountView: View {
                 .opacity(activityVisible ? 1 : 0)
                 .offset(y: activityVisible ? 0 : 8)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

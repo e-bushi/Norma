@@ -168,6 +168,17 @@ struct Toast: Identifiable, Equatable {
         )
     }
 
+    /// Error toast
+    static func error(message: String, detail: String? = nil) -> Toast {
+        return Toast(
+            message: message,
+            detail: detail,
+            icon: "exclamationmark.triangle.fill",
+            iconColor: Color("NormaPastelCoral"),
+            duration: 4.0
+        )
+    }
+
     /// "Norma is processing your note" — shown after a voice-dictation
     /// transcript is appended to a note from the list. Stays on screen
     /// longer than the standard success toast so the user can read the

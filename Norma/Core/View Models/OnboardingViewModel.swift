@@ -251,7 +251,7 @@ class OnboardingViewModel: ObservableObject {
 
     /// Sign in with Apple
     /// - Returns: True if sign-in was successful
-    func signInWithApple() async -> Bool {
+    func signInWithApple(requireExistingAccount: Bool = false) async -> Bool {
         isLoading = true
         clearError()
 
@@ -263,6 +263,17 @@ class OnboardingViewModel: ObservableObject {
             print("🍎 Step 1: Getting Apple credentials...")
             let appleResult = try await appleSignInManager.signIn()
             print("🍎 Step 1 complete: Got idToken, nonce: \(appleResult.nonce != nil), name: \(appleResult.fullName ?? "nil"), email: \(appleResult.email ?? "nil")")
+
+            // Step 1.5: On the login path, refuse silent account creation. If no
+            // Apple identity with this `sub` exists yet, bail before Supabase
+            // creates an auth.users row.
+            if requireExistingAccount {
+                let exists = try await supabaseService.appleIdentityExists(appleSub: appleResult.userIdentifier)
+                if !exists {
+                    print("🍎 ❌ No existing account for this Apple ID — refusing auto-create")
+                    throw AuthError.accountNotFound
+                }
+            }
 
             // Step 2: Sign in with Supabase using the Apple ID token
             print("🍎 Step 2: Signing in with Supabase...")
@@ -290,8 +301,14 @@ class OnboardingViewModel: ObservableObject {
             await sessionViewModel.handleAuthenticationSuccess()
             print("🍎 Step 4 complete")
 
-            // Step 5: Set up or unlock encryption using Apple's stable userIdentifier
-            let isNewUser = !sessionViewModel.hasCompletedOnboarding
+            // Step 5: Set up or unlock encryption using Apple's stable userIdentifier.
+            // `hasCompletedOnboarding` is profile-driven and can be false even
+            // for a user who already set up encryption (e.g. their profile
+            // write failed). The authoritative signal is whether
+            // `user_encryption_keys` already has a row server-side.
+            let userIdForKeyCheck = supabaseService.currentUser?.id.uuidString.lowercased() ?? sessionViewModel.currentUser?.userId ?? ""
+            let keyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
+            let isNewUser = !(await keyManager.hasEncryptionEnabled(for: userIdForKeyCheck))
             if isNewUser {
                 do {
                     print("🔐 Setting up encryption for new Apple user...")
@@ -302,15 +319,33 @@ class OnboardingViewModel: ObservableObject {
                     }
                     print("✅ Encryption setup complete for Apple user")
                 } catch {
-                    print("⚠️ Failed to setup encryption for Apple user: \(error)")
+                    print("❌ Failed to setup encryption for Apple user: \(error)")
+                    await MainActor.run {
+                        ToastManager.shared.show(.error(
+                            message: "Couldn't finish setting up your account",
+                            detail: error.localizedDescription
+                        ))
+                    }
                 }
             } else {
                 do {
                     print("🔐 Unlocking encryption for returning Apple user...")
                     try await sessionViewModel.unlockEncryptionForReturningUser(password: appleResult.userIdentifier)
                     print("✅ Encryption unlocked for Apple user")
+                    // Now that the master key is back in keychain, re-fetch the
+                    // profile and recompute setup status — the earlier fetch
+                    // during handleAuthenticationSuccess saw plaintext fallback
+                    // (no income) because the key wasn't loaded yet.
+                    await sessionViewModel.fetchUserProfile()
+                    await sessionViewModel.checkInitialSetupStatus()
                 } catch {
-                    print("⚠️ Failed to unlock encryption for Apple user: \(error)")
+                    print("❌ Failed to unlock encryption for Apple user: \(error)")
+                    await MainActor.run {
+                        ToastManager.shared.show(.error(
+                            message: "Couldn't unlock your encrypted data",
+                            detail: error.localizedDescription
+                        ))
+                    }
                 }
             }
 
@@ -357,8 +392,10 @@ class OnboardingViewModel: ObservableObject {
     // MARK: - Google Sign In Methods
 
     /// Sign in with Google
+    /// - Parameter requireExistingAccount: when true, refuses silent account creation.
+    ///   The login path should pass `true`; the sign-up path keeps the default `false`.
     /// - Returns: True if sign-in was successful
-    func signInWithGoogle() async -> Bool {
+    func signInWithGoogle(requireExistingAccount: Bool = false) async -> Bool {
         isLoading = true
         clearError()
 
@@ -370,6 +407,17 @@ class OnboardingViewModel: ObservableObject {
             print("🔵 Step 1: Getting Google credentials...")
             let googleResult = try await googleSignInManager.signIn()
             print("🔵 Step 1 complete: Got idToken, name: \(googleResult.fullName ?? "nil"), email: \(googleResult.email ?? "nil")")
+
+            // Step 1.5: On the login path, refuse silent account creation. If no
+            // Google identity with this `sub` exists yet, bail before Supabase
+            // creates an auth.users row.
+            if requireExistingAccount {
+                let exists = try await supabaseService.googleIdentityExists(googleSub: googleResult.userIdentifier)
+                if !exists {
+                    print("🔵 ❌ No existing account for this Google ID — refusing auto-create")
+                    throw AuthError.accountNotFound
+                }
+            }
 
             // Step 2: Sign in with Supabase using the Google ID token
             print("🔵 Step 2: Signing in with Supabase...")
@@ -397,8 +445,13 @@ class OnboardingViewModel: ObservableObject {
             await sessionViewModel.handleAuthenticationSuccess()
             print("🔵 Step 4 complete")
 
-            // Step 5: Set up or unlock encryption using Google's stable userIdentifier
-            let isNewUser = !sessionViewModel.hasCompletedOnboarding
+            // Step 5: Set up or unlock encryption using Google's stable userIdentifier.
+            // See the Apple path for the rationale — the authoritative signal
+            // for new-vs-returning is whether `user_encryption_keys` already
+            // has a row server-side, not the profile-driven onboarding flag.
+            let userIdForKeyCheck = supabaseService.currentUser?.id.uuidString.lowercased() ?? sessionViewModel.currentUser?.userId ?? ""
+            let keyManager = UserKeyManager(supabaseService: sessionViewModel.supabaseService)
+            let isNewUser = !(await keyManager.hasEncryptionEnabled(for: userIdForKeyCheck))
             if isNewUser {
                 do {
                     print("🔐 Setting up encryption for new Google user...")
@@ -409,15 +462,32 @@ class OnboardingViewModel: ObservableObject {
                     }
                     print("✅ Encryption setup complete for Google user")
                 } catch {
-                    print("⚠️ Failed to setup encryption for Google user: \(error)")
+                    print("❌ Failed to setup encryption for Google user: \(error)")
+                    await MainActor.run {
+                        ToastManager.shared.show(.error(
+                            message: "Couldn't finish setting up your account",
+                            detail: error.localizedDescription
+                        ))
+                    }
                 }
             } else {
                 do {
                     print("🔐 Unlocking encryption for returning Google user...")
                     try await sessionViewModel.unlockEncryptionForReturningUser(password: googleResult.userIdentifier)
                     print("✅ Encryption unlocked for Google user")
+                    // Re-fetch profile + recompute setup status now that the
+                    // master key is back in keychain. See the Apple path for
+                    // the rationale.
+                    await sessionViewModel.fetchUserProfile()
+                    await sessionViewModel.checkInitialSetupStatus()
                 } catch {
-                    print("⚠️ Failed to unlock encryption for Google user: \(error)")
+                    print("❌ Failed to unlock encryption for Google user: \(error)")
+                    await MainActor.run {
+                        ToastManager.shared.show(.error(
+                            message: "Couldn't unlock your encrypted data",
+                            detail: error.localizedDescription
+                        ))
+                    }
                 }
             }
 
@@ -708,8 +778,12 @@ class OnboardingViewModel: ObservableObject {
                 thoughtsCameBack: thoughtsCameBack.isEmpty ? nil : thoughtsCameBack
             )
 
-            // Check if profile already exists
-            if var existingProfile = sessionViewModel.currentUser {
+            // Check if a real DB-backed profile already exists. `currentUser`
+            // may be a non-nil in-memory fallback returned by
+            // `DataManager.getCurrentUserProfile` for brand-new sign-ups —
+            // those have no `id`, so we must create (not update), otherwise
+            // the edge function call throws `missingId` before being invoked.
+            if var existingProfile = sessionViewModel.currentUser, existingProfile.id != nil {
                 // Update existing profile
                 existingProfile.monthlyIncome = collectedData.monthlyIncome
                 existingProfile.freedomFund = collectedData.freedomFund
@@ -734,7 +808,13 @@ class OnboardingViewModel: ObservableObject {
 
             hydrateLocalProfile()
         } catch {
-            print("Failed to save profile data: \(error)")
+            print("❌ Failed to save profile data: \(error)")
+            await MainActor.run {
+                ToastManager.shared.show(.error(
+                    message: "Couldn't save your profile",
+                    detail: error.localizedDescription
+                ))
+            }
             hydrateLocalProfile()
         }
     }

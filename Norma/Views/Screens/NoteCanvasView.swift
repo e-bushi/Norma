@@ -158,7 +158,7 @@ struct NoteCanvasView: View {
             MiniChatView(note: note) { showMiniChat = false }
                 .environmentObject(billViewModel)
                 .environmentObject(sessionViewModel)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color(red: 0.075, green: 0.075, blue: 0.083))
         }
