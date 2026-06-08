@@ -35,6 +35,9 @@ struct NoteCanvasView: View {
     @State private var waveScale: CGFloat = 0
     @State private var hapticEngine: CHHapticEngine?
     @State private var hapticPlayer: CHHapticAdvancedPatternPlayer?
+    /// User toggle (Settings → preferences). When off, the "thinking" haptic
+    /// that plays while the extractor runs is suppressed.
+    @AppStorage("extractionHapticsEnabled") private var extractionHapticsEnabled = true
     @FocusState private var focusedField: Field?
 
     // Voice transcription state — Deepgram streams into bodyText while active.
@@ -527,6 +530,7 @@ struct NoteCanvasView: View {
     /// rather than a sequence of discrete taps. Falls back to nothing on
     /// devices without haptic support (older iPads, simulator).
     private func startThinkingHaptic() {
+        guard extractionHapticsEnabled else { return }
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
         guard hapticPlayer == nil else { return }
 

@@ -31,8 +31,7 @@ class AppCoordinator: ObservableObject {
 
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
-    lazy var conversationManager = ConversationManager(dataManager: dataManager, sessionViewModel: sessionViewModel)
-    
+
     // MARK: - Initialization
     
     init() {
@@ -88,10 +87,6 @@ class AppCoordinator: ObservableObject {
             currentView = .loading
         } else if sessionViewModel.shouldShowMainApp {
             currentView = .main
-            // Load conversations when entering main app (userId is obtained from sessionViewModel)
-            Task {
-                await conversationManager.loadConversations()
-            }
         } else if sessionViewModel.shouldShowAuthFlow {
             currentView = .onboarding
         } else if sessionViewModel.shouldShowInitialSetup {
@@ -182,7 +177,6 @@ class AppCoordinator: ObservableObject {
             RootView()
                 .environmentObject(self.dataManager)
                 .environmentObject(self.sessionViewModel)
-                .environmentObject(self.conversationManager)
                 .environmentObject(self)
         }
     }
@@ -244,7 +238,6 @@ enum AppView {
 }
 
 enum MainLayerViewType: Hashable {
-    case chat
     case settings
     case notes
 }
@@ -385,9 +378,16 @@ struct OnboardingCoordinatorView: View {
                     onContinue: { onboardingViewModel.moveToNextStep() }
                 )
 
-            case .celebrationThree:
-                OnboardingCelebrationView(
-                    phrase: "you've got the hang of it.",
+            case .notesValue:
+                OnboardingIntroInterstitialView(
+                    phases: [
+                        "you've got the hang of it.",
+                        "you can quickly jot your thoughts before you forget now.",
+                        "your notes are the gold.",
+                        "write anything — i make sense of all of it.",
+                        "now, a few quick facts about your money."
+                    ],
+                    holdDuration: 2.0,
                     onContinue: { onboardingViewModel.moveToNextStep() }
                 )
 
@@ -396,27 +396,6 @@ struct OnboardingCoordinatorView: View {
                     onContinue: { onboardingViewModel.moveToNextStep() }
                 )
                 .environmentObject(onboardingViewModel)
-
-            case .capstoneInsight:
-                let insight = OnboardingInsightRubric.compute(
-                    .init(
-                        triedBefore: onboardingViewModel.triedBefore,
-                        messyMoney: onboardingViewModel.messyMoney,
-                        writingFrequency: onboardingViewModel.writingFrequency,
-                        moneyShapedThoughts: onboardingViewModel.moneyShapedThoughts,
-                        tabsCartsCameraRoll: onboardingViewModel.tabsCartsCameraRoll,
-                        thoughtsCameBack: onboardingViewModel.thoughtsCameBack,
-                        incomeShape: onboardingViewModel.incomeShape,
-                        whatsWorking: onboardingViewModel.whatsWorking
-                    )
-                )
-                OnboardingIntroInterstitialView(
-                    phases: [insight.mirror, insight.role],
-                    // Insights are denser than the standard intro lines —
-                    // give the user time to actually read each one.
-                    holdDuration: 3.5,
-                    onContinue: { onboardingViewModel.moveToNextStep() }
-                )
 
             case .saveAnswers:
                 OnboardingSaveAnswersView(
@@ -429,6 +408,16 @@ struct OnboardingCoordinatorView: View {
                     }
                 )
                 .environmentObject(onboardingViewModel)
+
+            case .readyToStart:
+                OnboardingCelebrationView(
+                    phrases: [
+                        "hi, i'm norma.",
+                        "i'm glad you're finally here.",
+                        "start with a note — tell me what your bills are."
+                    ],
+                    onContinue: { onboardingViewModel.completeOnboarding() }
+                )
 
             case .complete:
                 // Transition to main app

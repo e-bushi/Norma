@@ -157,6 +157,10 @@ final class Note {
     var tags: [String]
     var createdAt: Date
     var updatedAt: Date
+    /// User-pinned flag. Pinned notes surface in a dedicated section at the top
+    /// of the notes list. Defaulted so existing call sites and persisted notes
+    /// migrate cleanly via SwiftData's lightweight migration.
+    var isPinned: Bool = false
 
     init(
         id: UUID = UUID(),
@@ -165,7 +169,8 @@ final class Note {
         tokens: [NoteToken] = [],
         tags: [String] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        isPinned: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -174,6 +179,7 @@ final class Note {
         self.tags = tags
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.isPinned = isPinned
     }
 }
 

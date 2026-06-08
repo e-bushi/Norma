@@ -165,21 +165,38 @@ final class NoteExtractionService {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
                 request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+                request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
                 request.timeoutInterval = 30
 
                 let nowISO = ISO8601DateFormatter().string(from: Date())
                 let userMessage = "Now: \(nowISO)\n\nNote text:\n\n\(text)"
-                let body = AnthropicRequest(
-                    model: model,
-                    maxTokens: 1024,
-                    system: Self.systemPrompt,
-                    messages: [AnthropicMessage(role: "user", content: .text(userMessage))],
-                    tools: [Self.extractionTool],
-                    toolChoice: AnthropicToolChoice(type: "tool", name: Self.extractionTool.name),
-                    stream: nil
-                )
 
-                request.httpBody = try JSONEncoder().encode(body)
+                // Build with JSONSerialization so `system` can use the array form
+                // with cache_control. The breakpoint on the system block caches the
+                // static tool schema + system prompt as a prefix (~90% off on repeat
+                // extractions); only the per-note user message is billed in full.
+                // Mirrors InsightEngine's caching setup.
+                let toolData = try JSONEncoder().encode(Self.extractionTool)
+                let toolDict = try JSONSerialization.jsonObject(with: toolData) as! [String: Any]
+
+                let body: [String: Any] = [
+                    "model": model,
+                    "max_tokens": 1024,
+                    "system": [
+                        [
+                            "type": "text",
+                            "text": Self.systemPrompt,
+                            "cache_control": ["type": "ephemeral"]
+                        ]
+                    ],
+                    "messages": [
+                        ["role": "user", "content": userMessage]
+                    ],
+                    "tools": [toolDict],
+                    "tool_choice": ["type": "tool", "name": Self.extractionTool.name]
+                ]
+
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse else {

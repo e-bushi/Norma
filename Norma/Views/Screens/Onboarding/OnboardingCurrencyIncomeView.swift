@@ -154,7 +154,7 @@ struct OnboardingCurrencyIncomeView: View {
 
     private var incomeField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("monthly take-home")
+            Text("monthly take-home (after taxes)")
                 .font(.system(size: 11, weight: .medium))
                 .tracking(0.8)
                 .foregroundStyle(NormaPalette.inkSubtle)

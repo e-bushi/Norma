@@ -34,9 +34,18 @@ struct SettingsView: View {
     @State private var showNormaKnowsEdit = false
     @State private var showProfileMissingNameEdit = false
 
+    #if DEBUG
+    @State private var showFundResetConfirmation = false
+    #endif
+
     // UserProfile
     @Query private var userProfiles: [UserProfile]
     private var userProfile: UserProfile? { userProfiles.first }
+
+    // Preferences — the in-note extraction haptic plays while norma is
+    // "thinking" on a note. Some users find the continuous buzz distracting,
+    // so it can be turned off here. Read by NoteCanvasView via the same key.
+    @AppStorage("extractionHapticsEnabled") private var extractionHapticsEnabled = true
 
     // Plaid state
     @State private var isLoadingLinkToken = false
@@ -56,6 +65,12 @@ struct SettingsView: View {
     private let danger = Color(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255)
 
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
+
+    /// Bank connect is the one paywalled action for now — everything else is
+    /// open. Free trial counts as access.
+    private var hasAccess: Bool {
+        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
+    }
 
     var body: some View {
         ZStack {
@@ -97,6 +112,10 @@ struct SettingsView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
 
+                    preferencesSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 18)
+
                     supportSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
@@ -108,6 +127,12 @@ struct SettingsView: View {
                     accountSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
+
+                    #if DEBUG
+                    debugSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
+                    #endif
                 }
             }
         }
@@ -121,6 +146,13 @@ struct SettingsView: View {
         } message: {
             Text("Are you sure you want to sign out?")
         }
+        #if DEBUG
+        .alert("Freedom fund reset", isPresented: $showFundResetConfirmation) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Balance, linked account, and local ledger cleared. Reopen the runway view to see the first-time state.")
+        }
+        #endif
         .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) { showDeleteAccountConfirmation = true }
@@ -591,6 +623,17 @@ struct SettingsView: View {
         .padding(.vertical, 10)
     }
 
+    private var preferencesSection: some View {
+        section(title: "preferences") {
+            toggleRow(
+                icon: "iphone.radiowaves.left.and.right",
+                title: "extraction haptics",
+                subtitle: "buzz while norma reads a note",
+                isOn: $extractionHapticsEnabled
+            )
+        }
+    }
+
     private var supportSection: some View {
         section(title: "support") {
             tappableRow(icon: "questionmark.circle", title: "help & support") { showHelpSupport = true }
@@ -622,6 +665,47 @@ struct SettingsView: View {
             .opacity(isDeletingAccount ? 0.5 : 1.0)
         }
     }
+
+    #if DEBUG
+    // Debug-only. Surgically returns the freedom fund to its untouched "first
+    // time" state without nuking the rest of the account: zeroes the balance,
+    // unlinks any arc account, and clears the local FreedomFundEntry ledger.
+    // Stripped from release builds by the surrounding #if DEBUG.
+    private var debugSection: some View {
+        section(title: "debug", titleColor: mutedText, dividerColor: mutedText.opacity(0.25)) {
+            destructiveRow(icon: "arrow.counterclockwise", title: "reset freedom fund") {
+                resetFreedomFund()
+            }
+        }
+    }
+
+    private func resetFreedomFund() {
+        // 1. Server-side profile: zero the balance and unlink the arc account.
+        //    Mirrors both the top-level column and the settings blob, exactly
+        //    as FreedomFundEditSheet.saveChanges() does.
+        if let currentUser = sessionViewModel.currentUser {
+            var updatedProfile = currentUser
+            var updatedSettings = currentUser.settings
+            updatedSettings.freedomFund = 0
+            updatedSettings.arcAccountId = nil
+            updatedProfile.settings = updatedSettings
+            updatedProfile.freedomFund = 0
+            Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+        }
+
+        // 2. Local ledger: drop every FreedomFundEntry so activity is empty.
+        do {
+            try modelContext.delete(model: FreedomFundEntry.self)
+            try modelContext.save()
+        } catch {
+            print("[debug] failed to clear FreedomFundEntry ledger: \(error)")
+        }
+
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        showFundResetConfirmation = true
+    }
+    #endif
 
     // MARK: - Section + row helpers
 
@@ -730,9 +814,40 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
+    private func toggleRow(icon: String, title: String, subtitle: String? = nil, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(accentPurple)
+                .frame(width: 22, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundStyle(cream)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundStyle(mutedText)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(accentPurple)
+        }
+        .padding(.vertical, 14)
+    }
+
     // MARK: - Plaid actions
 
     private func connectBank() {
+        // The single paywalled action for now. Subscribers (and trial users)
+        // pass; everyone else gets the paywall instead of the Plaid flow.
+        guard hasAccess else {
+            showPaywall = true
+            return
+        }
         guard let userId = sessionViewModel.currentUser?.userId else {
             plaidErrorMessage = "Please sign in to connect your bank."
             showPlaidError = true

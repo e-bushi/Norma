@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+/// A token for `WaveTextView`'s structured initializer — either a word or an
+/// SF Symbol, each with an optional per-token color override (falls back to
+/// the view's base color when nil).
+struct WaveTextToken {
+    enum Kind {
+        case word(String)
+        case symbol(String)
+    }
+    let kind: Kind
+    var color: Color? = nil
+}
+
 /// A text view that animates words with a cascading rise + blur effect.
 /// Each word starts low and blurred, then rises up and comes into focus
 /// with staggered timing to create a wave traveling through the text.
@@ -30,6 +42,10 @@ struct WaveTextView: View {
     /// Used by callers (e.g. onboarding interstitials) to layer haptics on
     /// top of the visual wave.
     var onWordAppear: ((Int) -> Void)? = nil
+    /// Structured content — when set, takes precedence over `text`/`accentSuffix`
+    /// and lets callers mix per-word colors and inline SF Symbols (e.g. a
+    /// lavender "+" and a lavender waveform glyph) while keeping the wave.
+    var tokens: [WaveTextToken]? = nil
 
     /// Animation configuration
     private let wordDelay: Double = 0.06
@@ -41,15 +57,26 @@ struct WaveTextView: View {
 
     private struct Segment {
         let text: String
+        let symbol: String?
         let color: Color
     }
 
     private var segments: [Segment] {
+        if let tokens {
+            return tokens.map { token in
+                switch token.kind {
+                case .word(let word):
+                    return Segment(text: word, symbol: nil, color: token.color ?? color)
+                case .symbol(let name):
+                    return Segment(text: "", symbol: name, color: token.color ?? color)
+                }
+            }
+        }
         var segs = text
             .split(separator: " ")
-            .map { Segment(text: String($0), color: color) }
+            .map { Segment(text: String($0), symbol: nil, color: color) }
         if let suffix = accentSuffix, !suffix.isEmpty {
-            segs.append(Segment(text: suffix, color: accentColor))
+            segs.append(Segment(text: suffix, symbol: nil, color: accentColor))
         }
         return segs
     }
@@ -59,6 +86,7 @@ struct WaveTextView: View {
             ForEach(Array(segments.enumerated()), id: \.offset) { index, seg in
                 WaveWord(
                     word: seg.text,
+                    symbolName: seg.symbol,
                     font: font,
                     color: seg.color,
                     tracking: tracking,
@@ -100,6 +128,7 @@ struct WaveTextView: View {
 /// Individual word view with rise + blur animation
 private struct WaveWord: View {
     let word: String
+    var symbolName: String? = nil
     let font: Font
     let color: Color
     var tracking: CGFloat = 0
@@ -109,13 +138,21 @@ private struct WaveWord: View {
     let animationDuration: Double
 
     var body: some View {
-        Text(word)
-            .font(font)
-            .tracking(tracking)
-            .foregroundColor(color)
-            .opacity(isAnimated ? 1 : 0)
-            .offset(y: isAnimated ? 0 : initialOffset)
-            .blur(radius: isAnimated ? 0 : initialBlur)
+        Group {
+            if let symbolName {
+                Image(systemName: symbolName)
+                    .font(font)
+                    .foregroundColor(color)
+            } else {
+                Text(word)
+                    .font(font)
+                    .tracking(tracking)
+                    .foregroundColor(color)
+            }
+        }
+        .opacity(isAnimated ? 1 : 0)
+        .offset(y: isAnimated ? 0 : initialOffset)
+        .blur(radius: isAnimated ? 0 : initialBlur)
     }
 }
 

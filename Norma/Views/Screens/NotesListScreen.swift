@@ -13,6 +13,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import UIKit
 
 struct NotesListScreen: View {
     @Environment(\.modelContext) private var modelContext
@@ -66,6 +67,11 @@ struct NotesListScreen: View {
     @State private var showList = false
     @State private var showBottom = false
     @State private var isVisible = false
+
+    /// Empty-state hero — the soft tick fires per word as the line waves in.
+    /// The text is held back a brief beat before it waves in.
+    @State private var showEmptyText = false
+    private let emptyWordHaptic = UIImpactFeedbackGenerator(style: .soft)
 
     private var hasAccess: Bool {
         subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
@@ -141,6 +147,18 @@ struct NotesListScreen: View {
         }
     }
 
+    /// Whether the user is actively searching. While searching we suppress the
+    /// Pinned section and let every match flow into the date buckets.
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Pinned notes, kept in the @Query's updatedAt-desc order. Only surfaced
+    /// when not searching.
+    private var pinnedNotes: [Note] {
+        filteredNotes.filter { $0.isPinned }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ZStack(alignment: .bottom) {
@@ -152,14 +170,17 @@ struct NotesListScreen: View {
                 // lavender accents on chips and capsules.
                 NormaPalette.lavender.opacity(0.04).ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        heroBlock
-
-                        listBody
-                            .padding(.bottom, 140)
-                            .opacity(showList ? 1 : 0)
-                            .offset(y: showList ? 0 : 16)
+                if filteredNotes.isEmpty {
+                    emptyHero
+                        .opacity(showList ? 1 : 0)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            listBody
+                                .padding(.bottom, 140)
+                                .opacity(showList ? 1 : 0)
+                                .offset(y: showList ? 0 : 16)
+                        }
                     }
                 }
 
@@ -278,11 +299,7 @@ struct NotesListScreen: View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
-            if hasAccess {
-                showArcDetail = true
-            } else {
-                showPaywall = true
-            }
+            showArcDetail = true
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("freedom fund")
@@ -339,117 +356,113 @@ struct NotesListScreen: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "\(currency) \(Int(amount))"
     }
 
-    // MARK: - Hero
-
-    private var heroBlock: some View {
-        Group {
-            if freedomFund > 0 {
-                heroAffordability
-            } else {
-                heroEmptyFund
-            }
-        }
-        .padding(.leading, 24)
-        .padding(.trailing, 16)
-        .padding(.top, 0)
-        .padding(.bottom, 22)
-    }
-
-    private var heroAffordability: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            heroLine("you can pay", visible: showHeroLine1)
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text("\(displayedArcCount)")
-                    .font(heroFont)
-                    .tracking(-2.56)
-                    .foregroundStyle(NormaPalette.ink)
-                    .contentTransition(.numericText())
-                    .animation(isVisible ? .spring(response: 0.5, dampingFraction: 0.82) : .none, value: displayedArcCount)
-                    .modifier(ShimmerModifier(active: isPlaidPending))
-                    .opacity(showHeroLine2 ? 1 : 0)
-                    .offset(y: showHeroLine2 ? 0 : 18)
-                    .blur(radius: showHeroLine2 ? 0 : 6)
-                heroLine(displayedArcCount == 1 ? "month" : "months", visible: showHeroLine2)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                heroLine("of bills", visible: showHeroCount)
-                heroAccentPeriod(visible: showHeroCount)
-            }
-        }
-    }
-
-    private var heroEmptyFund: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            heroLine("add cash", visible: showHeroLine1)
-            heroLine("to your", visible: showHeroLine2)
-            heroLine("freedom", visible: showHeroCount)
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                heroLine("fund", visible: showHeroCount)
-                heroAccentPeriod(visible: showHeroCount)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func heroLine(_ text: String, visible: Bool) -> some View {
-        Text(text)
-            .font(heroFont)
-            .tracking(-2.56)
-            .foregroundStyle(NormaPalette.ink)
-            .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 18)
-            .blur(radius: visible ? 0 : 6)
-    }
-
-    @ViewBuilder
-    private func heroAccentPeriod(visible: Bool) -> some View {
-        Text(".")
-            .font(heroFont)
-            .foregroundStyle(NormaPalette.lavender)
-            .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 18)
-    }
-
-    private var heroFont: Font { .system(size: 64, weight: .bold) }
-
     // MARK: - List body
 
     private var listBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if sections.isEmpty {
-                emptyState
+            // Pinned section sits above the date buckets. Hidden while
+            // searching so matches aren't split across two surfaces.
+            if !isSearching {
+                pinnedSection
+            }
+            ForEach(sections) { section in
+                sectionView(section)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    /// The Pinned section: a header matching the date-section treatment, then
+    /// either the pinned rows (same builder as date sections) or an
+    /// understated hint explaining how to pin.
+    private var pinnedSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("pinned")
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.88)  // 0.08em × 11
+                .textCase(.uppercase)
+                .foregroundStyle(NormaPalette.inkMuted)
+                .padding(.top, 18)
+                .padding(.bottom, 10)
+
+            if pinnedNotes.isEmpty {
+                pinnedEmptyHint
             } else {
-                ForEach(sections) { section in
-                    sectionView(section)
+                ForEach(Array(pinnedNotes.enumerated()), id: \.element.id) { offset, note in
+                    if repo != nil {
+                        NavigationLink(value: note) {
+                            row(for: note, index: offset + 1)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            noteContextMenu(for: note)
+                        }
+                    }
                 }
             }
         }
-        .padding(.horizontal, 16)
     }
 
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: "text.page")
-                .font(.system(size: 36, weight: .thin))
-                .foregroundStyle(NormaPalette.lavender.opacity(0.5))
+    /// Hint row shown when no notes are pinned yet. Understated — a small
+    /// lavender pin glyph beside muted instructional copy, not a hero.
+    private var pinnedEmptyHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pin")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(NormaPalette.lavender)
+            Text("touch and hold a note to pin it here.")
+                .font(.system(size: 14))
+                .foregroundStyle(NormaPalette.inkSubtle)
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("nothing here yet")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(NormaPalette.ink)
-
-                (Text("tap ")
-                + Text(Image(systemName: "plus"))
-                    .foregroundColor(NormaPalette.lavender)
-                + Text(" to write a note or ")
-                + Text(Image(systemName: "waveform"))
-                    .foregroundColor(NormaPalette.lavender)
-                + Text(" to speak one"))
-                    .font(.system(size: 14))
-                    .foregroundStyle(NormaPalette.inkSubtle)
+    /// Empty state, structured like the onboarding celebration screens: the
+    /// instruction waves in word-by-word as the screen's full-bleed hero.
+    private var emptyHero: some View {
+        ZStack {
+            if showEmptyText {
+                WaveTextView(
+                    text: "",
+                    font: .system(size: 56, weight: .bold),
+                    color: NormaPalette.ink,
+                    isAnimating: true,
+                    alignment: .leading,
+                    tracking: -1.5,
+                    wordSpacing: 12,
+                    lineSpacing: 0,
+                    onWordAppear: { _ in
+                        emptyWordHaptic.impactOccurred(intensity: 0.55)
+                        emptyWordHaptic.prepare()
+                    },
+                    tokens: [
+                        .init(kind: .word("tap")),
+                        .init(kind: .word("+"), color: NormaPalette.lavender),
+                        .init(kind: .word("to")),
+                        .init(kind: .word("write")),
+                        .init(kind: .word("a")),
+                        .init(kind: .word("note")),
+                        .init(kind: .word("or")),
+                        .init(kind: .symbol("waveform"), color: NormaPalette.lavender),
+                        .init(kind: .word("to")),
+                        .init(kind: .word("speak")),
+                        .init(kind: .word("one."))
+                    ]
+                )
+                .padding(.horizontal, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            emptyWordHaptic.prepare()
+            // Brief beat before the line waves in.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                showEmptyText = true
+            }
+        }
     }
 
     private func sectionView(_ section: NoteSection) -> some View {
@@ -469,11 +482,7 @@ struct NotesListScreen: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button(role: .destructive) {
-                            deleteNote(entry.note)
-                        } label: {
-                            Label("delete", systemImage: "trash")
-                        }
+                        noteContextMenu(for: entry.note)
                     }
                     .transition(
                         .asymmetric(
@@ -583,11 +592,7 @@ struct NotesListScreen: View {
                 bottomIcon(systemName: "plus") {
                     let impact = UIImpactFeedbackGenerator(style: .medium)
                     impact.impactOccurred()
-                    if hasAccess {
-                        createNewNote()
-                    } else {
-                        showPaywall = true
-                    }
+                    createNewNote()
                 }
             }
             .padding(.vertical, 6)
@@ -793,6 +798,48 @@ struct NotesListScreen: View {
         path.append(note)
     }
 
+    /// Shared context menu for note rows — pin/unpin toggle above the
+    /// destructive delete. Used by both the Pinned section and the date
+    /// sections so the two surfaces stay in lockstep.
+    @ViewBuilder private func noteContextMenu(for note: Note) -> some View {
+        Button {
+            togglePin(note)
+        } label: {
+            if note.isPinned {
+                Label("unpin", systemImage: "pin.slash")
+            } else {
+                Label("pin", systemImage: "pin")
+            }
+        }
+        Button(role: .destructive) {
+            deleteNote(note)
+        } label: {
+            Label("delete", systemImage: "trash")
+        }
+    }
+
+    /// Most notes a user may keep pinned at once. Unpinning is never blocked.
+    private let maxPinnedNotes = 3
+
+    private func togglePin(_ note: Note) {
+        // Enforce the pin cap only when turning a pin on. Count from the full
+        // `notes` array (not `pinnedNotes`, which filters by search) so a pin
+        // from a date row while searching can't slip past the limit.
+        if !note.isPinned && notes.filter({ $0.isPinned }).count >= maxPinnedNotes {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            ToastManager.shared.show(.info(message: "you can pin up to 3 notes"))
+            return
+        }
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            note.isPinned.toggle()
+        }
+        // Pinning deliberately leaves updatedAt untouched so the note keeps
+        // its place within its date bucket when unpinned.
+        try? modelContext.save()
+    }
+
     private func deleteNote(_ note: Note) {
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.impactOccurred()
@@ -852,7 +899,12 @@ struct NotesListScreen: View {
 
         var buckets: [(key: String, label: String, order: Int, entries: [(Note, Int)])] = []
 
-        for (i, note) in filteredNotes.enumerated() {
+        // When not searching, pinned notes live exclusively in the Pinned
+        // section, so exclude them from the date buckets. While searching we
+        // keep current behavior and bucket everything.
+        let dateNotes = isSearching ? filteredNotes : filteredNotes.filter { !$0.isPinned }
+
+        for (i, note) in dateNotes.enumerated() {
             let date = note.createdAt
             let key: String
             let label: String

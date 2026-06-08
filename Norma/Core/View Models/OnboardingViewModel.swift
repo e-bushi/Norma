@@ -19,17 +19,10 @@ class OnboardingViewModel: ObservableObject {
     @Published var showSignUp = false
     @Published var isVerified = false
     
-    // Chat State
-    @Published var messages: [ChatMessage] = []
-    @Published var conversationHistory: [AnthropicMessage] = []
-    @Published var userInput = ""
-    @Published var isTyping = false
-    
     // UI State
     @Published var showError = false
     @Published var errorMessage = ""
     @Published var isLoading = false
-    @Published var showCompletionTransition = false
     
     // Authentication State
     @Published var email: String?
@@ -60,7 +53,6 @@ class OnboardingViewModel: ObservableObject {
 
     // MARK: - Dependencies
     private let sessionViewModel: SessionViewModel
-    private let anthropicService = AnthropicService.shared
     private let supabaseService = SupabaseService.shared
     private let appleSignInManager = AppleSignInManager()
     private let googleSignInManager = GoogleSignInManager()
@@ -236,15 +228,26 @@ class OnboardingViewModel: ObservableObject {
     }
     
     /// Called after email verification succeeds. Onboarding questions were
-    /// already answered before auth, so finalize directly.
+    /// already answered before auth, so persist them and show the welcome
+    /// interstitial before the app.
     func proceedToWelcome() {
-        Task { await finalizeOnboarding() }
+        Task { await proceedToReadyToStart() }
     }
 
     /// Finalize onboarding by saving profile data and completing
     func finalizeOnboarding() async {
         await saveProfileData()
         completeOnboarding()
+    }
+
+    /// New-user completion: persist the collected answers, then show the
+    /// post-auth welcome interstitial (`readyToStart`). The interstitial's
+    /// continue action calls `completeOnboarding()`, which flips the app to
+    /// the main view. Used by the Apple/Google/email new-user paths so the
+    /// "hi, i'm norma" screen is the last thing before the app.
+    func proceedToReadyToStart() async {
+        await saveProfileData()
+        withAnimation { currentStep = .readyToStart }
     }
 
     // MARK: - Apple Sign In Methods
@@ -360,9 +363,10 @@ class OnboardingViewModel: ObservableObject {
                 currentStep = .complete
             } else if hasAnsweredOnboarding {
                 // User reached Apple sign-in from the end-of-flow auth screen.
-                // Persist their answers and go straight to the app.
-                print("🍎 New user with answers - finalizing")
-                await finalizeOnboarding()
+                // Persist their answers, then show the welcome interstitial
+                // before handing off to the app.
+                print("🍎 New user with answers - showing welcome")
+                await proceedToReadyToStart()
             } else {
                 print("🍎 New user - starting onboarding questions")
                 currentStep = .triedBefore
@@ -502,9 +506,10 @@ class OnboardingViewModel: ObservableObject {
                 currentStep = .complete
             } else if hasAnsweredOnboarding {
                 // User reached Google sign-in from the end-of-flow auth screen.
-                // Persist their answers and go straight to the app.
-                print("🔵 New user with answers - finalizing")
-                await finalizeOnboarding()
+                // Persist their answers, then show the welcome interstitial
+                // before handing off to the app.
+                print("🔵 New user with answers - showing welcome")
+                await proceedToReadyToStart()
             } else {
                 print("🔵 New user - starting onboarding questions")
                 currentStep = .triedBefore
@@ -531,112 +536,20 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Chat Methods
-    
-    func startConversation() async {
-        isTyping = true
-        clearError()
-        
-        do {
-            let response = try await anthropicService.startOnboardingConversation(userName: collectedData.name)
-            
-            isTyping = false
-            addNormaMessage(response)
-            conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(response)))
-            
-        } catch {
-            isTyping = false
-            showError(error.localizedDescription)
-        }
-    }
-    
-    func sendMessage(_ messageText: String) async {
-        let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedMessage.isEmpty else { return }
-
-        userInput = ""
-        clearError()
-
-        // Add user message
-        addUserMessage(trimmedMessage)
-        conversationHistory.append(AnthropicMessage(role: "user", content: .text(trimmedMessage)))
-
-        // Only get AI response if we haven't completed onboarding
-        if !showCompletionTransition {
-            // Delay showing typing indicator to make fast responses feel instant
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-
-            // Get AI response
-            isTyping = true
-            
-            do {
-                let response = try await anthropicService.continueOnboardingConversation(
-                    conversationHistory: conversationHistory,
-                    userMessage: trimmedMessage,
-                    userName: collectedData.name
-                )
-                
-                isTyping = false
-                
-                // Handle different response types
-                switch response {
-                case .text(let textResponse):
-                    // Regular text response - add to chat
-                    addNormaMessage(textResponse)
-                    conversationHistory.append(AnthropicMessage(role: "assistant", content: .text(textResponse)))
-                    
-                case .toolUse(let id, let name, let input):
-                    // Claude used the extraction tool - process the data
-                    if name == "extract_user_data" {
-                        await handleDataExtraction(toolId: id, input: input)
-                    }
-                    
-                case .toolResult(_, _):
-                    // Tool result - shouldn't happen in this flow
-                    break
-                }
-                
-            } catch {
-                isTyping = false
-                print(error)
-//                showError(error.localizedDescription)
-            }
-        } else {
-            // If we're transitioning, stop the typing indicator
-            isTyping = false
-        }
-    }
-    
     // MARK: - Private Methods
     
     private func resetOnboardingState() {
         showSignUp = false
         isVerified = false
-        messages.removeAll()
-        conversationHistory.removeAll()
-        userInput = ""
-        isTyping = false
         clearError()
         isLoading = false
         collectedData = UserOnboardingData()
-        
+
         // Clear sensitive data
         email = nil
         temporaryPassword = nil
     }
-    
-    private func addUserMessage(_ text: String) {
-        withAnimation {
-            messages.append(ChatMessage(role: .user, content: text))
-        }
-    }
 
-    private func addNormaMessage(_ text: String) {
-        withAnimation {
-            messages.append(ChatMessage(role: .assistant, content: text))
-        }
-    }
-    
     private func clearError() {
         showError = false
         errorMessage = ""
@@ -651,81 +564,6 @@ class OnboardingViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             await MainActor.run {
                 clearError()
-            }
-        }
-    }
-    
-    private func handleDataExtraction(toolId: String, input: [String: Any]) async {
-        do {
-            
-            // Parse the tool input directly
-            let name = input["name"] as? String ?? ""
-            let currency = input["currency"] as? String ?? "USD"
-            
-            // Handle different numeric types for monthlyIncome
-            var monthlyIncome: Double = 0
-            if let incomeDouble = input["monthlyIncome"] as? Double {
-                monthlyIncome = incomeDouble
-            } else if let incomeInt = input["monthlyIncome"] as? Int {
-                monthlyIncome = Double(incomeInt)
-            } else if let incomeString = input["monthlyIncome"] as? String, let parsed = Double(incomeString) {
-                monthlyIncome = parsed
-            }
-            
-            // Parse freedom fund (similar to monthlyIncome)
-            var freedomFund: Double = 0
-            if let fundDouble = input["freedomFund"] as? Double {
-                freedomFund = fundDouble
-            } else if let fundInt = input["freedomFund"] as? Int {
-                freedomFund = Double(fundInt)
-            } else if let fundString = input["freedomFund"] as? String, let parsed = Double(fundString) {
-                freedomFund = parsed
-            }
-
-            let painPoint = input["painPoint"] as? String ?? ""
-            let reminderPreference = input["reminderPreference"] as? String ?? ""
-
-            let extractedData = UserOnboardingData(
-                name: name,
-                currency: currency,
-                monthlyIncome: monthlyIncome,
-                freedomFund: freedomFund,
-                painPoint: painPoint,
-                reminderPreference: reminderPreference
-            )
-
-
-            // Check if we have ALL required data
-            if !extractedData.name.isEmpty &&
-               !extractedData.currency.isEmpty &&
-               !extractedData.painPoint.isEmpty &&
-               extractedData.monthlyIncome > 0 &&
-               !extractedData.reminderPreference.isEmpty {
-                
-                collectedData = extractedData
-                
-                // Add the tool use to conversation history
-                conversationHistory.append(AnthropicMessage(role: "assistant", content: .toolUse(id: toolId, name: "extract_user_data", input: input)))
-                
-                // Add a friendly completion message to chat
-                addNormaMessage("Perfect! I have all the information I need. Let's get you set up! 🎉")
-                conversationHistory.append(AnthropicMessage(role: "assistant", content: .text("Perfect! I have all the information I need. Let's get you set up! 🎉")))
-                
-                // Save the profile data but DON'T complete onboarding yet
-                // The completion view will handle that after showing animations
-                await saveProfileData()
-                
-                // Wait a moment to let user read the final message, then show completion view
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-                
-                // Set flag to show completion view
-                await MainActor.run {
-                    showCompletionTransition = true
-                }
-            } else {
-                print("Data incomplete from tool - name: '\(extractedData.name)', currency: '\(extractedData.currency)', painPoint: '\(extractedData.painPoint)', income: \(extractedData.monthlyIncome), freedomFund: \(extractedData.freedomFund), reminder: '\(extractedData.reminderPreference)'")
-                // This shouldn't happen if Claude is using the tool correctly
-                addNormaMessage("I'm still collecting some information. Let's continue our conversation!")
             }
         }
     }
@@ -947,23 +785,23 @@ enum OnboardingStep: CaseIterable {
     // before the auth wall.
     case voicePractice
 
-    // Milestone celebration #3 — right after the practice attempt, before
-    // the quantitative ask. A capstone celebration with personalized insight
-    // is planned for after auth but lives elsewhere (TBD).
-    case celebrationThree
+    // Bridge interstitial right after the practice attempt — opens with the
+    // "you've got the hang of it" beat, then reinforces that the notes are the
+    // gold (norma makes sense of everything they journal) and primes the quick
+    // finance questions that follow.
+    case notesValue
 
     // Quantitative questions.
-    case currencyIncome        // O4  — currency + optional monthly take-home
-
-    // Capstone insight — two sentences synthesized from the answer set
-    // (persona mirror + norma's role). Reuses the intro interstitial
-    // component to wave them in with per-word haptics.
-    case capstoneInsight
+    case currencyIncome        // O4  — currency + monthly take-home (after tax)
 
     // Auth tail.
     case saveAnswers          // O2  — apple/google or "prefer email? sign up"
     case authentication       // email signup form (when chosen from saveAnswers)
     case verification         // verify code (after email signup)
+
+    // Post-auth welcome — "hi, i'm norma" + "create your first note, tell me
+    // your bills". Shown once, only for brand-new users, right before the app.
+    case readyToStart
 
     case complete
 
