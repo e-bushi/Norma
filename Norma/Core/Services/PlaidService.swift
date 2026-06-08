@@ -16,7 +16,6 @@ class PlaidService: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var institutionName: String?
     @Published var itemId: String?
-    @Published var recurringOutflows: [RecurringStream] = []
 
     private init() {}
 
@@ -53,73 +52,6 @@ class PlaidService: ObservableObject {
             case available
             case current
             case isoCurrencyCode = "iso_currency_code"
-        }
-    }
-
-    struct PlaidTransaction: Codable, Identifiable {
-        let transactionId: String
-        let accountId: String
-        let merchantName: String?
-        let name: String
-        let amount: Double
-        let date: String
-        let authorizedDate: String?
-        let pending: Bool
-        let pendingTransactionId: String?
-        let isoCurrencyCode: String?
-        let logoUrl: String?
-        let website: String?
-        let personalFinanceCategory: PersonalFinanceCategory?
-
-        var id: String { transactionId }
-
-        enum CodingKeys: String, CodingKey {
-            case transactionId = "transaction_id"
-            case accountId = "account_id"
-            case merchantName = "merchant_name"
-            case name
-            case amount
-            case date
-            case authorizedDate = "authorized_date"
-            case pending
-            case pendingTransactionId = "pending_transaction_id"
-            case isoCurrencyCode = "iso_currency_code"
-            case logoUrl = "logo_url"
-            case website
-            case personalFinanceCategory = "personal_finance_category"
-        }
-    }
-
-    struct PersonalFinanceCategory: Codable {
-        let primary: String?
-        let detailed: String?
-    }
-
-    struct RecurringStream: Codable, Identifiable {
-        let streamId: String
-        let merchantName: String?
-        let averageAmount: Double
-        let frequency: String
-        let lastDate: String?
-        let predictedNextDate: String?
-        let isActive: Bool
-        let category: [String]?
-        let description: String?
-        let accountId: String?
-
-        var id: String { streamId }
-
-        enum CodingKeys: String, CodingKey {
-            case streamId = "stream_id"
-            case merchantName = "merchant_name"
-            case averageAmount = "average_amount"
-            case frequency
-            case lastDate = "last_date"
-            case predictedNextDate = "predicted_next_date"
-            case isActive = "is_active"
-            case category
-            case description
-            case accountId = "account_id"
         }
     }
 
@@ -177,30 +109,6 @@ class PlaidService: ObservableObject {
         let accounts: [PlaidAccount]
     }
 
-    private struct TransactionsRequest: Encodable {
-        let userId: String
-        let startDate: String
-        let endDate: String
-
-        enum CodingKeys: String, CodingKey {
-            case userId = "user_id"
-            case startDate = "start_date"
-            case endDate = "end_date"
-        }
-    }
-
-    private struct TransactionsResponse: Decodable {
-        let accounts: [PlaidAccount]?
-        let transactions: [PlaidTransaction]
-        let totalTransactions: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case accounts
-            case transactions
-            case totalTransactions = "total_transactions"
-        }
-    }
-
     // MARK: - API
 
     func createLinkToken(userId: String) async throws -> String {
@@ -224,32 +132,10 @@ class PlaidService: ObservableObject {
         return itemId
     }
 
-    func fetchRecurringTransactions(userId: String) async throws -> (outflows: [RecurringStream], inflows: [RecurringStream]) {
-        struct RecurringResponse: Decodable {
-            let outflowStreams: [RecurringStream]
-            let inflowStreams: [RecurringStream]
-
-            enum CodingKeys: String, CodingKey {
-                case outflowStreams = "outflow_streams"
-                case inflowStreams = "inflow_streams"
-            }
-        }
-
-        let body = CreateLinkTokenRequest(userId: userId)
-        let response: RecurringResponse = try await post(path: "/api/recurring-transactions", body: body)
-        return (outflows: response.outflowStreams, inflows: response.inflowStreams)
-    }
-
     func fetchBalances(userId: String) async throws -> [PlaidAccount] {
         let body = BalanceRequest(userId: userId)
         let response: BalanceResponse = try await post(path: "/api/balance", body: body)
         return response.accounts
-    }
-
-    func fetchTransactions(userId: String, startDate: String, endDate: String) async throws -> [PlaidTransaction] {
-        let body = TransactionsRequest(userId: userId, startDate: startDate, endDate: endDate)
-        let response: TransactionsResponse = try await post(path: "/api/transactions", body: body)
-        return response.transactions
     }
 
     func disconnect(userId: String, itemId: String) async throws {
@@ -291,9 +177,15 @@ class PlaidService: ObservableObject {
             throw PlaidError.invalidURL
         }
 
+        // Cortex authenticates every request with the Supabase JWT and derives
+        // the user id from it server-side. getSession() returns a valid
+        // (auto-refreshed) session, or throws if the user is signed out.
+        let session = try await SupabaseService.shared.getSession()
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)

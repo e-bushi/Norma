@@ -63,7 +63,7 @@ class DeepgramService: ObservableObject {
 
     @Published var isTranscribing = false
 
-    private let apiKey = "b8d20e4ecb8b420f9fc2f568d9a59780321b4c96"
+    private let tokenURL = "https://tafoviioqavefsyxskpo.supabase.co/functions/v1/deepgram-token"
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -84,10 +84,14 @@ class DeepgramService: ObservableObject {
         onPartialResult: @escaping (String) -> Void,
         onFinalResult: @escaping (String) -> Void,
         onError: @escaping (Error) -> Void
-    ) throws {
+    ) async throws {
         guard !isTranscribing else {
             throw DeepgramError.alreadyTranscribing
         }
+
+        // Fetch a short-lived Deepgram token from the edge function. The
+        // long-lived Deepgram key lives server-side and never ships in the app.
+        let token = try await fetchTemporaryToken()
 
         self.audioEngine = audioEngine
         self.onPartialResult = onPartialResult
@@ -96,7 +100,7 @@ class DeepgramService: ObservableObject {
         self.accumulatedTranscript = ""
 
         // Connect WebSocket
-        connectWebSocket()
+        connectWebSocket(token: token)
 
         // Configure and start audio
         try startAudioStreaming(audioEngine: audioEngine)
@@ -134,9 +138,44 @@ class DeepgramService: ObservableObject {
         onError = nil
     }
 
+    // MARK: - Temporary Token
+
+    private struct TemporaryToken: Decodable {
+        let accessToken: String
+
+        enum CodingKeys: String, CodingKey {
+            case accessToken = "access_token"
+        }
+    }
+
+    /// Requests a short-lived Deepgram grant token from the edge function,
+    /// authenticated with the user's Supabase JWT.
+    private func fetchTemporaryToken() async throws -> String {
+        guard let url = URL(string: tokenURL) else {
+            throw DeepgramError.connectionFailed("Invalid token URL")
+        }
+
+        let session = try await SupabaseService.shared.getSession()
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(SupabaseService.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.httpBody = Data("{}".utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw DeepgramError.connectionFailed("Could not obtain Deepgram token")
+        }
+
+        return try JSONDecoder().decode(TemporaryToken.self, from: data).accessToken
+    }
+
     // MARK: - WebSocket Connection
 
-    private func connectWebSocket() {
+    private func connectWebSocket(token: String) {
         let params = [
             "model=nova-3",
             "encoding=linear16",
@@ -153,7 +192,7 @@ class DeepgramService: ObservableObject {
         }
 
         var request = URLRequest(url: url)
-        request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         let session = URLSession(configuration: .default)
         self.urlSession = session

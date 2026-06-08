@@ -451,31 +451,33 @@ struct OnboardingVoicePracticeView: View {
             waveScale = 1.0
         }
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        Task { @MainActor in
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-            let engine = AVAudioEngine()
-            audioEngine = engine
+                let engine = AVAudioEngine()
+                audioEngine = engine
 
-            try deepgram.startLiveTranscription(
-                audioEngine: engine,
-                onPartialResult: { text in
-                    self.transcript = text
-                },
-                onFinalResult: { text in
-                    self.transcript = text
-                },
-                onError: { error in
-                    print("OnboardingVoicePracticeView: deepgram error: \(error)")
-                    self.stopRecording()
-                }
-            )
-            isRecording = true
-        } catch {
-            print("OnboardingVoicePracticeView: failed to start: \(error)")
-            isRecording = false
+                try await deepgram.startLiveTranscription(
+                    audioEngine: engine,
+                    onPartialResult: { text in
+                        self.transcript = text
+                    },
+                    onFinalResult: { text in
+                        self.transcript = text
+                    },
+                    onError: { error in
+                        print("OnboardingVoicePracticeView: deepgram error: \(error)")
+                        self.stopRecording()
+                    }
+                )
+                isRecording = true
+            } catch {
+                print("OnboardingVoicePracticeView: failed to start: \(error)")
+                isRecording = false
+            }
         }
     }
 

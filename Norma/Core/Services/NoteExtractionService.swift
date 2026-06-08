@@ -18,18 +18,13 @@ import Foundation
 final class NoteExtractionService {
     static let shared = NoteExtractionService()
 
-    private let apiKey: String
-    private let baseURL = "https://api.anthropic.com/v1/messages"
+    private let baseURL = "https://tafoviioqavefsyxskpo.supabase.co/functions/v1/anthropic-proxy"
     private let modelCascade = [
         "claude-haiku-4-5-20251001",
         "claude-3-5-haiku-20241022"
     ]
 
-    private init() {
-        // Same on-device key as AnthropicService (pre-existing debt; move to an
-        // edge function alongside the chat refactor later).
-        self.apiKey = "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"
-    }
+    private init() {}
 
     // MARK: - Public API
 
@@ -158,12 +153,17 @@ final class NoteExtractionService {
     private func sendToolRequest(text: String) async throws -> AnthropicMessageContent {
         var lastError: Error?
 
+        // The Anthropic edge proxy injects the API key server-side; authenticate
+        // with the Supabase JWT instead of shipping x-api-key in the client.
+        let session = try await SupabaseService.shared.getSession()
+
         for model in modelCascade {
             do {
                 var request = URLRequest(url: URL(string: baseURL)!)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+                request.setValue(SupabaseService.supabaseAnonKey, forHTTPHeaderField: "apikey")
                 request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
                 request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
                 request.timeoutInterval = 30

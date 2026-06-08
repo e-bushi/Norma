@@ -695,30 +695,32 @@ struct NotesListScreen: View {
         voiceTranscript = ""
         isRecording = true
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        Task { @MainActor in
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-            let engine = AVAudioEngine()
-            voiceAudioEngine = engine
+                let engine = AVAudioEngine()
+                voiceAudioEngine = engine
 
-            try deepgramService.startLiveTranscription(
-                audioEngine: engine,
-                onPartialResult: { transcript in
-                    self.voiceTranscript = transcript
-                },
-                onFinalResult: { transcript in
-                    self.voiceTranscript = transcript
-                },
-                onError: { error in
-                    print("NotesListScreen: deepgram error: \(error)")
-                    self.stopVoiceRecording()
-                }
-            )
-        } catch {
-            print("NotesListScreen: failed to start voice input: \(error)")
-            isRecording = false
+                try await deepgramService.startLiveTranscription(
+                    audioEngine: engine,
+                    onPartialResult: { transcript in
+                        self.voiceTranscript = transcript
+                    },
+                    onFinalResult: { transcript in
+                        self.voiceTranscript = transcript
+                    },
+                    onError: { error in
+                        print("NotesListScreen: deepgram error: \(error)")
+                        self.stopVoiceRecording()
+                    }
+                )
+            } catch {
+                print("NotesListScreen: failed to start voice input: \(error)")
+                isRecording = false
+            }
         }
     }
 

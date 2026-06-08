@@ -16,8 +16,7 @@ import SwiftData
 final class InsightEngine {
     static let shared = InsightEngine()
 
-    private var apiKey: String { AnthropicService.shared.anthropicApiKey }
-    private let baseURL = "https://api.anthropic.com/v1/messages"
+    private let baseURL = "https://tafoviioqavefsyxskpo.supabase.co/functions/v1/anthropic-proxy"
     private let model = "claude-haiku-4-5-20251001"
 
     private var lastRunTimestamp: Double {
@@ -180,10 +179,14 @@ final class InsightEngine {
             "tool_choice": ["type": "tool", "name": "record_insights"]
         ]
 
+        // The Anthropic edge proxy injects the API key server-side; authenticate
+        // with the Supabase JWT instead of shipping x-api-key in the client.
+        let session = try await SupabaseService.shared.getSession()
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(SupabaseService.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

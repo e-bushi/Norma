@@ -459,31 +459,33 @@ struct NoteCanvasView: View {
         focusedField = nil
         isRecording = true
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        Task { @MainActor in
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-            // Fresh engine per session — the previous one may have been torn
-            // down by stopTranscription.
-            audioEngine = AVAudioEngine()
+                // Fresh engine per session — the previous one may have been torn
+                // down by stopTranscription.
+                audioEngine = AVAudioEngine()
 
-            try deepgramService.startLiveTranscription(
-                audioEngine: audioEngine,
-                onPartialResult: { transcript in
-                    self.applyTranscript(transcript)
-                },
-                onFinalResult: { transcript in
-                    self.applyTranscript(transcript)
-                },
-                onError: { error in
-                    print("NoteCanvasView: deepgram error: \(error)")
-                    self.stopVoiceInput()
-                }
-            )
-        } catch {
-            print("NoteCanvasView: failed to start voice input: \(error)")
-            isRecording = false
+                try await deepgramService.startLiveTranscription(
+                    audioEngine: audioEngine,
+                    onPartialResult: { transcript in
+                        self.applyTranscript(transcript)
+                    },
+                    onFinalResult: { transcript in
+                        self.applyTranscript(transcript)
+                    },
+                    onError: { error in
+                        print("NoteCanvasView: deepgram error: \(error)")
+                        self.stopVoiceInput()
+                    }
+                )
+            } catch {
+                print("NoteCanvasView: failed to start voice input: \(error)")
+                isRecording = false
+            }
         }
     }
 
