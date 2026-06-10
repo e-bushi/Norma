@@ -720,6 +720,7 @@ struct NotesListScreen: View {
             } catch {
                 print("NotesListScreen: failed to start voice input: \(error)")
                 isRecording = false
+                ToastManager.shared.show(.error(message: "Couldn't start voice", detail: "Please try again"))
             }
         }
     }

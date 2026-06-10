@@ -477,6 +477,7 @@ struct OnboardingVoicePracticeView: View {
             } catch {
                 print("OnboardingVoicePracticeView: failed to start: \(error)")
                 isRecording = false
+                ToastManager.shared.show(.error(message: "Couldn't start voice", detail: "Please try again"))
             }
         }
     }

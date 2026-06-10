@@ -248,20 +248,31 @@ struct NoteCanvasView: View {
     }
 
     private var heroTitle: some View {
-        Group {
-            if focusedField == .title {
-                TextField("", text: $titleText, axis: .vertical)
-                    .font(.system(size: 56, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...3)
-                    .disabled(!isEditable)
-                    .focused($focusedField, equals: .title)
-                    .onChange(of: titleText) { _, newValue in
-                        scheduleTitleSave(newValue)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
+        // The TextField stays in the hierarchy at all times (not gated behind
+        // `if focusedField == .title`). Previously the field only existed once
+        // focused, so tapping the title set `focusedField = .title` before any
+        // field existed to receive it — the focus request was dropped and the
+        // tap appeared to do nothing. The display layer (with the lavender
+        // period) sits on top and is what the user taps to begin editing.
+        ZStack(alignment: .topLeading) {
+            TextField("", text: $titleText, axis: .vertical)
+                .font(.system(size: 56, weight: .heavy))
+                .foregroundStyle(.white)
+                .textFieldStyle(.plain)
+                .lineLimit(1...3)
+                .disabled(!isEditable)
+                .focused($focusedField, equals: .title)
+                .onChange(of: titleText) { _, newValue in
+                    // Only persist edits the user actually makes — not the
+                    // initial titleText assignment in .task(id:).
+                    guard focusedField == .title else { return }
+                    scheduleTitleSave(newValue)
+                }
+                .opacity(focusedField == .title ? 1 : 0)
+                .allowsHitTesting(focusedField == .title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if focusedField != .title {
                 (Text(titleText.isEmpty ? " " : titleText)
                     .foregroundColor(.white)
                  +
@@ -485,6 +496,7 @@ struct NoteCanvasView: View {
             } catch {
                 print("NoteCanvasView: failed to start voice input: \(error)")
                 isRecording = false
+                ToastManager.shared.show(.error(message: "Couldn't start voice", detail: "Please try again"))
             }
         }
     }
