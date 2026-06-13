@@ -76,9 +76,8 @@ class BillViewModel: ObservableObject {
     // MARK: - Data Loading
     
     func loadBills() {
-        // Update overdue status for bills past their due date
-        updateOverdueBills()
-
+        // Status (scheduled/overdue/paid) is derived on read via
+        // Bill.calculateStatus() — no need to persist transitions here.
         bills = dataManager.bills
         activeBills = dataManager.getActiveBills()
         upcomingBills = dataManager.getUpcomingBills()
@@ -87,35 +86,37 @@ class BillViewModel: ObservableObject {
         totalMonthlyBills = dataManager.getTotalMonthlyBills()
         nextBillDue = dataManager.getNextBillDue()
 
+        armRemindersAtLaunch()
     }
-    
-    private func updateOverdueBills() {
-        let today = Date()
-        let billsNeedingUpdate = dataManager.bills.filter { bill in
-            // Only update bills that are scheduled but past their effective due date
-            bill.status == .scheduled && bill.effectiveDueDate < today
-        }
-        
-        // Update each overdue bill
-        for bill in billsNeedingUpdate {
-            Task {
-                var updatedBill = bill
-                updatedBill.status = .overdue
-                
-                // Update verification date to track when status was changed
-                let dateFormatter = ISO8601DateFormatter()
-                dateFormatter.timeZone = TimeZone.current
-                updatedBill.verificationDate = dateFormatter.string(from: today)
-                
-                do {
-                    try await dataManager.updateBillVerificationFields(updatedBill)
-                } catch {
-                    print("Failed to update overdue status for bill \(bill.name): \(error)")
-                }
-            }
+
+    /// Once per launch, after bills first load: backfill the reminder flag onto
+    /// any legacy bills that predate the "all bills notify" default, then
+    /// re-arm the current cycle's notifications. Recurring local notifications
+    /// are one-shot, so a bill that rolled into a new cycle needs re-arming —
+    /// app launch is our reliable trigger for that.
+    private var didArmRemindersThisLaunch = false
+    private func armRemindersAtLaunch() {
+        guard !didArmRemindersThisLaunch, !bills.isEmpty else { return }
+        didArmRemindersThisLaunch = true
+        Task {
+            await backfillReminderFlagIfNeeded()
+            await NotificationService.shared.rearmAllBillReminders(for: dataManager.bills)
         }
     }
-    
+
+    /// One-time migration: flip `isReminderOn` true on bills created before the
+    /// default changed. No prior bill could have been intentionally muted (the
+    /// per-bill toggle ships alongside this), so flipping every false is safe.
+    private func backfillReminderFlagIfNeeded() async {
+        let key = "didBackfillBillReminders"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        for bill in dataManager.bills where !bill.isReminderOn {
+            var updated = bill
+            updated.isReminderOn = true
+            try? await dataManager.updateBillWithEncryption(updated)
+        }
+        UserDefaults.standard.set(true, forKey: key)
+    }
     
     func refreshBills() async {
         // Cancel any existing refresh task
@@ -334,11 +335,11 @@ class BillViewModel: ObservableObject {
             let dateFormatter = ISO8601DateFormatter()
             dateFormatter.timeZone = TimeZone.current
 
-            // Status is derived from the rolled-forward effective due date.
-            let status: BillStatus = bill.effectiveDueDate < Date() ? .overdue : .scheduled
-
             var updatedBill = bill
-            updatedBill.status = status
+            // Clearing paidAt is what actually un-pays the bill — display status
+            // is derived from it. The stored status is just a persistence snapshot.
+            updatedBill.paidAt = nil
+            updatedBill.status = bill.effectiveDueDate < Date() ? .overdue : .scheduled
             updatedBill.updatedAt = dateFormatter.string(from: Date())
 
             try await dataManager.updateBillWithEncryption(updatedBill)
@@ -360,7 +361,7 @@ class BillViewModel: ObservableObject {
         
         // Filter by status
         if let status = selectedStatus {
-            filtered = filtered.filter { $0.status == status }
+            filtered = filtered.filter { $0.calculateStatus() == status }
         }
         
         // Filter by search text
@@ -414,8 +415,8 @@ class BillViewModel: ObservableObject {
     func getDueDateStatus(for bill: Bill) -> (text: String, color: Color) {
         let calendar = Calendar.current
         let daysUntilDue = calendar.dateComponents([.day], from: Date(), to: bill.effectiveDueDate).day ?? 0
-        
-        switch bill.status {
+
+        switch bill.calculateStatus() {
         case .paid:
             return ("Paid", .green)
         case .overdue:

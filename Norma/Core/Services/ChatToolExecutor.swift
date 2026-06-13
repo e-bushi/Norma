@@ -155,7 +155,7 @@ class ChatToolExecutor {
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateStyle = .medium
                     for bill in searchResults.bills {
-                        resultText += "- \(bill.name): $\(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.effectiveDueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)\n"
+                        resultText += "- \(bill.name): $\(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.effectiveDueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.calculateStatus().rawValue)\n"
                     }
                     resultText += "\n"
                 }

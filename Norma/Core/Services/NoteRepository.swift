@@ -110,10 +110,28 @@ final class NoteRepository {
     ) {
         // Deduplicate — the LLM occasionally emits the same entity twice
         // when prose is ambiguous, contains typos, or rephrases the same fact.
-        let tokens: [NoteToken] = {
+        var tokens: [NoteToken] = {
             var seen = Set<String>()
             return tokens.filter { seen.insert(deduplicationKey(for: $0)).inserted }
         }()
+
+        // Sticky user-adjusted intentions/commitments: the user moved or
+        // upgraded these directly on the token (the prose never changed), so a
+        // re-extraction must keep them as-is rather than reverting to a fresh
+        // LLM emission. Drop any newly-emitted intent/commit whose subject
+        // matches one we're preserving, so we don't end up with a duplicate.
+        let stickyUserTokens = note.tokens.filter {
+            ($0.kind == .intent || $0.kind == .commit) && $0.userAdjustedAt != nil
+        }
+        let stickyUserSubjects = Set(stickyUserTokens.compactMap { normalizedSubject(for: $0) })
+        if !stickyUserSubjects.isEmpty {
+            tokens = tokens.filter { token in
+                guard token.kind == .intent || token.kind == .commit,
+                      let subject = normalizedSubject(for: token)
+                else { return true }
+                return !stickyUserSubjects.contains(subject)
+            }
+        }
 
         struct Carry { let confirmedAt: Date; let remindAt: Date }
         let outgoingReminders = note.tokens.filter { $0.kind == .reminder }
@@ -149,12 +167,14 @@ final class NoteRepository {
         for old in outgoingReminders where !stickyIds.contains(old.id) {
             NotificationService.shared.cancelAIReminder(identifier: reminderIdentifier(tokenId: old.id))
         }
-        // Delete only non-sticky tokens. Sticky reminder tokens stay attached.
-        let stickyTokens = note.tokens.filter { stickyIds.contains($0.id) }
-        for old in note.tokens where !stickyIds.contains(old.id) {
+        // Preserve both sticky reminder tokens and user-adjusted intent/commit
+        // tokens; delete everything else and rebuild from the fresh emission.
+        let preservedIds = stickyIds.union(stickyUserTokens.map { $0.id })
+        let preservedTokens = note.tokens.filter { preservedIds.contains($0.id) }
+        for old in note.tokens where !preservedIds.contains(old.id) {
             context.delete(old)
         }
-        note.tokens = tokens + stickyTokens
+        note.tokens = tokens + preservedTokens
 
         for token in tokens where token.kind == .reminder {
             if let subject = normalizedSubject(for: token), let prior = confirmedLookup[subject] {

@@ -179,7 +179,7 @@ struct Bill: Identifiable, Codable, Equatable {
         frequency: BillFrequency,
         categoryId: String? = nil,
         merchant: String? = nil,
-        isReminderOn: Bool = false,
+        isReminderOn: Bool = true,
         reminderDays: Int? = nil,
         isActive: Bool? = nil,
         createdAt: String? = nil,
@@ -315,5 +315,13 @@ extension Bill {
         }
         return effectiveDueDate < now ? .overdue : .scheduled
     }
+
+    /// The source of truth for display and behavior. Always read this instead
+    /// of the stored `status` field — that field is a persistence/sync snapshot
+    /// and can be stale once the calendar moves into a new billing cycle.
+    var displayStatus: BillStatus { calculateStatus() }
+
+    /// True only if the bill was marked paid within its *current* cycle.
+    var isPaidThisCycle: Bool { calculateStatus() == .paid }
 
 }

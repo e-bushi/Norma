@@ -125,12 +125,12 @@ extension DataManager {
     }
 
     func getOverdueBills() -> [Bill] {
-        return bills.filter { $0.status == .overdue }
+        return bills.filter { $0.calculateStatus() == .overdue }
             .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
 
     func getBillsByStatus(_ status: BillStatus) -> [Bill] {
-        return bills.filter { $0.status == status }
+        return bills.filter { $0.calculateStatus() == status }
             .sorted { $0.effectiveDueDate < $1.effectiveDueDate }
     }
 

@@ -42,6 +42,10 @@ struct ForecastSheet: View {
     @State private var isDeleting: Bool = false
     @State private var isMarkingPaid: Bool = false
     @State private var isUpgrading: Bool = false
+    @State private var isAdvancing: Bool = false
+
+    /// Bill tapped for the detail/edit sheet. Non-nil drives presentation.
+    @State private var selectedBillForDetail: Bill?
 
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
@@ -88,6 +92,22 @@ struct ForecastSheet: View {
                 upgradeSheet
                     .presentationDetents([.height(360)])
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $selectedBillForDetail) { bill in
+                BillDetailSheet(bill: bill)
+                    .environmentObject(billViewModel)
+                    .environmentObject(sessionViewModel)
+                    .presentationDragIndicator(.visible)
+            }
+            .onAppear {
+                // Contextual permission prompt (decision: first bill / forecast
+                // open), then re-arm so a freshly-granted user gets reminders now.
+                Task {
+                    if !billViewModel.bills.isEmpty {
+                        await NotificationService.shared.ensurePermission()
+                        await NotificationService.shared.rearmAllBillReminders(for: billViewModel.bills)
+                    }
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -143,6 +163,17 @@ struct ForecastSheet: View {
                             Label("upgrade to commitment", systemImage: "arrow.up.circle")
                         }
                         .disabled(!hasSelection || isUpgrading)
+
+                        Divider()
+
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            performAdvanceIntentions()
+                        } label: {
+                            Label("push to next month", systemImage: "calendar.badge.plus")
+                        }
+                        .disabled(!hasSelection || isAdvancing)
                     }
                 } label: {
                     Text(hasSelection
@@ -523,9 +554,10 @@ struct ForecastSheet: View {
             impact.impactOccurred()
             if inBillsSelection, case .bill(let bill) = row {
                 toggleSelection(bill)
-            } else {
-                // TODO: open bill detail / edit sheet (or jump to source note for commits)
+            } else if case .bill(let bill) = row {
+                selectedBillForDetail = bill
             }
+            // Commitments have no detail sheet (they live in their source note).
         } label: {
             HStack(spacing: 12) {
                 if inBillsSelection && canSelect {
@@ -791,9 +823,13 @@ struct ForecastSheet: View {
         let due = upgradeDueDate
         Task {
             await MainActor.run {
+                let now = Date()
                 for token in targets {
                     token.kindRaw = NoteToken.Kind.commit.rawValue
                     token.occurredAt = due
+                    // Mark as user-adjusted so re-extraction of the source note
+                    // doesn't revert this commitment back to a raw intention.
+                    token.userAdjustedAt = now
                 }
                 try? modelContext.save()
                 isUpgrading = false
@@ -801,6 +837,26 @@ struct ForecastSheet: View {
                 exitSelection()
             }
         }
+    }
+
+    /// Push the selected intentions into the next month. Intentions are bucketed
+    /// by `occurredAt` month, so advancing one month moves it to next month's
+    /// list. Stamps `userAdjustedAt` so the move survives note re-extraction.
+    private func performAdvanceIntentions() {
+        let targets = allTokens.filter { selectedIntentionIds.contains($0.id) && $0.kind == .intent }
+        guard !targets.isEmpty else { return }
+        isAdvancing = true
+        let cal = Calendar.current
+        let now = Date()
+        for token in targets {
+            if let advanced = cal.date(byAdding: .month, value: 1, to: token.occurredAt) {
+                token.occurredAt = advanced
+            }
+            token.userAdjustedAt = now
+        }
+        try? modelContext.save()
+        isAdvancing = false
+        exitSelection()
     }
 
     private func performBulkMarkPaid() {
@@ -969,7 +1025,7 @@ struct ForecastSheet: View {
 
         var isPaid: Bool {
             switch self {
-            case .bill(let b): return b.status == .paid
+            case .bill(let b): return b.isPaidThisCycle
             case .commitment: return false
             }
         }

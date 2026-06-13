@@ -206,8 +206,10 @@ class NotificationService: NSObject, ObservableObject {
             }
         }
 
-        // Add due date notification if it's in the future
-        if dueDateStart > today {
+        // Add due date notification on the due date itself. Use >= so a bill
+        // due today still arms its 9am day-of reminder (a past 9am simply
+        // won't fire — iOS drops elapsed calendar triggers silently).
+        if dueDateStart >= today {
             if let notificationTime = setNotificationTime(for: dueDateStart, hour: 9) {
                 dates.append((notificationTime, effectiveDue, true))
             }
@@ -367,9 +369,49 @@ class NotificationService: NSObject, ObservableObject {
     // MARK: - Schedule All Bill Reminders
     func scheduleAllBillReminders(bills: [Bill]) async {
         for bill in bills {
-            if bill.status == .scheduled {
+            if bill.calculateStatus() == .scheduled {
                 await scheduleBillReminders(for: bill)
             }
+        }
+    }
+
+    /// Requests notification permission if the user hasn't been asked yet.
+    /// Returns whether notifications are authorized afterwards. Safe to call
+    /// repeatedly — once the status is determined it never re-prompts.
+    @discardableResult
+    func ensurePermission() async -> Bool {
+        let settings = await notificationCenter.notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            return await requestNotificationPermission()
+        case .authorized, .provisional, .ephemeral:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Re-arms the current cycle's day-before + day-of reminders for every
+    /// reminder-enabled bill. Called on launch (and after bills change) so
+    /// recurring bills that rolled into a new cycle get freshly scheduled —
+    /// local notifications are one-shot and don't survive a cycle on their own.
+    ///
+    /// Does NOT prompt for permission: if the user hasn't authorized,
+    /// `scheduleBillReminders` no-ops. The prompt is driven separately by
+    /// `ensurePermission()` at a contextual moment (first bill / forecast open).
+    func rearmAllBillReminders(for bills: [Bill]) async {
+        guard isNotificationsEnabled else { return }
+        for bill in bills where bill.isReminderOn {
+            // Skip bills already settled for the current cycle — no point
+            // nagging about something that's paid. Overdue/scheduled still arm
+            // (calculateNotificationDates no-ops on past dates anyway).
+            guard bill.calculateStatus() != .paid else {
+                await cancelNotifications(for: bill)
+                continue
+            }
+            // scheduleBillReminders cancels this bill's pending requests first,
+            // so re-arming is idempotent and won't pile up duplicates.
+            await scheduleBillReminders(for: bill)
         }
     }
     

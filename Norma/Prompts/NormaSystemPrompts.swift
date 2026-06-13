@@ -106,7 +106,7 @@ struct NormaSystemPrompts {
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
         let billsList = bills.map { bill in
-            "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.effectiveDueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.status.rawValue)"
+            "- id: \(bill.id ?? "unknown"), \(bill.name): \(currency) \(String(format: "%.2f", bill.amount)), due \(dateFormatter.string(from: bill.effectiveDueDate)), frequency: \(bill.frequency.rawValue), status: \(bill.calculateStatus().rawValue)"
         }.joined(separator: "\n")
 
         return """

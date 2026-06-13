@@ -757,7 +757,7 @@ struct FreedomFundEditSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HStack(alignment: .center, spacing: 4) {
                         Text(currencySymbol)
                             .font(heroFont)
                             .tracking(-2.56)
@@ -771,15 +771,16 @@ struct FreedomFundEditSheet: View {
                                 .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                         } else {
-                            TextField("0", text: $freedomFundText)
-                                .font(heroFont)
-                                .tracking(-2.56)
-                                .foregroundColor(cream)
-                                .tint(accentPurple)
-                                .keyboardType(.decimalPad)
-                                .focused($isTextFieldFocused)
-                                .multilineTextAlignment(.leading)
-                                .minimumScaleFactor(0.5)
+                            AnimatedAmountField(
+                                text: $freedomFundText,
+                                focused: $isTextFieldFocused,
+                                font: heroFont,
+                                textColor: cream,
+                                placeholderColor: cream.opacity(0.3),
+                                caretColor: accentPurple,
+                                caretHeight: 46,
+                                tracking: -2.56
+                            )
                         }
                     }
 
@@ -867,7 +868,10 @@ struct FreedomFundEditSheet: View {
             } else {
                 useLinkedAccount = false
                 if currentFreedomFund > 0 {
-                    freedomFundText = formatNumberWithoutCurrency(currentFreedomFund)
+                    // Seed the raw (un-grouped) value — AnimatedAmountField owns
+                    // comma formatting for display; the stored string stays plain.
+                    let isWhole = currentFreedomFund == currentFreedomFund.rounded()
+                    freedomFundText = String(format: isWhole ? "%.0f" : "%.2f", currentFreedomFund)
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     isTextFieldFocused = true

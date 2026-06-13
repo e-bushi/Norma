@@ -38,6 +38,16 @@ final class NoteToken {
     /// Source bill ID for `.billPayment` tokens. Nil for all other kinds.
     var billId: String?
 
+    /// Stamp set when the user directly mutates an `.intent`/`.commit` token
+    /// (upgrading an intention to a commitment, or advancing it to a later
+    /// month). These edits live only on the token — the source prose is
+    /// unchanged — so a later re-extraction must NOT discard them. Tokens with
+    /// this set are preserved across re-extraction (see
+    /// `NoteRepository.applyExtractedTokens`). Nil = LLM/regex-owned, free to
+    /// replace. Defaulted so existing persisted tokens migrate cleanly via
+    /// SwiftData's lightweight migration.
+    var userAdjustedAt: Date? = nil
+
     var note: Note?
 
     enum Kind: String, Codable, CaseIterable {
@@ -126,7 +136,8 @@ final class NoteToken {
         isProvisional: Bool = false,
         remindAt: Date? = nil,
         confirmedAt: Date? = nil,
-        billId: String? = nil
+        billId: String? = nil,
+        userAdjustedAt: Date? = nil
     ) {
         self.id = id
         self.kindRaw = kind.rawValue
@@ -144,6 +155,7 @@ final class NoteToken {
         self.remindAt = remindAt
         self.confirmedAt = confirmedAt
         self.billId = billId
+        self.userAdjustedAt = userAdjustedAt
     }
 }
 
