@@ -436,8 +436,8 @@ struct ForecastSheet: View {
             .padding(.top, 6)
             .padding(.bottom, 14)
 
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                billRowView(row, kind: kind, showTopDivider: index > 0)
+            ForEach(rows, id: \.id) { row in
+                billRowView(row, kind: kind)
             }
         }
     }
@@ -544,7 +544,7 @@ struct ForecastSheet: View {
     private enum RowKind { case overdue, upcoming, paid }
 
     @ViewBuilder
-    private func billRowView(_ row: BillRow, kind: RowKind, showTopDivider: Bool) -> some View {
+    private func billRowView(_ row: BillRow, kind: RowKind) -> some View {
         let isCommit = { if case .commitment = row { return true } else { return false } }()
         let inBillsSelection = isSelecting && selectionScope == .bills
         let isSelected = row.billId.map { selectedBillIds.contains($0) } ?? false
@@ -618,13 +618,6 @@ struct ForecastSheet: View {
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
-            .overlay(alignment: .top) {
-                if showTopDivider {
-                    Rectangle()
-                        .fill(cream.opacity(0.08))
-                        .frame(height: 1)
-                }
-            }
         }
         .buttonStyle(.plain)
         .simultaneousGesture(

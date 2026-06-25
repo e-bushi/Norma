@@ -34,6 +34,9 @@ struct EncryptableBill: Identifiable, Codable {
     var createdAt: String?
     var updatedAt: String?
     var verificationDate: String?
+    /// Timestamp of the most recent mark-paid action. Unencrypted (it's just a
+    /// timestamp). The displayed paid status is derived from this in `Bill`.
+    var paidAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -53,6 +56,7 @@ struct EncryptableBill: Identifiable, Codable {
         case updatedAt = "updated_at"
         case notes
         case verificationDate = "verification_date"
+        case paidAt = "paid_at"
     }
 
     // Custom decoding to handle date formats from Supabase
@@ -74,6 +78,17 @@ struct EncryptableBill: Identifiable, Codable {
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         verificationDate = try container.decodeIfPresent(String.self, forKey: .verificationDate)
+
+        // paid_at is a Postgres timestamptz — may or may not carry fractional
+        // seconds depending on how it was written, so try both ISO8601 shapes.
+        if let paidAtString = try container.decodeIfPresent(String.self, forKey: .paidAt) {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            paidAt = fractional.date(from: paidAtString)
+                ?? ISO8601DateFormatter().date(from: paidAtString)
+        } else {
+            paidAt = nil
+        }
 
         // Handle date decoding with multiple formats
         let dueDateString = try container.decode(String.self, forKey: .dueDate)
@@ -143,6 +158,9 @@ struct EncryptableBill: Identifiable, Codable {
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(verificationDate, forKey: .verificationDate)
+        if let paidAt {
+            try container.encode(ISO8601DateFormatter().string(from: paidAt), forKey: .paidAt)
+        }
 
         // Encode dates as YYYY-MM-DD string
         let dateFormatter = DateFormatter()
@@ -188,7 +206,8 @@ struct EncryptableBill: Identifiable, Codable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             notes: decryptedNotes,
-            verificationDate: verificationDate
+            verificationDate: verificationDate,
+            paidAt: paidAt
         )
     }
 }
@@ -212,7 +231,8 @@ extension EncryptableBill {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         notes: String? = nil,
-        verificationDate: String? = nil
+        verificationDate: String? = nil,
+        paidAt: Date? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -231,5 +251,6 @@ extension EncryptableBill {
         self.updatedAt = updatedAt
         self.notes = notes
         self.verificationDate = verificationDate
+        self.paidAt = paidAt
     }
 }

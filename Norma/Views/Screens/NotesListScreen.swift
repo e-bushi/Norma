@@ -48,6 +48,19 @@ struct NotesListScreen: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showPaywall = false
 
+    // Hard paywall (non-dismissible). Distinct from `showPaywall`, which is the
+    // soft, dismissible per-action sheet. The hard wall is the gate: it lands
+    // after the user has felt extraction across their first couple of notes,
+    // or immediately when a previously-used subscription/trial has lapsed.
+    @State private var showHardWall = false
+    /// Sticky, monotonic count of notes this user has created. Incremented on
+    /// each new note, never decremented — so deleting notes can't drop a user
+    /// back under the wall. The wall lands once this reaches `freeNoteLimit`.
+    @AppStorage("com.norma.notesCreatedCount") private var notesCreatedCount = 0
+    /// Free notes a user gets before the hard wall. They feel extraction on
+    /// these, then are asked to subscribe.
+    private let freeNoteLimit = 2
+
     /// Observed for the per-row "extraction in progress" pulsing dot.
     @State private var syncQueue = NoteSyncQueue.shared
     @State private var path: [Note] = []
@@ -75,6 +88,25 @@ struct NotesListScreen: View {
 
     private var hasAccess: Bool {
         subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
+    }
+
+    /// Whether the non-dismissible hard wall should be standing. A user without
+    /// access hits it once they've either (a) burned a prior trial/subscription
+    /// — gate immediately — or (b) created their first couple of notes, so
+    /// they've already felt extraction do its thing. A user still under the
+    /// free-note limit passes.
+    private var shouldHardWall: Bool {
+        guard !hasAccess else { return false }
+        return subscriptionManager.hasUsedFreeTrial || notesCreatedCount >= freeNoteLimit
+    }
+
+    /// Returning users who already spent their trial see the "trial wrapped"
+    /// framing; first-timers see the onboarding trial offer.
+    private var hardWallContext: PaywallContext {
+        if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
+            return .trialExpired
+        }
+        return .onboarding
     }
 
     private var freedomFund: Double {
@@ -221,6 +253,11 @@ struct NotesListScreen: View {
             Task.detached { @MainActor in
                 await InsightEngine.shared.analyzeIfNeeded(modelContext: modelContext)
             }
+            // Hard-wall gate: refresh entitlement state, then raise the wall
+            // if this user no longer has access (expired sub, or first note
+            // already written). A brand-new user with no notes passes through.
+            await subscriptionManager.checkSubscriptionStatus()
+            presentHardWallIfNeeded()
         }
         .onChange(of: arcCount) { _, newValue in
             guard isVisible else { return }
@@ -246,6 +283,16 @@ struct NotesListScreen: View {
             if !newPath.isEmpty && isRecording {
                 stopVoiceRecording()
             }
+            // Returned to the list (canvas popped). If the user just wrote
+            // their first note without access, this is where the hard wall
+            // lands — after they've felt extraction, not mid-write.
+            if newPath.isEmpty {
+                presentHardWallIfNeeded()
+            }
+        }
+        .onChange(of: hasAccess) { _, nowHasAccess in
+            // A successful purchase/restore dissolves the wall.
+            if nowHasAccess { showHardWall = false }
         }
         .sheet(isPresented: $showArcDetail) {
             ArcCountView(
@@ -285,6 +332,12 @@ struct NotesListScreen: View {
                 .environmentObject(appCoordinator)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+        }
+        // The hard wall. A fullScreenCover (not a sheet) so it can't be
+        // swiped away; the .onboarding/.trialExpired contexts also hide the
+        // close button — the only way past is purchase or restore.
+        .fullScreenCover(isPresented: $showHardWall) {
+            PaywallView(context: hardWallContext)
         }
     }
 
@@ -578,7 +631,11 @@ struct NotesListScreen: View {
                 bottomIcon(systemName: "point.3.connected.trianglepath.dotted") {
                     let impact = UIImpactFeedbackGenerator(style: .light)
                     impact.impactOccurred()
-                    showInsights = true
+                    if hasAccess {
+                        showInsights = true
+                    } else {
+                        showPaywall = true
+                    }
                 }
             }
             .padding(.vertical, 6)
@@ -795,10 +852,21 @@ struct NotesListScreen: View {
     }
 
     private func createNewNote() {
+        // Count this note toward the free limit. The hard wall keys off this
+        // when they return to the list, so they feel extraction on their first
+        // couple of notes before being asked to subscribe.
+        notesCreatedCount += 1
         let note = Note()
         modelContext.insert(note)
         try? modelContext.save()
         path.append(note)
+    }
+
+    /// Raise the hard wall if the gating conditions are met. Called only at
+    /// safe moments — never while a note canvas is pushed — so it can't yank
+    /// the user out of editing.
+    private func presentHardWallIfNeeded() {
+        if shouldHardWall { showHardWall = true }
     }
 
     /// Shared context menu for note rows — pin/unpin toggle above the

@@ -432,6 +432,15 @@ extension Bill {
             "is_reminder_on": AnyCodable(isReminderOn)
         ]
 
+        // Paid-state timestamp. Always sent (not omitted) so that un-paying a
+        // bill — which sets paidAt back to nil — writes an explicit null and
+        // clears the column, rather than leaving the old timestamp in place.
+        if let paidAt = paidAt {
+            data["paid_at"] = AnyCodable(ISO8601DateFormatter().string(from: paidAt))
+        } else {
+            data["paid_at"] = AnyCodable(NSNull())
+        }
+
         if let nextDueDate = nextDueDate {
             data["next_due_date"] = AnyCodable(dateFormatter.string(from: nextDueDate))
         }

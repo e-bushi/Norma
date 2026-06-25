@@ -48,9 +48,18 @@ struct NoteCanvasView: View {
     @State private var voicePulse: Bool = false
     @State private var showMiniChat: Bool = false
 
+    // Subscription gate — chatting with Norma is a paywalled action.
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var showPaywall: Bool = false
+
     enum Field: Hashable { case title, body }
 
     private var isEditable: Bool { repo != nil }
+
+    /// Subscribers and trial users pass; everyone else hits the paywall.
+    private var hasAccess: Bool {
+        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
+    }
 
     /// Lavender dither only renders while the LLM extractor is actively
     /// running for this note. Other states — pending, queued, synced, error
@@ -164,6 +173,11 @@ struct NoteCanvasView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color(red: 0.075, green: 0.075, blue: 0.083))
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         .preferredColorScheme(.dark)
         .task(id: note.id) {
@@ -376,7 +390,11 @@ struct NoteCanvasView: View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .medium)
             impact.impactOccurred()
-            withAnimation(.spring(response: 0.35)) { showMiniChat.toggle() }
+            if hasAccess {
+                withAnimation(.spring(response: 0.35)) { showMiniChat.toggle() }
+            } else {
+                showPaywall = true
+            }
         } label: {
             Text("Chat with Norma")
                 .font(.system(size: 14, weight: .medium))

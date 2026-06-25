@@ -117,6 +117,7 @@ CREATE TABLE public.bills (
     notes text,                            -- encrypted
     is_active boolean DEFAULT true,
     verification_date date,
+    paid_at timestamp with time zone,      -- most recent mark-paid time; app derives displayed paid status from this
     embedding vector(1024),                -- Voyage AI embeddings for semantic search
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()

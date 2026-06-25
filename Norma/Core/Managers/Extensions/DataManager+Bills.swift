@@ -168,6 +168,10 @@ extension DataManager {
         // Bill.effectiveDueDate the next time the bill is read in a new cycle.
         var updatedBill = bill
         updatedBill.status = .paid
+        // Stamp the paid time — the displayed status is derived from `paidAt`,
+        // not the stored `status` string, so without this the bill never reads
+        // as paid (in-session or after relaunch).
+        updatedBill.paidAt = Date()
 
         try await updateBillWithEncryption(updatedBill)
 

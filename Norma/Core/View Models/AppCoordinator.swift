@@ -174,6 +174,11 @@ class AppCoordinator: ObservableObject {
                 .environmentObject(dataManager)
         
         case .main:
+            // The hard paywall is presented from NotesListScreen (after the
+            // user's first note, or immediately on an expired subscription),
+            // not wrapped here — gating at this level would tear down the
+            // notes NavigationStack and yank the user out of the note canvas
+            // mid-write. See NotesListScreen's hard-wall fullScreenCover.
             RootView()
                 .environmentObject(self.dataManager)
                 .environmentObject(self.sessionViewModel)
