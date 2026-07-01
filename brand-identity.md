@@ -1,7 +1,16 @@
 # Norma - Brand Identity Brief
 
+> **Reconciled 2026-06-19 to canonical positioning.** Norma is NOT a budget/tracker — earlier copy
+> ("manage bills, budgets, and expenses") was pre-pivot and has been corrected. Current audience +
+> voice truth: `Personal-Branding/Content/marketing/norma/psychographics.md`. Current color tokens:
+> `mauldin/norma-landing-page-brand-spec.md` (the source of truth for hex/usage).
+
 ## App Overview
-Norma is a conversational AI financial assistant that helps users manage bills, budgets, and expenses through natural chat interactions. The app emphasizes approachability and clarity in personal finance management.
+Norma is a **financial journal that gets money out of your head.** You write what's happening in
+plain English — by voice or a snapped receipt — and Norma makes sense of what's due, what's coming,
+and what you keep meaning to buy. It's for people who tried the budgeting apps (Copilot, Mint,
+spreadsheets) and quit them all. Explicitly **not a budget, not a tracker** — a journal that talks
+back. The emphasis is approachability and relief: clarity without intimidation.
 
 ## Core Brand Attributes
 - **Approachable**: Financial management without intimidation
@@ -13,12 +22,14 @@ Norma is a conversational AI financial assistant that helps users manage bills, 
 ## Visual Design System
 
 ### Color Palette
-**Muted Pastels** - Soft, calming tones that reduce financial stress:
-- Pastel Purple (Bills): Gentle authority
-- Pastel Teal (Budgets): Growth and balance
-- Pastel Coral (Expenses): Warmth and attention
-- Neutral Background: Clean, uncluttered canvas
-- Dark accents (charcoal #2C2C2C): Grounding elements
+**Muted Pastels** - Soft, calming tones that reduce financial stress, desaturated so financial data
+feels soothing rather than alarming. Current tokens + usage live in `norma-landing-page-brand-spec.md`
+(dark-mode background `#231c18`, pastel-teal as primary CTA). Roles, **not budget categories**:
+- Pastel Teal: primary CTA, interactive elements, links
+- Pastel Purple: secondary accent, badges
+- Pastel Coral: emphasis / attention
+- Neutral warm background: clean, uncluttered canvas
+- Dark accents: grounding elements
 
 **Philosophy**: Colors are desaturated to feel soothing rather than alarming, even when showing financial data that might typically cause stress.
 
