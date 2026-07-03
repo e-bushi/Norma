@@ -581,7 +581,7 @@ struct NormaKnowsInfoPopover: View {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 22))
-                    .foregroundColor(Color("NormaPastelPurple"))
+                    .foregroundColor(NormaPalette.lavender)
                 Text("what norma knows")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                     .foregroundColor(.primary)

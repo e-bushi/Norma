@@ -21,7 +21,7 @@ struct PaywallPlanCard: View {
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
     private let onAccent = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
 
     var body: some View {
         Button(action: action) {

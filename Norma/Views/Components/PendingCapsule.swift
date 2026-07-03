@@ -27,20 +27,20 @@ struct PendingCapsule: View {
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(Color("NormaPastelPurple"))
+                            .fill(NormaPalette.lavender)
                     )
             }
-            .foregroundColor(Color("NormaPastelPurple"))
+            .foregroundColor(NormaPalette.lavender)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(Color("NormaPastelPurple").opacity(0.15))
+                    .fill(NormaPalette.lavender.opacity(0.15))
                     .glassEffect(in: Capsule())
             )
             .overlay(
                 Capsule()
-                    .stroke(Color("NormaPastelPurple").opacity(0.3), lineWidth: 0.5)
+                    .stroke(NormaPalette.lavender.opacity(0.3), lineWidth: 0.5)
             )
         }
         .buttonStyle(CapsulePressStyle())

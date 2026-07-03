@@ -10,7 +10,7 @@ import SwiftUI
 struct ChatBubbleView: View {
     let message: ChatMessage
     var shouldAnimate: Bool = false
-    var accentColor: Color = Color("NormaPastelPurple")
+    var accentColor: Color = NormaPalette.lavender
     var onArcSimulatorTap: ((Int, Double, Double, String) -> Void)?
 
     var body: some View {

@@ -151,8 +151,8 @@ struct RecoveryPhraseSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color("NormaPastelPurple").opacity(0.1))
-                .foregroundColor(Color("NormaPastelPurple"))
+                .background(NormaPalette.lavender.opacity(0.1))
+                .foregroundColor(NormaPalette.lavender)
                 .cornerRadius(12)
             }
 

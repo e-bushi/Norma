@@ -51,7 +51,7 @@ struct ArcCountView: View {
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
     private var heroFont: Font { .system(size: 64, weight: .bold) }
@@ -484,7 +484,7 @@ struct FreedomFundFirstTimeView: View {
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
 
@@ -700,7 +700,7 @@ struct FreedomFundEditSheet: View {
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
     private var heroFont: Font { .system(size: 64, weight: .bold) }
@@ -1231,7 +1231,7 @@ struct ArcInfoPopover: View {
             HStack(spacing: 10) {
                 Image(systemName: "building.columns.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color("NormaPastelPurple"))
+                    .foregroundColor(NormaPalette.lavender)
 
                 Text("connect an account")
                     .font(.custom(FontFamily.Rubik.medium, size: 15))
@@ -1280,7 +1280,7 @@ struct FreedomFundInfoPopover: View {
             HStack(spacing: 10) {
                 Image(systemName: "building.columns.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color("NormaPastelPurple"))
+                    .foregroundColor(NormaPalette.lavender)
 
                 Text("Linked Account")
                     .font(.custom(FontFamily.Rubik.medium, size: 15))

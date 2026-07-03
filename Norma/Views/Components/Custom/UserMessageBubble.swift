@@ -9,7 +9,7 @@ import SwiftUI
 
 struct UserMessageBubble: View {
     let content: String
-    var accentColor: Color = Color("NormaPastelPurple")
+    var accentColor: Color = NormaPalette.lavender
 
     @State private var showContent = false
 

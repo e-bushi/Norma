@@ -52,7 +52,7 @@ struct ForecastSheet: View {
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
     private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
 
     var body: some View {
         NavigationStack {
@@ -1114,7 +1114,7 @@ struct ForecastInfoPopover: View {
                 HStack(spacing: 10) {
                     Image(systemName: "lightbulb")
                         .font(.system(size: 20))
-                        .foregroundColor(Color("NormaPastelPurple"))
+                        .foregroundColor(NormaPalette.lavender)
 
                     Text("intentions")
                         .font(.custom(FontFamily.Rubik.medium, size: 15))
@@ -1131,7 +1131,7 @@ struct ForecastInfoPopover: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.seal")
                         .font(.system(size: 20))
-                        .foregroundColor(Color("NormaPastelPurple"))
+                        .foregroundColor(NormaPalette.lavender)
 
                     Text("commitments")
                         .font(.custom(FontFamily.Rubik.medium, size: 15))
@@ -1148,7 +1148,7 @@ struct ForecastInfoPopover: View {
                 HStack(spacing: 10) {
                     Image(systemName: "switch.2")
                         .font(.system(size: 20))
-                        .foregroundColor(Color("NormaPastelPurple"))
+                        .foregroundColor(NormaPalette.lavender)
 
                     Text("what-if toggle")
                         .font(.custom(FontFamily.Rubik.medium, size: 15))

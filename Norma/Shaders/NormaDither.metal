@@ -5,7 +5,9 @@
 //  Animated 8x8 Bayer dither over a 2D simplex noise field.
 //  Mirrors @paper-design/shaders-react <Dithering /> with parameters tuned
 //  to match the O1 landing artboard: shape=simplex, type=8x8, size=1.9,
-//  scale=0.51, speed=1.54, lavender on transparent.
+//  scale=0.51, speed=1.54, tint color on transparent. Tint is passed in
+//  from the caller (NormaPalette.lavender, i.e. the user's selected
+//  AppTheme accent) rather than hardcoded, so the animation follows theme.
 //
 
 #include <metal_stdlib>
@@ -62,10 +64,10 @@ constant int bayer8[64] = {
 
 // MARK: - Norma dither shader
 //
-// Apply via `.colorEffect(ShaderLibrary.normaDither(.float2(w,h), .float(time), .float(intensity)))`
+// Apply via `.colorEffect(ShaderLibrary.normaDither(.float2(w,h), .float(time), .float(intensity), .float(dotSize), .color(tint)))`
 // onto a `Rectangle().fill(Color.white)`. Intensity 0..1 controls overall
-// opacity of the lavender dots; transparent pixels fall through to the
-// view underneath (typically NormaPalette.canvas).
+// opacity of the tinted dots; transparent pixels fall through to the view
+// underneath (typically NormaPalette.canvas).
 
 [[stitchable]] half4 normaDither(
     float2 pos,
@@ -73,7 +75,8 @@ constant int bayer8[64] = {
     float2 size,
     float time,
     float intensity,
-    float dotSize
+    float dotSize,
+    half4 tint
 ) {
     // Tuned to visually match Paper's <Dithering /> output — chunkier dots,
     // sparser coverage, larger noise blobs than the bare Paper params imply.
@@ -112,8 +115,7 @@ constant int bayer8[64] = {
     float threshold = float(bayer8[cy * 8 + cx]) / 64.0;
 
     if (n > threshold) {
-        // #9676D9 lavender
-        return half4(0.588h, 0.463h, 0.851h, half(intensity));
+        return half4(tint.rgb, half(intensity));
     }
     return half4(0.0h, 0.0h, 0.0h, 0.0h);
 }

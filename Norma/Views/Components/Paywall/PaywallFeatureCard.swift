@@ -13,7 +13,7 @@ struct PaywallFeatureRow: View {
 
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
 
     var body: some View {
         HStack(spacing: 14) {

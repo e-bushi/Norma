@@ -47,6 +47,11 @@ struct SettingsView: View {
     // so it can be turned off here. Read by NoteCanvasView via the same key.
     @AppStorage("extractionHapticsEnabled") private var extractionHapticsEnabled = true
 
+    // Accent theme — the app's purplish color, user-selectable. The dark
+    // background/canvas stays static; this only swaps NormaPalette.lavender,
+    // which every purple-tinted view already reads from.
+    @AppStorage(AppTheme.storageKey) private var selectedAccentThemeID = AppTheme.defaultID
+
     // Plaid state
     @State private var isLoadingLinkToken = false
     @State private var isExchangingToken = false
@@ -61,7 +66,7 @@ struct SettingsView: View {
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
     private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
-    private let accentPurple = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+    private var accentPurple: Color { NormaPalette.lavender }
     private let danger = Color(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255)
 
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
@@ -631,7 +636,63 @@ struct SettingsView: View {
                 subtitle: "buzz while norma reads a note",
                 isOn: $extractionHapticsEnabled
             )
+            Divider().overlay(dimText.opacity(0.25)).padding(.vertical, 4)
+            themeRow
         }
+    }
+
+    private var themeRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(accentPurple)
+                    .frame(width: 22, alignment: .leading)
+                Text("accent color")
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundStyle(cream)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 30), spacing: 14)], spacing: 14) {
+                ForEach(AppTheme.presets) { theme in
+                    themeSwatch(theme)
+                }
+            }
+            .padding(.leading, 36)
+            .padding(.trailing, 36)
+        }
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func themeSwatch(_ theme: AccentTheme) -> some View {
+        let isSelected = selectedAccentThemeID == theme.id
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.easeOut(duration: 0.18)) {
+                selectedAccentThemeID = theme.id
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(theme.color)
+                Circle()
+                    .strokeBorder(
+                        isSelected ? cream.opacity(0.9) : dimText.opacity(0.4),
+                        style: isSelected
+                            ? StrokeStyle(lineWidth: 2)
+                            : StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(onAccentText)
+                }
+            }
+            .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(theme.name)
     }
 
     private var supportSection: some View {

@@ -2,10 +2,11 @@
 //  DitherShaderView.swift
 //  Norma
 //
-//  Animated lavender dot-grid dither, matching the O1 landing artboard.
-//  Used as an ambient background while the AI is "thinking" on a note —
-//  intensity fades in/out so the layer stays visible only when extraction
-//  is actively running.
+//  Animated dot-grid dither, matching the O1 landing artboard. Used as an
+//  ambient background while the AI is "thinking" on a note — intensity
+//  fades in/out so the layer stays visible only when extraction is
+//  actively running. Tint follows the user's selected AppTheme accent
+//  (NormaPalette.lavender), not a fixed color.
 //
 
 import SwiftUI
@@ -35,7 +36,8 @@ struct DitherShaderView: View {
                             .float2(geo.size.width, geo.size.height),
                             .float(Float(time)),
                             .float(Float(intensity)),
-                            .float(Float(dotSize))
+                            .float(Float(dotSize)),
+                            .color(NormaPalette.lavender)
                         )
                     )
             }

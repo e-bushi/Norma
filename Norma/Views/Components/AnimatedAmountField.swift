@@ -284,7 +284,7 @@ private struct AnimatedAmountFieldPreview: View {
     var body: some View {
         let bg = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
         let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
-        let accent = Color(red: 0x96/255, green: 0x76/255, blue: 0xD9/255)
+        let accent = NormaPalette.lavender
 
         ZStack {
             bg.ignoresSafeArea()

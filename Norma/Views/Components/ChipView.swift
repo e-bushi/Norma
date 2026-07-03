@@ -264,7 +264,10 @@ struct ChipView: View {
 }
 
 enum NormaPalette {
-    static let lavender = Color(red: 0.588, green: 0.463, blue: 0.851)
+    /// User-selectable accent — reads the persisted `AppTheme` choice.
+    /// Every existing call site stays a plain color read, so changing the
+    /// theme in Settings updates the whole app without further wiring.
+    static var lavender: Color { AppTheme.current.color }
     static let lavenderText = Color(red: 0.91, green: 0.86, blue: 1.0)
     static let canvas = Color(red: 0.055, green: 0.055, blue: 0.063)
     static let cardSurface = Color(red: 0.102, green: 0.078, blue: 0.149)
