@@ -383,6 +383,15 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var bankingSection: some View {
+        // Whole section disappears while Plaid is dormant — this is the only
+        // entry point into the Link flow, so hiding it stops new connections.
+        if FeatureFlags.plaidEnabled {
+            bankingSectionContent
+        }
+    }
+
+    @ViewBuilder
+    private var bankingSectionContent: some View {
         section(title: "banking") {
             if !plaidService.connectedAccounts.isEmpty {
                 connectedBankRow
@@ -537,9 +546,16 @@ struct SettingsView: View {
     /// title — these are facts *norma* has learned, not first-person notes.
     private var normaKnowsProse: some View {
         let profile = userProfile
-        let currency = profile?.currency.lowercased() ?? "usd"
+        // Income and currency are canonical on the server profile — the
+        // forecast, arc, and chat all read/write settings.monthlyIncome.
+        // The local UserProfile mirror is only a fallback so the prose
+        // still renders in signed-out/preview contexts.
+        let settings = sessionViewModel.currentUser?.settings
+        let currency = (settings?.currency ?? profile?.currency ?? "USD").lowercased()
         let incomeText: String = {
-            guard let amount = profile?.incomeAmount, amount > 0 else { return "—" }
+            let serverAmount = settings?.monthlyIncome ?? 0
+            let amount = serverAmount > 0 ? serverAmount : (profile?.incomeAmount ?? 0)
+            guard amount > 0 else { return "—" }
             return formatBalance(amount, currency: currency.uppercased())
         }()
         let frequency = profile?.incomeFrequency?.lowercased() ?? "—"

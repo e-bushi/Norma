@@ -163,6 +163,9 @@ struct NotesListScreen: View {
     /// freedom fund but the live balance hasn't been fetched yet. Shimmer
     /// runs during this window so the user knows the number may shift.
     private var isPlaidPending: Bool {
+        // With Plaid dormant no balance fetch is ever in flight — without
+        // this guard, a user with a wired arcAccountId would shimmer forever.
+        guard FeatureFlags.plaidEnabled else { return false }
         guard let arcAccountId = sessionViewModel.currentUser?.settings.arcAccountId else {
             return false
         }

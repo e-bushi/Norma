@@ -191,24 +191,52 @@ final class NoteRepository {
         BillTokenBridge.shared.reconcile(extractedTokens: tokens)
     }
 
-    /// User-driven confirmation: stamps confirmedAt, persists the chosen time
-    /// (if the chip was in "needs info" state and the user just picked one),
-    /// and schedules the OS notification. Idempotent — calling again replaces
-    /// any existing scheduled notification with the new time.
+    /// Why user-facing confirmation can fail. Surfaced so the canvas can
+    /// explain the failure instead of silently leaving the chip dashed.
+    enum ReminderConfirmFailure {
+        case notificationsDenied
+        case timeAlreadyPassed
+        case schedulingFailed
+    }
+
+    /// User-driven confirmation: schedules the OS notification first, and only
+    /// stamps confirmedAt once the OS accepts it — the chip must never read
+    /// "confirmed" for a reminder that doesn't exist. Returns nil on success,
+    /// or the failure reason so the caller can surface it. If the user has
+    /// never answered the notification-permission prompt, asks now — at the
+    /// moment the permission visibly matters. Idempotent — confirming again
+    /// replaces any existing scheduled notification with the new time.
     ///
     /// Does NOT re-enqueue the LLM extractor: the note's prose hasn't changed,
     /// only the user's confirmation state on an existing token. Re-extracting
     /// would replace this token with a fresh one (new UUID) and drop the
     /// confirmation if the user picked a time different from what the LLM
     /// originally inferred — the chip would visibly flip back to dashed.
-    func confirmReminder(_ token: NoteToken, remindAt: Date, on note: Note) {
-        guard token.kind == .reminder else { return }
+    @discardableResult
+    func confirmReminder(_ token: NoteToken, remindAt: Date, on note: Note) async -> ReminderConfirmFailure? {
+        guard token.kind == .reminder else { return nil }
+
+        let service = NotificationService.shared
+        await service.refreshPermissionStatus()
+        if service.notificationPermissionStatus == .notDetermined {
+            _ = await service.requestNotificationPermission()
+        }
+
+        let result = await Self.scheduleReminderRequest(token, fireDate: remindAt, on: note)
+        if case .failure(let error) = result {
+            switch error as? NotificationError {
+            case .permissionDenied: return .notificationsDenied
+            case .invalidDate: return .timeAlreadyPassed
+            default: return .schedulingFailed
+            }
+        }
+
         token.remindAt = remindAt
         token.occurredAt = remindAt
         token.confirmedAt = Date()
         note.updatedAt = Date()
-        Self.scheduleReminder(token, on: note)
         save()
+        return nil
     }
 
     /// Inverse of confirmReminder — used when the user dismisses a reminder
@@ -287,8 +315,23 @@ final class NoteRepository {
         return "\(token.kind.rawValue)|\(amt)|\(token.currency.uppercased())|\(subject)|\(rec)"
     }
 
+    /// Fire-and-forget scheduling for the re-extraction path, where the
+    /// confirmation being carried forward is already the source of truth and
+    /// there is no user interaction to report a failure to.
     static func scheduleReminder(_ token: NoteToken, on note: Note) {
         guard let fireDate = token.remindAt else { return }
+        Task { @MainActor in
+            _ = await scheduleReminderRequest(token, fireDate: fireDate, on: note)
+        }
+    }
+
+    /// Awaitable core — builds the notification and returns the OS's verdict
+    /// so user-driven paths (confirmReminder) can react to a refusal.
+    static func scheduleReminderRequest(
+        _ token: NoteToken,
+        fireDate: Date,
+        on note: Note
+    ) async -> Result<String, Error> {
         let subject = token.subject?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedSubject = (subject?.isEmpty == false ? subject! : "reminder")
         let noteTitle = note.title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -300,17 +343,15 @@ final class NoteRepository {
             "noteId": note.id.uuidString,
             "tokenId": token.id.uuidString
         ]
-        Task { @MainActor in
-            _ = await NotificationService.shared.scheduleAIReminder(
-                title: resolvedSubject,
-                message: body,
-                remindAt: fireDate,
-                reminderType: .general,
-                recurrence: recurrence,
-                identifier: identifier,
-                userInfo: userInfo
-            )
-        }
+        return await NotificationService.shared.scheduleAIReminder(
+            title: resolvedSubject,
+            message: body,
+            remindAt: fireDate,
+            reminderType: .general,
+            recurrence: recurrence,
+            identifier: identifier,
+            userInfo: userInfo
+        )
     }
 
     /// Maps the richer NoteToken.Recurrence enum onto NotificationService.Recurrence.

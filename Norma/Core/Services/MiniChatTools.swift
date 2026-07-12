@@ -295,6 +295,15 @@ final class MiniChatToolExecutor {
             modelContext.insert(userProfile)
         }
 
+        // Mirror income + currency onto the local profile so its fallback
+        // values track the canonical server settings written above.
+        if let amount = input["income_amount"] as? Double {
+            userProfile.incomeAmount = amount
+        }
+        if let currency = input["currency"] as? String {
+            userProfile.currency = currency
+        }
+
         if let freq = input["income_frequency"] as? String {
             userProfile.incomeFrequency = freq
             updated.append("frequency → \(freq)")

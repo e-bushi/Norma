@@ -65,22 +65,30 @@ class NotificationService: NSObject, ObservableObject {
     func requestNotificationPermission() async -> Bool {
         do {
             let granted = try await notificationCenter.requestAuthorization(options: [.alert, .badge, .sound])
-            await checkNotificationPermission()
+            await refreshPermissionStatus()
             return granted
         } catch {
             print("Failed to request notification permission: \(error)")
             return false
         }
     }
-    
+
+    /// Fire-and-forget status refresh for sync call sites (init, app-active
+    /// observer). Callers whose next step depends on `isNotificationsEnabled`
+    /// must await `refreshPermissionStatus()` instead — this returns before
+    /// the published values land.
     func checkNotificationPermission() {
         Task {
-            let settings = await notificationCenter.notificationSettings()
-            await MainActor.run {
-                notificationPermissionStatus = settings.authorizationStatus
-                isNotificationsEnabled = settings.authorizationStatus == .authorized
-            }
+            await refreshPermissionStatus()
         }
+    }
+
+    @discardableResult
+    func refreshPermissionStatus() async -> Bool {
+        let settings = await notificationCenter.notificationSettings()
+        notificationPermissionStatus = settings.authorizationStatus
+        isNotificationsEnabled = settings.authorizationStatus == .authorized
+        return isNotificationsEnabled
     }
     
     // MARK: - Notification Categories Setup

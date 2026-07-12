@@ -99,7 +99,17 @@ final class InsightEngine {
             return "[\(dateStr)] \(title)\n  \(note.rawText.prefix(300))\(tokenLine)"
         }.joined(separator: "\n\n")
 
-        let existingSummary = existing.prefix(10).map { insight in
+        // Dismissed insights stay in the prompt as tombstones — the user
+        // saying "not this" is a stronger signal than mere duplication, so
+        // they get their own do-not-resurface section.
+        let liveInsights = existing.filter { $0.dismissedAt == nil }
+        let dismissedInsights = existing.filter { $0.dismissedAt != nil }
+
+        let existingSummary = liveInsights.prefix(10).map { insight in
+            "[\(insight.type.rawValue)] \(insight.headline)"
+        }.joined(separator: "\n")
+
+        let dismissedSummary = dismissedInsights.prefix(15).map { insight in
             "[\(insight.type.rawValue)] \(insight.headline)"
         }.joined(separator: "\n")
 
@@ -115,6 +125,7 @@ final class InsightEngine {
         Rules:
         - Only surface insights with clear evidence from the notes
         - Don't repeat insights that already exist
+        - Never re-surface an insight the user dismissed, or anything close to it — dismissal means "not this"
         - Keep headlines conversational and lowercase
         - Keep details specific — reference dates, amounts, note content
         - Return 0-3 insights per run. Quality over quantity.
@@ -128,6 +139,9 @@ final class InsightEngine {
 
         Existing insights (don't repeat these):
         \(existingSummary.isEmpty ? "none yet" : existingSummary)
+
+        Insights the user dismissed (never re-surface these or near-duplicates of them):
+        \(dismissedSummary.isEmpty ? "none" : dismissedSummary)
 
         Analyze the notes and return new insights using the record_insights tool. If there's nothing meaningful to surface, return an empty array.
         """

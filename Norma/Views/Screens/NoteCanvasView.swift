@@ -314,11 +314,32 @@ struct NoteCanvasView: View {
     }
 
     /// Wires reminder-chip confirmation through the repo. Returns nil in
-    /// preview/sample-data contexts so chips stay non-interactive.
+    /// preview/sample-data contexts so chips stay non-interactive. On failure
+    /// the chip stays dashed (the repo never stamps confirmedAt) and a toast
+    /// explains why the reminder didn't get scheduled.
     private var confirmReminderHandler: ((NoteToken, Date) -> Void)? {
         guard let repo else { return nil }
         return { token, date in
-            repo.confirmReminder(token, remindAt: date, on: note)
+            Task { @MainActor in
+                guard let failure = await repo.confirmReminder(token, remindAt: date, on: note) else { return }
+                switch failure {
+                case .notificationsDenied:
+                    ToastManager.shared.show(.error(
+                        message: "notifications are off",
+                        detail: "enable them for norma in ios settings to get reminders"
+                    ))
+                case .timeAlreadyPassed:
+                    ToastManager.shared.show(.error(
+                        message: "that time already passed",
+                        detail: "pick a time in the future"
+                    ))
+                case .schedulingFailed:
+                    ToastManager.shared.show(.error(
+                        message: "couldn't set the reminder",
+                        detail: "please try again"
+                    ))
+                }
+            }
         }
     }
 

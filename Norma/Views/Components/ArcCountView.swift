@@ -722,7 +722,7 @@ struct FreedomFundEditSheet: View {
     }
 
     private var hasPlaidAccounts: Bool {
-        !plaidService.connectedAccounts.isEmpty
+        FeatureFlags.plaidEnabled && !plaidService.connectedAccounts.isEmpty
     }
 
     private var selectedAccountBalance: Double? {

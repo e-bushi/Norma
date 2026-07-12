@@ -11,7 +11,12 @@ import UIKit
 
 struct InsightsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Insight.createdAt, order: .reverse) private var insights: [Insight]
+    @Environment(\.modelContext) private var modelContext
+    @Query(
+        filter: #Predicate<Insight> { $0.dismissedAt == nil },
+        sort: \Insight.createdAt,
+        order: .reverse
+    ) private var insights: [Insight]
 
     // Two-phase empty experience: a wave-text intro interstitial that
     // crossfades into the resting "nothing yet" empty state. Plays whenever
@@ -57,6 +62,17 @@ struct InsightsView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // If the sheet opened with insights, dismissing the last one
+            // mid-session should land on the resting empty state — the
+            // intro interstitial is a first-open experience, not a
+            // consequence of deleting things.
+            if !insights.isEmpty {
+                introDidFinish = true
+                emptyPhase = .resting
+                restingVisible = true
+            }
+        }
     }
 
     // MARK: - Empty experience (intro interstitial → resting empty state)
@@ -313,6 +329,24 @@ struct InsightsView: View {
                 Text(insight.createdAt.insightTimestamp)
                     .font(.system(size: 11))
                     .foregroundStyle(NormaPalette.inkMuted)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        insight.dismissedAt = Date()
+                        try? modelContext.save()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(NormaPalette.inkMuted)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
 
             Text(insight.headline)

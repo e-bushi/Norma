@@ -154,7 +154,16 @@ struct ChipView: View {
     }
 
     private func openPicker() {
-        pickerDate = token.remindAt ?? Self.defaultPickerDate()
+        // A stale proposed time falls back to next-9AM: the picker's
+        // future-only range can't clamp a binding the user never touches,
+        // so pre-filling a past date would let an untouched "confirm" ride
+        // straight into a scheduling refusal.
+        let now = Date()
+        if let proposed = token.remindAt, proposed > now {
+            pickerDate = proposed
+        } else {
+            pickerDate = Self.defaultPickerDate(now: now)
+        }
         showingPicker = true
     }
 

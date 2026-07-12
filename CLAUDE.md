@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Style
+
+Write to save Chris effort. Always:
+- Lead with the point in one sentence ("The finding:", "The fix:", "The bug:").
+- Bold labels, short numbered lists, one line per item.
+- One idea per sentence. No repetition, no hedging, no wind-up.
+- Explicitly say what NOT to do when it saves a wrong turn.
+- End with the single next action, not a menu.
+- Long-form only when walking through an experience or when Chris asks for depth.
+
 ## Build & Test Commands
 - Build app: `xcodebuild -scheme Norma build`
 - Run all tests: `xcodebuild -scheme Norma test`

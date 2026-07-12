@@ -51,6 +51,11 @@ struct RootView: View {
     }
 
     private func syncPlaidBalances(userId: String) async {
+        // Dormant: this sync fires on every launch and foreground for any
+        // user with a linked item, and each fetch is a billable Plaid call.
+        // With the flag off, connectedAccounts never loads and the app reads
+        // the last value synced into settings.freedomFund.
+        guard FeatureFlags.plaidEnabled else { return }
         do {
             let plaidItems = try await dataManager.supabaseService.fetchPlaidItems(userId: userId)
             guard let plaidItem = plaidItems.first else { return }

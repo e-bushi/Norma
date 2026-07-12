@@ -1,0 +1,26 @@
+//
+//  FeatureFlags.swift
+//  Norma
+//
+//  Compile-time switches for features that are built but dormant.
+//
+
+import Foundation
+
+enum FeatureFlags {
+    /// Master switch for the Plaid bank-connect integration.
+    ///
+    /// Off while the feature is dormant: nobody is connecting banks and the
+    /// launch-time balance sync generates billable Plaid API calls for every
+    /// user with a linked item. Gates the settings banking section (the only
+    /// entry into Plaid Link), RootView's balance sync, and the linked-account
+    /// states on the arc sheet and notes list. With the flag off,
+    /// `PlaidService.connectedAccounts` simply never loads, so every consumer
+    /// falls back to the manual freedom-fund path — including users who had
+    /// an account wired, whose fund freezes at its last-synced value in
+    /// `settings.freedomFund`.
+    ///
+    /// Flip to true to revive the feature client-side. The Plaid dashboard
+    /// plan and the Cortex proxy are billed independently of this flag.
+    static let plaidEnabled = false
+}

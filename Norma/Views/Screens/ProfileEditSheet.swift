@@ -22,6 +22,11 @@ import SwiftData
 struct NormaKnowsEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    /// Income and currency are canonical on the server profile (the forecast,
+    /// arc, and chat all read/write settings.monthlyIncome) — this sheet
+    /// hydrates from there and writes back through on save so the two stores
+    /// can't drift. Inherited from SettingsView's environment.
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
 
     let profile: UserProfile?
 
@@ -352,10 +357,12 @@ struct NormaKnowsEditSheet: View {
             // Currency always has a value (defaults to USD), but only seed a
             // row when the user has been through onboarding (i.e. the profile
             // exists). For brand-new accounts we want a clean canvas.
-            guard profile != nil else { return nil }
-            return profile?.currency ?? "USD"
+            guard profile != nil || sessionViewModel.currentUser != nil else { return nil }
+            return sessionViewModel.currentUser?.settings.currency ?? profile?.currency ?? "USD"
         case .income:
-            guard let amount = profile?.incomeAmount, amount > 0 else { return nil }
+            let serverAmount = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+            let amount = serverAmount > 0 ? serverAmount : (profile?.incomeAmount ?? 0)
+            guard amount > 0 else { return nil }
             return String(format: "%g", amount)
         case .frequency:
             guard let freq = profile?.incomeFrequency, !freq.isEmpty else { return nil }
@@ -417,6 +424,21 @@ struct NormaKnowsEditSheet: View {
         target.updatedAt = Date()
 
         try? modelContext.save()
+
+        // Write income + currency through to the server profile. Without
+        // this, the forecast/arc keep reading the old settings values and
+        // the two stores drift the first time income changes on either side.
+        if var serverProfile = sessionViewModel.currentUser {
+            let newIncome = income ?? 0
+            let newCurrency = currency ?? "USD"
+            if serverProfile.settings.monthlyIncome != newIncome
+                || serverProfile.settings.currency != newCurrency {
+                serverProfile.settings.monthlyIncome = newIncome
+                serverProfile.settings.currency = newCurrency
+                Task { await sessionViewModel.updateUserProfile(serverProfile) }
+            }
+        }
+
         dismiss()
     }
 
