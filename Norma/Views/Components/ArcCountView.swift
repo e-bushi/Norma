@@ -13,6 +13,12 @@ struct ArcCountView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @Query(sort: \FreedomFundEntry.createdAt, order: .reverse)
     private var allEntries: [FreedomFundEntry]
+    @Query(
+        filter: #Predicate<Insight> { $0.dismissedAt == nil },
+        sort: \Insight.createdAt,
+        order: .reverse
+    )
+    private var insights: [Insight]
 
     let arcCount: Int
     let freedomFund: Double
@@ -21,6 +27,15 @@ struct ArcCountView: View {
 
     @State private var showFreedomFundEdit = false
     @State private var showInfoPopover = false
+
+    @Environment(\.modelContext) private var modelContext
+    /// Balance re-anchor via popover: tapping the amount capsule opens a small
+    /// popover with the amount field; saving writes the balance + a ledger row.
+    @State private var showBalancePopover = false
+    @State private var showStatusPopover = false
+    @State private var showInsights = false
+    @State private var balanceText = ""
+    @FocusState private var balanceFocused: Bool
 
     @State private var heroWordCount = 0
     @State private var pillVisible = false
@@ -65,6 +80,18 @@ struct ArcCountView: View {
         var faded: Bool = false
     }
 
+    /// A merged timeline row — either a fund-balance change or an AI insight,
+    /// carried together in one date-sorted feed.
+    private struct TimelineRow: Identifiable {
+        let id: UUID
+        let date: Date
+        let kind: Kind
+        enum Kind {
+            case fund(ActivityItem)
+            case insight(headline: String, dateLabel: String)
+        }
+    }
+
     /// True once the user has connected a bank account as their fund source.
     private var hasLinkedAccount: Bool {
         sessionViewModel.currentUser?.settings.arcAccountId != nil
@@ -75,22 +102,40 @@ struct ArcCountView: View {
     /// distinct from "time to refill" (arcCount == 0), which means they've
     /// funded it before and since drawn it down.
     private var isFirstTime: Bool {
-        freedomFund <= 0 && !hasLinkedAccount && activityItems.isEmpty
+        let hasHistory = allEntries.contains { $0.userId == sessionViewModel.currentUser?.userId }
+        return freedomFund <= 0 && !hasLinkedAccount && !hasHistory
     }
 
-    private var activityItems: [ActivityItem] {
+    /// The merged activity feed: fund-balance changes + AI insights, sorted
+    /// together newest-first. Insights long-press into the full InsightsView.
+    private var timelineRows: [TimelineRow] {
         guard let userId = sessionViewModel.currentUser?.userId else { return [] }
-        return allEntries
+        let fundRows = allEntries
             .filter { $0.userId == userId }
             .map { entry in
-                ActivityItem(
+                TimelineRow(
                     id: UUID(uuidString: entry.id) ?? UUID(),
-                    date: Self.dateLabel(for: entry.createdAt),
-                    label: Self.activityLabel(for: entry),
-                    amount: formatSignedCurrency(entry.delta),
-                    isIncome: entry.delta > 0
+                    date: entry.createdAt,
+                    kind: .fund(ActivityItem(
+                        id: UUID(uuidString: entry.id) ?? UUID(),
+                        date: Self.dateLabel(for: entry.createdAt),
+                        label: Self.activityLabel(for: entry),
+                        amount: formatSignedCurrency(entry.delta),
+                        isIncome: entry.delta > 0
+                    ))
                 )
             }
+        let insightRows = insights.map { insight in
+            TimelineRow(
+                id: insight.id,
+                date: insight.createdAt,
+                kind: .insight(
+                    headline: insight.headline,
+                    dateLabel: Self.dateLabel(for: insight.createdAt)
+                )
+            )
+        }
+        return (fundRows + insightRows).sorted { $0.date > $1.date }
     }
 
     private static func dateLabel(for date: Date) -> String {
@@ -147,7 +192,9 @@ struct ArcCountView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // No NavigationStack here — HomeView owns the stack and the chrome
+        // (settings + notes). This view is pure content now.
+        Group {
             if isFirstTime {
                 firstTimeContent
             } else {
@@ -159,6 +206,11 @@ struct ArcCountView: View {
             FreedomFundEditSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showInsights) {
+            InsightsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         .onAppear {
             if !isFirstTime { runEntranceAnimation() }
@@ -178,17 +230,6 @@ struct ArcCountView: View {
         .background(bg.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(mutedText)
-                }
-            }
-        }
     }
 
     // MARK: - Funded / Refill content (arcCount >= 0, has history)
@@ -196,33 +237,53 @@ struct ArcCountView: View {
     @ViewBuilder
     private var fundedContent: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    showFreedomFundEdit = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Text("freedom fund")
-                            .font(.custom(FontFamily.Rubik.medium, size: 13))
-                            .foregroundColor(mutedText)
-                        Text(formatCurrency(freedomFund))
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 14))
-                            .foregroundColor(cream)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(dimText)
+                // Status + amount capsules. The status capsule uses the theme
+                // color; the amount capsule opens the balance-edit popover.
+                HStack(spacing: 8) {
+                    if runwayState == .runway {
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showStatusPopover = true
+                        } label: {
+                            Text(statusLine)
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                                .foregroundColor(accentPurple)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(accentPurple.opacity(0.14)))
+                                .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .popover(isPresented: $showStatusPopover, arrowEdge: .top) {
+                            statusInfoPopover
+                                .presentationCompactAdaptation(.popover)
+                        }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(glassFill))
-                    .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+
+                    Button {
+                        beginBalanceEdit()
+                    } label: {
+                        Text(formatCurrency(freedomFund))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                            .foregroundColor(cream)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(glassFill))
+                            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .popover(isPresented: $showBalancePopover, arrowEdge: .top) {
+                        balanceEditPopover
+                            .presentationCompactAdaptation(.popover)
+                    }
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
 
+                // Runway hero — the wave-text headline, restored.
                 VStack(alignment: .leading, spacing: 0) {
                     switch runwayState {
                     case .runway:
@@ -294,7 +355,7 @@ struct ArcCountView: View {
                     .opacity(activityVisible ? 1 : 0)
 
                 ZStack(alignment: .top) {
-                    if activityItems.isEmpty {
+                    if timelineRows.isEmpty {
                         Text("no activity yet.")
                             .font(.custom(FontFamily.Rubik.regular, size: 14).italic())
                             .foregroundColor(dimText)
@@ -304,13 +365,8 @@ struct ArcCountView: View {
                     } else {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 10) {
-                                ForEach(activityItems) { item in
-                                    HStack(spacing: 0) {
-                                        if !item.isIncome { Spacer(minLength: 0) }
-                                        activityRow(item)
-                                        if item.isIncome { Spacer(minLength: 0) }
-                                    }
-                                    .opacity(item.faded ? 0.55 : 1)
+                                ForEach(timelineRows) { row in
+                                    timelineRowView(row)
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -333,23 +389,146 @@ struct ArcCountView: View {
             .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        showInfoPopover = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 18))
+    }
+
+    /// Status word shown above the balance hero.
+    private var statusLine: String {
+        switch runwayState {
+        case .runway:
+            return ArcCalculationService.getStateName(arcCount: arcCount).lowercased()
+        case .addBill:
+            return "add a bill to see your runway"
+        case .refill:
+            return "time to refill"
+        }
+    }
+
+    private var currencySymbol: String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currency
+        return f.currencySymbol ?? "$"
+    }
+
+    /// The popover balance editor — reuses AnimatedAmountField in a compact
+    /// form. Save writes through commitBalance and dismisses.
+    @ViewBuilder
+    private var balanceEditPopover: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("how much do you have to live on?")
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundColor(mutedText)
+
+            HStack(alignment: .center, spacing: 4) {
+                Text(currencySymbol)
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(cream.opacity(0.55))
+                AnimatedAmountField(
+                    text: $balanceText,
+                    focused: $balanceFocused,
+                    font: .system(size: 40, weight: .bold),
+                    textColor: cream,
+                    placeholderColor: cream.opacity(0.3),
+                    caretColor: accentPurple,
+                    caretHeight: 34,
+                    tracking: -1
+                )
+            }
+
+            Button {
+                commitBalance()
+                showBalancePopover = false
+            } label: {
+                Text("save")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundColor(cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(glassFill))
+                    .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+        .frame(width: 280)
+        .background(bg)
+    }
+
+    /// Legend of the runway status tiers, highlighting the user's current one.
+    @ViewBuilder
+    private var statusInfoPopover: some View {
+        let current = ArcCalculationService.getStateName(arcCount: arcCount)
+        let tiers: [(name: String, desc: String)] = [
+            ("Urgency", "less than a month. every decision matters."),
+            ("Cautionary", "some breathing room, but not comfortable yet."),
+            ("Steady", "solid ground, rhythm found."),
+            ("Calm", "real distance from zero."),
+            ("Abundant", "serious financial cushion.")
+        ]
+        VStack(alignment: .leading, spacing: 14) {
+            Text("what your status means")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                .foregroundColor(cream)
+            ForEach(tiers, id: \.name) { tier in
+                let isCurrent = tier.name == current
+                HStack(alignment: .top, spacing: 10) {
+                    Circle()
+                        .fill(isCurrent ? accentPurple : cream.opacity(0.25))
+                        .frame(width: 7, height: 7)
+                        .padding(.top, 5)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tier.name.lowercased())
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                            .foregroundColor(isCurrent ? accentPurple : cream)
+                        Text(tier.desc)
+                            .font(.custom(FontFamily.Rubik.regular, size: 12))
                             .foregroundColor(mutedText)
-                    }
-                    .popover(isPresented: $showInfoPopover, arrowEdge: .top) {
-                        ArcInfoPopover()
-                            .presentationCompactAdaptation(.popover)
                     }
                 }
             }
+        }
+        .padding(20)
+        .frame(width: 300)
+        .background(bg)
+    }
+
+    private func beginBalanceEdit() {
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        if freedomFund > 0 {
+            let isWhole = freedomFund.truncatingRemainder(dividingBy: 1) == 0
+            balanceText = String(format: isWhole ? "%.0f" : "%.2f", freedomFund)
+        } else {
+            balanceText = ""
+        }
+        showBalancePopover = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            balanceFocused = true
+        }
+    }
+
+    /// The re-anchor. Writes the new balance to settings + a manual-edit ledger
+    /// entry, mirroring FreedomFundEditSheet's save path. No-ops if unchanged or
+    /// unparseable.
+    private func commitBalance() {
+        balanceFocused = false
+        guard var updatedProfile = sessionViewModel.currentUser else { return }
+        let cleaned = balanceText.filter { $0.isNumber || $0 == "." }
+        guard let newFund = Double(cleaned) else { return }
+        var updatedSettings = updatedProfile.settings
+        guard updatedSettings.freedomFund != newFund else { return }
+        updatedSettings.freedomFund = newFund
+        updatedProfile.freedomFund = newFund
+        FreedomFundLedger.recordIfChanged(
+            in: modelContext,
+            userId: updatedProfile.userId,
+            newBalance: newFund,
+            source: .manualEdit
+        )
+        updatedProfile.settings = updatedSettings
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        Task { await sessionViewModel.updateUserProfile(updatedProfile) }
     }
 
     @ViewBuilder
@@ -409,6 +588,57 @@ struct ArcCountView: View {
         .padding(.vertical, 9)
         .background(Capsule().fill(glassFill))
         .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func timelineRowView(_ row: TimelineRow) -> some View {
+        switch row.kind {
+        case .fund(let item):
+            HStack(spacing: 0) {
+                if !item.isIncome { Spacer(minLength: 0) }
+                activityRow(item)
+                if item.isIncome { Spacer(minLength: 0) }
+            }
+        case .insight(let headline, let dateLabel):
+            insightRow(headline: headline, dateLabel: dateLabel)
+                .onLongPressGesture {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    showInsights = true
+                }
+        }
+    }
+
+    /// AI-insight row in the timeline. Lavender-tinted so it reads as Norma's
+    /// commentary, not a balance change. Long-press opens the full InsightsView.
+    @ViewBuilder
+    private func insightRow(headline: String, dateLabel: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12))
+                .foregroundColor(accentPurple)
+                .padding(.top, 3)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headline)
+                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                    .foregroundColor(cream)
+                    .multilineTextAlignment(.leading)
+                HStack(spacing: 6) {
+                    Text(dateLabel)
+                        .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+                        .foregroundColor(dimText)
+                    Text("hold to read")
+                        .font(.custom(FontFamily.Rubik.regular, size: 11))
+                        .foregroundColor(accentPurple.opacity(0.6))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16).fill(accentPurple.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(accentPurple.opacity(0.3), lineWidth: 1))
     }
 
     @ViewBuilder

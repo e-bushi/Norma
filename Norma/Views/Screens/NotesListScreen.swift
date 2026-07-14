@@ -16,6 +16,11 @@ import AVFoundation
 import UIKit
 
 struct NotesListScreen: View {
+    /// When true, this screen is pushed inside HomeView's NavigationStack as the
+    /// notes archive: it drops its own stack, bottom nav, and toolbar chrome and
+    /// relies on the parent stack for the back button and note→canvas pushes.
+    var embedded: Bool = false
+
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -195,7 +200,7 @@ struct NotesListScreen: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        stackWrapper {
             ZStack(alignment: .bottom) {
                 NormaPalette.canvas.ignoresSafeArea()
                 // Subtle lavender wash over the canvas — gives the screen a
@@ -219,25 +224,29 @@ struct NotesListScreen: View {
                     }
                 }
 
-                bottomBar
-                    .opacity(showBottom ? 1 : 0)
-                    .offset(y: showBottom ? 0 : 24)
-                    .scaleEffect(showBottom ? 1 : 0.96, anchor: .bottom)
+                if !embedded {
+                    bottomBar
+                        .opacity(showBottom ? 1 : 0)
+                        .offset(y: showBottom ? 0 : 24)
+                        .scaleEffect(showBottom ? 1 : 0.96, anchor: .bottom)
+                }
             }
-            .navigationTitle("")
+            .navigationTitle(embedded ? "notes" : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    freedomFundToolbarItem
-                        .opacity(showNav ? 1 : 0)
-                }
-                .sharedBackgroundVisibility(.hidden)
+                if !embedded {
+                    ToolbarItem(placement: .topBarLeading) {
+                        freedomFundToolbarItem
+                            .opacity(showNav ? 1 : 0)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    settingsToolbarItem
-                        .opacity(showNav ? 1 : 0)
+                    ToolbarItem(placement: .topBarTrailing) {
+                        settingsToolbarItem
+                            .opacity(showNav ? 1 : 0)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
                 }
-                .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(for: Note.self) { note in
                 if let repo {
@@ -341,6 +350,20 @@ struct NotesListScreen: View {
         // close button — the only way past is purchase or restore.
         .fullScreenCover(isPresented: $showHardWall) {
             PaywallView(context: hardWallContext)
+        }
+    }
+
+    /// Wraps content in a NavigationStack only when this screen is the root.
+    /// When embedded (pushed into HomeView's stack), it returns the content
+    /// bare so the parent stack owns navigation — no nesting.
+    @ViewBuilder
+    private func stackWrapper<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        if embedded {
+            content()
+        } else {
+            NavigationStack(path: $path) {
+                content()
+            }
         }
     }
 
@@ -664,7 +687,9 @@ struct NotesListScreen: View {
 
             Spacer()
 
-            voiceButton
+            if FeatureFlags.voiceCaptureEnabled {
+                voiceButton
+            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
@@ -869,6 +894,7 @@ struct NotesListScreen: View {
     /// safe moments — never while a note canvas is pushed — so it can't yank
     /// the user out of editing.
     private func presentHardWallIfNeeded() {
+        guard !embedded else { return }
         if shouldHardWall { showHardWall = true }
     }
 

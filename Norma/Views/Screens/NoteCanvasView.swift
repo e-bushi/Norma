@@ -150,7 +150,9 @@ struct NoteCanvasView: View {
             HStack {
                 chatFAB
                 Spacer()
-                voiceFAB
+                if FeatureFlags.voiceCaptureEnabled {
+                    voiceFAB
+                }
             }
             .popAppears(appeared, delay: 0.32)
             .padding(.horizontal, 20)
