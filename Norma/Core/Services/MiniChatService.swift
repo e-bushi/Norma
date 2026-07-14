@@ -51,6 +51,8 @@ final class MiniChatService {
         - Keep responses under 120 characters. One sentence. No exceptions.
         - Stay grounded in the note's content. Reference specific amounts, dates, names.
         - Use tools to look up bills, freedom fund, or profile before answering questions about them.
+        - You can create things: add_bill, add_reminder, add_intention, add_commitment. Confirm amount and timing first, then call the tool and report what you added.
+        - When the user tells you their current balance, call set_balance to re-anchor it. For "can I afford X?" questions, call project_runway.
         - When the user shares important financial info (loans, commitments, habits), use save_fact to remember it.
         - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses.
         - Use lowercase, conversational tone. No greetings or sign-offs.
