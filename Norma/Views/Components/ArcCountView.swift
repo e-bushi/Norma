@@ -34,6 +34,7 @@ struct ArcCountView: View {
     @State private var showBalancePopover = false
     @State private var showStatusPopover = false
     @State private var showInsights = false
+    @State private var popoverInsightId: UUID?
     @State private var balanceText = ""
     @FocusState private var balanceFocused: Bool
 
@@ -49,9 +50,28 @@ struct ArcCountView: View {
     private enum RunwayState { case runway, addBill, refill }
 
     private var runwayState: RunwayState {
-        if arcCount > 0 { return .runway }
-        if freedomFund > 0 && totalMonthlyBills <= 0 { return .addBill }
-        return .refill
+        if freedomFund <= 0 { return .refill }
+        if runwayDays == nil { return .addBill }
+        return .runway
+    }
+
+    /// Observed daily burn from the ledger (falls back to bills ÷ 30).
+    private var dailyBurn: Double {
+        let userId = sessionViewModel.currentUser?.userId
+        let entries = allEntries.filter { $0.userId == userId }
+        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills)
+    }
+
+    /// Runway in days: balance ÷ burn. Nil when there's no balance or no burn
+    /// source (no bills and no observed history) — the "add a bill" state.
+    private var runwayDays: Int? {
+        guard dailyBurn > 0, freedomFund > 0 else { return nil }
+        return Int(floor(freedomFund / dailyBurn))
+    }
+
+    /// Compact runway value + unit for the hero (e.g. "7" / "weeks").
+    private var compactRunway: (value: String, unit: String) {
+        ArcCalculationService.compactRunway(days: runwayDays ?? 0)
     }
 
     private var heroWordTotal: Int {
@@ -88,7 +108,7 @@ struct ArcCountView: View {
         let kind: Kind
         enum Kind {
             case fund(ActivityItem)
-            case insight(headline: String, dateLabel: String)
+            case insight(headline: String, detail: String, dateLabel: String)
         }
     }
 
@@ -131,6 +151,7 @@ struct ArcCountView: View {
                 date: insight.createdAt,
                 kind: .insight(
                     headline: insight.headline,
+                    detail: insight.detail,
                     dateLabel: Self.dateLabel(for: insight.createdAt)
                 )
             )
@@ -240,6 +261,23 @@ struct ArcCountView: View {
                 // Status + amount capsules. The status capsule uses the theme
                 // color; the amount capsule opens the balance-edit popover.
                 HStack(spacing: 8) {
+                    Button {
+                        beginBalanceEdit()
+                    } label: {
+                        Text("balance: \(formatCurrency(freedomFund))")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .foregroundColor(cream)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(glassFill))
+                            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .popover(isPresented: $showBalancePopover, arrowEdge: .top) {
+                        balanceEditPopover
+                            .presentationCompactAdaptation(.popover)
+                    }
+
                     if runwayState == .runway {
                         Button {
                             let impact = UIImpactFeedbackGenerator(style: .light)
@@ -247,10 +285,10 @@ struct ArcCountView: View {
                             showStatusPopover = true
                         } label: {
                             Text(statusLine)
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 15))
                                 .foregroundColor(accentPurple)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
                                 .background(Capsule().fill(accentPurple.opacity(0.14)))
                                 .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
                         }
@@ -259,23 +297,6 @@ struct ArcCountView: View {
                             statusInfoPopover
                                 .presentationCompactAdaptation(.popover)
                         }
-                    }
-
-                    Button {
-                        beginBalanceEdit()
-                    } label: {
-                        Text(formatCurrency(freedomFund))
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
-                            .foregroundColor(cream)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Capsule().fill(glassFill))
-                            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .popover(isPresented: $showBalancePopover, arrowEdge: .top) {
-                        balanceEditPopover
-                            .presentationCompactAdaptation(.popover)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -288,8 +309,8 @@ struct ArcCountView: View {
                     switch runwayState {
                     case .runway:
                         HStack(spacing: 14) {
-                            waveWord("\(arcCount)", index: 0)
-                            waveWord(arcCount == 1 ? "month" : "months", index: 1)
+                            waveWord(compactRunway.value, index: 0)
+                            waveWord(compactRunway.unit, index: 1)
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             waveWord("of", index: 2)
@@ -371,7 +392,7 @@ struct ArcCountView: View {
                             }
                             .padding(.horizontal, 24)
                             .padding(.top, 24)
-                            .padding(.bottom, 40)
+                            .padding(.bottom, 120)
                         }
                         LinearGradient(
                             colors: [bg, bg.opacity(0)],
@@ -395,7 +416,7 @@ struct ArcCountView: View {
     private var statusLine: String {
         switch runwayState {
         case .runway:
-            return ArcCalculationService.getStateName(arcCount: arcCount).lowercased()
+            return ArcCalculationService.getStateName(days: runwayDays ?? 0).lowercased()
         case .addBill:
             return "add a bill to see your runway"
         case .refill:
@@ -414,23 +435,23 @@ struct ArcCountView: View {
     /// form. Save writes through commitBalance and dismisses.
     @ViewBuilder
     private var balanceEditPopover: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("how much do you have to live on?")
-                .font(.custom(FontFamily.Rubik.medium, size: 13))
+        VStack(alignment: .leading, spacing: 18) {
+            Text("total spendable balance")
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
                 .foregroundColor(mutedText)
 
-            HStack(alignment: .center, spacing: 4) {
+            HStack(alignment: .center, spacing: 5) {
                 Text(currencySymbol)
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: 36, weight: .bold))
                     .foregroundColor(cream.opacity(0.55))
                 AnimatedAmountField(
                     text: $balanceText,
                     focused: $balanceFocused,
-                    font: .system(size: 40, weight: .bold),
+                    font: .system(size: 48, weight: .bold),
                     textColor: cream,
                     placeholderColor: cream.opacity(0.3),
                     caretColor: accentPurple,
-                    caretHeight: 34,
+                    caretHeight: 42,
                     tracking: -1
                 )
             }
@@ -440,55 +461,55 @@ struct ArcCountView: View {
                 showBalancePopover = false
             } label: {
                 Text("save")
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                     .foregroundColor(cream)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 14)
                     .background(Capsule().fill(glassFill))
                     .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
-        .padding(20)
-        .frame(width: 280)
+        .padding(24)
+        .frame(width: 340)
         .background(bg)
     }
 
     /// Legend of the runway status tiers, highlighting the user's current one.
     @ViewBuilder
     private var statusInfoPopover: some View {
-        let current = ArcCalculationService.getStateName(arcCount: arcCount)
+        let current = ArcCalculationService.getStateName(days: runwayDays ?? 0)
         let tiers: [(name: String, desc: String)] = [
-            ("Urgency", "less than a month. every decision matters."),
-            ("Cautionary", "some breathing room, but not comfortable yet."),
-            ("Steady", "solid ground, rhythm found."),
-            ("Calm", "real distance from zero."),
-            ("Abundant", "serious financial cushion.")
+            ("Urgency", "less than two weeks. every decision matters."),
+            ("Cautionary", "a couple weeks to a month. breathing room, not comfort."),
+            ("Steady", "one to four months. solid ground."),
+            ("Calm", "four to nine months. real distance from zero."),
+            ("Abundant", "nine months or more. serious cushion.")
         ]
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("what your status means")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                .font(.custom(FontFamily.Rubik.semiBold, size: 17))
                 .foregroundColor(cream)
             ForEach(tiers, id: \.name) { tier in
                 let isCurrent = tier.name == current
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
                     Circle()
                         .fill(isCurrent ? accentPurple : cream.opacity(0.25))
-                        .frame(width: 7, height: 7)
-                        .padding(.top, 5)
-                    VStack(alignment: .leading, spacing: 2) {
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(tier.name.lowercased())
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
                             .foregroundColor(isCurrent ? accentPurple : cream)
                         Text(tier.desc)
-                            .font(.custom(FontFamily.Rubik.regular, size: 12))
+                            .font(.custom(FontFamily.Rubik.regular, size: 14))
                             .foregroundColor(mutedText)
                     }
                 }
             }
         }
-        .padding(20)
-        .frame(width: 300)
+        .padding(24)
+        .frame(width: 340)
         .background(bg)
     }
 
@@ -599,53 +620,109 @@ struct ArcCountView: View {
                 activityRow(item)
                 if item.isIncome { Spacer(minLength: 0) }
             }
-        case .insight(let headline, let dateLabel):
-            insightRow(headline: headline, dateLabel: dateLabel)
-                .onLongPressGesture {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    showInsights = true
-                }
+        case .insight(let headline, let detail, let dateLabel):
+            HStack(spacing: 0) {
+                insightRow(headline: headline, dateLabel: dateLabel)
+                    .onLongPressGesture {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        popoverInsightId = row.id
+                    }
+                    .popover(
+                        isPresented: Binding(
+                            get: { popoverInsightId == row.id },
+                            set: { if !$0 { popoverInsightId = nil } }
+                        ),
+                        arrowEdge: .top
+                    ) {
+                        insightDetailPopover(headline: headline, detail: detail)
+                            .presentationCompactAdaptation(.popover)
+                    }
+                Spacer(minLength: 0)
+            }
         }
     }
 
-    /// AI-insight row in the timeline. Lavender-tinted so it reads as Norma's
-    /// commentary, not a balance change. Long-press opens the full InsightsView.
+    /// Long-press popover for an insight — shows the full write-up plus a
+    /// button through to the complete InsightsView.
+    @ViewBuilder
+    private func insightDetailPopover(headline: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("norma")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                .foregroundColor(accentPurple)
+            Text(headline)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                .foregroundColor(cream)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(detail)
+                .font(.custom(FontFamily.Rubik.regular, size: 15))
+                .foregroundColor(mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                popoverInsightId = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    showInsights = true
+                }
+            } label: {
+                Text("see all insights")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundColor(accentPurple)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(accentPurple.opacity(0.12)))
+                    .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(22)
+        .frame(width: 340)
+        .background(bg)
+    }
+
+    /// AI-insight row — Norma's commentary as a capsule matching the fund rows.
+    /// Content-width, max two lines (ellipsis past that). The norma·date pill
+    /// hovers over the bottom-trailing edge so it reads as a signature.
     @ViewBuilder
     private func insightRow(headline: String, dateLabel: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 12))
-                .foregroundColor(accentPurple)
-                .padding(.top, 3)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(headline)
-                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                    .foregroundColor(cream)
-                    .multilineTextAlignment(.leading)
-                HStack(spacing: 6) {
+        Text(headline)
+            .font(.custom(FontFamily.Rubik.medium, size: 16))
+            .foregroundColor(cream)
+            .multilineTextAlignment(.leading)
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .frame(maxWidth: 300, alignment: .leading)
+            .glassEffect(in: Capsule())
+            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 5) {
+                    Text("norma")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+                        .foregroundColor(accentPurple)
+                    Text("·")
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundColor(dimText)
                     Text(dateLabel)
                         .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
                         .foregroundColor(dimText)
-                    Text("hold to read")
-                        .font(.custom(FontFamily.Rubik.regular, size: 11))
-                        .foregroundColor(accentPurple.opacity(0.6))
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(bg))
+                .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                .offset(x: 14, y: 12)
             }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16).fill(accentPurple.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(accentPurple.opacity(0.3), lineWidth: 1))
+            .padding(.bottom, 12)
     }
 
     @ViewBuilder
     private func activityRow(_ item: ActivityItem) -> some View {
         HStack(spacing: 10) {
             Text(item.date)
-                .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
                 .foregroundColor(dimText)
 
             if item.isIncome {
@@ -659,11 +736,11 @@ struct ArcCountView: View {
             }
 
             Text(item.label)
-                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .font(.custom(FontFamily.Rubik.medium, size: 16))
                 .foregroundColor(mutedText)
 
             Text(item.amount)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                 .foregroundColor(item.isIncome ? accentPurple : mutedText)
         }
         .padding(.horizontal, 16)
