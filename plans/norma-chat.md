@@ -41,10 +41,15 @@ Each create tool returns a confirmation string the chat surfaces ("added rent ·
 - Entry point: a chat action on the home screen (candidate: repurpose the `+` — quick-note dies with notes — into the chat button; or a distinct FAB). **Open decision.**
 
 ## 4. Migration order (decision A — replacement first, prune last)
-- **C1 — Create tools:** add the `add_*` / `set_balance` / `project_runway` tools to `MiniChatTools` (+ tool schemas in the service). Test via existing MiniChat. Notes still live.
-- **C2 — Full-screen chat view:** decoupled glass chat + home entry point + dither loading.
-- **C3 — Repoint reads:** confirm forecast/calendar/reminders read tokens regardless of note attachment (should already; verify standalone tokens surface).
-- **C4 — Prune notes:** delete `NotesListScreen`, `NoteCanvasView`, `NoteRepository` text/extraction, `NoteSyncQueue`, `NoteExtractionService`, the notes entry points, and the `Note` model + note↔token attachment. Keep `NoteToken`, `DitherShaderView`, `BillTokenBridge`.
+- **C1 — Create tools:** ✅ DONE. `add_bill`/`add_reminder`/`add_intention`/`add_commitment`/`set_balance`/`project_runway` added to `MiniChatTools` + schemas. Tokens insert standalone.
+- **C2 — Full-screen chat view:** ✅ DONE. `NormaChatView` — transparent `.glassEffect` overlay (not a sheet), fog-in emergence, transcript (user capsules + Norma as large white WaveText, no border), dither loading, manual keyboard lift. `+` opens it. Tool chain decoupled from `Note`.
+- **C3 — Repoint reads:** ✅ DONE (verify-only). Forecast reads `@Query` NoteTokens by kind (no note attachment). Reminders/Calendar source OS pending notifications; chat reminders + bills schedule with matching identifiers/userInfo. Constraint: reminders show in those sheets only if notification permission granted.
+- **C4 — Prune notes:** ✅ DONE. Deleted `NotesListScreen`, `NoteCanvasView`, `MiniChatView`, `NoteStatusCapsule`, `NoteExtractionService`, `NoteSyncQueue`, `BillPaymentJournal`, `InsightEngine`, `NoteSegmentsView`/`GroupChipView`/`RibbonView`, the `Note` model + note↔token relationship, and the obsolete re-extraction tests. `NoteRepository` stripped to reminder utilities. Kept `NoteToken`, `DitherShaderView`, `BillTokenBridge`, `ChipView`.
+
+### Post-C4 follow-ups (not yet done)
+1. **Onboarding still note/voice-shaped:** `voicePracticeIntro` / `voicePractice` / `notesValue` steps + `OnboardingVoicePracticeView` reference the retired paradigm (`runExtraction` stubbed to compile). Needs a dedicated onboarding pass.
+2. **Insight generation is off:** the `Insight` model + display survive; the generator was deleted. Rebuild it runway-framed (burn deltas / bill collisions) per runway-first P6/P7.
+3. **Chat polish:** streaming (currently dither-then-show), inline tool-result confirmation chips, and a persisted transcript are still open.
 
 ## 5. Cost
 - Haiku + proxy + prompt caching already minimize per-message cost. Fine for now.
