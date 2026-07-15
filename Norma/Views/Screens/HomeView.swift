@@ -16,13 +16,6 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-/// Value pushed onto HomeView's navigation path to open the notes archive.
-/// A dedicated type keeps the notes-list push distinct from the Note pushes
-/// that NotesListScreen makes for the canvas, both living in one stable path.
-private enum HomeDestination: Hashable {
-    case notes
-}
-
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
@@ -33,7 +26,6 @@ struct HomeView: View {
     @State private var showCalendar = false
     @State private var showSettings = false
     @State private var keyboardVisible = false
-    @State private var path = NavigationPath()
     @State private var showChat = false
 
     // MARK: - Runway inputs (ported from NotesListScreen)
@@ -62,7 +54,7 @@ struct HomeView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             ZStack(alignment: .bottom) {
                 NormaPalette.canvas.ignoresSafeArea()
                 NormaPalette.lavender.opacity(0.04).ignoresSafeArea()
@@ -82,17 +74,9 @@ struct HomeView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: HomeDestination.self) { _ in
-                NotesListScreen(embedded: true)
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     settingsToolbarItem
-                }
-                .sharedBackgroundVisibility(.hidden)
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    notesToolbarItem
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -196,25 +180,6 @@ struct HomeView: View {
                     .frame(width: 44, height: 44)
             }
         }
-    }
-
-    /// Top-right door to the notes browse surface. Pushes a value onto the
-    /// path (not a view-based NavigationLink / isPresented destination) — both
-    /// of those re-fire the list push on top of the note when you tap a note
-    /// inside the list. A value push is stable.
-    private var notesToolbarItem: some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            path.append(HomeDestination.notes)
-        } label: {
-            Image(systemName: "note.text")
-                .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(NormaPalette.ink)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private var settingsToolbarItem: some View {
