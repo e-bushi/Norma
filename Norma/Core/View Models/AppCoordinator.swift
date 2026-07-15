@@ -369,33 +369,6 @@ struct OnboardingCoordinatorView: View {
                     onboardingViewModel.moveToNextStep()
                 }
 
-            case .voicePracticeIntro:
-                OnboardingIntroInterstitialView(
-                    phases: [
-                        "now let's try something different.",
-                        "say a money thought out loud — norma will catch it."
-                    ],
-                    onContinue: { onboardingViewModel.moveToNextStep() }
-                )
-
-            case .voicePractice:
-                OnboardingVoicePracticeView(
-                    onContinue: { onboardingViewModel.moveToNextStep() }
-                )
-
-            case .notesValue:
-                OnboardingIntroInterstitialView(
-                    phases: [
-                        "you've got the hang of it.",
-                        "you can quickly jot your thoughts before you forget now.",
-                        "your notes are the gold.",
-                        "write anything — i make sense of all of it.",
-                        "now, a few quick facts about your money."
-                    ],
-                    holdDuration: 2.0,
-                    onContinue: { onboardingViewModel.moveToNextStep() }
-                )
-
             case .currencyIncome:
                 OnboardingCurrencyIncomeView(
                     onContinue: { onboardingViewModel.moveToNextStep() }
@@ -419,7 +392,7 @@ struct OnboardingCoordinatorView: View {
                     phrases: [
                         "hi, i'm norma.",
                         "i'm glad you're finally here.",
-                        "start with a note — tell me what your bills are."
+                        "tell me your bills — i'll show you how long your money lasts."
                     ],
                     onContinue: { onboardingViewModel.completeOnboarding() }
                 )

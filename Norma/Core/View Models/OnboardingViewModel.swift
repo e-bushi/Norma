@@ -777,20 +777,6 @@ enum OnboardingStep: CaseIterable {
     case incomeShape           // O4b — "how does your income show up?"
     case whatsWorking          // O4c — "what would 'this is working' feel like?"
 
-    // Short interstitial that primes the user for the voice practice — same
-    // typographic pattern as the very first intro, just different phrases.
-    case voicePracticeIntro
-
-    // Practice screen — voice → AI extraction demo so users feel the product
-    // before the auth wall.
-    case voicePractice
-
-    // Bridge interstitial right after the practice attempt — opens with the
-    // "you've got the hang of it" beat, then reinforces that the notes are the
-    // gold (norma makes sense of everything they journal) and primes the quick
-    // finance questions that follow.
-    case notesValue
-
     // Quantitative questions.
     case currencyIncome        // O4  — currency + monthly take-home (after tax)
 
@@ -799,8 +785,9 @@ enum OnboardingStep: CaseIterable {
     case authentication       // email signup form (when chosen from saveAnswers)
     case verification         // verify code (after email signup)
 
-    // Post-auth welcome — "hi, i'm norma" + "create your first note, tell me
-    // your bills". Shown once, only for brand-new users, right before the app.
+    // Post-auth welcome — "hi, i'm norma" + "tell me your bills, i'll show you
+    // how long your money lasts". Shown once, only for brand-new users, right
+    // before the app.
     case readyToStart
 
     case complete
