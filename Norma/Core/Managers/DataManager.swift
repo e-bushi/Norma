@@ -116,7 +116,6 @@ class DataManager: ObservableObject {
             return
         }
         do {
-            try context.delete(model: Note.self)
             try context.delete(model: NoteToken.self)
             try context.delete(model: CachedBill.self)
             try context.delete(model: FreedomFundEntry.self)

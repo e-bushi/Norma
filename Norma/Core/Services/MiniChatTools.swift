@@ -228,8 +228,7 @@ final class MiniChatToolExecutor {
         billViewModel: BillViewModel,
         sessionViewModel: SessionViewModel,
         freedomFund: Double,
-        totalMonthlyBills: Double,
-        note: Note? = nil
+        totalMonthlyBills: Double
     ) async -> String {
         switch name {
         case "get_bills":
@@ -241,7 +240,7 @@ final class MiniChatToolExecutor {
         case "get_profile":
             return executeGetProfile(modelContext: modelContext, sessionViewModel: sessionViewModel)
         case "save_fact":
-            return executeSaveFact(input: input, modelContext: modelContext, note: note)
+            return executeSaveFact(input: input, modelContext: modelContext)
         case "update_profile":
             return await executeUpdateProfile(input: input, modelContext: modelContext, sessionViewModel: sessionViewModel)
         case "add_bill":
@@ -478,11 +477,11 @@ final class MiniChatToolExecutor {
         return lines.isEmpty ? "no profile saved yet." : lines.joined(separator: "\n")
     }
 
-    private static func executeSaveFact(input: [String: Any], modelContext: ModelContext, note: Note?) -> String {
+    private static func executeSaveFact(input: [String: Any], modelContext: ModelContext) -> String {
         guard let fact = input["fact"] as? String else {
             return "error: missing fact text."
         }
-        let source = (input["source"] as? String) ?? (note != nil ? "mini chat, \(note?.title ?? "untitled")" : "norma chat")
+        let source = (input["source"] as? String) ?? "norma chat"
 
         let descriptor = FetchDescriptor<UserProfile>()
         let profile: UserProfile

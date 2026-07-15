@@ -861,11 +861,6 @@ struct ForecastSheet: View {
         Task {
             await billViewModel.markBillsAsPaid(toMark)
             await MainActor.run {
-                BillPaymentJournal.appendBillPayments(
-                    toMark,
-                    currency: sessionViewModel.currentUser?.settings.currency ?? "USD",
-                    in: modelContext
-                )
                 isMarkingPaid = false
                 exitSelection()
             }

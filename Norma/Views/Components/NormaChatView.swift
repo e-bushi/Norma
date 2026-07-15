@@ -279,8 +279,7 @@ struct NormaChatView: View {
             billViewModel: billViewModel,
             sessionViewModel: sessionViewModel,
             freedomFund: freedomFund,
-            totalMonthlyBills: totalMonthlyBills,
-            note: nil
+            totalMonthlyBills: totalMonthlyBills
         )
     }
 

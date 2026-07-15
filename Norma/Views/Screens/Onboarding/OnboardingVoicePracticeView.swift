@@ -503,25 +503,14 @@ struct OnboardingVoicePracticeView: View {
         runExtraction(on: captured)
     }
 
+    // Prose extraction was removed in the runway-first pivot (notes are gone;
+    // the chat is the input surface now). This voice-practice onboarding step
+    // is obsolete and should be replaced in a dedicated onboarding pass — for
+    // now it just settles the wave without extracting anything.
     private func runExtraction(on text: String) {
         isExtracting = true
-        Task {
-            do {
-                let tokens = try await NoteExtractionService.shared.extract(text: text)
-                await MainActor.run {
-                    extractedTokens.append(contentsOf: tokens)
-                    seenKinds.formUnion(tokens.map { $0.kind })
-                    isExtracting = false
-                    collapseWaveAfterPause()
-                }
-            } catch {
-                await MainActor.run {
-                    extractionError = "couldn't reach the extractor. try again."
-                    isExtracting = false
-                    collapseWaveAfterPause()
-                }
-            }
-        }
+        collapseWaveAfterPause()
+        isExtracting = false
     }
 
     /// Holds the shader open briefly after extraction lands so the user can

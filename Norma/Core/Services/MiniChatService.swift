@@ -24,25 +24,6 @@ final class MiniChatService {
         let sessionViewModel: SessionViewModel
         let freedomFund: Double
         let totalMonthlyBills: Double
-        let note: Note?
-
-        init(
-            modelContext: ModelContext,
-            bills: [Bill],
-            billViewModel: BillViewModel,
-            sessionViewModel: SessionViewModel,
-            freedomFund: Double,
-            totalMonthlyBills: Double,
-            note: Note? = nil
-        ) {
-            self.modelContext = modelContext
-            self.bills = bills
-            self.billViewModel = billViewModel
-            self.sessionViewModel = sessionViewModel
-            self.freedomFund = freedomFund
-            self.totalMonthlyBills = totalMonthlyBills
-            self.note = note
-        }
     }
 
     func send(
@@ -172,8 +153,7 @@ final class MiniChatService {
                         billViewModel: ctx.billViewModel,
                         sessionViewModel: ctx.sessionViewModel,
                         freedomFund: ctx.freedomFund,
-                        totalMonthlyBills: ctx.totalMonthlyBills,
-                        note: ctx.note
+                        totalMonthlyBills: ctx.totalMonthlyBills
                     )
 
                     toolResults.append([
