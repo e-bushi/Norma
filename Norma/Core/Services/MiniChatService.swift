@@ -24,7 +24,25 @@ final class MiniChatService {
         let sessionViewModel: SessionViewModel
         let freedomFund: Double
         let totalMonthlyBills: Double
-        let note: Note
+        let note: Note?
+
+        init(
+            modelContext: ModelContext,
+            bills: [Bill],
+            billViewModel: BillViewModel,
+            sessionViewModel: SessionViewModel,
+            freedomFund: Double,
+            totalMonthlyBills: Double,
+            note: Note? = nil
+        ) {
+            self.modelContext = modelContext
+            self.bills = bills
+            self.billViewModel = billViewModel
+            self.sessionViewModel = sessionViewModel
+            self.freedomFund = freedomFund
+            self.totalMonthlyBills = totalMonthlyBills
+            self.note = note
+        }
     }
 
     func send(
@@ -40,24 +58,47 @@ final class MiniChatService {
         \(profileContext)
         """
 
-        let systemPrompt = """
-        You are Norma, a concise financial companion embedded inside a note. The user is looking at a specific note and wants a quick exchange — a calculation, a clarification, or a suggestion.
+        let isNoteScoped = !noteContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-        Context from the current note:
-        \(noteContext)
-        \(profileBlock)
+        let systemPrompt: String
+        if isNoteScoped {
+            systemPrompt = """
+            You are Norma, a concise financial companion embedded inside a note. The user is looking at a specific note and wants a quick exchange — a calculation, a clarification, or a suggestion.
 
-        Rules:
-        - Keep responses under 120 characters. One sentence. No exceptions.
-        - Stay grounded in the note's content. Reference specific amounts, dates, names.
-        - Use tools to look up bills, freedom fund, or profile before answering questions about them.
-        - You can create things: add_bill, add_reminder, add_intention, add_commitment. Confirm amount and timing first, then call the tool and report what you added.
-        - When the user tells you their current balance, call set_balance to re-anchor it. For "can I afford X?" questions, call project_runway.
-        - When the user shares important financial info (loans, commitments, habits), use save_fact to remember it.
-        - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses.
-        - Use lowercase, conversational tone. No greetings or sign-offs.
-        - When doing math, show the result clearly.
-        """
+            Context from the current note:
+            \(noteContext)
+            \(profileBlock)
+
+            Rules:
+            - Keep responses under 120 characters. One sentence. No exceptions.
+            - Stay grounded in the note's content. Reference specific amounts, dates, names.
+            - Use tools to look up bills, freedom fund, or profile before answering questions about them.
+            - You can create things: add_bill, add_reminder, add_intention, add_commitment. Confirm amount and timing first, then call the tool and report what you added.
+            - When the user tells you their current balance, call set_balance to re-anchor it. For "can I afford X?" questions, call project_runway.
+            - When the user shares important financial info (loans, commitments, habits), use save_fact to remember it.
+            - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses.
+            - Use lowercase, conversational tone. No greetings or sign-offs.
+            - When doing math, show the result clearly.
+            """
+        } else {
+            systemPrompt = """
+            You are Norma, the user's financial copilot. You help them track what's coming and understand their runway — how long their money lasts. This is a full conversation, not a note.
+            \(profileBlock)
+
+            What you can do:
+            - Add things the user tells you about: add_bill (recurring/one-time bills), add_reminder (a dated nudge), add_intention (a maybe-purchase they're weighing), add_commitment (a decided, dated expense).
+            - Re-anchor their balance with set_balance when they tell you their current total.
+            - Answer "can I afford X?" with project_runway.
+            - Look things up with get_bills, get_freedom_fund, get_profile before answering.
+            - Remember durable financial facts with save_fact.
+
+            Rules:
+            - Confirm amount and timing before creating anything, then call the tool and report what you added in one short line.
+            - Keep replies to one or two sentences. Lowercase, conversational, no greetings or sign-offs.
+            - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses — never offer to log spending.
+            - When doing math, show the result clearly.
+            """
+        }
 
         let systemBlock: [[String: Any]] = [
             [

@@ -34,7 +34,10 @@ struct ArcCountView: View {
     @State private var showBalancePopover = false
     @State private var showStatusPopover = false
     @State private var showInsights = false
-    @State private var popoverInsightId: UUID?
+    /// The insight whose write-up is shown as a centered floating card.
+    /// A single card overlaid on the whole view — not a per-row popover —
+    /// so its size and position don't depend on where the row sits.
+    @State private var selectedInsight: InsightDetail?
     @State private var balanceText = ""
     @FocusState private var balanceFocused: Bool
 
@@ -212,6 +215,13 @@ struct ArcCountView: View {
         }
     }
 
+    /// Identifiable payload for the centered insight card.
+    private struct InsightDetail: Identifiable {
+        let id: UUID
+        let headline: String
+        let detail: String
+    }
+
     var body: some View {
         // No NavigationStack here — HomeView owns the stack and the chrome
         // (settings + notes). This view is pure content now.
@@ -223,6 +233,13 @@ struct ArcCountView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Centered insight card, overlaid on the whole view so it can float
+        // over the arc/balance regardless of which row was long-pressed.
+        .overlay {
+            if let insight = selectedInsight {
+                insightCardOverlay(insight)
+            }
+        }
         .sheet(isPresented: $showFreedomFundEdit) {
             FreedomFundEditSheet()
                 .presentationDetents([.large])
@@ -626,58 +643,74 @@ struct ArcCountView: View {
                     .onLongPressGesture {
                         let impact = UIImpactFeedbackGenerator(style: .medium)
                         impact.impactOccurred()
-                        popoverInsightId = row.id
-                    }
-                    .popover(
-                        isPresented: Binding(
-                            get: { popoverInsightId == row.id },
-                            set: { if !$0 { popoverInsightId = nil } }
-                        ),
-                        arrowEdge: .top
-                    ) {
-                        insightDetailPopover(headline: headline, detail: detail)
-                            .presentationCompactAdaptation(.popover)
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            selectedInsight = InsightDetail(id: row.id, headline: headline, detail: detail)
+                        }
                     }
                 Spacer(minLength: 0)
             }
         }
     }
 
-    /// Long-press popover for an insight — shows the full write-up plus a
-    /// button through to the complete InsightsView.
+    /// Centered floating card for a long-pressed insight — shows the full
+    /// write-up plus a button through to the complete InsightsView. Overlaid
+    /// on the whole view with a dimmed, tap-to-dismiss backdrop, so its size
+    /// and position are constant regardless of the source row's location.
     @ViewBuilder
-    private func insightDetailPopover(headline: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("norma")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 13))
-                .foregroundColor(accentPurple)
-            Text(headline)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 18))
-                .foregroundColor(cream)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(detail)
-                .font(.custom(FontFamily.Rubik.regular, size: 15))
-                .foregroundColor(mutedText)
-                .fixedSize(horizontal: false, vertical: true)
-            Button {
-                popoverInsightId = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    showInsights = true
-                }
-            } label: {
-                Text("see all insights")
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+    private func insightCardOverlay(_ insight: InsightDetail) -> some View {
+        ZStack {
+            // Dimmed backdrop — tap anywhere outside the card to dismiss.
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { dismissInsightCard() }
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("norma")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
                     .foregroundColor(accentPurple)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Capsule().fill(accentPurple.opacity(0.12)))
-                    .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                Text(insight.headline)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .foregroundColor(cream)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(insight.detail)
+                    .font(.custom(FontFamily.Rubik.regular, size: 15))
+                    .foregroundColor(mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    dismissInsightCard()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        showInsights = true
+                    }
+                } label: {
+                    Text("see all insights")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(accentPurple)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(accentPurple.opacity(0.12)))
+                        .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(22)
+            .frame(maxWidth: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(cream.opacity(0.10), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+            )
+            .padding(.horizontal, 28)
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
         }
-        .padding(22)
-        .frame(width: 340)
-        .background(bg)
+    }
+
+    private func dismissInsightCard() {
+        withAnimation(.easeOut(duration: 0.2)) { selectedInsight = nil }
     }
 
     /// AI-insight row — Norma's commentary as a capsule matching the fund rows.

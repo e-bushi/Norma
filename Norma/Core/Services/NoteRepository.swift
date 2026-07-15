@@ -330,19 +330,19 @@ final class NoteRepository {
     static func scheduleReminderRequest(
         _ token: NoteToken,
         fireDate: Date,
-        on note: Note
+        on note: Note? = nil
     ) async -> Result<String, Error> {
         let subject = token.subject?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedSubject = (subject?.isEmpty == false ? subject! : "reminder")
-        let noteTitle = note.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteTitle = note?.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = (noteTitle?.isEmpty == false) ? "from your '\(noteTitle!)' note" : ""
         let identifier = reminderIdentifier(tokenId: token.id)
         let recurrence = mapRecurrence(token.recurrence)
-        let userInfo: [String: Any] = [
+        var userInfo: [String: Any] = [
             "subject": resolvedSubject,
-            "noteId": note.id.uuidString,
             "tokenId": token.id.uuidString
         ]
+        if let note { userInfo["noteId"] = note.id.uuidString }
         return await NotificationService.shared.scheduleAIReminder(
             title: resolvedSubject,
             message: body,

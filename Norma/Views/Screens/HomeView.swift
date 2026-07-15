@@ -34,10 +34,7 @@ struct HomeView: View {
     @State private var showSettings = false
     @State private var keyboardVisible = false
     @State private var path = NavigationPath()
-    @State private var showQuickNote = false
-    @State private var quickNoteText = ""
-    @FocusState private var quickNoteFocused: Bool
-    @AppStorage("com.norma.notesCreatedCount") private var notesCreatedCount = 0
+    @State private var showChat = false
 
     // MARK: - Runway inputs (ported from NotesListScreen)
 
@@ -78,10 +75,7 @@ struct HomeView: View {
                 )
                 .environmentObject(sessionViewModel)
 
-                // Keep the bar mounted while the quick-note popover is open —
-                // it anchors to the `+`, so hiding it for the keyboard would
-                // yank the popover's anchor out from under it.
-                if !keyboardVisible || showQuickNote {
+                if !keyboardVisible {
                     bottomBar
                 }
             }
@@ -130,6 +124,17 @@ struct HomeView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
+        .overlay {
+            if showChat {
+                NormaChatView(onDismiss: {
+                    withAnimation(.easeInOut(duration: 0.45)) { showChat = false }
+                })
+                .environmentObject(sessionViewModel)
+                .environmentObject(billViewModel)
+                .transition(.opacity)
+                .zIndex(1)
+            }
+        }
     }
 
     // MARK: - Bottom bar
@@ -154,8 +159,8 @@ struct HomeView: View {
             Spacer()
 
             HStack(spacing: 0) {
-                bottomIcon(systemName: "plus") {
-                    beginQuickNote()
+                bottomIcon(systemName: "bubble.left.and.text.bubble.right") {
+                    withAnimation(.easeInOut(duration: 0.45)) { showChat = true }
                 }
             }
             .padding(.vertical, 6)
@@ -164,10 +169,6 @@ struct HomeView: View {
             .overlay(
                 Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1)
             )
-            .popover(isPresented: $showQuickNote, arrowEdge: .bottom) {
-                quickNotePopover
-                    .presentationCompactAdaptation(.popover)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
@@ -214,67 +215,6 @@ struct HomeView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Quick note
-
-    /// Compact composer anchored to the `+`. Writes a note quickly ("what's
-    /// coming / on your mind") and enqueues extraction — no segue.
-    @ViewBuilder
-    private var quickNotePopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("what's coming / on your mind?")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(NormaPalette.inkMuted)
-
-            TextField("jot it down…", text: $quickNoteText, axis: .vertical)
-                .lineLimit(3...6)
-                .font(.system(size: 16))
-                .foregroundStyle(NormaPalette.ink)
-                .tint(NormaPalette.lavender)
-                .focused($quickNoteFocused)
-
-            HStack {
-                Spacer()
-                Button {
-                    saveQuickNote()
-                } label: {
-                    Text("save")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(NormaPalette.ink)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(NormaPalette.lavender.opacity(0.15)))
-                        .overlay(Capsule().stroke(NormaPalette.lavender.opacity(0.6), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(quickNoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(16)
-        .frame(width: 300)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 20))
-    }
-
-    private func beginQuickNote() {
-        quickNoteText = ""
-        showQuickNote = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            quickNoteFocused = true
-        }
-    }
-
-    private func saveQuickNote() {
-        let trimmed = quickNoteText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        notesCreatedCount += 1
-        let note = Note(rawText: trimmed)
-        modelContext.insert(note)
-        // touch → save + enqueue the LLM extractor, same path as the canvas.
-        NoteRepository(context: modelContext).saveAndSync(note)
-        quickNoteText = ""
-        quickNoteFocused = false
-        showQuickNote = false
     }
 
     private var settingsToolbarItem: some View {

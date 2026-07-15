@@ -229,7 +229,7 @@ final class MiniChatToolExecutor {
         sessionViewModel: SessionViewModel,
         freedomFund: Double,
         totalMonthlyBills: Double,
-        note: Note
+        note: Note? = nil
     ) async -> String {
         switch name {
         case "get_bills":
@@ -247,7 +247,7 @@ final class MiniChatToolExecutor {
         case "add_bill":
             return await executeAddBill(input: input, billViewModel: billViewModel)
         case "add_reminder":
-            return await executeAddReminder(input: input, modelContext: modelContext, sessionViewModel: sessionViewModel, note: note)
+            return await executeAddReminder(input: input, modelContext: modelContext, sessionViewModel: sessionViewModel)
         case "add_intention":
             return executeAddIntention(input: input, modelContext: modelContext, sessionViewModel: sessionViewModel)
         case "add_commitment":
@@ -298,7 +298,7 @@ final class MiniChatToolExecutor {
         return "added bill: \(bill.name) · \(String(format: "%.2f", bill.amount)) · \(frequency.rawValue.lowercased())"
     }
 
-    private static func executeAddReminder(input: [String: Any], modelContext: ModelContext, sessionViewModel: SessionViewModel, note: Note) async -> String {
+    private static func executeAddReminder(input: [String: Any], modelContext: ModelContext, sessionViewModel: SessionViewModel) async -> String {
         guard let subject = input["subject"] as? String else { return "error: missing subject." }
         guard let remindAt = parseDate(input["remind_at"] as? String) else {
             return "error: missing or invalid remind_at (use ISO8601)."
@@ -313,14 +313,14 @@ final class MiniChatToolExecutor {
             confirmedAt: Date()
         )
         modelContext.insert(token)
-        // Reuse the async permission + schedule path (note supplies notification metadata only;
-        // the token is standalone so it surfaces in the forecast/reminders queries directly).
+        // Reuse the async permission path; schedule standalone (no note) — the token
+        // surfaces in the forecast/reminders queries directly.
         let service = NotificationService.shared
         await service.refreshPermissionStatus()
         if service.notificationPermissionStatus == .notDetermined {
             _ = await service.requestNotificationPermission()
         }
-        let result = await NoteRepository.scheduleReminderRequest(token, fireDate: remindAt, on: note)
+        let result = await NoteRepository.scheduleReminderRequest(token, fireDate: remindAt)
         try? modelContext.save()
         if case .failure = result {
             return "saved the reminder, but couldn't schedule the notification — check notification permissions in Settings."
@@ -478,11 +478,11 @@ final class MiniChatToolExecutor {
         return lines.isEmpty ? "no profile saved yet." : lines.joined(separator: "\n")
     }
 
-    private static func executeSaveFact(input: [String: Any], modelContext: ModelContext, note: Note) -> String {
+    private static func executeSaveFact(input: [String: Any], modelContext: ModelContext, note: Note?) -> String {
         guard let fact = input["fact"] as? String else {
             return "error: missing fact text."
         }
-        let source = (input["source"] as? String) ?? "mini chat, \(note.title ?? "untitled")"
+        let source = (input["source"] as? String) ?? (note != nil ? "mini chat, \(note?.title ?? "untitled")" : "norma chat")
 
         let descriptor = FetchDescriptor<UserProfile>()
         let profile: UserProfile
