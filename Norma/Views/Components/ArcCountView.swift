@@ -358,6 +358,7 @@ struct ArcCountView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     freshnessNavItem
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
     }

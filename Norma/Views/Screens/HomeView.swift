@@ -120,20 +120,13 @@ struct HomeView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
-        .overlay {
-            if showChat {
-                NormaChatView(
-                    seedText: chatSeed,
-                    onDismiss: {
-                        withAnimation(.easeInOut(duration: 0.45)) { showChat = false }
-                        chatSeed = nil
-                    }
-                )
+        .sheet(isPresented: $showChat, onDismiss: { chatSeed = nil }) {
+            NormaChatView(seedText: chatSeed)
                 .environmentObject(sessionViewModel)
                 .environmentObject(billViewModel)
-                .transition(.opacity)
-                .zIndex(1)
-            }
+                .presentationDetents([.large])
+                .presentationBackground(.clear)
+                .presentationDragIndicator(.visible)
         }
     }
 

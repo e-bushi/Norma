@@ -20,7 +20,6 @@ struct NormaChatView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
 
     var seedText: String? = nil
-    var onDismiss: (() -> Void)? = nil
 
     /// A transcript entry — either a chat message or an inline confirmation
     /// chip for a create/mutate tool Norma just ran.
@@ -43,38 +42,29 @@ struct NormaChatView: View {
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
     @State private var appeared: Bool = false
-    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var inputFocused: Bool
 
     private let chatService = MiniChatService()
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Transparent glass layer over the home, tinted a touch darker.
-                Rectangle()
-                    .fill(NormaPalette.canvas.opacity(0.35))
-                    .glassEffect(in: Rectangle())
-                    .ignoresSafeArea()
+        ZStack {
+            // Transparent glass layer over the home, tinted a touch darker.
+            Rectangle()
+                .fill(NormaPalette.canvas.opacity(0.35))
+                .glassEffect(in: Rectangle())
+                .ignoresSafeArea()
 
-                // Loading state: the salvaged notes dither.
-                DitherShaderView(intensity: 1.0)
-                    .blur(radius: 20)
-                    .opacity(isLoading ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.5), value: isLoading)
-                    .ignoresSafeArea()
+            // Loading state: the salvaged notes dither.
+            DitherShaderView(intensity: 1.0)
+                .blur(radius: 20)
+                .opacity(isLoading ? 1 : 0)
+                .animation(.easeInOut(duration: 0.5), value: isLoading)
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    header
-                    transcript
-                    inputBar
-                }
-                // Lift the whole column by the keyboard's height (net of the
-                // home-indicator inset) — the ancestor ignores the keyboard
-                // safe area, so we drive avoidance manually.
-                .padding(.bottom, keyboardHeight > 0 ? keyboardHeight - geo.safeAreaInsets.bottom : 0)
+            VStack(spacing: 0) {
+                transcript
+                inputBar
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .preferredColorScheme(.dark)
         // Fog-in: the whole surface materializes out of a blur, like breath on glass.
@@ -86,77 +76,50 @@ struct NormaChatView: View {
             withAnimation(.easeOut(duration: 0.55)) { appeared = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { inputFocused = true }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
-            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = frame.height }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = 0 }
-        }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Text("norma")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(NormaPalette.ink)
-            Spacer()
-            Button {
-                inputFocused = false
-                onDismiss?()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(NormaPalette.inkSubtle)
-                    .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
     }
 
     // MARK: - Transcript
 
+    /// Only Norma's latest reply is shown — no user echoes, no scrollback. The
+    /// full exchange still lives in `entries` for API context; the surface just
+    /// stays a single, calm response.
     private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 12) {
-                    ForEach(entries) { entry in
-                        entryView(entry)
-                            .id(entry.id)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                if isLoading {
+                    typingIndicator
+                } else {
+                    ForEach(lastTurnChips, id: \.id) { chip in
+                        confirmationChip(chip.summary)
                     }
-                    if isLoading {
-                        typingIndicator
-                            .id("typing")
+                    if let reply = latestReply {
+                        bubble(reply)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
             }
-            .onChange(of: entries.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(entries.last?.id, anchor: .bottom)
-                }
-            }
-            .onChange(of: isLoading) { _, loading in
-                if loading {
-                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("typing", anchor: .bottom) }
-                }
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    @ViewBuilder
-    private func entryView(_ entry: ChatEntry) -> some View {
-        switch entry {
-        case .message(let message):
-            bubble(message)
-        case .chip(_, let summary):
-            confirmationChip(summary)
+    /// Norma's most recent assistant message.
+    private var latestReply: MiniChatMessage? {
+        for entry in entries.reversed() {
+            if case .message(let m) = entry, m.role == .assistant { return m }
+        }
+        return nil
+    }
+
+    /// Confirmation chips produced since the last thing the user said.
+    private var lastTurnChips: [(id: UUID, summary: String)] {
+        let lastUserIdx = entries.lastIndex {
+            if case .message(let m) = $0 { return m.role == .user } else { return false }
+        }
+        let tail = lastUserIdx.map { entries[entries.index(after: $0)...] } ?? entries[...]
+        return tail.compactMap {
+            if case .chip(let id, let s) = $0 { return (id: id, summary: s) } else { return nil }
         }
     }
 
