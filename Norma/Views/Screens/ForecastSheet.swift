@@ -326,7 +326,15 @@ struct ForecastSheet: View {
                 .frame(maxWidth: 150, alignment: .trailing)
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(cream.opacity(0.04)))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        )
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
     }
 
@@ -398,7 +406,15 @@ struct ForecastSheet: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(cream.opacity(0.04)))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        )
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
     }
 
