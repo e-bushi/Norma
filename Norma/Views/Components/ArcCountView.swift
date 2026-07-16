@@ -42,6 +42,24 @@ struct ArcCountView: View {
     @State private var balanceText = ""
     @FocusState private var balanceFocused: Bool
 
+    /// The reward shown after a re-anchor: what the update revealed (spend +
+    /// burn), the runway shift, and streak/weekly progress. Re-anchoring is the
+    /// app's lifeblood, so the act pays the user back — a burn lesson plus a
+    /// habit reward — every time.
+    struct ReanchorReward {
+        let spend: Double          // positive = spent since last anchor
+        let added: Double          // positive = added money instead
+        let days: Int?             // days since the previous anchor
+        let perDay: Double         // spend ÷ days
+        let runwayBefore: Int?
+        let runwayAfter: Int?
+        let streak: Int
+        let weekCount: Int
+        let milestone: String?
+    }
+    @State private var reanchorReward: ReanchorReward?
+    @State private var showReanchorMoment = false
+
     @State private var heroWordCount = 0
     @State private var pillVisible = false
     @State private var rangeVisible = false
@@ -73,6 +91,64 @@ struct ArcCountView: View {
         return Int(floor(freedomFund / dailyBurn))
     }
 
+    private func runwayDays(for balance: Double) -> Int? {
+        guard dailyBurn > 0, balance > 0 else { return nil }
+        return Int(floor(balance / dailyBurn))
+    }
+
+    // MARK: - Re-anchor engagement (freshness / streak / weekly)
+
+    /// User balance updates, newest first. These are the re-anchors the whole
+    /// app depends on — every reward mechanic is derived from their timestamps.
+    private var manualEntries: [FreedomFundEntry] {
+        let userId = sessionViewModel.currentUser?.userId
+        return allEntries
+            .filter { $0.userId == userId && $0.source == .manualEdit }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Distinct calendar days the user re-anchored, newest first.
+    private var anchorDays: [Date] {
+        let cal = Calendar.current
+        return Array(Set(manualEntries.map { cal.startOfDay(for: $0.createdAt) })).sorted(by: >)
+    }
+
+    private var daysSinceLastAnchor: Int? {
+        guard let last = manualEntries.first else { return nil }
+        let cal = Calendar.current
+        return cal.dateComponents([.day], from: cal.startOfDay(for: last.createdAt), to: cal.startOfDay(for: Date())).day
+    }
+
+    private var isRunwayLive: Bool { (daysSinceLastAnchor ?? 99) == 0 }
+
+    private var anchorStreak: Int { streak(from: anchorDays) }
+    private var weekAnchorCount: Int { weekCount(from: anchorDays) }
+
+    /// Consecutive days ending today or yesterday. A gap of 2+ days breaks it.
+    private func streak(from daysDesc: [Date]) -> Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let mostRecent = daysDesc.first else { return 0 }
+        let gap = cal.dateComponents([.day], from: mostRecent, to: today).day ?? 99
+        guard gap <= 1 else { return 0 }
+        let daySet = Set(daysDesc)
+        var streak = 0
+        var cursor = mostRecent
+        while daySet.contains(cursor) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
+
+    /// Distinct re-anchor days within the current calendar week (0–7).
+    private func weekCount(from days: [Date]) -> Int {
+        let cal = Calendar.current
+        guard let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return 0 }
+        return days.filter { week.contains($0) }.count
+    }
+
     /// Compact runway value + unit for the hero (e.g. "7" / "weeks").
     private var compactRunway: (value: String, unit: String) {
         ArcCalculationService.compactRunway(days: runwayDays ?? 0)
@@ -93,6 +169,8 @@ struct ArcCountView: View {
     private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
+    private let warning = Color(red: 0.93, green: 0.58, blue: 0.35)
+    private var liveGreen: Color { Color(red: 0.45, green: 0.80, blue: 0.55) }
     private var heroFont: Font { .system(size: 70, weight: .bold) }
 
     private struct ActivityItem: Identifiable {
@@ -241,6 +319,9 @@ struct ArcCountView: View {
                 insightCardOverlay(insight)
             }
         }
+        .overlay {
+            reanchorMomentOverlay
+        }
         .sheet(isPresented: $showFreedomFundEdit) {
             FreedomFundEditSheet()
                 .presentationDetents([.large])
@@ -340,6 +421,13 @@ struct ArcCountView: View {
                 .padding(.top, 16)
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
+
+                if runwayState == .runway {
+                    freshnessPill
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                        .opacity(pillVisible ? 1 : 0)
+                }
 
                 // Runway hero — the wave-text headline, restored.
                 VStack(alignment: .leading, spacing: 0) {
@@ -550,6 +638,158 @@ struct ArcCountView: View {
         .background(bg)
     }
 
+    // MARK: - Re-anchor pill + reward moment
+
+    private var freshnessLabel: String {
+        guard let d = daysSinceLastAnchor else { return "set your balance to start" }
+        switch d {
+        case 0: return "runway is live"
+        case 1: return "1 day since last update"
+        default: return "\(d) days stale — tap to refresh"
+        }
+    }
+
+    private var freshnessPill: some View {
+        Button { beginBalanceEdit() } label: {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(isRunwayLive ? liveGreen : warning)
+                    .frame(width: 6, height: 6)
+                Text(freshnessLabel)
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
+                if anchorStreak >= 2 {
+                    Text("· \(anchorStreak)-day streak")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+                        .foregroundColor(accentPurple)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(glassFill))
+            .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func weeklyDots(_ count: Int) -> some View {
+        HStack(spacing: 5) {
+            ForEach(0..<7, id: \.self) { i in
+                Circle()
+                    .fill(i < count ? accentPurple : cream.opacity(0.15))
+                    .frame(width: 6, height: 6)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reanchorMomentOverlay: some View {
+        if showReanchorMoment, let r = reanchorReward {
+            ZStack {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissReanchorMoment() }
+                DitherShaderView(intensity: 1.0)
+                    .blur(radius: 30)
+                    .opacity(0.5)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(r.milestone ?? "runway updated")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: r.milestone != nil ? 20 : 22))
+                        .foregroundColor(r.milestone != nil ? accentPurple : cream)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // Burn lesson — the payoff for the input.
+                    VStack(alignment: .leading, spacing: 3) {
+                        if r.spend > 0 {
+                            let span = r.days.map { $0 == 1 ? " over 1 day" : ($0 == 0 ? "" : " over \($0) days") } ?? ""
+                            Text("you spent \(formatCurrency(r.spend))\(span)")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                .foregroundColor(cream)
+                            if r.perDay > 0 {
+                                Text("≈ \(formatCurrency(r.perDay))/day")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(mutedText)
+                            }
+                        } else if r.added > 0 {
+                            Text("you added \(formatCurrency(r.added)) — runway extended.")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                .foregroundColor(cream)
+                        } else {
+                            Text("balance confirmed. runway stays true.")
+                                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                                .foregroundColor(mutedText)
+                        }
+                    }
+
+                    if let b = r.runwayBefore, let a = r.runwayAfter {
+                        let cb = ArcCalculationService.compactRunway(days: b)
+                        let ca = ArcCalculationService.compactRunway(days: a)
+                        HStack(spacing: 8) {
+                            Text("runway")
+                                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                                .foregroundColor(mutedText)
+                            Text("\(cb.value) \(cb.unit)")
+                                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                .foregroundColor(dimText)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(mutedText)
+                            Text("\(ca.value) \(ca.unit)")
+                                .font(.custom(FontFamily.Rubik.bold, size: 15))
+                                .foregroundColor(cream)
+                        }
+                    }
+
+                    Divider().overlay(cream.opacity(0.1))
+
+                    // Habit reward — streak + weekly ring.
+                    HStack {
+                        Text(r.streak >= 2 ? "\(r.streak)-day streak" : "kept true")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                            .foregroundColor(accentPurple)
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 4) {
+                            weeklyDots(r.weekCount)
+                            Text("\(r.weekCount)/7 this week")
+                                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                                .foregroundColor(mutedText)
+                        }
+                    }
+
+                    Button { dismissReanchorMoment() } label: {
+                        Text("nice")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .foregroundColor(accentPurple)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(accentPurple.opacity(0.12)))
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(24)
+                .frame(maxWidth: 360)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(bg)
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(cream.opacity(0.1), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+                )
+                .padding(.horizontal, 28)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func dismissReanchorMoment() {
+        withAnimation(.easeOut(duration: 0.3)) { showReanchorMoment = false }
+    }
+
     private func beginBalanceEdit() {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
@@ -574,7 +814,14 @@ struct ArcCountView: View {
         let cleaned = balanceText.filter { $0.isNumber || $0 == "." }
         guard let newFund = Double(cleaned) else { return }
         var updatedSettings = updatedProfile.settings
-        guard updatedSettings.freedomFund != newFund else { return }
+        let prevFund = updatedSettings.freedomFund
+        guard prevFund != newFund else { return }
+
+        // Capture reward inputs BEFORE mutating — burn + the previous anchor's
+        // date drive the spend/burn lesson.
+        let burn = dailyBurn
+        let prevAnchorDate = manualEntries.first?.createdAt
+
         updatedSettings.freedomFund = newFund
         updatedProfile.freedomFund = newFund
         FreedomFundLedger.recordIfChanged(
@@ -587,6 +834,59 @@ struct ArcCountView: View {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+
+        presentReanchorReward(prevFund: prevFund, newFund: newFund, prevAnchorDate: prevAnchorDate, burn: burn)
+    }
+
+    /// Builds the post-re-anchor reward and shows the moment. Streak/week are
+    /// computed with today folded in, since the just-inserted ledger entry may
+    /// not have propagated to `@Query` yet.
+    private func presentReanchorReward(prevFund: Double, newFund: Double, prevAnchorDate: Date?, burn: Double) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let daysWithToday = Array(Set(anchorDays + [today])).sorted(by: >)
+        let newStreak = streak(from: daysWithToday)
+        let newWeek = weekCount(from: daysWithToday)
+
+        let days: Int? = prevAnchorDate.map {
+            max(0, cal.dateComponents([.day], from: cal.startOfDay(for: $0), to: today).day ?? 0)
+        }
+        let spend = max(0, prevFund - newFund)
+        let added = max(0, newFund - prevFund)
+        let perDay = (days ?? 0) > 0 ? spend / Double(days!) : spend
+
+        let runwayBefore = burn > 0 && prevFund > 0 ? Int(floor(prevFund / burn)) : nil
+        let runwayAfter = burn > 0 && newFund > 0 ? Int(floor(newFund / burn)) : nil
+
+        // Milestone: celebrate a streak crossing once.
+        var milestone: String?
+        let lastCelebrated = UserDefaults.standard.integer(forKey: "reanchor.lastCelebratedStreak")
+        if newStreak > lastCelebrated {
+            switch newStreak {
+            case 7: milestone = "a week of keeping your runway honest."
+            case 30: milestone = "30 days true. remarkable."
+            case 100: milestone = "100 days. you live by this number now."
+            default: break
+            }
+            if milestone != nil {
+                UserDefaults.standard.set(newStreak, forKey: "reanchor.lastCelebratedStreak")
+            }
+        }
+        if newStreak < lastCelebrated {
+            // Streak reset — allow future milestones to fire again.
+            UserDefaults.standard.set(0, forKey: "reanchor.lastCelebratedStreak")
+        }
+
+        reanchorReward = ReanchorReward(
+            spend: spend, added: added, days: days, perDay: perDay,
+            runwayBefore: runwayBefore, runwayAfter: runwayAfter,
+            streak: newStreak, weekCount: newWeek, milestone: milestone
+        )
+        withAnimation(.easeOut(duration: 0.4)) { showReanchorMoment = true }
+        // Gentle auto-dismiss if the user just walks away.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            if showReanchorMoment { dismissReanchorMoment() }
+        }
     }
 
     @ViewBuilder
