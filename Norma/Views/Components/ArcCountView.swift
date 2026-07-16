@@ -338,6 +338,13 @@ struct ArcCountView: View {
                 generateInsights()
             }
         }
+        .toolbar {
+            if !isFirstTime && runwayState == .runway {
+                ToolbarItem(placement: .topBarTrailing) {
+                    freshnessNavItem
+                }
+            }
+        }
     }
 
     /// Kicks the rule-based insight engine on home-appear (self-throttled to
@@ -376,13 +383,6 @@ struct ArcCountView: View {
     @ViewBuilder
     private var fundedContent: some View {
             VStack(alignment: .leading, spacing: 0) {
-                if runwayState == .runway {
-                    freshnessPill
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                        .opacity(pillVisible ? 1 : 0)
-                }
-
                 // Status + amount capsules. The status capsule uses the theme
                 // color; the amount capsule opens the balance-edit popover.
                 HStack(spacing: 8) {
@@ -425,7 +425,7 @@ struct ArcCountView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 16)
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
 
@@ -640,37 +640,32 @@ struct ArcCountView: View {
 
     // MARK: - Re-anchor pill + reward moment
 
-    private var freshnessLabel: String {
-        guard let d = daysSinceLastAnchor else { return "set your balance to start" }
-        switch d {
-        case 0: return "runway is live"
-        case 1: return "1 day since last update"
-        default: return "\(d) days stale — tap to refresh"
-        }
-    }
-
-    private var freshnessPill: some View {
+    /// Compact freshness/streak glance for the nav bar's trailing slot. The
+    /// full-width pill read unevenly on the home; the nav bar is its home now.
+    /// Shows a streak count when there's one, else a live/stale word; tapping
+    /// opens the balance editor (loss-aversion shortcut to keep runway true).
+    private var freshnessNavItem: some View {
         Button { beginBalanceEdit() } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: 5) {
                 Circle()
                     .fill(isRunwayLive ? liveGreen : warning)
                     .frame(width: 6, height: 6)
-                Text(freshnessLabel)
-                    .font(.custom(FontFamily.Rubik.medium, size: 12))
-                    .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
                 if anchorStreak >= 2 {
-                    Text("· \(anchorStreak)-day streak")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+                    Text("\(anchorStreak)")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 13))
                         .foregroundColor(accentPurple)
+                } else {
+                    Text(isRunwayLive ? "live" : "stale")
+                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             .background(Capsule().fill(glassFill))
             .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func weeklyDots(_ count: Int) -> some View {
