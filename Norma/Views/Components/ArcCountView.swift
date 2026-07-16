@@ -33,6 +33,9 @@ struct ArcCountView: View {
     /// Balance re-anchor via popover: tapping the amount capsule opens a small
     /// popover with the amount field; saving writes the balance + a ledger row.
     @State private var showBalancePopover = false
+    /// Separate binding so the nav-bar freshness item's balance popover anchors
+    /// under the nav item, not the balance capsule below it.
+    @State private var showBalanceNavPopover = false
     @State private var showStatusPopover = false
     @State private var showInsights = false
     /// The insight whose write-up is shown as a centered floating card.
@@ -280,7 +283,10 @@ struct ArcCountView: View {
     private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)] {
         let calendar = Calendar.current
         let now = Date()
-        return (1...24).map { offset in
+        // Start at offset 0 so the first capsule is THIS month. arcCount is the
+        // number of months of runway, so month N (0-based) is covered when
+        // N < arcCount (this month covered once you can cover ≥ 1 cycle).
+        return (0..<24).map { offset in
             guard let futureDate = calendar.date(byAdding: .month, value: offset, to: now) else {
                 return (name: "", shortName: "", isCovered: false, year: 0)
             }
@@ -290,7 +296,7 @@ struct ArcCountView: View {
             formatter.dateFormat = "MMM"
             let shortName = formatter.string(from: futureDate).lowercased()
             let year = calendar.component(.year, from: futureDate)
-            return (name: fullName, shortName: shortName, isCovered: offset <= arcCount, year: year)
+            return (name: fullName, shortName: shortName, isCovered: offset < arcCount, year: year)
         }
     }
 
@@ -584,6 +590,7 @@ struct ArcCountView: View {
             Button {
                 commitBalance()
                 showBalancePopover = false
+                showBalanceNavPopover = false
             } label: {
                 Text("save")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 16))
@@ -645,7 +652,7 @@ struct ArcCountView: View {
     /// Shows a streak count when there's one, else a live/stale word; tapping
     /// opens the balance editor (loss-aversion shortcut to keep runway true).
     private var freshnessNavItem: some View {
-        Button { beginBalanceEdit() } label: {
+        Button { beginBalanceEdit(fromNav: true) } label: {
             HStack(spacing: 5) {
                 Circle()
                     .fill(isRunwayLive ? liveGreen : warning)
@@ -666,6 +673,10 @@ struct ArcCountView: View {
             .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
+        .popover(isPresented: $showBalanceNavPopover, arrowEdge: .top) {
+            balanceEditPopover
+                .presentationCompactAdaptation(.popover)
+        }
     }
 
     private func weeklyDots(_ count: Int) -> some View {
@@ -785,7 +796,7 @@ struct ArcCountView: View {
         withAnimation(.easeOut(duration: 0.3)) { showReanchorMoment = false }
     }
 
-    private func beginBalanceEdit() {
+    private func beginBalanceEdit(fromNav: Bool = false) {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
         if freedomFund > 0 {
@@ -794,7 +805,7 @@ struct ArcCountView: View {
         } else {
             balanceText = ""
         }
-        showBalancePopover = true
+        if fromNav { showBalanceNavPopover = true } else { showBalancePopover = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             balanceFocused = true
         }
