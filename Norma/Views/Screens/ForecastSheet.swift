@@ -28,6 +28,11 @@ struct ForecastSheet: View {
     // after-bills number and runway, live as you type.
     @State private var whatIfExpanded: Bool = false
     @State private var whatIfAmount: String = ""
+    /// Brief dither "crunching" beat after the amount changes, before the
+    /// impact rows resolve — same thinking motif as the chat.
+    @State private var whatIfCalculating: Bool = false
+    @State private var whatIfDebounce: Task<Void, Never>? = nil
+    @FocusState private var whatIfFocused: Bool
 
     /// "If I committed everything" — independent toggle that subtracts the
     /// intentions total from the hero net. Styled in the tab row as a third
@@ -87,7 +92,16 @@ struct ForecastSheet: View {
                         .padding(.bottom, 48)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Tap any empty area to dismiss the decimal-pad keyboard. The
+                // clear background sits behind the content, so taps on rows,
+                // buttons, and the field itself are handled by them first.
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { whatIfFocused = false }
+                )
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -292,7 +306,7 @@ struct ForecastSheet: View {
                         .font(.custom(FontFamily.Rubik.bold, size: 24))
                         .foregroundStyle(netAfterBills > 0 ? cream : accentPurple)
                         .contentTransition(.numericText())
-                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: safeToSpendPerWeek)
+                        .animation(.easeInOut(duration: 0.6), value: safeToSpendPerWeek)
                     Text("/ week")
                         .font(.custom(FontFamily.Rubik.medium, size: 13))
                         .foregroundStyle(mutedText)
@@ -341,6 +355,7 @@ struct ForecastSheet: View {
                         .foregroundStyle(mutedText)
                     TextField("0", text: $whatIfAmount)
                         .keyboardType(.decimalPad)
+                        .focused($whatIfFocused)
                         .font(.custom(FontFamily.Rubik.bold, size: 20))
                         .foregroundStyle(cream)
                         .tint(accentPurple)
@@ -349,21 +364,32 @@ struct ForecastSheet: View {
                 .padding(.vertical, 10)
                 .background(Capsule().fill(cream.opacity(0.06)))
                 .overlay(Capsule().stroke(cream.opacity(0.10), lineWidth: 1))
+                .onChange(of: whatIfAmount) { _, _ in beginWhatIfCrunch() }
 
                 if whatIfValue > 0 {
-                    VStack(spacing: 10) {
-                        whatIfImpactRow(
-                            label: "after bills",
-                            before: formatCurrency(netAfterBills),
-                            after: formatCurrency(max(0, netAfterBills - whatIfValue))
-                        )
-                        whatIfImpactRow(
-                            label: "runway",
-                            before: runwayLabel(runwayDays(for: freedomFund)),
-                            after: runwayLabel(runwayDays(for: freedomFund - whatIfValue))
-                        )
+                    ZStack {
+                        if whatIfCalculating {
+                            DitherShaderView(intensity: 1.0)
+                                .frame(height: 66)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .transition(.opacity)
+                        } else {
+                            VStack(spacing: 10) {
+                                whatIfImpactRow(
+                                    label: "after bills",
+                                    before: formatCurrency(netAfterBills),
+                                    after: formatCurrency(max(0, netAfterBills - whatIfValue))
+                                )
+                                whatIfImpactRow(
+                                    label: "runway",
+                                    before: runwayLabel(runwayDays(for: freedomFund)),
+                                    after: runwayLabel(runwayDays(for: freedomFund - whatIfValue))
+                                )
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
-                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.4), value: whatIfCalculating)
                 }
             }
         }
@@ -387,6 +413,7 @@ struct ForecastSheet: View {
             Text(after)
                 .font(.custom(FontFamily.Rubik.bold, size: 15))
                 .foregroundStyle(cream)
+                .contentTransition(.numericText())
         }
     }
 
@@ -394,6 +421,23 @@ struct ForecastSheet: View {
         guard let days else { return "—" }
         let c = ArcCalculationService.compactRunway(days: days)
         return "\(c.value) \(c.unit)"
+    }
+
+    /// Shows the dither "crunching" beat, then resolves the impact rows a
+    /// moment after the user stops typing — a considered feel instead of a
+    /// jittery per-keystroke recompute.
+    private func beginWhatIfCrunch() {
+        whatIfDebounce?.cancel()
+        guard whatIfValue > 0 else {
+            withAnimation(.easeInOut(duration: 0.3)) { whatIfCalculating = false }
+            return
+        }
+        whatIfCalculating = true
+        whatIfDebounce = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.45)) { whatIfCalculating = false }
+        }
     }
 
     // MARK: - Filter capsules
