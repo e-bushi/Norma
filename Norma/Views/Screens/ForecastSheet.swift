@@ -19,9 +19,15 @@ struct ForecastSheet: View {
     @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \NoteToken.occurredAt) private var allTokens: [NoteToken]
+    @Query(sort: \FreedomFundEntry.createdAt, order: .reverse) private var allEntries: [FreedomFundEntry]
 
     @State private var selectedTab: Tab = .thisMonth
     @State private var showInfoPopover = false
+
+    // What-if a purchase — a tap-to-test amount that shows its impact on the
+    // after-bills number and runway, live as you type.
+    @State private var whatIfExpanded: Bool = false
+    @State private var whatIfAmount: String = ""
 
     /// "If I committed everything" — independent toggle that subtracts the
     /// intentions total from the hero net. Styled in the tab row as a third
@@ -60,7 +66,17 @@ struct ForecastSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     heroBlock
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 20)
+
+                    if !isSelecting {
+                        safeToSpendCard
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 12)
+
+                        whatIfCard
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 22)
+                    }
 
                     filterCapsules
                         .padding(.horizontal, 24)
@@ -260,6 +276,124 @@ struct ForecastSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - Safe to spend
+
+    private var safeToSpendCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SAFE TO SPEND")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 10))
+                    .tracking(0.6)
+                    .foregroundStyle(mutedText)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(formatCurrency(safeToSpendPerWeek))
+                        .font(.custom(FontFamily.Rubik.bold, size: 24))
+                        .foregroundStyle(netAfterBills > 0 ? cream : accentPurple)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: safeToSpendPerWeek)
+                    Text("/ week")
+                        .font(.custom(FontFamily.Rubik.medium, size: 13))
+                        .foregroundStyle(mutedText)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(netAfterBills > 0
+                 ? "and still cover \(selectedTab == .thisMonth ? "this" : "next") month's bills"
+                 : "bills top your income \(selectedTab == .thisMonth ? "this" : "next") month")
+                .font(.custom(FontFamily.Rubik.regular, size: 12))
+                .foregroundStyle(mutedText)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 150, alignment: .trailing)
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(cream.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    // MARK: - What-if a purchase
+
+    private var whatIfCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { whatIfExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkle.magnifyingglass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(accentPurple)
+                    Text("test a purchase")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                        .foregroundStyle(cream)
+                    Spacer()
+                    Image(systemName: whatIfExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(mutedText)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if whatIfExpanded {
+                HStack(spacing: 6) {
+                    Text(NormaPalette.currencySymbol(for: currency))
+                        .font(.custom(FontFamily.Rubik.bold, size: 20))
+                        .foregroundStyle(mutedText)
+                    TextField("0", text: $whatIfAmount)
+                        .keyboardType(.decimalPad)
+                        .font(.custom(FontFamily.Rubik.bold, size: 20))
+                        .foregroundStyle(cream)
+                        .tint(accentPurple)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(cream.opacity(0.06)))
+                .overlay(Capsule().stroke(cream.opacity(0.10), lineWidth: 1))
+
+                if whatIfValue > 0 {
+                    VStack(spacing: 10) {
+                        whatIfImpactRow(
+                            label: "after bills",
+                            before: formatCurrency(netAfterBills),
+                            after: formatCurrency(max(0, netAfterBills - whatIfValue))
+                        )
+                        whatIfImpactRow(
+                            label: "runway",
+                            before: runwayLabel(runwayDays(for: freedomFund)),
+                            after: runwayLabel(runwayDays(for: freedomFund - whatIfValue))
+                        )
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(cream.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    private func whatIfImpactRow(label: String, before: String, after: String) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(mutedText)
+            Spacer()
+            Text(before)
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundStyle(dimText)
+            Image(systemName: "arrow.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(mutedText)
+            Text(after)
+                .font(.custom(FontFamily.Rubik.bold, size: 15))
+                .foregroundStyle(cream)
+        }
+    }
+
+    private func runwayLabel(_ days: Int?) -> String {
+        guard let days else { return "—" }
+        let c = ArcCalculationService.compactRunway(days: days)
+        return "\(c.value) \(c.unit)"
     }
 
     // MARK: - Filter capsules
@@ -967,6 +1101,41 @@ struct ForecastSheet: View {
         var sum = totalBillsForMonth + totalCommitments
         if includeIntentions { sum += totalIntentions }
         return sum
+    }
+
+    // MARK: - Computed: balance / runway (shared with the home's math)
+
+    private var freedomFund: Double {
+        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    /// Raw monthly bill total across all bills — matches the value the home
+    /// feeds the runway engine, so the what-if runway lines up with the home.
+    private var allMonthlyBills: Double {
+        billViewModel.bills.reduce(0) { $0 + $1.amount }
+    }
+
+    private var userEntries: [FreedomFundEntry] {
+        let uid = sessionViewModel.currentUser?.userId
+        return allEntries.filter { uid == nil || $0.userId == uid }
+    }
+
+    private var dailyBurn: Double {
+        ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills)
+    }
+
+    private func runwayDays(for balance: Double) -> Int? {
+        dailyBurn > 0 ? Int(floor(max(0, balance) / dailyBurn)) : nil
+    }
+
+    /// After-bills headroom expressed as a weekly spend rate — the same monthly
+    /// number the hero shows, made actionable at the cadence people budget by.
+    private var safeToSpendPerWeek: Double {
+        netAfterBills / 4.33
+    }
+
+    private var whatIfValue: Double {
+        Double(whatIfAmount.filter { $0.isNumber || $0 == "." }) ?? 0
     }
 
     private var netAfterBills: Double {
