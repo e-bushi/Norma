@@ -58,7 +58,11 @@ struct ForecastSheet: View {
     /// Bill tapped for the detail/edit sheet. Non-nil drives presentation.
     @State private var selectedBillForDetail: Bill?
 
+    /// Paid section starts collapsed as a card deck; tap toggles to a list.
+    @State private var paidExpanded: Bool = false
+
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
+    private let cardBg = Color(red: 0x1F/255, green: 0x1F/255, blue: 0x24/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
@@ -558,14 +562,8 @@ struct ForecastSheet: View {
                     .padding(.top, overdueRows.isEmpty ? 0 : 14)
                 }
                 if !paidRows.isEmpty {
-                    section(
-                        title: "paid",
-                        titleColor: dimText,
-                        dividerColor: cream.opacity(0.08),
-                        rows: paidRows,
-                        kind: .paid
-                    )
-                    .padding(.top, (overdueRows.isEmpty && upcomingRows.isEmpty) ? 0 : 14)
+                    paidSectionView
+                        .padding(.top, (overdueRows.isEmpty && upcomingRows.isEmpty) ? 0 : 14)
                 }
             }
 
@@ -617,6 +615,129 @@ struct ForecastSheet: View {
             ForEach(rows, id: \.id) { row in
                 billRowView(row, kind: kind)
             }
+        }
+    }
+
+    // MARK: - Paid section (collapsible card deck)
+
+    /// Header + body for paid bills. Collapsed, the cards stack as a deck to
+    /// save space; tapping the header or the deck fans them into a vertical
+    /// list, and tapping again re-stacks them.
+    private var paidSectionView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    paidExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("paid")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                        .tracking(0.88)
+                        .textCase(.uppercase)
+                        .foregroundStyle(dimText)
+                    Rectangle()
+                        .fill(cream.opacity(0.08))
+                        .frame(height: 1)
+                    Text("\(paidRows.count)")
+                        .font(.custom(FontFamily.Rubik.medium, size: 11))
+                        .tracking(0.44)
+                        .foregroundStyle(dimText)
+                    Image(systemName: paidExpanded ? "chevron.up" : "rectangle.stack")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(dimText)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+
+            if paidExpanded {
+                VStack(spacing: 10) {
+                    ForEach(paidRows, id: \.id) { row in
+                        paidCard(row, interactive: true)
+                    }
+                }
+            } else {
+                paidDeck
+            }
+        }
+    }
+
+    private var paidDeck: some View {
+        let visible = Array(paidRows.prefix(4))
+        let step: CGFloat = 12
+        return Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                paidExpanded = true
+            }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .top) {
+                    ForEach(Array(Array(visible.enumerated()).reversed()), id: \.element.id) { idx, row in
+                        paidCard(row, interactive: false)
+                            .scaleEffect(1 - CGFloat(idx) * 0.04, anchor: .top)
+                            .offset(y: CGFloat(idx) * step)
+                            .opacity(1 - Double(idx) * 0.16)
+                            .zIndex(Double(visible.count - idx))
+                    }
+                }
+                .padding(.bottom, CGFloat(max(0, visible.count - 1)) * step)
+
+                Text("tap to expand")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .foregroundStyle(dimText)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func paidCard(_ row: BillRow, interactive: Bool) -> some View {
+        let inner = HStack(spacing: 12) {
+            statusDot(for: .paid)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.name.lowercased())
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .tracking(-0.16)
+                    .foregroundStyle(mutedText)
+                    .lineLimit(1)
+                Text(eyebrowText(forDate: row.dueDate, kind: .paid))
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .tracking(0.48)
+                    .textCase(.uppercase)
+                    .foregroundStyle(dimText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(formatCurrency(row.amount))
+                .font(.custom(FontFamily.Rubik.medium, size: 18))
+                .tracking(-0.18)
+                .foregroundStyle(dimText)
+                .strikethrough(true, color: dimText)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 14).fill(cardBg))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(cream.opacity(0.07), lineWidth: 1))
+
+        if interactive {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                if case .bill(let bill) = row { selectedBillForDetail = bill }
+            } label: {
+                inner
+            }
+            .buttonStyle(.plain)
+        } else {
+            inner
         }
     }
 

@@ -42,12 +42,81 @@ struct BillDetailSheet: View {
         sessionViewModel.currentUser?.settings.currency ?? "USD"
     }
 
+    // MARK: - Projection math
+
+    private var currentYear: Int {
+        Calendar.current.component(.year, from: Date())
+    }
+
+    /// The amount currently in the field, falling back to the saved value.
+    private var editedAmount: Double {
+        Double(amountText) ?? bill.amount
+    }
+
+    private var periodsPerYear: Int {
+        switch frequency {
+        case .monthly: return 12
+        case .quarterly: return 4
+        case .yearly: return 1
+        case .oneTime: return 1
+        }
+    }
+
+    private var yearlyAmount: Double {
+        editedAmount * Double(periodsPerYear)
+    }
+
+    /// Count and dollar total of the bill's occurrences from today through the
+    /// end of the current calendar year. One-time bills count once if their due
+    /// date still falls in-year.
+    private func remainingThisYear() -> (count: Int, total: Double) {
+        let cal = Calendar.current
+        let now = cal.startOfDay(for: Date())
+        guard let endOfYear = cal.date(from: DateComponents(year: currentYear, month: 12, day: 31)) else {
+            return (0, 0)
+        }
+
+        let intervalMonths: Int
+        switch frequency {
+        case .monthly: intervalMonths = 1
+        case .quarterly: intervalMonths = 3
+        case .yearly: intervalMonths = 12
+        case .oneTime:
+            let due = cal.startOfDay(for: dueDate)
+            return (due >= now && due <= endOfYear) ? (1, editedAmount) : (0, 0)
+        }
+
+        // Walk occurrences from the due date, fast-forwarding to the first that
+        // isn't in the past, then counting through year-end.
+        var occ = cal.startOfDay(for: dueDate)
+        while occ < now {
+            guard let next = cal.date(byAdding: .month, value: intervalMonths, to: occ) else { break }
+            occ = next
+        }
+        var count = 0
+        while occ <= endOfYear {
+            count += 1
+            guard let next = cal.date(byAdding: .month, value: intervalMonths, to: occ) else { break }
+            occ = next
+        }
+        return (count, Double(count) * editedAmount)
+    }
+
+    private func formatMoney(_ amount: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currency
+        f.maximumFractionDigits = 0
+        return f.string(from: NSNumber(value: amount)) ?? "\(currency) \(Int(amount))"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
                     nameField
                     amountField
+                    projectionSummary
                     dueDateField
                     frequencyField
                     reminderField
@@ -119,6 +188,54 @@ struct BillDetailSheet: View {
                     .textFieldStyle(.plain)
             }
         }
+    }
+
+    /// Two derived numbers that turn a single amount into what it actually
+    /// costs: what's left to pay on this bill through Dec 31, and the annualized
+    /// figure. Both read off the live editable state, so they update as the user
+    /// changes the amount or frequency.
+    @ViewBuilder
+    private var projectionSummary: some View {
+        let remaining = remainingThisYear()
+        VStack(spacing: 0) {
+            summaryRow(
+                label: frequency == .oneTime ? "total" : "rest of \(currentYear)",
+                value: formatMoney(remaining.total),
+                caption: frequency == .oneTime
+                    ? nil
+                    : "\(remaining.count) \(remaining.count == 1 ? "payment" : "payments") left this year"
+            )
+            if frequency != .oneTime {
+                Rectangle()
+                    .fill(cream.opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.vertical, 2)
+                summaryRow(label: "per year", value: formatMoney(yearlyAmount), caption: nil)
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(cream.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    private func summaryRow(label: String, value: String, caption: String?) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundStyle(cream.opacity(0.85))
+                if let caption {
+                    Text(caption)
+                        .font(.custom(FontFamily.Rubik.medium, size: 11))
+                        .foregroundStyle(mutedText)
+                }
+            }
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.custom(FontFamily.Rubik.bold, size: 20))
+                .foregroundStyle(accentPurple)
+        }
+        .padding(.vertical, 8)
     }
 
     private var dueDateField: some View {
