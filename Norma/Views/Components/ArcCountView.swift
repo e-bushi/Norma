@@ -376,6 +376,13 @@ struct ArcCountView: View {
     @ViewBuilder
     private var fundedContent: some View {
             VStack(alignment: .leading, spacing: 0) {
+                if runwayState == .runway {
+                    freshnessPill
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
+                        .opacity(pillVisible ? 1 : 0)
+                }
+
                 // Status + amount capsules. The status capsule uses the theme
                 // color; the amount capsule opens the balance-edit popover.
                 HStack(spacing: 8) {
@@ -418,16 +425,9 @@ struct ArcCountView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.top, 8)
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
-
-                if runwayState == .runway {
-                    freshnessPill
-                        .padding(.horizontal, 24)
-                        .padding(.top, 8)
-                        .opacity(pillVisible ? 1 : 0)
-                }
 
                 // Runway hero — the wave-text headline, restored.
                 VStack(alignment: .leading, spacing: 0) {
