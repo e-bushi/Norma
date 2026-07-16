@@ -23,6 +23,7 @@ struct ForecastSheet: View {
 
     @State private var selectedTab: Tab = .thisMonth
     @State private var showInfoPopover = false
+    @State private var showSafeInfo = false
 
     // What-if a purchase — a tap-to-test amount that shows its impact on the
     // after-bills number and runway, live as you type.
@@ -299,32 +300,39 @@ struct ForecastSheet: View {
     // MARK: - Safe to spend
 
     private var safeToSpendCard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
                 Text("SAFE TO SPEND")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 10))
                     .tracking(0.6)
                     .foregroundStyle(mutedText)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatCurrency(safeToSpendPerWeek))
-                        .font(.custom(FontFamily.Rubik.bold, size: 24))
-                        .foregroundStyle(netAfterBills > 0 ? cream : accentPurple)
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.6), value: safeToSpendPerWeek)
-                    Text("/ week")
-                        .font(.custom(FontFamily.Rubik.medium, size: 13))
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showSafeInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(mutedText)
                 }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showSafeInfo, arrowEdge: .top) {
+                    safeToSpendInfoPopover
+                        .presentationCompactAdaptation(.popover)
+                }
             }
-            Spacer(minLength: 8)
-            Text(netAfterBills > 0
-                 ? "and still cover \(selectedTab == .thisMonth ? "this" : "next") month's bills"
-                 : "bills top your income \(selectedTab == .thisMonth ? "this" : "next") month")
-                .font(.custom(FontFamily.Rubik.regular, size: 12))
-                .foregroundStyle(mutedText)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 150, alignment: .trailing)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(formatCurrency(safeToSpendPerWeek))
+                    .font(.custom(FontFamily.Rubik.bold, size: 24))
+                    .foregroundStyle(netAfterBills > 0 ? cream : accentPurple)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.6), value: safeToSpendPerWeek)
+                Text("/ week")
+                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                    .foregroundStyle(mutedText)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous).fill(
@@ -336,6 +344,32 @@ struct ForecastSheet: View {
             )
         )
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    private var safeToSpendInfoPopover: some View {
+        let period = selectedTab == .thisMonth ? "this" : "next"
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "wallet.bill.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(accentPurple)
+                Text("safe to spend")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .foregroundColor(.primary)
+            }
+            Text("what you can spend each week and still cover \(period) month's bills — your income minus \(period) month's bills and commitments, split across the ~4.3 weeks in a month.")
+                .font(.normaInput(13))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if netAfterBills <= 0 {
+                Text("right now your bills top your income, so there's nothing extra to spend.")
+                    .font(.normaInput(13))
+                    .foregroundColor(NormaPalette.lavender)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(18)
+        .frame(width: 270)
     }
 
     // MARK: - What-if a purchase
