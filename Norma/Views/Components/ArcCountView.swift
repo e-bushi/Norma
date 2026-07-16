@@ -37,6 +37,8 @@ struct ArcCountView: View {
     /// under the nav item, not the balance capsule below it.
     @State private var showBalanceNavPopover = false
     @State private var showStatusPopover = false
+    /// Slow breathing glow behind the status capsule so it invites a tap.
+    @State private var statusPulse = false
     @State private var showInsights = false
     /// The insight whose write-up is shown as a centered floating card.
     /// A single card overlaid on the whole view — not a per-row popover —
@@ -405,13 +407,32 @@ struct ArcCountView: View {
                     Button {
                         beginBalanceEdit()
                     } label: {
-                        Text("balance: \(formatCurrency(freedomFund))")
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                            .foregroundColor(cream)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(glassFill))
-                            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                        HStack(spacing: 7) {
+                            Image(systemName: "banknote.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(accentPurple.opacity(0.9))
+                            HStack(spacing: 5) {
+                                Text("balance")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                                    .foregroundColor(cream.opacity(0.55))
+                                Text(formatCurrency(freedomFund))
+                                    .font(.custom(FontFamily.Rubik.bold, size: 15))
+                                    .foregroundColor(cream)
+                                    .contentTransition(.numericText())
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        )
+                        .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
                     }
                     .buttonStyle(PlainButtonStyle())
                     .popover(isPresented: $showBalancePopover, arrowEdge: .top) {
@@ -425,15 +446,36 @@ struct ArcCountView: View {
                             impact.impactOccurred()
                             showStatusPopover = true
                         } label: {
-                            Text(statusLine)
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                                .foregroundColor(accentPurple)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Capsule().fill(accentPurple.opacity(0.14)))
-                                .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                            HStack(spacing: 6) {
+                                Image(systemName: statusIcon)
+                                    .font(.system(size: 12, weight: .bold))
+                                Text(statusLine)
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            }
+                            .foregroundColor(accentPurple)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [accentPurple.opacity(0.24), accentPurple.opacity(0.10)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            )
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
+                            .shadow(
+                                color: accentPurple.opacity(statusPulse ? 0.5 : 0.12),
+                                radius: statusPulse ? 11 : 4
+                            )
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
+                                statusPulse = true
+                            }
+                        }
                         .popover(isPresented: $showStatusPopover, arrowEdge: .top) {
                             statusInfoPopover
                                 .presentationCompactAdaptation(.popover)
@@ -554,6 +596,18 @@ struct ArcCountView: View {
             .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Flight-metaphor glyph for the runway tier — climbs from a warning to
+    /// full flight to sparkle as the runway lengthens.
+    private var statusIcon: String {
+        switch runwayDays ?? 0 {
+        case ..<14: return "exclamationmark.triangle.fill"
+        case 14..<45: return "wind"
+        case 45..<120: return "airplane"
+        case 120..<270: return "airplane.departure"
+        default: return "sparkles"
+        }
     }
 
     /// Status word shown above the balance hero.

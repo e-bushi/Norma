@@ -35,8 +35,18 @@ struct NormaChatView: View {
         }
     }
 
+    /// A short, warm opener chosen at random each time the chat opens. Keeps the
+    /// blank surface feeling alive and points at what Norma can actually do.
+    private static let greetings = [
+        "what's on your mind? a bill, a plan, or how long your money lasts.",
+        "talk to me. i'll turn it into bills, reminders, and runway.",
+        "tell me what just happened with your money — i'll sort it.",
+        "got a bill coming up? or want to know how far your money stretches?",
+        "here for it. what should we get on the books?"
+    ]
+
     @State private var entries: [ChatEntry] = [
-        .message(MiniChatMessage(role: .assistant, text: "hey — tell me what's coming up, or ask how long your money lasts."))
+        .message(MiniChatMessage(role: .assistant, text: NormaChatView.greetings.randomElement()!))
     ]
     @State private var profile: UserProfile?
     @State private var inputText: String = ""
