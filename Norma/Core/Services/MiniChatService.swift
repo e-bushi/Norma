@@ -26,13 +26,34 @@ final class MiniChatService {
         let totalMonthlyBills: Double
     }
 
+    /// A create/mutate tool that fired during a turn, surfaced so the chat can
+    /// render an inline confirmation chip (e.g. "✓ added rent · $1,400").
+    struct ToolOutcome: Identifiable {
+        let id = UUID()
+        let name: String
+        let summary: String
+    }
+
+    /// The result of a turn: Norma's text plus any chip-worthy tool outcomes,
+    /// in the order they fired (chips render before the text reply).
+    struct Response {
+        let text: String
+        let outcomes: [ToolOutcome]
+    }
+
+    /// Tools whose success produces a visible confirmation chip. Reads
+    /// (get_*, project_runway) and save_fact don't — Norma just speaks those.
+    private static let chipTools: Set<String> = [
+        "add_bill", "add_reminder", "add_intention", "add_commitment", "set_balance"
+    ]
+
     func send(
         userText: String,
         noteContext: String,
         profileContext: String = "",
         history: [MiniChatMessage],
         toolContext: ToolContext? = nil
-    ) async throws -> String {
+    ) async throws -> Response {
         let profileBlock = profileContext.isEmpty ? "" : """
 
         What norma knows about this user:
@@ -101,6 +122,7 @@ final class MiniChatService {
         let hasTools = toolContext != nil
         let maxRounds = 3
         var round = 0
+        var outcomes: [ToolOutcome] = []
 
         while round < maxRounds {
             round += 1
@@ -131,7 +153,7 @@ final class MiniChatService {
 
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let content = json["content"] as? [[String: Any]] else {
-                return "sorry, I couldn't process that."
+                return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
             }
 
             let stopReason = json["stop_reason"] as? String
@@ -156,6 +178,14 @@ final class MiniChatService {
                         totalMonthlyBills: ctx.totalMonthlyBills
                     )
 
+                    // Surface a chip only for successful create/mutate tools.
+                    if Self.chipTools.contains(toolName),
+                       !result.lowercased().hasPrefix("error"),
+                       !result.lowercased().hasPrefix("couldn't"),
+                       !result.lowercased().hasPrefix("no user") {
+                        outcomes.append(ToolOutcome(name: toolName, summary: result))
+                    }
+
                     toolResults.append([
                         "type": "tool_result",
                         "tool_use_id": toolId,
@@ -170,12 +200,12 @@ final class MiniChatService {
 
             if let textBlock = content.first(where: { ($0["type"] as? String) == "text" }),
                let text = textBlock["text"] as? String {
-                return text
+                return Response(text: text, outcomes: outcomes)
             }
 
-            return "sorry, I couldn't process that."
+            return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
         }
 
-        return "sorry, I couldn't process that."
+        return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
     }
 }

@@ -21,8 +21,22 @@ struct NormaChatView: View {
 
     var onDismiss: (() -> Void)? = nil
 
-    @State private var history: [MiniChatMessage] = [
-        MiniChatMessage(role: .assistant, text: "hey — tell me what's coming up, or ask how long your money lasts.")
+    /// A transcript entry — either a chat message or an inline confirmation
+    /// chip for a create/mutate tool Norma just ran.
+    private enum ChatEntry: Identifiable {
+        case message(MiniChatMessage)
+        case chip(id: UUID, summary: String)
+
+        var id: UUID {
+            switch self {
+            case .message(let m): return m.id
+            case .chip(let id, _): return id
+            }
+        }
+    }
+
+    @State private var entries: [ChatEntry] = [
+        .message(MiniChatMessage(role: .assistant, text: "hey — tell me what's coming up, or ask how long your money lasts."))
     ]
     @State private var profile: UserProfile?
     @State private var inputText: String = ""
@@ -109,9 +123,9 @@ struct NormaChatView: View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 12) {
-                    ForEach(history) { message in
-                        bubble(message)
-                            .id(message.id)
+                    ForEach(entries) { entry in
+                        entryView(entry)
+                            .id(entry.id)
                     }
                     if isLoading {
                         typingIndicator
@@ -121,9 +135,9 @@ struct NormaChatView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .onChange(of: history.count) { _, _ in
+            .onChange(of: entries.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(history.last?.id, anchor: .bottom)
+                    proxy.scrollTo(entries.last?.id, anchor: .bottom)
                 }
             }
             .onChange(of: isLoading) { _, loading in
@@ -132,6 +146,34 @@ struct NormaChatView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func entryView(_ entry: ChatEntry) -> some View {
+        switch entry {
+        case .message(let message):
+            bubble(message)
+        case .chip(_, let summary):
+            confirmationChip(summary)
+        }
+    }
+
+    /// Inline confirmation that a create/mutate tool ran — e.g. "✓ added
+    /// rent · $1,400 · monthly". Renders before Norma's text reply.
+    private func confirmationChip(_ summary: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 11, weight: .bold))
+            Text(summary)
+                .font(.system(size: 13, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(NormaPalette.lavender)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule(style: .continuous).fill(NormaPalette.lavender.opacity(0.14)))
+        .overlay(Capsule(style: .continuous).stroke(NormaPalette.lavender.opacity(0.45), lineWidth: 1))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -231,11 +273,18 @@ struct NormaChatView: View {
 
     // MARK: - Actions
 
+    /// Prior messages only (chips excluded) — the API history. Captured before
+    /// the new user turn is appended so `send` doesn't double-count it.
+    private var messageHistory: [MiniChatMessage] {
+        entries.compactMap { if case .message(let m) = $0 { return m } else { return nil } }
+    }
+
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        history.append(MiniChatMessage(role: .user, text: text))
+        let priorHistory = messageHistory
+        entries.append(.message(MiniChatMessage(role: .user, text: text)))
         inputText = ""
         withAnimation(.easeOut(duration: 0.2)) { isLoading = true }
 
@@ -245,16 +294,31 @@ struct NormaChatView: View {
                     userText: text,
                     noteContext: "",
                     profileContext: profileContextString,
-                    history: history,
+                    history: priorHistory,
                     toolContext: toolContext
                 )
-                history.append(MiniChatMessage(role: .assistant, text: response))
-                withAnimation(.easeOut(duration: 0.3)) { isLoading = false }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    for outcome in response.outcomes {
+                        entries.append(.chip(id: outcome.id, summary: chipLabel(outcome.summary)))
+                    }
+                    entries.append(.message(MiniChatMessage(role: .assistant, text: response.text)))
+                    isLoading = false
+                }
             } catch {
-                history.append(MiniChatMessage(role: .assistant, text: "something went wrong — try again."))
+                entries.append(.message(MiniChatMessage(role: .assistant, text: "something went wrong — try again.")))
                 withAnimation(.easeOut(duration: 0.3)) { isLoading = false }
             }
         }
+    }
+
+    /// Tidies a tool summary for the chip — drops the "added bill:" style verb
+    /// prefix so the pill reads as a clean fact ("rent · $1,400 · monthly").
+    private func chipLabel(_ summary: String) -> String {
+        if let colon = summary.firstIndex(of: ":") {
+            let tail = summary[summary.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !tail.isEmpty { return tail }
+        }
+        return summary
     }
 
     private func loadProfile() {
