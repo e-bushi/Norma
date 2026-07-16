@@ -280,6 +280,15 @@ struct ArcCountView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
+    /// Offset (in months from now) of the last month a bill payment lands.
+    /// = ceil(fund / bills) - 1: this month is offset 0, and a fund that only
+    /// partially covers a month still "pays" in that month, so the endpoint is
+    /// one month past arcCount whenever the fund isn't an exact multiple.
+    private var lastBillMonthOffset: Int {
+        guard totalMonthlyBills > 0, freedomFund > 0 else { return 0 }
+        return max(0, Int(ceil(freedomFund / totalMonthlyBills)) - 1)
+    }
+
     private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)] {
         let calendar = Calendar.current
         let now = Date()
@@ -480,16 +489,19 @@ struct ArcCountView: View {
                 .padding(.vertical, 20)
 
                 if arcCount > 0 {
-                    let firstCovered = upcomingMonths.first(where: { $0.isCovered })
-                    let lastCovered = upcomingMonths.last(where: { $0.isCovered })
+                    // First pill = this month (offset 0). Last pill = the last
+                    // month a (possibly partial) bill payment lands, which is
+                    // ceil(fund / bills) - 1 — one month past arcCount whenever
+                    // the fund isn't an exact multiple of the monthly bills.
+                    let first = upcomingMonths[0]
+                    let lastIdx = min(lastBillMonthOffset, upcomingMonths.count - 1)
+                    let last = upcomingMonths[lastIdx]
                     HStack(spacing: 12) {
-                        if let first = firstCovered {
-                            rangePill(first.shortName, year: first.year)
-                        }
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(mutedText)
-                        if let last = lastCovered {
+                        rangePill(first.shortName, year: first.year)
+                        if lastIdx > 0 {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(mutedText)
                             rangePill(last.shortName, year: last.year)
                         }
                     }
