@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var showSettings = false
     @State private var keyboardVisible = false
     @State private var showChat = false
+    /// Pre-filled chat text when the user taps "add for [day]" on the calendar.
+    @State private var chatSeed: String?
 
     // MARK: - Runway inputs (ported from NotesListScreen)
 
@@ -96,7 +98,17 @@ struct HomeView: View {
                 .presentationDragIndicator(.hidden)
         }
         .sheet(isPresented: $showCalendar) {
-            CalendarSheet()
+            CalendarSheet(onAddForDate: { date in
+                let f = DateFormatter()
+                f.dateFormat = "MMM d"
+                chatSeed = "on \(f.string(from: date).lowercased()), "
+                showCalendar = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    withAnimation(.easeInOut(duration: 0.45)) { showChat = true }
+                }
+            })
+                .environmentObject(sessionViewModel)
+                .environmentObject(billViewModel)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
@@ -110,9 +122,13 @@ struct HomeView: View {
         }
         .overlay {
             if showChat {
-                NormaChatView(onDismiss: {
-                    withAnimation(.easeInOut(duration: 0.45)) { showChat = false }
-                })
+                NormaChatView(
+                    seedText: chatSeed,
+                    onDismiss: {
+                        withAnimation(.easeInOut(duration: 0.45)) { showChat = false }
+                        chatSeed = nil
+                    }
+                )
                 .environmentObject(sessionViewModel)
                 .environmentObject(billViewModel)
                 .transition(.opacity)

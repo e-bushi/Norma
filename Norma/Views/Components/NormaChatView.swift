@@ -19,6 +19,7 @@ struct NormaChatView: View {
     @EnvironmentObject private var billViewModel: BillViewModel
     @EnvironmentObject private var sessionViewModel: SessionViewModel
 
+    var seedText: String? = nil
     var onDismiss: (() -> Void)? = nil
 
     /// A transcript entry — either a chat message or an inline confirmation
@@ -81,6 +82,7 @@ struct NormaChatView: View {
         .blur(radius: appeared ? 0 : 24)
         .onAppear {
             loadProfile()
+            if let seedText, !seedText.isEmpty, inputText.isEmpty { inputText = seedText }
             withAnimation(.easeOut(duration: 0.55)) { appeared = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { inputFocused = true }
         }
