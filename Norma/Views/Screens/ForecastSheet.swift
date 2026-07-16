@@ -86,7 +86,7 @@ struct ForecastSheet: View {
                 Button("cancel", role: .cancel) {}
                 Button("mark paid") { performBulkMarkPaid() }
             } message: {
-                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle and added to today's note.")
+                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle.")
             }
             .sheet(isPresented: $showUpgradeSheet) {
                 upgradeSheet
@@ -403,7 +403,7 @@ struct ForecastSheet: View {
             Text("nothing \(selectedTab == .thisMonth ? "this month" : "next month")")
                 .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                 .foregroundStyle(cream.opacity(0.7))
-            Text("bills, commitments, and intentions written in your notes show up here.")
+            Text("bills, commitments, and intentions you add in chat show up here.")
                 .font(.custom(FontFamily.Rubik.regular, size: 13))
                 .foregroundStyle(mutedText)
         }
@@ -1116,7 +1116,7 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(.primary)
                 }
 
-                Text("an intention is something you're thinking about spending on — picked up from notes like \"thinking about a $200 trip.\" they don't count against your month unless you upgrade them.")
+                Text("an intention is something you're thinking about spending on — tell norma \"thinking about a $200 trip\" and it lands here. they don't count against your month unless you upgrade them.")
                     .font(.normaInput(14))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
