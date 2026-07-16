@@ -46,10 +46,15 @@ Each create tool returns a confirmation string the chat surfaces ("added rent ·
 - **C3 — Repoint reads:** ✅ DONE (verify-only). Forecast reads `@Query` NoteTokens by kind (no note attachment). Reminders/Calendar source OS pending notifications; chat reminders + bills schedule with matching identifiers/userInfo. Constraint: reminders show in those sheets only if notification permission granted.
 - **C4 — Prune notes:** ✅ DONE. Deleted `NotesListScreen`, `NoteCanvasView`, `MiniChatView`, `NoteStatusCapsule`, `NoteExtractionService`, `NoteSyncQueue`, `BillPaymentJournal`, `InsightEngine`, `NoteSegmentsView`/`GroupChipView`/`RibbonView`, the `Note` model + note↔token relationship, and the obsolete re-extraction tests. `NoteRepository` stripped to reminder utilities. Kept `NoteToken`, `DitherShaderView`, `BillTokenBridge`, `ChipView`.
 
-### Post-C4 follow-ups (not yet done)
-1. **Onboarding still note/voice-shaped:** `voicePracticeIntro` / `voicePractice` / `notesValue` steps + `OnboardingVoicePracticeView` reference the retired paradigm (`runExtraction` stubbed to compile). Needs a dedicated onboarding pass.
-2. **Insight generation is off:** the `Insight` model + display survive; the generator was deleted. Rebuild it runway-framed (burn deltas / bill collisions) per runway-first P6/P7.
-3. **Chat polish:** streaming (currently dither-then-show), inline tool-result confirmation chips, and a persisted transcript are still open.
+### Post-C4 follow-ups
+1. **Onboarding de-noted** ✅ DONE. Removed `voicePracticeIntro`/`voicePractice`/`notesValue` steps + `OnboardingVoicePracticeView`; flow is whatsWorking → currencyIncome; `readyToStart` reworded to runway framing. Past-tool/habit questions kept (pain discovery, not feature refs).
+2. **Runway insight generation** ✅ DONE. `RunwayInsightEngine` — rule-based (no LLM), 4 rules (bill collision / burn spike / low runway / tier milestone). Runs on home-appear, 6h throttle, dedup via new `Insight.ruleKey`. Fires into the existing timeline + InsightsView.
+3. **Chat polish — partial.** ✅ Inline tool-result confirmation chips (create/mutate tools render a `✓` pill before Norma's reply; `send` now returns `Response(text, outcomes)`). ⏸️ **Not done (deferred by choice):** streaming (conflicts with the dither moment; needs SSE edge work) and persisted transcript (currently ephemeral per open).
+
+### Still open / future
+- Insight engine has **no unit tests** yet (rule math is deterministic + testable via an in-memory container — worth adding).
+- Migration watch: dropping the `Note` model + `NoteToken.note` relationship relies on SwiftData lightweight migration on existing installs.
+- Chat: streaming + persisted transcript (see #3), a monthly usage meter when volume grows.
 
 ## 5. Cost
 - Haiku + proxy + prompt caching already minimize per-message cost. Fine for now.
