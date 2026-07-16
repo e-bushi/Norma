@@ -11,6 +11,7 @@ import SwiftData
 struct ArcCountView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var billViewModel: BillViewModel
     @Query(sort: \FreedomFundEntry.createdAt, order: .reverse)
     private var allEntries: [FreedomFundEntry]
     @Query(
@@ -251,8 +252,27 @@ struct ArcCountView: View {
                 .presentationDragIndicator(.hidden)
         }
         .onAppear {
-            if !isFirstTime { runEntranceAnimation() }
+            if !isFirstTime {
+                runEntranceAnimation()
+                generateInsights()
+            }
         }
+    }
+
+    /// Kicks the rule-based insight engine on home-appear (self-throttled to
+    /// once every 6h). Reads bills from the view model and the ledger from the
+    /// local store; new insights land in the Recent Activity timeline.
+    private func generateInsights() {
+        let userId = sessionViewModel.currentUser?.userId
+        let entries = allEntries.filter { userId == nil || $0.userId == userId }
+        RunwayInsightEngine.shared.analyzeIfNeeded(
+            modelContext: modelContext,
+            bills: billViewModel.bills,
+            entries: entries,
+            freedomFund: freedomFund,
+            monthlyBills: totalMonthlyBills,
+            currency: currency
+        )
     }
 
     // MARK: - First-time content (never engaged with the fund)
