@@ -42,16 +42,15 @@ struct NormaChatView: View {
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
     @State private var appeared: Bool = false
+    @State private var hapticTask: Task<Void, Never>?
     @FocusState private var inputFocused: Bool
 
     private let chatService = MiniChatService()
 
     var body: some View {
         ZStack {
-            // Transparent glass layer over the home, tinted a touch darker.
-            Rectangle()
-                .fill(NormaPalette.canvas.opacity(0.35))
-                .glassEffect(in: Rectangle())
+            // Solid dark backing — no glass.
+            NormaPalette.canvas
                 .ignoresSafeArea()
 
             // Loading state: the salvaged notes dither.
@@ -76,6 +75,29 @@ struct NormaChatView: View {
             withAnimation(.easeOut(duration: 0.55)) { appeared = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { inputFocused = true }
         }
+        .onDisappear { stopThinkingHaptics() }
+        // Gentle recurring pulse while the dither is thinking.
+        .onChange(of: isLoading) { _, loading in
+            if loading { startThinkingHaptics() } else { stopThinkingHaptics() }
+        }
+    }
+
+    // MARK: - Thinking haptics
+
+    private func startThinkingHaptics() {
+        hapticTask?.cancel()
+        hapticTask = Task { @MainActor in
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            while !Task.isCancelled {
+                generator.impactOccurred(intensity: 0.5)
+                try? await Task.sleep(nanoseconds: 480_000_000)
+            }
+        }
+    }
+
+    private func stopThinkingHaptics() {
+        hapticTask?.cancel()
+        hapticTask = nil
     }
 
     // MARK: - Transcript
@@ -158,13 +180,13 @@ struct NormaChatView: View {
             // Norma speaks as large white wave text — no bubble, no border.
             WaveTextView(
                 text: message.text,
-                font: .system(size: 24, weight: .semibold),
+                font: .system(size: 32, weight: .semibold),
                 color: .white,
                 isAnimating: true,
                 alignment: .leading,
                 tracking: -0.5,
-                wordSpacing: 7,
-                lineSpacing: 4,
+                wordSpacing: 9,
+                lineSpacing: 6,
                 onWordAppear: { _ in
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.35)
                 }
