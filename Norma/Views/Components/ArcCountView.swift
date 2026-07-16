@@ -93,7 +93,7 @@ struct ArcCountView: View {
     private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
-    private var heroFont: Font { .system(size: 64, weight: .bold) }
+    private var heroFont: Font { .system(size: 70, weight: .bold) }
 
     private struct ActivityItem: Identifiable {
         let id: UUID
