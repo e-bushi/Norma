@@ -40,8 +40,6 @@ struct ArcCountView: View {
     /// Slow breathing glow behind the status capsule so it invites a tap.
     @State private var statusPulse = false
     @State private var showInsights = false
-    /// The shareable runway card (widget-gallery style picker sheet).
-    @State private var showShareCard = false
     /// The insight whose write-up is shown as a centered floating card.
     /// A single card overlaid on the whole view — not a per-row popover —
     /// so its size and position don't depend on where the row sits.
@@ -354,11 +352,6 @@ struct ArcCountView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showShareCard) {
-            RunwayShareSheet(data: shareCardData)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showInsights) {
             InsightsView()
                 .presentationDetents([.large])
@@ -374,10 +367,6 @@ struct ArcCountView: View {
             if !isFirstTime && runwayState == .runway {
                 ToolbarItem(placement: .topBarTrailing) {
                     freshnessNavItem
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .topBarTrailing) {
-                    shareNavItem
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -737,41 +726,6 @@ struct ArcCountView: View {
     /// full-width pill read unevenly on the home; the nav bar is its home now.
     /// Shows a streak count when there's one, else a live/stale word; tapping
     /// opens the balance editor (loss-aversion shortcut to keep runway true).
-    /// Nav-bar entry to the shareable runway card, sitting next to freshness.
-    private var shareNavItem: some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            showShareCard = true
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(accentPurple)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(glassFill))
-                .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    /// Snapshot for the share card: runway as time + flight tier from
-    /// runway × bill-load. Dollars are deliberately omitted (flex, not ledger).
-    private var shareCardData: RunwayCardData {
-        let cr = compactRunway
-        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        let days = runwayDays ?? 0
-        let tier = RunwayTier.compute(runwayDays: days, bills: totalMonthlyBills, income: income)
-        let load = income > 0 ? Int((totalMonthlyBills / income * 100).rounded()) : nil
-        return RunwayCardData(
-            runwayValue: cr.value,
-            runwayUnit: cr.unit,
-            days: days,
-            tier: tier,
-            loadPercent: load
-        )
-    }
-
     private var freshnessNavItem: some View {
         Button { beginBalanceEdit(fromNav: true) } label: {
             HStack(spacing: 5) {
