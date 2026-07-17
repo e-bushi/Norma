@@ -69,7 +69,9 @@ struct HomeView: View {
                 )
                 .environmentObject(sessionViewModel)
 
-                if !keyboardVisible {
+                // The bottom nav only makes sense once there's a balance to
+                // reason about — hide it on the first-time empty state.
+                if !keyboardVisible && freedomFund > 0 {
                     bottomBar
                 }
             }

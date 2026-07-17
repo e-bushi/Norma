@@ -1343,7 +1343,8 @@ struct FreedomFundFirstTimeView: View {
                         methodCard(
                             icon: "building.columns.fill",
                             title: "connect an account",
-                            detail: "link a bank and your balance syncs on its own — no manual updates."
+                            detail: "link a bank and your balance syncs on its own — no manual updates.",
+                            comingSoon: true
                         )
                     }
                     .padding(.top, 28)
@@ -1386,7 +1387,7 @@ struct FreedomFundFirstTimeView: View {
     }
 
     @ViewBuilder
-    private func methodCard(icon: String, title: String, detail: String) -> some View {
+    private func methodCard(icon: String, title: String, detail: String, comingSoon: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 18))
@@ -1394,9 +1395,22 @@ struct FreedomFundFirstTimeView: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                    .foregroundColor(cream)
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(cream)
+                    if comingSoon {
+                        Text("coming soon")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 9))
+                            .tracking(0.6)
+                            .textCase(.uppercase)
+                            .foregroundColor(accentPurple)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(accentPurple.opacity(0.14)))
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.4), lineWidth: 1))
+                    }
+                }
                 Text(detail)
                     .font(.custom(FontFamily.Rubik.regular, size: 13))
                     .foregroundColor(mutedText)
@@ -1413,6 +1427,7 @@ struct FreedomFundFirstTimeView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(glassBorder, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         )
+        .opacity(comingSoon ? 0.5 : 1)
     }
 }
 
