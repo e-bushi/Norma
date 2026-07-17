@@ -1,18 +1,21 @@
 # Norma Business Model
 
-> **⚠ Reconciled 2026-06-19 — partial.** Positioning, audience, and headline pricing are corrected
-> to canonical (Norma = a financial journal that gets money out of your head; NOT a budget/tracker;
-> audience = "budgeting-app dropouts"; live pricing = free to start + Norma Pro **$3.99/mo**).
+> **⚠ Reconciled 2026-07-17 to the RUNWAY ethos.** Positioning + audience are corrected: Norma
+> answers **"how long does your money last?"** — it is **not a budget, tracker, or journal.** The
+> earlier "financial journal / write it down / voice + receipt capture" framing is **retired** (those
+> features were cut in the July runway-first pivot). Audience is a **psychographic — "The
+> Escape-Minded"** (see the Avatar section), not a demographic. Live pricing = free to start + Norma
+> Pro **$3.99/mo**.
 > **Everything downstream of pricing — Cost Analysis, Revenue Projections, Unit Economics, metric
-> targets — was computed on the retired $7.99/$14.99 two-tier model and is NOT current. Recompute
-> against real $3.99 pricing before trusting any number; left in place (not rewritten) to avoid
-> inventing figures.** Audience truth: `Personal-Branding/Content/marketing/norma/psychographics.md`.
+> targets — was computed on the retired $7.99/$14.99 two-tier model and is NOT current, AND assumes
+> the retired journal feature set. Recompute against real $3.99 pricing + the runway product before
+> trusting any number; left in place (not rewritten) to avoid inventing figures.**
 
 ## Overview
-Norma is a **financial journal that gets money out of your head** — you write what's happening in
-plain English (voice + receipt capture) and it makes sense of what's due, what's coming, and what
-you keep meaning to buy. Not a budget, not a tracker. For people who tried the budgeting apps
-(Copilot, Mint, spreadsheets) and quit them all.
+Norma turns your money into **time.** You tell it your balance and your bills; it shows your
+**runway** — how many days of freedom you have — and keeps that number honest as you re-anchor.
+No budgets, no categories, no dashboards. One glance tells you whether you're alright, and watching
+the runway grow is the payoff. For people who want **out** — not people who want a better budget.
 
 ## Pricing Strategy
 
@@ -21,12 +24,14 @@ iPhone-only. The two-tier model below ($7.99 Base / $14.99 Pro) is **retired** �
 historical reference for the AI-cost mechanics.
 
 ### Free
-Get money out of your head: AI journaling (voice + receipt capture); what's due / what's coming /
-what you keep meaning to buy. `[NEEDS CHRIS: exact free-vs-Pro feature split — do not assume]`
+See your runway: enter your balance + bills → days of freedom, re-anchor anytime, forecast +
+calendar of what's coming. `[NEEDS CHRIS: exact free-vs-Pro feature split — do not assume]`
 
 ### Norma Pro — $3.99/month
-Everything in free, plus the deeper "make sense of it" layer. `[NEEDS CHRIS: confirm Pro feature
-list. The old "advanced budgeting optimization" framing is retired — Norma is not a budget.]`
+Everything in free, plus the deeper layer. `[NEEDS CHRIS: confirm Pro feature list against the runway
+product. Candidates now that notes/expense-tracking are gone: the shareable runway card + status
+tiers, runway insights (collisions / burn spikes), the what-if copilot depth, and bank-connect once
+Plaid returns. The old "advanced budgeting optimization" framing is retired — Norma is not a budget.]`
 
 > **AI model strategy (technical — likely also stale):** the original plan used a Sonnet→Haiku
 > cascade for logging + Opus for deep analysis (cost lines below). Model versions and that math
@@ -78,19 +83,24 @@ cash-flow predictions · advanced budgeting optimization · priority support.
 
 ## Market Positioning
 
-Norma doesn't compete on budgeting features — it's for people who **quit** those tools. The
-"competitors" are the things the audience already abandoned (the status quo to escape), not
-feature-comparison rivals.
+Norma doesn't compete on budgeting features — it reframes the question. Everyone else answers "where
+did my money go / am I on budget?" Norma answers **"how long does my money last, and am I getting
+freer?"** The "competitors" are the systems the audience already abandoned, plus the anxiety of not
+knowing how much freedom they've bought.
 
 ### What they tried and quit
 - **Copilot / Mint / spreadsheets / their own private system** — all demanded they become a
-  disciplined budgeter and maintain a system. None stuck.
-- **YNAB** — powerful, but it's a budgeting methodology: overkill and the wrong shape for someone
-  who'd rather write a thought down than build a budget.
+  disciplined budgeter and maintain a system. None stuck, and none told them the one thing they
+  actually wanted: *how long can I keep doing this?*
+- **YNAB** — a budgeting methodology: overkill and the wrong shape for someone whose goal is escape,
+  not category discipline.
+- **The banking app** — shows a balance, not a runway. A number that means nothing until you do the
+  math in your head.
 
 ### Value proposition
-"Now there's a place to write it down." Norma wins by being the **anti-budget** — relief from
-holding money in your head, not another system to maintain.
+**"Know how many days your money lasts — without a budget."** Norma converts a private balance into
+**runway (time),** keeps it honest with a one-tap re-anchor, and makes a growing runway feel like
+progress toward freedom. The flex is time, not dollars — which is also what makes it shareable.
 
 ## Growth Strategy
 
@@ -234,33 +244,50 @@ holding money in your head, not another system to maintain.
 
 ## Target Customer Avatar
 
-Full profile: `Personal-Branding/Content/marketing/norma/psychographics.md`. Summary:
+Full profile: [[project_ethos_escape_minded]] (canonical). Summary:
 
-**"The budgeting-app dropout."** Defined by behavior, not income or occupation.
-- **Primary pain:** money lives in their head — what's due, what's coming, what they keep meaning to
-  buy — and they can't make sense of it. The problem was never their spending.
-- **Behavior:** tried Copilot / Mint / a spreadsheet / their own system and **quit them all.** Would
-  rather write a thought down than build a budget. Often lives between places.
-- **Core values:** relief over optimization; understanding over being managed; tools that fit how
-  their mind works.
-- **Key fear:** being blindsided because nothing ever stuck — and the nagging "am I just bad with money?"
+**"The Escape-Minded."** Defined by a mindset, not income or occupation: they **measure wealth in
+freedom, not totals,** and want *out* (or to stay out) — the pursuit of "fuck you money." The line is
+**wants freedom vs. content on the treadmill,** not "self-funded vs. salaried."
+- **Primary pain:** they can't see how much freedom they actually have. A balance is just a number;
+  they want to know *how long it buys them* — and whether they're getting closer to escape.
+- **Two postures, one mind:** *Building* (has income, wants out — watches runway grow toward escape
+  velocity) and *Living* (off a finite pool — stays free longer). Escape isn't one-time: builders
+  plan it, the already-free defend it.
+- **Behavior:** quit the budgeting apps (a countdown never needed categories); often cash-heavy /
+  multi-currency, so bank-sync is blind to them; want a glance, not a dashboard.
+- **Core values:** freedom over optimization; reassurance over analysis; tools they never have to
+  maintain.
+- **Key emotional driver:** the *satisfaction of runway growing* is the hook; the *fear of running
+  dry unseen* is the retention.
 
-(The earlier "Overwhelmed Professional" and "Financial Optimizer" avatars were pre-pivot and are
-**retired** — they defined the user by income bracket and a bill-management / optimization
-job-to-be-done that no longer matches the product.)
+**Beachhead → beyond nomads:** nomads are the sharpest instance, not the definition — also
+freelancers between contracts, sabbatical-takers, coast/lean-FIRE, bootstrapped founders on savings,
+lumpy-income creatives, and salaried people plotting an exit.
+
+(The earlier "budgeting-app dropout," "Overwhelmed Professional," and "Financial Optimizer" avatars
+are **retired** — the first was the journal-era audience; the last two defined the user by income
+bracket and an optimization job-to-be-done that never matched the product.)
 
 ### NOT our customer
-- People who **want** a budget/system and happily run YNAB, Mint, or a spreadsheet — Norma is for the
-  ones who *quit* those.
+- People who **want** a budget/system and happily run YNAB, Mint, or a spreadsheet.
 - Optimizers who enjoy the dashboard and want investment / tax / accounting depth.
-- Anyone who wants money **managed for them** — Norma reflects and converses, it doesn't decide.
+- Anyone content on the treadmill whose account refills, untouched, every payday — runway means
+  little to them.
 
-### Messaging (on-positioning — from the live page)
+### Messaging (runway ethos — the live page still runs the retired journal copy; rewrite pending)
+On-positioning:
+- "know how many days your money lasts."
+- "your money, measured in freedom — not a budget."
+- "how much runway do you have?"
+- "watch your freedom grow."
+- "one number. no budget. no dashboard."
+
+Retire (journal-era, currently live — replace on the landing page):
 - "now there's a place to write it down"
 - "you tried the budgeting apps. they didn't stick. but the bills still live in your head."
-- "if you'd rather write a thought down than build a budget, this is for you."
-- "the problem was never your spending — it was trying to hold it all in your head."
-- Avoid the retired lines: "never miss another bill payment," "your AI bill assistant," "peace of mind for $8/month."
+- "a financial journal for what's due, what's coming, and what you keep meaning to buy."
+- and the older "never miss another bill payment," "your AI bill assistant," "peace of mind for $8/month."
 
 ## Next Steps
 
