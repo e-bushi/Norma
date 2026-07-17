@@ -21,6 +21,7 @@ struct CalendarSheet: View {
     @State private var selectedTab: Tab = .thisMonth
     @State private var selectedDay: Int = Calendar.current.component(.day, from: Date())
     @State private var allReminders: [Reminder] = []
+    @State private var showIncomeEditor = false
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var billViewModel: BillViewModel
@@ -66,6 +67,10 @@ struct CalendarSheet: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 22)
 
+                    incomeRow
+                        .padding(.horizontal, 24)
+                        .padding(.top, 18)
+
                     projectedBalanceCard
                         .padding(.horizontal, 24)
                         .padding(.top, 12)
@@ -87,6 +92,63 @@ struct CalendarSheet: View {
         .background(bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .task { await loadReminders() }
+        .sheet(isPresented: $showIncomeEditor) {
+            IncomeEditSheet()
+                .environmentObject(sessionViewModel)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Income row (entry to the cadence editor)
+
+    private var incomeRow: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showIncomeEditor = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accentPurple)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("income")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(mutedText)
+                    Text(incomeSummary)
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(cream)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(dimText)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+            )
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var incomeSummary: String {
+        guard let profile = profiles.first,
+              let amount = profile.incomeAmount, amount > 0,
+              let cadence = profile.incomeCadence else {
+            return "add your income"
+        }
+        return "\(formatCurrency(amount)) · \(cadence.label)"
     }
 
     // MARK: - Drag handle
