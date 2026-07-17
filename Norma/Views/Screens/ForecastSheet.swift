@@ -24,6 +24,7 @@ struct ForecastSheet: View {
     @State private var selectedTab: Tab = .thisMonth
     @State private var showInfoPopover = false
     @State private var showSafeInfo = false
+    @State private var showWhatIfInfo = false
 
     // What-if a purchase — a tap-to-test amount that shows its impact on the
     // after-bills number and runway, live as you type.
@@ -348,51 +349,83 @@ struct ForecastSheet: View {
 
     private var safeToSpendInfoPopover: some View {
         let period = selectedTab == .thisMonth ? "this" : "next"
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
                 Image(systemName: "wallet.bill.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: 19))
                     .foregroundColor(accentPurple)
                 Text("safe to spend")
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 19))
                     .foregroundColor(.primary)
             }
             Text("what you can spend each week and still cover \(period) month's bills — your income minus \(period) month's bills and commitments, split across the ~4.3 weeks in a month.")
-                .font(.normaInput(13))
+                .font(.normaInput(16))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if netAfterBills <= 0 {
                 Text("right now your bills top your income, so there's nothing extra to spend.")
-                    .font(.normaInput(13))
+                    .font(.normaInput(16))
                     .foregroundColor(NormaPalette.lavender)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(18)
-        .frame(width: 270)
+        .padding(20)
+        .frame(width: 300)
+    }
+
+    private var whatIfInfoPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 19))
+                    .foregroundColor(accentPurple)
+                Text("test a purchase")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 19))
+                    .foregroundColor(.primary)
+            }
+            Text("type in an amount to feel the trade before you make it. norma shows your money after bills and your runway — both before and after the spend — so a purchase stops being a guess.")
+                .font(.normaInput(16))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 300)
     }
 
     // MARK: - What-if a purchase
 
     private var whatIfCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { whatIfExpanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkle.magnifyingglass")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(accentPurple)
-                    Text("test a purchase")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 14))
-                        .foregroundStyle(cream)
-                    Spacer()
-                    Image(systemName: whatIfExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+            HStack(spacing: 8) {
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accentPurple)
+                Text("test a purchase")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                    .foregroundStyle(cream)
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showWhatIfInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(mutedText)
                 }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showWhatIfInfo, arrowEdge: .top) {
+                    whatIfInfoPopover
+                        .presentationCompactAdaptation(.popover)
+                }
+                Spacer()
+                Image(systemName: whatIfExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(mutedText)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) { whatIfExpanded.toggle() }
+            }
 
             if whatIfExpanded {
                 HStack(spacing: 6) {
@@ -1479,12 +1512,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(Color("NormaPastelTeal"))
 
                     Text("your month")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 20))
                         .foregroundColor(.primary)
                 }
 
                 Text("the hero shows what's left after everything due this month — income minus bills and commitments. switch between this month and next month to plan ahead.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1496,12 +1529,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("intentions")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
                 Text("an intention is something you're thinking about spending on — tell norma \"thinking about a $200 trip\" and it lands here. they don't count against your month unless you upgrade them.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1513,12 +1546,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("commitments")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
                 Text("when you're ready to act on an intention, long-press it and upgrade it to a commitment. commitments act like one-time bills — they get a due date and show up in the bills sections.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1530,12 +1563,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("what-if toggle")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
                 Text("flip \"if i committed everything\" to see your month with all intentions counted. handy for sanity-checking before you upgrade anything.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

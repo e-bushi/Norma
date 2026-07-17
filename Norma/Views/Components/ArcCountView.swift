@@ -687,7 +687,7 @@ struct ArcCountView: View {
         ]
         VStack(alignment: .leading, spacing: 16) {
             Text("what your status means")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                .font(.custom(FontFamily.Rubik.semiBold, size: 20))
                 .foregroundColor(cream)
             ForEach(tiers, id: \.name) { tier in
                 let isCurrent = tier.name == current
@@ -695,13 +695,13 @@ struct ArcCountView: View {
                     Circle()
                         .fill(isCurrent ? accentPurple : cream.opacity(0.25))
                         .frame(width: 8, height: 8)
-                        .padding(.top, 6)
+                        .padding(.top, 7)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tier.name.lowercased())
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 17))
                             .foregroundColor(isCurrent ? accentPurple : cream)
                         Text(tier.desc)
-                            .font(.custom(FontFamily.Rubik.regular, size: 14))
+                            .font(.custom(FontFamily.Rubik.regular, size: 16))
                             .foregroundColor(mutedText)
                     }
                 }
