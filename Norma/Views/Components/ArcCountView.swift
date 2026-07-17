@@ -61,6 +61,14 @@ struct ArcCountView: View {
         let streak: Int
         let weekCount: Int
         let milestone: String?
+        /// Runway got longer this anchor — flips the moment from a burn reveal
+        /// (confession) to a gain celebration (leveling up).
+        let grew: Bool
+        /// Days of runway gained (after − before), when both are known.
+        let daysDelta: Int?
+        /// One-time "a year of freedom" style beat when runway crosses an
+        /// upward threshold. Distinct from the streak `milestone`.
+        let freedomMilestone: String?
     }
     @State private var reanchorReward: ReanchorReward?
     @State private var showReanchorMoment = false
@@ -771,14 +779,41 @@ struct ArcCountView: View {
                     .allowsHitTesting(false)
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(r.milestone ?? "runway updated")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: r.milestone != nil ? 20 : 22))
-                        .foregroundColor(r.milestone != nil ? accentPurple : cream)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Headline — a gain celebrates, a spend informs.
+                    if r.grew {
+                        Text(r.freedomMilestone ?? gainHeadline(r))
+                            .font(.custom(FontFamily.Rubik.bold, size: 24))
+                            .foregroundColor(liveGreen)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(r.milestone ?? "runway updated")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: r.milestone != nil ? 20 : 22))
+                            .foregroundColor(r.milestone != nil ? accentPurple : cream)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                    // Burn lesson — the payoff for the input.
+                    // Detail — what the anchor bought (gain) or taught (burn).
                     VStack(alignment: .leading, spacing: 3) {
-                        if r.spend > 0 {
+                        if r.grew {
+                            if r.added > 0 {
+                                Text("you added \(formatCurrency(r.added)).")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                                if let d = r.daysDelta, d > 0 {
+                                    Text("that's \(d) more \(d == 1 ? "day" : "days") of freedom.")
+                                        .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                        .foregroundColor(liveGreen)
+                                }
+                            } else if let d = r.daysDelta, d > 0 {
+                                Text("your bills eased — \(d) more \(d == 1 ? "day" : "days") of freedom.")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                            } else {
+                                Text("runway extended.")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                            }
+                        } else if r.spend > 0 {
                             let span = r.days.map { $0 == 1 ? " over 1 day" : ($0 == 0 ? "" : " over \($0) days") } ?? ""
                             Text("you spent \(formatCurrency(r.spend))\(span)")
                                 .font(.custom(FontFamily.Rubik.semiBold, size: 16))
@@ -788,10 +823,6 @@ struct ArcCountView: View {
                                     .font(.custom(FontFamily.Rubik.medium, size: 14))
                                     .foregroundColor(mutedText)
                             }
-                        } else if r.added > 0 {
-                            Text("you added \(formatCurrency(r.added)) — runway extended.")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                                .foregroundColor(cream)
                         } else {
                             Text("balance confirmed. runway stays true.")
                                 .font(.custom(FontFamily.Rubik.medium, size: 15))
@@ -809,12 +840,12 @@ struct ArcCountView: View {
                             Text("\(cb.value) \(cb.unit)")
                                 .font(.custom(FontFamily.Rubik.medium, size: 14))
                                 .foregroundColor(dimText)
-                            Image(systemName: "arrow.right")
+                            Image(systemName: r.grew ? "arrow.up.right" : "arrow.right")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(mutedText)
+                                .foregroundColor(r.grew ? liveGreen : mutedText)
                             Text("\(ca.value) \(ca.unit)")
                                 .font(.custom(FontFamily.Rubik.bold, size: 15))
-                                .foregroundColor(cream)
+                                .foregroundColor(r.grew ? liveGreen : cream)
                         }
                     }
 
@@ -861,6 +892,12 @@ struct ArcCountView: View {
 
     private func dismissReanchorMoment() {
         withAnimation(.easeOut(duration: 0.3)) { showReanchorMoment = false }
+    }
+
+    /// Headline for a runway gain when no freedom milestone fired.
+    private func gainHeadline(_ r: ReanchorReward) -> String {
+        if let d = r.daysDelta, d > 0 { return "+\(d) \(d == 1 ? "day" : "days") of freedom" }
+        return "runway extended"
     }
 
     private func beginBalanceEdit(fromNav: Bool = false) {
@@ -950,11 +987,36 @@ struct ArcCountView: View {
             UserDefaults.standard.set(0, forKey: "reanchor.lastCelebratedStreak")
         }
 
+        // Growth: did this anchor buy more freedom? Prefer the runway-day delta;
+        // fall back to a straight "added money" when burn isn't known yet.
+        let daysDelta: Int? = (runwayBefore != nil && runwayAfter != nil) ? (runwayAfter! - runwayBefore!) : nil
+        let grew = (daysDelta ?? 0) > 0 || (added > 0 && runwayBefore == nil)
+
+        // Freedom milestone: fire once when runway crosses an upward threshold.
+        var freedomMilestone: String?
+        if grew, let after = runwayAfter {
+            let thresholds: [(Int, String)] = [
+                (30, "a month of freedom."),
+                (90, "three months of freedom."),
+                (180, "half a year of freedom."),
+                (365, "a year of freedom. escape velocity."),
+                (730, "two years of freedom.")
+            ]
+            let lastCrossed = UserDefaults.standard.integer(forKey: "reanchor.lastFreedomMilestoneDays")
+            if let hit = thresholds.last(where: { after >= $0.0 }), hit.0 > lastCrossed {
+                freedomMilestone = hit.1
+                UserDefaults.standard.set(hit.0, forKey: "reanchor.lastFreedomMilestoneDays")
+            }
+        }
+
         reanchorReward = ReanchorReward(
             spend: spend, added: added, days: days, perDay: perDay,
             runwayBefore: runwayBefore, runwayAfter: runwayAfter,
-            streak: newStreak, weekCount: newWeek, milestone: milestone
+            streak: newStreak, weekCount: newWeek, milestone: milestone,
+            grew: grew, daysDelta: daysDelta, freedomMilestone: freedomMilestone
         )
+        // A gain deserves a brighter tap than a spend.
+        if grew { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         withAnimation(.easeOut(duration: 0.4)) { showReanchorMoment = true }
         // Gentle auto-dismiss if the user just walks away.
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
