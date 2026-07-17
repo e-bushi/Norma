@@ -152,7 +152,7 @@ struct SettingsView: View {
             Text("Are you sure you want to sign out?")
         }
         #if DEBUG
-        .alert("Freedom fund reset", isPresented: $showFundResetConfirmation) {
+        .alert("Balance reset", isPresented: $showFundResetConfirmation) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Balance, linked account, and local ledger cleared. Reopen the runway view to see the first-time state.")
@@ -750,7 +750,7 @@ struct SettingsView: View {
     // Stripped from release builds by the surrounding #if DEBUG.
     private var debugSection: some View {
         section(title: "debug", titleColor: mutedText, dividerColor: mutedText.opacity(0.25)) {
-            destructiveRow(icon: "arrow.counterclockwise", title: "reset freedom fund") {
+            destructiveRow(icon: "arrow.counterclockwise", title: "reset balance") {
                 resetFreedomFund()
             }
         }

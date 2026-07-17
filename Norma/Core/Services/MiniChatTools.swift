@@ -438,7 +438,7 @@ final class MiniChatToolExecutor {
         } else {
             runway = "no bills to calculate runway"
         }
-        return "freedom fund: \(String(format: "%.2f", balance)). \(runway)."
+        return "balance: \(String(format: "%.2f", balance)). \(runway)."
     }
 
     private static func executeGetProfile(modelContext: ModelContext, sessionViewModel: SessionViewModel) -> String {

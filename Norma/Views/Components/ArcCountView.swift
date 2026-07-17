@@ -258,7 +258,7 @@ struct ArcCountView: View {
     private static func activityLabel(for entry: FreedomFundEntry) -> String {
         switch entry.source {
         case .manualEdit:
-            return entry.delta >= 0 ? "added to fund" : "withdrew from fund"
+            return entry.delta >= 0 ? "added to balance" : "withdrew from balance"
         case .linkedAccountSync:
             return "balance synced"
         }
@@ -1226,7 +1226,7 @@ struct FreedomFundFirstTimeView: View {
 
     /// What it is / why it matters, delivered one line at a time.
     private let introPhases = [
-        "this is your freedom fund.",
+        "this is your balance.",
         "money you set aside to cover your bills.",
         "norma reads it as runway — how many months you're covered."
     ]
@@ -1360,7 +1360,7 @@ struct FreedomFundFirstTimeView: View {
             Button {
                 onSetUp()
             } label: {
-                Text("set up my fund")
+                Text("set my balance")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                     .foregroundColor(cream)
                     .frame(maxWidth: .infinity)
@@ -1532,7 +1532,7 @@ struct FreedomFundEditSheet: View {
                         }
                     }
 
-                    Text(useLinkedAccount ? "from linked account" : "how much is in your freedom fund?")
+                    Text(useLinkedAccount ? "from linked account" : "how much is your balance?")
                         .font(.custom(FontFamily.Rubik.medium, size: 13))
                         .foregroundColor(mutedText)
                 }
@@ -1963,7 +1963,7 @@ struct ArcInfoPopover: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("runway is how many months your freedom fund can cover your bills.")
+                Text("runway is how many months your balance can cover your bills.")
                     .font(.normaInput(14))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1986,7 +1986,7 @@ struct ArcInfoPopover: View {
                     .foregroundColor(.primary)
             }
 
-            Text("link a bank account and your balance becomes your freedom fund automatically — no manual updates.")
+            Text("link a bank account and your balance syncs automatically — no manual updates.")
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2006,13 +2006,13 @@ struct FreedomFundInfoPopover: View {
                     .font(.system(size: 24))
                     .foregroundColor(Color("NormaPastelTeal"))
 
-                Text("Freedom Fund")
+                Text("Balance")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                     .foregroundColor(.primary)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Your Freedom Fund is the total amount you have saved to cover bills.")
+                Text("Your balance is the total amount you have to cover bills.")
                     .font(.normaInput(14))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2035,7 +2035,7 @@ struct FreedomFundInfoPopover: View {
                     .foregroundColor(.primary)
             }
 
-            Text("Connect a bank account to automatically sync your balance as your Freedom Fund. No more manual updates.")
+            Text("Connect a bank account to automatically sync your balance. No more manual updates.")
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
