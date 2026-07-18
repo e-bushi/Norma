@@ -35,7 +35,9 @@ struct ArcCountView: View {
     @State private var showBalancePopover = false
     /// Separate binding so the nav-bar freshness item's balance popover anchors
     /// under the nav item, not the balance capsule below it.
-    @State private var showBalanceNavPopover = false
+    /// The nav-bar freshness item shows a "last updated" info popover (not a
+    /// balance editor — re-anchoring lives on the balance capsule).
+    @State private var showFreshnessPopover = false
     @State private var showStatusPopover = false
     /// Slow breathing glow behind the status capsule so it invites a tap.
     @State private var statusPulse = false
@@ -665,7 +667,6 @@ struct ArcCountView: View {
             Button {
                 commitBalance()
                 showBalancePopover = false
-                showBalanceNavPopover = false
             } label: {
                 Text("save")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 16))
@@ -726,21 +727,41 @@ struct ArcCountView: View {
     /// full-width pill read unevenly on the home; the nav bar is its home now.
     /// Shows a streak count when there's one, else a live/stale word; tapping
     /// opens the balance editor (loss-aversion shortcut to keep runway true).
+    /// Timestamp of the most recent re-anchor, if any.
+    private var lastAnchorDate: Date? { manualEntries.first?.createdAt }
+
+    /// Compact "updated 2h ago" style freshness for the nav label.
+    private var freshnessLabel: String {
+        guard let date = lastAnchorDate else { return "not updated" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        let secs = Date().timeIntervalSince(date)
+        if secs < 60 { return "updated just now" }
+        return "updated \(f.localizedString(for: date, relativeTo: Date()))"
+    }
+
+    /// Full "last updated" line for the info popover.
+    private var lastUpdatedLine: String {
+        guard let date = lastAnchorDate else { return "you haven't set your balance yet." }
+        let f = DateFormatter()
+        f.dateFormat = Calendar.current.isDateInToday(date) ? "'today at' h:mm a"
+            : (Calendar.current.isDateInYesterday(date) ? "'yesterday at' h:mm a" : "MMM d 'at' h:mm a")
+        return f.string(from: date).lowercased()
+    }
+
     private var freshnessNavItem: some View {
-        Button { beginBalanceEdit(fromNav: true) } label: {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showFreshnessPopover = true
+        } label: {
             HStack(spacing: 5) {
                 Circle()
                     .fill(isRunwayLive ? liveGreen : warning)
                     .frame(width: 6, height: 6)
-                if anchorStreak >= 2 {
-                    Text("\(anchorStreak)")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 13))
-                        .foregroundColor(accentPurple)
-                } else {
-                    Text(isRunwayLive ? "live" : "stale")
-                        .font(.custom(FontFamily.Rubik.medium, size: 12))
-                        .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
-                }
+                Text(freshnessLabel)
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -748,10 +769,52 @@ struct ArcCountView: View {
             .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
-        .popover(isPresented: $showBalanceNavPopover, arrowEdge: .top) {
-            balanceEditPopover
+        .popover(isPresented: $showFreshnessPopover, arrowEdge: .top) {
+            freshnessInfoPopover
                 .presentationCompactAdaptation(.popover)
         }
+    }
+
+    /// Read-only status: when the runway was last re-anchored and whether it's
+    /// still live. Not an editor — re-anchoring is the balance capsule's job.
+    private var freshnessInfoPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(isRunwayLive ? liveGreen : warning)
+                    .frame(width: 8, height: 8)
+                Text(isRunwayLive ? "runway is live" : "runway is stale")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .foregroundColor(cream)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("last updated")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .foregroundColor(mutedText)
+                Text(lastUpdatedLine)
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(cream)
+            }
+
+            if anchorStreak >= 2 {
+                Text("\(anchorStreak)-day check-in streak")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundColor(accentPurple)
+            }
+
+            Text(isRunwayLive
+                 ? "your runway reflects today's balance."
+                 : "update your balance to keep the runway true.")
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundColor(mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(width: 250)
+        .background(bg)
     }
 
     private func weeklyDots(_ count: Int) -> some View {
@@ -900,7 +963,7 @@ struct ArcCountView: View {
         return "runway extended"
     }
 
-    private func beginBalanceEdit(fromNav: Bool = false) {
+    private func beginBalanceEdit() {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
         if freedomFund > 0 {
@@ -909,7 +972,7 @@ struct ArcCountView: View {
         } else {
             balanceText = ""
         }
-        if fromNav { showBalanceNavPopover = true } else { showBalancePopover = true }
+        showBalancePopover = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             balanceFocused = true
         }
