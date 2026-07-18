@@ -648,19 +648,19 @@ struct ArcCountView: View {
                 .font(.custom(FontFamily.Rubik.medium, size: 15))
                 .foregroundColor(mutedText)
 
-            HStack(alignment: .center, spacing: 5) {
+            HStack(alignment: .center, spacing: 6) {
                 Text(currencySymbol)
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: 46, weight: .bold))
                     .foregroundColor(cream.opacity(0.55))
                 AnimatedAmountField(
                     text: $balanceText,
                     focused: $balanceFocused,
-                    font: .system(size: 48, weight: .bold),
+                    font: .system(size: 68, weight: .bold),
                     textColor: cream,
                     placeholderColor: cream.opacity(0.3),
                     caretColor: accentPurple,
-                    caretHeight: 42,
-                    tracking: -1
+                    caretHeight: 60,
+                    tracking: -1.5
                 )
             }
 
