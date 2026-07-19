@@ -34,6 +34,7 @@ struct CalendarSheet: View {
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
     private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
     private let warning = Color(red: 0.93, green: 0.58, blue: 0.35)
+    private let payGreen = Color(red: 0.45, green: 0.80, blue: 0.55)
     private var accentPurple: Color { NormaPalette.lavender }
 
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
@@ -249,10 +250,11 @@ struct CalendarSheet: View {
 
             // Day cells, in rows of 7
             let grid = monthGridDays
+            let paydayDays = paydayDaysInDisplayedMonth
             ForEach(0..<(grid.count / 7), id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { col in
-                        dayCell(day: grid[row * 7 + col])
+                        dayCell(day: grid[row * 7 + col], paydayDays: paydayDays)
                     }
                 }
             }
@@ -260,8 +262,9 @@ struct CalendarSheet: View {
     }
 
     @ViewBuilder
-    private func dayCell(day: Int?) -> some View {
+    private func dayCell(day: Int?, paydayDays: Set<Int>) -> some View {
         let hasReminder = day.map { activeReminders[$0] != nil } ?? false
+        let isPayday = day.map { paydayDays.contains($0) } ?? false
         let isSelected = day == selectedDay && day != nil
         let isToday = day.map { isCellToday($0) } ?? false
         let isDanger = day.map { $0 == dangerDay } ?? false
@@ -302,10 +305,17 @@ struct CalendarSheet: View {
                 Color.clear.frame(width: 32, height: 32)
             }
 
-            // Reminder dot — always allocated (4×4) so rows align
-            Circle()
-                .fill(hasReminder ? accentPurple : Color.clear)
-                .frame(width: 4, height: 4)
+            // Marker row — reminder (accent) and/or payday (green). Always
+            // allocated 4pt tall so rows stay aligned.
+            HStack(spacing: 3) {
+                if hasReminder {
+                    Circle().fill(accentPurple).frame(width: 4, height: 4)
+                }
+                if isPayday {
+                    Circle().fill(payGreen).frame(width: 4, height: 4)
+                }
+            }
+            .frame(height: 4)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 48)
@@ -357,7 +367,7 @@ struct CalendarSheet: View {
                         .font(.custom(FontFamily.Rubik.medium, size: 11))
                         .foregroundStyle(warning.opacity(0.95))
                         .multilineTextAlignment(.trailing)
-                } else if payday == nil || monthlyIncome == 0 {
+                } else if !hasIncomeSchedule {
                     Text("before any\nnew income")
                         .font(.custom(FontFamily.Rubik.regular, size: 11))
                         .foregroundStyle(mutedText)
@@ -626,8 +636,44 @@ struct CalendarSheet: View {
 
     private var freedomFund: Double { sessionViewModel.currentUser?.settings.freedomFund ?? 0 }
     private var monthlyIncome: Double { sessionViewModel.currentUser?.settings.monthlyIncome ?? 0 }
-    private var payday: Int? { profiles.first?.payday }
+    private var profile: UserProfile? { profiles.first }
     private var currencyCode: String { sessionViewModel.currentUser?.settings.currency ?? "USD" }
+
+    /// Amount landing on each payday. Prefers the per-paycheck amount; falls
+    /// back to a legacy monthly figure stored only in settings.
+    private var incomePerPayday: Double {
+        if let amt = profile?.incomeAmount, amt > 0 { return amt }
+        if let c = profile?.incomeCadence, case .monthly = c, monthlyIncome > 0 { return monthlyIncome }
+        return 0
+    }
+
+    /// True when we can project paydays (a cadence + an amount). `irregular`
+    /// yields no predicted paydays, so it reads as false here.
+    private var hasIncomeSchedule: Bool {
+        guard incomePerPayday > 0, let cadence = profile?.incomeCadence else { return false }
+        if case .irregular = cadence { return false }
+        return true
+    }
+
+    /// Predicted paydays in `(after, through]` using the flexible cadence.
+    private func paydays(after start: Date, through end: Date, cal: Calendar) -> [Date] {
+        guard let profile, hasIncomeSchedule else { return [] }
+        let from = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: start)) ?? start
+        return profile.nextPaydays(from: from, through: end, calendar: cal)
+    }
+
+    /// Days-of-month in the displayed month that land on a payday — drives the
+    /// green marker dots in the grid.
+    private var paydayDaysInDisplayedMonth: Set<Int> {
+        guard let profile, hasIncomeSchedule,
+              let first = date(forDay: 1),
+              let last = date(forDay: daysInDisplayedMonth) else { return [] }
+        let cal = Calendar.current
+        let dates = profile.nextPaydays(from: cal.startOfDay(for: first),
+                                        through: cal.startOfDay(for: last),
+                                        calendar: cal)
+        return Set(dates.map { cal.component(.day, from: $0) })
+    }
 
     private var daysInDisplayedMonth: Int {
         Calendar.current.range(of: .day, in: .month, for: displayedMonthDate)?.count ?? 30
@@ -666,8 +712,8 @@ struct CalendarSheet: View {
             if d > today, d <= end { balance -= token.amount }
         }
 
-        if let payday, monthlyIncome > 0 {
-            balance += Double(paydayCount(after: today, through: end, payday: payday, cal: cal)) * monthlyIncome
+        if hasIncomeSchedule {
+            balance += Double(paydays(after: today, through: end, cal: cal).count) * incomePerPayday
         }
 
         return balance
@@ -678,7 +724,7 @@ struct CalendarSheet: View {
     /// the balance only ever falls and the "low" is just month-end), so we
     /// return nil without a payday + income to model the refill against.
     private var dangerDay: Int? {
-        guard let _ = payday, monthlyIncome > 0 else { return nil }
+        guard hasIncomeSchedule else { return nil }
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         var minDay: Int?
@@ -743,19 +789,6 @@ struct CalendarSheet: View {
         return due
     }
 
-    private func paydayCount(after start: Date, through end: Date, payday: Int, cal: Calendar) -> Int {
-        var count = 0
-        var d = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: start)) ?? start
-        let last = cal.startOfDay(for: end)
-        var guardCount = 0
-        while d <= last, guardCount < 800 {
-            if cal.component(.day, from: d) == payday { count += 1 }
-            guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
-            d = next
-            guardCount += 1
-        }
-        return count
-    }
 
     private func formatCurrency(_ amount: Double) -> String {
         let symbol = NormaPalette.currencySymbol(for: currencyCode)
