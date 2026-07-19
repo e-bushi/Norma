@@ -384,7 +384,8 @@ final class MiniChatToolExecutor {
         let userId = sessionViewModel.currentUser?.userId
         let entries = ((try? modelContext.fetch(FetchDescriptor<FreedomFundEntry>())) ?? [])
             .filter { userId == nil || $0.userId == userId }
-        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills)
+        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills, monthlyIncome: income)
         guard burn > 0 else { return "can't project runway yet — no burn rate and no bills to estimate from." }
         let nowDays = Int(floor(freedomFund / burn))
         let afterDays = Int(floor(max(0, freedomFund - cost) / burn))

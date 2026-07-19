@@ -135,23 +135,38 @@ struct ArcCalculationService {
 
     // MARK: - Burn-based runway (decision A: income ignored)
 
-    /// Observed daily burn from the freedom-fund ledger. Every downward delta is
-    /// treated as money spent (bills + life); summed over the span between the
-    /// first and last anchor, divided by elapsed days. Falls back to bills ÷ 30
-    /// until there are two anchors spanning at least a day — before then, there's
-    /// no observed history and runway behaves like the bill-coverage estimate.
+    /// Observed daily burn from the freedom-fund ledger, over the span between
+    /// the first and last anchor. Falls back to bills ÷ 30 until there are two
+    /// anchors spanning at least a day.
+    ///
+    /// **Income back-out (P4):** when income is known, the raw balance deltas
+    /// *understate* real outflow — a paycheck landing between anchors masks the
+    /// spend it offset. So we recover true total outflow as
+    /// `income received − net balance change` (income − (last − first)), which
+    /// equals bills + life actually spent. With no income this reduces to the
+    /// observed downward-delta sum, so income-less ("Living") users are
+    /// unchanged. Runway stays conservative — it measures outflow as if income
+    /// stopped; when you're net-positive (building), it floors at bill coverage.
     ///
     /// - Parameters:
     ///   - entries: The user's FreedomFundEntry ledger (any order).
     ///   - monthlyBills: Total monthly bills, the fallback burn source.
+    ///   - monthlyIncome: Derived monthly income; 0 keeps the legacy behavior.
     /// - Returns: Estimated burn per day (always ≥ 0).
-    static func dailyBurn(entries: [FreedomFundEntry], monthlyBills: Double) -> Double {
+    static func dailyBurn(entries: [FreedomFundEntry], monthlyBills: Double, monthlyIncome: Double = 0) -> Double {
         let sorted = entries.sorted { $0.createdAt < $1.createdAt }
         if let first = sorted.first, let last = sorted.last, sorted.count >= 2 {
             let days = last.createdAt.timeIntervalSince(first.createdAt) / 86_400
             if days >= 1 {
-                let burn = sorted.reduce(0.0) { $0 + ($1.delta < 0 ? -$1.delta : 0) }
-                if burn > 0 { return burn / days }
+                if monthlyIncome > 0 {
+                    let netChange = last.balanceAfter - first.balanceAfter
+                    let incomeInWindow = monthlyIncome * (days / 30.0)
+                    let outflow = incomeInWindow - netChange
+                    if outflow > 0 { return outflow / days }
+                } else {
+                    let burn = sorted.reduce(0.0) { $0 + ($1.delta < 0 ? -$1.delta : 0) }
+                    if burn > 0 { return burn / days }
+                }
             }
         }
         return monthlyBills / 30.0

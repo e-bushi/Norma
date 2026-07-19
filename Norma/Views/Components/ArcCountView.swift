@@ -92,11 +92,13 @@ struct ArcCountView: View {
         return .runway
     }
 
-    /// Observed daily burn from the ledger (falls back to bills ÷ 30).
+    /// Observed daily burn from the ledger (falls back to bills ÷ 30). Income
+    /// is backed out so a paycheck landing between anchors doesn't hide spend.
     private var dailyBurn: Double {
         let userId = sessionViewModel.currentUser?.userId
         let entries = allEntries.filter { $0.userId == userId }
-        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills)
+        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills, monthlyIncome: income)
     }
 
     /// Runway in days: balance ÷ burn. Nil when there's no balance or no burn
@@ -387,6 +389,7 @@ struct ArcCountView: View {
             entries: entries,
             freedomFund: freedomFund,
             monthlyBills: totalMonthlyBills,
+            monthlyIncome: sessionViewModel.currentUser?.settings.monthlyIncome ?? 0,
             currency: currency
         )
     }

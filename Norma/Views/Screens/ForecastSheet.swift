@@ -1369,7 +1369,8 @@ struct ForecastSheet: View {
     }
 
     private var dailyBurn: Double {
-        ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills)
+        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        return ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills, monthlyIncome: income)
     }
 
     private func runwayDays(for balance: Double) -> Int? {
