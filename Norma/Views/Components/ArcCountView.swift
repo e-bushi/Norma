@@ -20,6 +20,11 @@ struct ArcCountView: View {
         order: .reverse
     )
     private var insights: [Insight]
+    @Query private var profiles: [UserProfile]
+
+    /// Timestamp of the payday the user dismissed, so the nudge stays hidden
+    /// until the next one lands.
+    @AppStorage("paydayNudge.dismissedTimestamp") private var dismissedPaydayTS: Double = 0
 
     let arcCount: Int
     let freedomFund: Double
@@ -414,6 +419,13 @@ struct ArcCountView: View {
     @ViewBuilder
     private var fundedContent: some View {
             VStack(alignment: .leading, spacing: 0) {
+                if let payday = pendingPayday {
+                    paydayNudgeBanner(payday: payday)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 // Status + amount capsules. The status capsule uses the theme
                 // color; the amount capsule opens the balance-edit popover.
                 HStack(spacing: 8) {
@@ -733,6 +745,36 @@ struct ArcCountView: View {
     /// Timestamp of the most recent re-anchor, if any.
     private var lastAnchorDate: Date? { manualEntries.first?.createdAt }
 
+    // MARK: - Payday nudge (P5)
+
+    private var incomeProfile: UserProfile? { profiles.first }
+
+    /// Amount expected each payday. Prefers per-paycheck; falls back to a
+    /// legacy monthly figure stored only in settings.
+    private var perPaycheckAmount: Double {
+        if let amt = incomeProfile?.incomeAmount, amt > 0 { return amt }
+        if let c = incomeProfile?.incomeCadence, case .monthly = c,
+           let m = sessionViewModel.currentUser?.settings.monthlyIncome, m > 0 { return m }
+        return 0
+    }
+
+    /// The most recent predicted payday (on or before today) that the user
+    /// hasn't yet re-anchored past or dismissed. Nil for irregular/no income.
+    private var pendingPayday: Date? {
+        guard let profile = incomeProfile, perPaycheckAmount > 0,
+              let cadence = profile.incomeCadence else { return nil }
+        if case .irregular = cadence { return nil }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let from = cal.date(byAdding: .day, value: -45, to: today) else { return nil }
+        guard let lastPayday = profile.nextPaydays(from: from, through: today, calendar: cal).last else { return nil }
+        // Already re-anchored on/after this payday → balance is current.
+        if let anchor = lastAnchorDate, cal.startOfDay(for: anchor) >= lastPayday { return nil }
+        // Dismissed this specific payday.
+        if abs(dismissedPaydayTS - lastPayday.timeIntervalSince1970) < 1 { return nil }
+        return lastPayday
+    }
+
     /// Compact "updated 2h ago" style freshness for the nav label.
     private var freshnessLabel: String {
         guard let date = lastAnchorDate else { return "not updated" }
@@ -750,6 +792,59 @@ struct ArcCountView: View {
         f.dateFormat = Calendar.current.isDateInToday(date) ? "'today at' h:mm a"
             : (Calendar.current.isDateInYesterday(date) ? "'yesterday at' h:mm a" : "MMM d 'at' h:mm a")
         return f.string(from: date).lowercased()
+    }
+
+    /// Gentle in-app nudge shown when a predicted payday has landed since the
+    /// last re-anchor: an invitation to reconcile the balance, never a demand.
+    /// Income is projection-only, so payday is exactly when reality and the
+    /// projection diverge — the natural moment to re-anchor.
+    private func paydayNudgeBanner(payday: Date) -> some View {
+        let f = DateFormatter(); f.dateFormat = "MMM d"
+        let when = f.string(from: payday).lowercased()
+        return HStack(spacing: 12) {
+            Image(systemName: "banknote.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(liveGreen)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("payday landed · \(when)")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                    .foregroundColor(cream)
+                Text("you should've gotten about \(formatCurrency(perPaycheckAmount)) — update your balance?")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundColor(mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    dismissedPaydayTS = payday.timeIntervalSince1970
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(mutedText)
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(liveGreen.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(liveGreen.opacity(0.45), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { beginBalanceEdit() }
     }
 
     private var freshnessNavItem: some View {
