@@ -33,6 +33,7 @@ struct SettingsView: View {
     @State private var showRecoveryPhraseSheet = false
     @State private var showNormaKnowsEdit = false
     @State private var showProfileMissingNameEdit = false
+    @State private var showIncomeEditor = false
 
     #if DEBUG
     @State private var showFundResetConfirmation = false
@@ -81,6 +82,12 @@ struct SettingsView: View {
         ZStack {
             settingsContent
             if isDeletingAccount { deletingOverlay }
+        }
+        .sheet(isPresented: $showIncomeEditor) {
+            IncomeEditSheet()
+                .environmentObject(sessionViewModel)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showNormaKnowsEdit) {
             NormaKnowsEditSheet(profile: userProfile)
@@ -322,7 +329,27 @@ struct SettingsView: View {
                     )
                 }
             }
+
+            listRow(
+                icon: "banknote",
+                iconColor: accentPurple,
+                primary: "income",
+                secondary: incomeRowSummary,
+                showChevron: true,
+                action: { showIncomeEditor = true }
+            )
         }
+    }
+
+    /// Per-paycheck amount + cadence for the profile income row.
+    private var incomeRowSummary: String {
+        guard let profile = userProfile,
+              let amount = profile.incomeAmount, amount > 0,
+              let cadence = profile.incomeCadence else {
+            return "add your income"
+        }
+        let currency = sessionViewModel.currentUser?.settings.currency ?? profile.currency
+        return "\(formatBalance(amount, currency: currency)) · \(cadence.label)"
     }
 
     @ViewBuilder
@@ -558,8 +585,18 @@ struct SettingsView: View {
             guard amount > 0 else { return "—" }
             return formatBalance(amount, currency: currency.uppercased())
         }()
-        let frequency = profile?.incomeFrequency?.lowercased() ?? "—"
-        let paydayText = profile?.payday.map { "day \($0)" } ?? "—"
+        let payDescription: String = {
+            guard let cadence = profile?.incomeCadence else { return "—" }
+            switch cadence {
+            case .weekly:                 return "weekly"
+            case .biweekly:               return "every 2 weeks"
+            case .semiMonthly(let a, let b):
+                let bLabel = b >= 29 ? "last day" : "the \(b)th"
+                return "on the \(a)th & \(bLabel)"
+            case .monthly(let day):       return "monthly on day \(day)"
+            case .irregular:              return "when it comes"
+            }
+        }()
         let runwayText: String = {
             guard let floor = profile?.runwayFloor else { return "—" }
             let unit = floor == 1.0 ? "month" : "months"
@@ -575,10 +612,7 @@ struct SettingsView: View {
             + Text(incomeText).foregroundStyle(cream)
             + Text(", paid ")
                 .foregroundStyle(mutedText)
-            + Text(frequency).foregroundStyle(cream)
-            + Text(", on ")
-                .foregroundStyle(mutedText)
-            + Text(paydayText).foregroundStyle(cream)
+            + Text(payDescription).foregroundStyle(cream)
             + Text(". your runway floor is ")
                 .foregroundStyle(mutedText)
             + Text(runwayText).foregroundStyle(cream)
