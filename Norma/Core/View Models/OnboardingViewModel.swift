@@ -673,14 +673,32 @@ class OnboardingViewModel: ObservableObject {
         }
 
         profile.currency = collectedData.currency
-        if collectedData.monthlyIncome > 0 {
+        if collectedData.incomeAmountPerPaycheck > 0 {
+            profile.incomeAmount = collectedData.incomeAmountPerPaycheck
+            profile.setIncomeCadence(onboardingCadence())
+        } else if collectedData.monthlyIncome > 0 {
+            // Legacy path (no per-paycheck captured): treat as monthly.
             profile.incomeAmount = collectedData.monthlyIncome
+            profile.setIncomeCadence(.monthly(day: 1))
         }
 
         let onboardingFacts = buildOnboardingFacts()
         profile.facts = profile.facts.filter { $0.source != "onboarding" } + onboardingFacts
         profile.updatedAt = Date()
         try? context.save()
+    }
+
+    /// Reconstruct an IncomeCadence from the onboarding choice. Exact day is
+    /// defaulted here (refined later in the calendar/profile editor); the
+    /// cadence *type* is what fixes the monthly math.
+    private func onboardingCadence() -> IncomeCadence {
+        switch collectedData.incomeCadenceRaw {
+        case "weekly":      return .weekly(weekday: 6)          // Fri
+        case "biweekly":    return .biweekly(anchor: Date())    // ~last payday
+        case "semiMonthly": return .semiMonthly(day1: 15, day2: 31)
+        case "irregular":   return .irregular
+        default:            return .monthly(day: 1)
+        }
     }
 
     private func buildOnboardingFacts() -> [FinancialFact] {

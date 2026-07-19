@@ -16,7 +16,33 @@ struct OnboardingCurrencyIncomeView: View {
 
     @State private var currencyCode: String = "USD"
     @State private var incomeText: String = ""
+    @State private var cadence: CadenceChoice = .monthly
     @FocusState private var incomeFocused: Bool
+
+    // Onboarding captures the cadence *type* + amount; exact day is refined
+    // later in the calendar/profile editor. Mirrors IncomeCadence.
+    private enum CadenceChoice: String, CaseIterable {
+        case weekly, biweekly, semiMonthly, monthly, irregular
+        var label: String {
+            switch self {
+            case .weekly:      return "weekly"
+            case .biweekly:    return "every 2 weeks"
+            case .semiMonthly: return "twice a month"
+            case .monthly:     return "monthly"
+            case .irregular:   return "it varies"
+            }
+        }
+        /// Average paydays per month — converts the per-paycheck amount to the
+        /// monthly figure settings needs. Keep in sync with IncomeCadence.
+        var occurrencesPerMonth: Double {
+            switch self {
+            case .weekly:      return 52.0 / 12.0
+            case .biweekly:    return 26.0 / 12.0
+            case .semiMonthly: return 2
+            case .monthly, .irregular: return 1
+            }
+        }
+    }
 
     @State private var formAppeared = false
     @State private var ctaAppeared = false
@@ -61,6 +87,11 @@ struct OnboardingCurrencyIncomeView: View {
                 incomeField
                     .opacity(formAppeared ? 1 : 0)
                     .offset(y: formAppeared ? 0 : 12)
+                    .padding(.bottom, 24)
+
+                cadenceField
+                    .opacity(formAppeared ? 1 : 0)
+                    .offset(y: formAppeared ? 0 : 12)
 
                 Spacer(minLength: 24)
 
@@ -81,8 +112,12 @@ struct OnboardingCurrencyIncomeView: View {
             currencyCode = onboardingViewModel.collectedData.currency.isEmpty
                 ? "USD"
                 : onboardingViewModel.collectedData.currency
-            if onboardingViewModel.collectedData.monthlyIncome > 0 {
-                incomeText = formattedNumber(onboardingViewModel.collectedData.monthlyIncome)
+            let seed = onboardingViewModel.collectedData.incomeAmountPerPaycheck > 0
+                ? onboardingViewModel.collectedData.incomeAmountPerPaycheck
+                : onboardingViewModel.collectedData.monthlyIncome
+            if seed > 0 { incomeText = formattedNumber(seed) }
+            if let saved = CadenceChoice(rawValue: onboardingViewModel.collectedData.incomeCadenceRaw) {
+                cadence = saved
             }
             withAnimation(.easeOut(duration: 0.5).delay(0.55)) { formAppeared = true }
             withAnimation(.easeOut(duration: 0.5).delay(0.70)) { ctaAppeared = true }
@@ -154,7 +189,7 @@ struct OnboardingCurrencyIncomeView: View {
 
     private var incomeField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("monthly take-home (after taxes)")
+            Text("amount per paycheck (after taxes)")
                 .font(.system(size: 11, weight: .medium))
                 .tracking(0.8)
                 .foregroundStyle(NormaPalette.inkSubtle)
@@ -207,6 +242,46 @@ struct OnboardingCurrencyIncomeView: View {
         }
     }
 
+    private var cadenceField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("how often do you get paid?")
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.8)
+                .foregroundStyle(NormaPalette.inkSubtle)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(CadenceChoice.allCases, id: \.self) { choice in
+                    cadenceChip(choice)
+                }
+            }
+        }
+    }
+
+    private func cadenceChip(_ choice: CadenceChoice) -> some View {
+        let active = cadence == choice
+        return Button {
+            impactGenerator.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { cadence = choice }
+        } label: {
+            Text(choice.label)
+                .font(.system(size: 14, weight: active ? .semibold : .medium))
+                .foregroundStyle(active ? NormaPalette.canvas : NormaPalette.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity)
+                .background {
+                    if active { Capsule().fill(NormaPalette.lavender) }
+                }
+                .overlay(
+                    Capsule().strokeBorder(
+                        active ? NormaPalette.lavender : NormaPalette.ink.opacity(0.28),
+                        style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [3, 3])
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var continueBlock: some View {
         Button(action: {
             impactGenerator.impactOccurred()
@@ -239,8 +314,11 @@ struct OnboardingCurrencyIncomeView: View {
 
     private func saveAndContinue() {
         onboardingViewModel.collectedData.currency = currencyCode
-        let parsed = Double(incomeText.filter(\.isNumber)) ?? 0
-        onboardingViewModel.collectedData.monthlyIncome = parsed
+        let perPaycheck = Double(incomeText.filter(\.isNumber)) ?? 0
+        onboardingViewModel.collectedData.incomeAmountPerPaycheck = perPaycheck
+        onboardingViewModel.collectedData.incomeCadenceRaw = cadence.rawValue
+        // Derived monthly figure for settings (forecast/calendar read this).
+        onboardingViewModel.collectedData.monthlyIncome = perPaycheck * cadence.occurrencesPerMonth
         incomeFocused = false
         onContinue()
     }
