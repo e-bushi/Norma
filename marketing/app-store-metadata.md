@@ -61,6 +61,30 @@ manager", "savings tracker".)
 >
 > Free to start. Norma Pro is $3.99/month.
 
+## What's New — 3.0.0 (≤4,000 chars)
+
+> Norma 3.0 is a big one.
+>
+> Norma is now built around one number: your runway — how many days your money lasts. Tell it your
+> balance and your bills, and see your money measured in days of freedom.
+>
+> New in 3.0:
+>
+> Runway home — your balance becomes days of freedom, kept honest every time you check in.
+>
+> Flexible income & paydays — weekly, every two weeks, monthly, or irregular. Your paydays land on
+> the calendar, and Norma gives you a gentle nudge to update your balance when you get paid.
+>
+> Test a purchase — feel a spend before you make it: "this trip costs you 9 days."
+>
+> Forecast & calendar — what's left after bills, a safe-to-spend number, and your low point before
+> payday.
+>
+> Calmer and faster — just chat to add bills and reminders, and a home that tells you if you're okay
+> at a glance.
+>
+> No budgets. No categories. Just how long your money lasts.
+
 ## Notes
 - Keep the listing runway-framed — do **not** revert to the retired journal copy ("write it down",
   "get money out of your head"). That framing describes a product that no longer exists.
