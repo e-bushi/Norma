@@ -110,7 +110,7 @@ struct Toast: Identifiable, Equatable {
         let arcText = arcsRemaining == 1 ? "1 arc left" : "\(arcsRemaining) arcs left"
 
         return Toast(
-            message: "-\(amountString) from Freedom Fund",
+            message: "-\(amountString) from balance",
             detail: arcText,
             icon: "arrow.down.circle.fill",
             iconColor: Color("NormaPastelCoral"),
@@ -127,8 +127,8 @@ struct Toast: Identifiable, Equatable {
         let amountString = formatter.string(from: NSNumber(value: amount)) ?? "$\(Int(amount))"
 
         return Toast(
-            message: "-\(amountString) from Freedom Fund",
-            detail: "Add funds to rebuild",
+            message: "-\(amountString) from balance",
+            detail: "add to your balance to rebuild",
             icon: "exclamationmark.circle.fill",
             iconColor: Color("NormaPastelCoral"),
             duration: 3.5
@@ -138,8 +138,8 @@ struct Toast: Identifiable, Equatable {
     /// Toast shown when user has no freedom fund set up
     static func freedomFundEmpty() -> Toast {
         return Toast(
-            message: "No Freedom Fund",
-            detail: "Add funds to get started",
+            message: "No balance",
+            detail: "add a balance to get started",
             icon: "plus.circle.fill",
             iconColor: Color("NormaPastelTeal"),
             duration: 3.0

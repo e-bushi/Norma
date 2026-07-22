@@ -23,4 +23,16 @@ enum FeatureFlags {
     /// Flip to true to revive the feature client-side. The Plaid dashboard
     /// plan and the Cortex proxy are billed independently of this flag.
     static let plaidEnabled = false
+
+    /// Master switch for Deepgram-backed voice capture (the waveform button on
+    /// the notes list and note canvas).
+    ///
+    /// Off while dormant: every dictation is a billable Deepgram call, and at
+    /// zero revenue that cost isn't justified. We keep the feature rather than
+    /// deleting it because on-device iOS dictation isn't accurate enough — the
+    /// Deepgram option stays available to revive. With the flag off the voice
+    /// button is hidden and capture is text-only.
+    ///
+    /// Flip to true to revive. Rotate the leaked Deepgram key before doing so.
+    static let voiceCaptureEnabled = false
 }

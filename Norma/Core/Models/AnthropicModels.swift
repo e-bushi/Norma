@@ -328,10 +328,17 @@ struct AnthropicErrorDetail: Codable {
 struct UserOnboardingData: Codable {
     var name: String = ""
     var currency: String = "USD"
-    var monthlyIncome: Double = 0  // After-tax monthly income
+    var monthlyIncome: Double = 0  // Derived monthly figure (amount × cadence).
     var freedomFund: Double = 0
     var painPoint: String = ""
     var reminderPreference: String = ""
+
+    // Flexible pay cadence captured in onboarding. `monthlyIncome` above is the
+    // derived monthly (for settings); these carry the per-paycheck truth so the
+    // local UserProfile stores the real cadence. Exact day-of-week/month is
+    // defaulted here and refined later in the calendar/profile editor.
+    var incomeAmountPerPaycheck: Double = 0
+    var incomeCadenceRaw: String = "monthly"  // weekly|biweekly|semiMonthly|monthly|irregular
 }
 
 // MARK: - Errors

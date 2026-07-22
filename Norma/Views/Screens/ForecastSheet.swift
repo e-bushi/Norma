@@ -19,9 +19,22 @@ struct ForecastSheet: View {
     @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \NoteToken.occurredAt) private var allTokens: [NoteToken]
+    @Query(sort: \FreedomFundEntry.createdAt, order: .reverse) private var allEntries: [FreedomFundEntry]
 
     @State private var selectedTab: Tab = .thisMonth
     @State private var showInfoPopover = false
+    @State private var showSafeInfo = false
+    @State private var showWhatIfInfo = false
+
+    // What-if a purchase — a tap-to-test amount that shows its impact on the
+    // after-bills number and runway, live as you type.
+    @State private var whatIfExpanded: Bool = false
+    @State private var whatIfAmount: String = ""
+    /// Brief dither "crunching" beat after the amount changes, before the
+    /// impact rows resolve — same thinking motif as the chat.
+    @State private var whatIfCalculating: Bool = false
+    @State private var whatIfDebounce: Task<Void, Never>? = nil
+    @FocusState private var whatIfFocused: Bool
 
     /// "If I committed everything" — independent toggle that subtracts the
     /// intentions total from the hero net. Styled in the tab row as a third
@@ -47,7 +60,11 @@ struct ForecastSheet: View {
     /// Bill tapped for the detail/edit sheet. Non-nil drives presentation.
     @State private var selectedBillForDetail: Bill?
 
+    /// Paid section starts collapsed as a card deck; tap toggles to a list.
+    @State private var paidExpanded: Bool = false
+
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
+    private let cardBg = Color(red: 0x1F/255, green: 0x1F/255, blue: 0x24/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
@@ -60,7 +77,17 @@ struct ForecastSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     heroBlock
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 20)
+
+                    if !isSelecting {
+                        safeToSpendCard
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 12)
+
+                        whatIfCard
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 22)
+                    }
 
                     filterCapsules
                         .padding(.horizontal, 24)
@@ -71,7 +98,16 @@ struct ForecastSheet: View {
                         .padding(.bottom, 48)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Tap any empty area to dismiss the decimal-pad keyboard. The
+                // clear background sits behind the content, so taps on rows,
+                // buttons, and the field itself are handled by them first.
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { whatIfFocused = false }
+                )
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -86,7 +122,7 @@ struct ForecastSheet: View {
                 Button("cancel", role: .cancel) {}
                 Button("mark paid") { performBulkMarkPaid() }
             } message: {
-                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle and added to today's note.")
+                Text("\(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") will be marked paid for this cycle.")
             }
             .sheet(isPresented: $showUpgradeSheet) {
                 upgradeSheet
@@ -262,6 +298,235 @@ struct ForecastSheet: View {
         }
     }
 
+    // MARK: - Safe to spend
+
+    private var safeToSpendCard: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Text("SAFE TO SPEND")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 10))
+                    .tracking(0.6)
+                    .foregroundStyle(mutedText)
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showSafeInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(mutedText)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showSafeInfo, arrowEdge: .top) {
+                    safeToSpendInfoPopover
+                        .presentationCompactAdaptation(.popover)
+                }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(formatCurrency(safeToSpendPerWeek))
+                    .font(.custom(FontFamily.Rubik.bold, size: 24))
+                    .foregroundStyle(netAfterBills > 0 ? cream : accentPurple)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.6), value: safeToSpendPerWeek)
+                Text("/ week")
+                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                    .foregroundStyle(mutedText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        )
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    private var safeToSpendInfoPopover: some View {
+        let period = selectedTab == .thisMonth ? "this" : "next"
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: "wallet.bill.fill")
+                    .font(.system(size: 19))
+                    .foregroundColor(accentPurple)
+                Text("safe to spend")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 19))
+                    .foregroundColor(.primary)
+            }
+            Text("what you can spend each week and still cover \(period) month's bills — your income minus \(period) month's bills and commitments, split across the ~4.3 weeks in a month.")
+                .font(.normaInput(16))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if netAfterBills <= 0 {
+                Text("right now your bills top your income, so there's nothing extra to spend.")
+                    .font(.normaInput(16))
+                    .foregroundColor(NormaPalette.lavender)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
+    }
+
+    private var whatIfInfoPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 19))
+                    .foregroundColor(accentPurple)
+                Text("test a purchase")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 19))
+                    .foregroundColor(.primary)
+            }
+            Text("type in an amount to feel the trade before you make it. norma shows your money after bills and your runway — both before and after the spend — so a purchase stops being a guess.")
+                .font(.normaInput(16))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 300)
+    }
+
+    // MARK: - What-if a purchase
+
+    private var whatIfCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accentPurple)
+                Text("test a purchase")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                    .foregroundStyle(cream)
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showWhatIfInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(mutedText)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showWhatIfInfo, arrowEdge: .top) {
+                    whatIfInfoPopover
+                        .presentationCompactAdaptation(.popover)
+                }
+                Spacer()
+                Image(systemName: whatIfExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(mutedText)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) { whatIfExpanded.toggle() }
+            }
+
+            if whatIfExpanded {
+                HStack(spacing: 6) {
+                    Text(NormaPalette.currencySymbol(for: currency))
+                        .font(.custom(FontFamily.Rubik.bold, size: 20))
+                        .foregroundStyle(mutedText)
+                    TextField("0", text: $whatIfAmount)
+                        .keyboardType(.decimalPad)
+                        .focused($whatIfFocused)
+                        .font(.custom(FontFamily.Rubik.bold, size: 20))
+                        .foregroundStyle(cream)
+                        .tint(accentPurple)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(cream.opacity(0.06)))
+                .overlay(Capsule().stroke(cream.opacity(0.10), lineWidth: 1))
+                .onChange(of: whatIfAmount) { _, _ in beginWhatIfCrunch() }
+
+                if whatIfValue > 0 {
+                    ZStack {
+                        if whatIfCalculating {
+                            DitherShaderView(intensity: 1.0)
+                                .frame(height: 66)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .transition(.opacity)
+                        } else {
+                            VStack(spacing: 10) {
+                                whatIfImpactRow(
+                                    label: "after bills",
+                                    before: formatCurrency(netAfterBills),
+                                    after: formatCurrency(max(0, netAfterBills - whatIfValue))
+                                )
+                                whatIfImpactRow(
+                                    label: "runway",
+                                    before: runwayLabel(runwayDays(for: freedomFund)),
+                                    after: runwayLabel(runwayDays(for: freedomFund - whatIfValue))
+                                )
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.4), value: whatIfCalculating)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        )
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+    }
+
+    private func whatIfImpactRow(label: String, before: String, after: String) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .foregroundStyle(mutedText)
+            Spacer()
+            Text(before)
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundStyle(dimText)
+            Image(systemName: "arrow.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(mutedText)
+            Text(after)
+                .font(.custom(FontFamily.Rubik.bold, size: 15))
+                .foregroundStyle(cream)
+                .contentTransition(.numericText())
+        }
+    }
+
+    private func runwayLabel(_ days: Int?) -> String {
+        guard let days else { return "—" }
+        let c = ArcCalculationService.compactRunway(days: days)
+        return "\(c.value) \(c.unit)"
+    }
+
+    /// Shows the dither "crunching" beat, then resolves the impact rows a
+    /// moment after the user stops typing — a considered feel instead of a
+    /// jittery per-keystroke recompute.
+    private func beginWhatIfCrunch() {
+        whatIfDebounce?.cancel()
+        guard whatIfValue > 0 else {
+            withAnimation(.easeInOut(duration: 0.3)) { whatIfCalculating = false }
+            return
+        }
+        whatIfCalculating = true
+        whatIfDebounce = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.45)) { whatIfCalculating = false }
+        }
+    }
+
     // MARK: - Filter capsules
 
     private var filterCapsules: some View {
@@ -380,14 +645,8 @@ struct ForecastSheet: View {
                     .padding(.top, overdueRows.isEmpty ? 0 : 14)
                 }
                 if !paidRows.isEmpty {
-                    section(
-                        title: "paid",
-                        titleColor: dimText,
-                        dividerColor: cream.opacity(0.08),
-                        rows: paidRows,
-                        kind: .paid
-                    )
-                    .padding(.top, (overdueRows.isEmpty && upcomingRows.isEmpty) ? 0 : 14)
+                    paidSectionView
+                        .padding(.top, (overdueRows.isEmpty && upcomingRows.isEmpty) ? 0 : 14)
                 }
             }
 
@@ -403,7 +662,7 @@ struct ForecastSheet: View {
             Text("nothing \(selectedTab == .thisMonth ? "this month" : "next month")")
                 .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                 .foregroundStyle(cream.opacity(0.7))
-            Text("bills, commitments, and intentions written in your notes show up here.")
+            Text("bills, commitments, and intentions you add in chat show up here.")
                 .font(.custom(FontFamily.Rubik.regular, size: 13))
                 .foregroundStyle(mutedText)
         }
@@ -439,6 +698,129 @@ struct ForecastSheet: View {
             ForEach(rows, id: \.id) { row in
                 billRowView(row, kind: kind)
             }
+        }
+    }
+
+    // MARK: - Paid section (collapsible card deck)
+
+    /// Header + body for paid bills. Collapsed, the cards stack as a deck to
+    /// save space; tapping the header or the deck fans them into a vertical
+    /// list, and tapping again re-stacks them.
+    private var paidSectionView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    paidExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("paid")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                        .tracking(0.88)
+                        .textCase(.uppercase)
+                        .foregroundStyle(dimText)
+                    Rectangle()
+                        .fill(cream.opacity(0.08))
+                        .frame(height: 1)
+                    Text("\(paidRows.count)")
+                        .font(.custom(FontFamily.Rubik.medium, size: 11))
+                        .tracking(0.44)
+                        .foregroundStyle(dimText)
+                    Image(systemName: paidExpanded ? "chevron.up" : "rectangle.stack")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(dimText)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+
+            if paidExpanded {
+                VStack(spacing: 10) {
+                    ForEach(paidRows, id: \.id) { row in
+                        paidCard(row, interactive: true)
+                    }
+                }
+            } else {
+                paidDeck
+            }
+        }
+    }
+
+    private var paidDeck: some View {
+        let visible = Array(paidRows.prefix(4))
+        let step: CGFloat = 12
+        return Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                paidExpanded = true
+            }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .top) {
+                    ForEach(Array(Array(visible.enumerated()).reversed()), id: \.element.id) { idx, row in
+                        paidCard(row, interactive: false)
+                            .scaleEffect(1 - CGFloat(idx) * 0.04, anchor: .top)
+                            .offset(y: CGFloat(idx) * step)
+                            .opacity(1 - Double(idx) * 0.16)
+                            .zIndex(Double(visible.count - idx))
+                    }
+                }
+                .padding(.bottom, CGFloat(max(0, visible.count - 1)) * step)
+
+                Text("tap to expand")
+                    .font(.custom(FontFamily.Rubik.medium, size: 11))
+                    .foregroundStyle(dimText)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func paidCard(_ row: BillRow, interactive: Bool) -> some View {
+        let inner = HStack(spacing: 12) {
+            statusDot(for: .paid)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.name.lowercased())
+                    .font(.custom(FontFamily.Rubik.medium, size: 16))
+                    .tracking(-0.16)
+                    .foregroundStyle(mutedText)
+                    .lineLimit(1)
+                Text(eyebrowText(forDate: row.dueDate, kind: .paid))
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .tracking(0.48)
+                    .textCase(.uppercase)
+                    .foregroundStyle(dimText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(formatCurrency(row.amount))
+                .font(.custom(FontFamily.Rubik.medium, size: 18))
+                .tracking(-0.18)
+                .foregroundStyle(dimText)
+                .strikethrough(true, color: dimText)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 14).fill(cardBg))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(cream.opacity(0.07), lineWidth: 1))
+
+        if interactive {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                if case .bill(let bill) = row { selectedBillForDetail = bill }
+            } label: {
+                inner
+            }
+            .buttonStyle(.plain)
+        } else {
+            inner
         }
     }
 
@@ -861,11 +1243,6 @@ struct ForecastSheet: View {
         Task {
             await billViewModel.markBillsAsPaid(toMark)
             await MainActor.run {
-                BillPaymentJournal.appendBillPayments(
-                    toMark,
-                    currency: sessionViewModel.currentUser?.settings.currency ?? "USD",
-                    in: modelContext
-                )
                 isMarkingPaid = false
                 exitSelection()
             }
@@ -972,6 +1349,42 @@ struct ForecastSheet: View {
         var sum = totalBillsForMonth + totalCommitments
         if includeIntentions { sum += totalIntentions }
         return sum
+    }
+
+    // MARK: - Computed: balance / runway (shared with the home's math)
+
+    private var freedomFund: Double {
+        sessionViewModel.currentUser?.settings.freedomFund ?? 0
+    }
+
+    /// Raw monthly bill total across all bills — matches the value the home
+    /// feeds the runway engine, so the what-if runway lines up with the home.
+    private var allMonthlyBills: Double {
+        billViewModel.bills.reduce(0) { $0 + $1.amount }
+    }
+
+    private var userEntries: [FreedomFundEntry] {
+        let uid = sessionViewModel.currentUser?.userId
+        return allEntries.filter { uid == nil || $0.userId == uid }
+    }
+
+    private var dailyBurn: Double {
+        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        return ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills, monthlyIncome: income)
+    }
+
+    private func runwayDays(for balance: Double) -> Int? {
+        dailyBurn > 0 ? Int(floor(max(0, balance) / dailyBurn)) : nil
+    }
+
+    /// After-bills headroom expressed as a weekly spend rate — the same monthly
+    /// number the hero shows, made actionable at the cadence people budget by.
+    private var safeToSpendPerWeek: Double {
+        netAfterBills / 4.33
+    }
+
+    private var whatIfValue: Double {
+        Double(whatIfAmount.filter { $0.isNumber || $0 == "." }) ?? 0
     }
 
     private var netAfterBills: Double {
@@ -1100,12 +1513,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(Color("NormaPastelTeal"))
 
                     Text("your month")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 20))
                         .foregroundColor(.primary)
                 }
 
                 Text("the hero shows what's left after everything due this month — income minus bills and commitments. switch between this month and next month to plan ahead.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1117,12 +1530,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("intentions")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
-                Text("an intention is something you're thinking about spending on — picked up from notes like \"thinking about a $200 trip.\" they don't count against your month unless you upgrade them.")
-                    .font(.normaInput(14))
+                Text("an intention is something you're thinking about spending on — tell norma \"thinking about a $200 trip\" and it lands here. they don't count against your month unless you upgrade them.")
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1134,12 +1547,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("commitments")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
                 Text("when you're ready to act on an intention, long-press it and upgrade it to a commitment. commitments act like one-time bills — they get a due date and show up in the bills sections.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1151,12 +1564,12 @@ struct ForecastInfoPopover: View {
                         .foregroundColor(NormaPalette.lavender)
 
                     Text("what-if toggle")
-                        .font(.custom(FontFamily.Rubik.medium, size: 15))
+                        .font(.custom(FontFamily.Rubik.medium, size: 17))
                         .foregroundColor(.primary)
                 }
 
                 Text("flip \"if i committed everything\" to see your month with all intentions counted. handy for sanity-checking before you upgrade anything.")
-                    .font(.normaInput(14))
+                    .font(.normaInput(16))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

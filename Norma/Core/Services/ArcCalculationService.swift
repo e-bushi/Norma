@@ -133,6 +133,70 @@ struct ArcCalculationService {
         }
     }
 
+    // MARK: - Burn-based runway (decision A: income ignored)
+
+    /// Observed daily burn from the freedom-fund ledger, over the span between
+    /// the first and last anchor. Falls back to bills ÷ 30 until there are two
+    /// anchors spanning at least a day.
+    ///
+    /// **Income back-out (P4):** when income is known, the raw balance deltas
+    /// *understate* real outflow — a paycheck landing between anchors masks the
+    /// spend it offset. So we recover true total outflow as
+    /// `income received − net balance change` (income − (last − first)), which
+    /// equals bills + life actually spent. With no income this reduces to the
+    /// observed downward-delta sum, so income-less ("Living") users are
+    /// unchanged. Runway stays conservative — it measures outflow as if income
+    /// stopped; when you're net-positive (building), it floors at bill coverage.
+    ///
+    /// - Parameters:
+    ///   - entries: The user's FreedomFundEntry ledger (any order).
+    ///   - monthlyBills: Total monthly bills, the fallback burn source.
+    ///   - monthlyIncome: Derived monthly income; 0 keeps the legacy behavior.
+    /// - Returns: Estimated burn per day (always ≥ 0).
+    static func dailyBurn(entries: [FreedomFundEntry], monthlyBills: Double, monthlyIncome: Double = 0) -> Double {
+        let sorted = entries.sorted { $0.createdAt < $1.createdAt }
+        if let first = sorted.first, let last = sorted.last, sorted.count >= 2 {
+            let days = last.createdAt.timeIntervalSince(first.createdAt) / 86_400
+            if days >= 1 {
+                if monthlyIncome > 0 {
+                    let netChange = last.balanceAfter - first.balanceAfter
+                    let incomeInWindow = monthlyIncome * (days / 30.0)
+                    let outflow = incomeInWindow - netChange
+                    if outflow > 0 { return outflow / days }
+                } else {
+                    let burn = sorted.reduce(0.0) { $0 + ($1.delta < 0 ? -$1.delta : 0) }
+                    if burn > 0 { return burn / days }
+                }
+            }
+        }
+        return monthlyBills / 30.0
+    }
+
+    /// Runway expressed as a compact time value + unit ("47" / "days",
+    /// "7" / "weeks", "3" / "months", "1.5" / "years"). Keeps the hero compact
+    /// where the verbose human-scale string would overflow.
+    static func compactRunway(days: Int) -> (value: String, unit: String) {
+        if days < 30 { return ("\(days)", days == 1 ? "day" : "days") }
+        if days < 365 {
+            let months = Int((Double(days) / 30).rounded())
+            return ("\(months)", months == 1 ? "month" : "months")
+        }
+        let years = (Double(days) / 365 * 10).rounded() / 10
+        let valueStr = years.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(years))" : "\(years)"
+        return (valueStr, years == 1 ? "year" : "years")
+    }
+
+    /// Status tier keyed to runway in days (the day-based hero's companion).
+    static func getStateName(days: Int) -> String {
+        switch days {
+        case ..<14: return "Urgency"
+        case 14..<45: return "Cautionary"
+        case 45..<120: return "Steady"
+        case 120..<270: return "Calm"
+        default: return "Abundant"
+        }
+    }
+
     /// Convert days to human-scale time description
     ///
     /// - Parameter days: Number of days

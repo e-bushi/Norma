@@ -14,16 +14,27 @@ import UserNotifications
 struct CalendarSheet: View {
     enum Tab { case thisMonth, nextMonth }
 
+    /// Called when the user taps "add for this day" — the host opens the chat
+    /// seeded with the date so they can finish the thought.
+    var onAddForDate: ((Date) -> Void)? = nil
+
     @State private var selectedTab: Tab = .thisMonth
     @State private var selectedDay: Int = Calendar.current.component(.day, from: Date())
     @State private var allReminders: [Reminder] = []
+    @State private var showIncomeEditor = false
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var billViewModel: BillViewModel
+    @Query private var allTokens: [NoteToken]
+    @Query private var profiles: [UserProfile]
 
     private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
     private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
     private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
     private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
     private let onAccentText = Color(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255)
+    private let warning = Color(red: 0.93, green: 0.58, blue: 0.35)
+    private let payGreen = Color(red: 0.45, green: 0.80, blue: 0.55)
     private var accentPurple: Color { NormaPalette.lavender }
 
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
@@ -57,16 +68,88 @@ struct CalendarSheet: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 22)
 
+                    incomeRow
+                        .padding(.horizontal, 24)
+                        .padding(.top, 18)
+
+                    projectedBalanceCard
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+
                     reminderCards
                         .padding(.horizontal, 24)
                         .padding(.top, 12)
-                        .padding(.bottom, 32)
+
+                    if onAddForDate != nil {
+                        addForDayButton
+                            .padding(.horizontal, 24)
+                            .padding(.top, 14)
+                    }
+
+                    Spacer(minLength: 32)
                 }
             }
         }
         .background(bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .task { await loadReminders() }
+        .sheet(isPresented: $showIncomeEditor) {
+            IncomeEditSheet()
+                .environmentObject(sessionViewModel)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Income row (entry to the cadence editor)
+
+    private var incomeRow: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showIncomeEditor = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accentPurple)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("income")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(mutedText)
+                    Text(incomeSummary)
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundStyle(cream)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(dimText)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+            )
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(cream.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var incomeSummary: String {
+        guard let profile = profiles.first,
+              let amount = profile.incomeAmount, amount > 0,
+              let cadence = profile.incomeCadence else {
+            return "add your income"
+        }
+        return "\(formatCurrency(amount)) · \(cadence.label)"
     }
 
     // MARK: - Drag handle
@@ -167,10 +250,11 @@ struct CalendarSheet: View {
 
             // Day cells, in rows of 7
             let grid = monthGridDays
+            let paydayDays = paydayDaysInDisplayedMonth
             ForEach(0..<(grid.count / 7), id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { col in
-                        dayCell(day: grid[row * 7 + col])
+                        dayCell(day: grid[row * 7 + col], paydayDays: paydayDays)
                     }
                 }
             }
@@ -178,10 +262,12 @@ struct CalendarSheet: View {
     }
 
     @ViewBuilder
-    private func dayCell(day: Int?) -> some View {
+    private func dayCell(day: Int?, paydayDays: Set<Int>) -> some View {
         let hasReminder = day.map { activeReminders[$0] != nil } ?? false
+        let isPayday = day.map { paydayDays.contains($0) } ?? false
         let isSelected = day == selectedDay && day != nil
         let isToday = day.map { isCellToday($0) } ?? false
+        let isDanger = day.map { $0 == dangerDay } ?? false
         VStack(spacing: 4) {
             if let day {
                 Button {
@@ -194,6 +280,10 @@ struct CalendarSheet: View {
                     ZStack {
                         if isSelected {
                             Circle().fill(accentPurple).frame(width: 32, height: 32)
+                        } else if isDanger {
+                            Circle()
+                                .stroke(warning, lineWidth: 1.5)
+                                .frame(width: 32, height: 32)
                         } else if isToday {
                             Circle()
                                 .stroke(accentPurple.opacity(0.85), lineWidth: 1)
@@ -201,11 +291,11 @@ struct CalendarSheet: View {
                         }
                         Text("\(day)")
                             .font(.custom(
-                                (isSelected || isToday) ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium,
+                                (isSelected || isToday || isDanger) ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium,
                                 size: 14
                             ))
                             .foregroundStyle(
-                                isSelected ? onAccentText : (isToday ? accentPurple : cream)
+                                isSelected ? onAccentText : (isDanger ? warning : (isToday ? accentPurple : cream))
                             )
                     }
                     .frame(width: 32, height: 32)
@@ -215,10 +305,17 @@ struct CalendarSheet: View {
                 Color.clear.frame(width: 32, height: 32)
             }
 
-            // Reminder dot — always allocated (4×4) so rows align
-            Circle()
-                .fill(hasReminder ? accentPurple : Color.clear)
-                .frame(width: 4, height: 4)
+            // Marker row — reminder (accent) and/or payday (green). Always
+            // allocated 4pt tall so rows stay aligned.
+            HStack(spacing: 3) {
+                if hasReminder {
+                    Circle().fill(accentPurple).frame(width: 4, height: 4)
+                }
+                if isPayday {
+                    Circle().fill(payGreen).frame(width: 4, height: 4)
+                }
+            }
+            .frame(height: 4)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 48)
@@ -243,6 +340,81 @@ struct CalendarSheet: View {
             .tracking(0.66)
             .textCase(.uppercase)
             .foregroundStyle(mutedText)
+    }
+
+    // MARK: - Projected balance + add
+
+    @ViewBuilder
+    private var projectedBalanceCard: some View {
+        if let date = selectedDate, date >= Calendar.current.startOfDay(for: Date()) {
+            let balance = projectedBalance(on: date)
+            let isDangerDay = selectedDay == dangerDay
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isSelectedToday ? "BALANCE TODAY" : "BALANCE BY THIS DAY")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 10))
+                        .tracking(0.6)
+                        .foregroundStyle(mutedText)
+                    Text("≈ \(formatCurrency(balance))")
+                        .font(.custom(FontFamily.Rubik.bold, size: 26))
+                        .foregroundStyle(isDangerDay ? warning : cream)
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.5), value: balance)
+                }
+                Spacer(minLength: 8)
+                if isDangerDay {
+                    Text("your low point\nbefore payday")
+                        .font(.custom(FontFamily.Rubik.medium, size: 11))
+                        .foregroundStyle(warning.opacity(0.95))
+                        .multilineTextAlignment(.trailing)
+                } else if !hasIncomeSchedule {
+                    Text("before any\nnew income")
+                        .font(.custom(FontFamily.Rubik.regular, size: 11))
+                        .foregroundStyle(mutedText)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(cream.opacity(0.04)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke((isDangerDay ? warning : cream).opacity(isDangerDay ? 0.4 : 0.08), lineWidth: 1)
+            )
+        }
+    }
+
+    private var addForDayButton: some View {
+        Button {
+            guard let date = selectedDate else { return }
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            onAddForDate?(date)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("add for \(shortDayLabel)")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+            }
+            .foregroundStyle(accentPurple)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(accentPurple.opacity(0.12)))
+            .overlay(Capsule().stroke(accentPurple.opacity(0.4), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var isSelectedToday: Bool {
+        guard let d = selectedDate else { return false }
+        return Calendar.current.isDateInToday(d)
+    }
+
+    private var shortDayLabel: String {
+        guard let d = selectedDate else { return "this day" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: d).lowercased()
     }
 
     // MARK: - Reminder cards
@@ -458,6 +630,173 @@ struct CalendarSheet: View {
         case 3: return "rd"
         default: return "th"
         }
+    }
+
+    // MARK: - Balance projection
+
+    private var freedomFund: Double { sessionViewModel.currentUser?.settings.freedomFund ?? 0 }
+    private var monthlyIncome: Double { sessionViewModel.currentUser?.settings.monthlyIncome ?? 0 }
+    private var profile: UserProfile? { profiles.first }
+    private var currencyCode: String { sessionViewModel.currentUser?.settings.currency ?? "USD" }
+
+    /// Amount landing on each payday. Prefers the per-paycheck amount; falls
+    /// back to a legacy monthly figure stored only in settings.
+    private var incomePerPayday: Double {
+        if let amt = profile?.incomeAmount, amt > 0 { return amt }
+        if let c = profile?.incomeCadence, case .monthly = c, monthlyIncome > 0 { return monthlyIncome }
+        return 0
+    }
+
+    /// True when we can project paydays (a cadence + an amount). `irregular`
+    /// yields no predicted paydays, so it reads as false here.
+    private var hasIncomeSchedule: Bool {
+        guard incomePerPayday > 0, let cadence = profile?.incomeCadence else { return false }
+        if case .irregular = cadence { return false }
+        return true
+    }
+
+    /// Predicted paydays in `(after, through]` using the flexible cadence.
+    private func paydays(after start: Date, through end: Date, cal: Calendar) -> [Date] {
+        guard let profile, hasIncomeSchedule else { return [] }
+        let from = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: start)) ?? start
+        return profile.nextPaydays(from: from, through: end, calendar: cal)
+    }
+
+    /// Days-of-month in the displayed month that land on a payday — drives the
+    /// green marker dots in the grid.
+    private var paydayDaysInDisplayedMonth: Set<Int> {
+        guard let profile, hasIncomeSchedule,
+              let first = date(forDay: 1),
+              let last = date(forDay: daysInDisplayedMonth) else { return [] }
+        let cal = Calendar.current
+        let dates = profile.nextPaydays(from: cal.startOfDay(for: first),
+                                        through: cal.startOfDay(for: last),
+                                        calendar: cal)
+        return Set(dates.map { cal.component(.day, from: $0) })
+    }
+
+    private var daysInDisplayedMonth: Int {
+        Calendar.current.range(of: .day, in: .month, for: displayedMonthDate)?.count ?? 30
+    }
+
+    private func date(forDay day: Int) -> Date? {
+        let cal = Calendar.current
+        var comps = cal.dateComponents([.year, .month], from: displayedMonthDate)
+        comps.day = day
+        return cal.date(from: comps)
+    }
+
+    private var selectedDate: Date? { date(forDay: selectedDay) }
+
+    /// Projected balance at end of `target`: the current balance minus every
+    /// bill + commitment that clears between now and then, plus income on any
+    /// payday that lands in the window. Income is included here (unlike the
+    /// runway engine) so the calendar shows a realistic dip-and-refill rather
+    /// than a straight slide to zero. Past days project the current balance.
+    private func projectedBalance(on target: Date) -> Double {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let end = cal.startOfDay(for: target)
+        guard end >= today else { return freedomFund }
+
+        var balance = freedomFund
+
+        for bill in billViewModel.bills {
+            var occurrences = billOccurrences(bill, afterExclusive: today, through: end, cal: cal)
+            if bill.isPaidThisCycle, !occurrences.isEmpty { occurrences.removeFirst() }
+            balance -= Double(occurrences.count) * bill.amount
+        }
+
+        for token in allTokens where token.kind == .commit {
+            let d = cal.startOfDay(for: token.occurredAt)
+            if d > today, d <= end { balance -= token.amount }
+        }
+
+        if hasIncomeSchedule {
+            balance += Double(paydays(after: today, through: end, cal: cal).count) * incomePerPayday
+        }
+
+        return balance
+    }
+
+    /// The day of the displayed month where the projected balance bottoms out
+    /// — the pre-payday low. Only meaningful when income is known (otherwise
+    /// the balance only ever falls and the "low" is just month-end), so we
+    /// return nil without a payday + income to model the refill against.
+    private var dangerDay: Int? {
+        guard hasIncomeSchedule else { return nil }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var minDay: Int?
+        var minBalance = Double.greatestFiniteMagnitude
+        for day in 1...daysInDisplayedMonth {
+            guard let d = date(forDay: day) else { continue }
+            if selectedTab == .thisMonth, cal.startOfDay(for: d) < today { continue }
+            let balance = projectedBalance(on: d)
+            if balance < minBalance {
+                minBalance = balance
+                minDay = day
+            }
+        }
+        // Only flag it if it's an actual dip below where we stand today.
+        guard minBalance < freedomFund else { return nil }
+        return minDay
+    }
+
+    private func billOccurrences(_ bill: Bill, afterExclusive start: Date, through end: Date, cal: Calendar) -> [Date] {
+        var result: [Date] = []
+        guard var due = firstDue(bill, onOrAfter: cal.date(byAdding: .day, value: 1, to: start) ?? start, cal: cal) else {
+            return result
+        }
+        let step: DateComponents?
+        switch bill.frequency {
+        case .oneTime: step = nil
+        case .monthly: step = DateComponents(month: 1)
+        case .quarterly: step = DateComponents(month: 3)
+        case .yearly: step = DateComponents(year: 1)
+        }
+        var guardCount = 0
+        while due <= end, guardCount < 24 {
+            result.append(due)
+            guard let step, let next = cal.date(byAdding: step, to: due) else { break }
+            due = next
+            guardCount += 1
+        }
+        return result
+    }
+
+    private func firstDue(_ bill: Bill, onOrAfter start: Date, cal: Calendar) -> Date? {
+        let startDay = cal.startOfDay(for: start)
+        if let next = bill.nextDueDate, cal.startOfDay(for: next) >= startDay {
+            return cal.startOfDay(for: next)
+        }
+        let step: DateComponents?
+        switch bill.frequency {
+        case .oneTime:
+            let due = cal.startOfDay(for: bill.dueDate)
+            return due >= startDay ? due : nil
+        case .monthly: step = DateComponents(month: 1)
+        case .quarterly: step = DateComponents(month: 3)
+        case .yearly: step = DateComponents(year: 1)
+        }
+        var due = cal.startOfDay(for: bill.dueDate)
+        var guardCount = 0
+        while due < startDay, guardCount < 500 {
+            guard let step, let next = cal.date(byAdding: step, to: due) else { return nil }
+            due = next
+            guardCount += 1
+        }
+        return due
+    }
+
+
+    private func formatCurrency(_ amount: Double) -> String {
+        let symbol = NormaPalette.currencySymbol(for: currencyCode)
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        let number = f.string(from: NSNumber(value: amount.rounded())) ?? "\(Int(amount))"
+        return "\(symbol)\(number)"
     }
 }
 

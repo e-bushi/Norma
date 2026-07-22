@@ -33,10 +33,27 @@ final class UserProfile {
     // MARK: - Fixed fields
 
     var currency: String
+    /// Amount received PER PAYCHECK for the cadence below (not monthly).
     var incomeAmount: Double?
+    /// Legacy free-text frequency ("monthly" etc.) — superseded by
+    /// `incomeCadenceRaw` + the structured fields; kept for back-compat.
     var incomeFrequency: String?
+    /// Day-of-month for monthly / first day for semi-monthly. Legacy readers
+    /// still use this; the cadence layer reads it as day1.
     var payday: Int?
     var runwayFloor: Double?
+
+    // MARK: - Structured pay cadence (see IncomeSchedule.swift)
+    // All optional so SwiftData lightweight-migrates existing installs.
+
+    /// "weekly" | "biweekly" | "semiMonthly" | "monthly" | "irregular".
+    var incomeCadenceRaw: String?
+    /// Weekly cadence: 1=Sun … 7=Sat.
+    var incomeWeekday: Int?
+    /// Biweekly cadence: a known past payday; future ones are anchor + 14·k.
+    var incomeAnchorDate: Date?
+    /// Semi-monthly cadence: the second day of month (first day = `payday`).
+    var incomeDay2: Int?
 
     // MARK: - Freeform facts
 
@@ -54,6 +71,10 @@ final class UserProfile {
         incomeFrequency: String? = nil,
         payday: Int? = nil,
         runwayFloor: Double? = nil,
+        incomeCadenceRaw: String? = nil,
+        incomeWeekday: Int? = nil,
+        incomeAnchorDate: Date? = nil,
+        incomeDay2: Int? = nil,
         facts: [FinancialFact] = [],
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -64,6 +85,10 @@ final class UserProfile {
         self.incomeFrequency = incomeFrequency
         self.payday = payday
         self.runwayFloor = runwayFloor
+        self.incomeCadenceRaw = incomeCadenceRaw
+        self.incomeWeekday = incomeWeekday
+        self.incomeAnchorDate = incomeAnchorDate
+        self.incomeDay2 = incomeDay2
         self.facts = facts
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -86,9 +111,13 @@ final class UserProfile {
         var lines: [String] = []
         lines.append("currency: \(currency)")
         if let amount = incomeAmount {
-            lines.append("income: \(amount) (\(incomeFrequency ?? "unknown frequency"))")
+            let cadenceLabel = incomeCadence?.label ?? incomeFrequency ?? "unknown frequency"
+            lines.append("income: \(amount) per paycheck (\(cadenceLabel))")
+            if let monthly = monthlyEquivalent {
+                lines.append("≈ \(Int(monthly.rounded())) / month")
+            }
         }
-        if let day = payday {
+        if let cadence = incomeCadence, case .monthly(let day) = cadence {
             lines.append("payday: day \(day) of month")
         }
         if let floor = runwayFloor {

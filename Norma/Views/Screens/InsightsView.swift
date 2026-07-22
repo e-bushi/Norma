@@ -193,7 +193,7 @@ struct InsightsView: View {
     private let exampleInsights: [(type: String, headline: String, detail: String)] = [
         ("pattern", "'rent' keeps coming up", "you've written about rent in several notes this month."),
         ("nudge", "the subscription you meant to cancel", "you mentioned it a few weeks ago and it hasn't come up since."),
-        ("milestone", "three months of runway", "your freedom fund now covers three months of bills."),
+        ("milestone", "three months of runway", "your balance now covers three months of bills."),
         ("anomaly", "a bill looks higher than usual", "one of your recurring bills jumped this cycle.")
     ]
 

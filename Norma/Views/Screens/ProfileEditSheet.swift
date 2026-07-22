@@ -621,7 +621,7 @@ struct NormaKnowsInfoPopover: View {
                 glossaryRow(label: "income",   body: "how much you typically bring home per pay cycle.")
                 glossaryRow(label: "pay frequency", body: "how often that income arrives — weekly, biweekly, monthly, etc.")
                 glossaryRow(label: "payday",   body: "the day of the month your deposit usually lands.")
-                glossaryRow(label: "runway floor", body: "the minimum months of bills you want your freedom fund to cover before norma starts nudging.")
+                glossaryRow(label: "runway floor", body: "the minimum months of bills you want your balance to cover before norma starts nudging.")
             }
 
             Divider()

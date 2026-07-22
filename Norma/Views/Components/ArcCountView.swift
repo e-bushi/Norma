@@ -11,8 +11,20 @@ import SwiftData
 struct ArcCountView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var billViewModel: BillViewModel
     @Query(sort: \FreedomFundEntry.createdAt, order: .reverse)
     private var allEntries: [FreedomFundEntry]
+    @Query(
+        filter: #Predicate<Insight> { $0.dismissedAt == nil },
+        sort: \Insight.createdAt,
+        order: .reverse
+    )
+    private var insights: [Insight]
+    @Query private var profiles: [UserProfile]
+
+    /// Timestamp of the payday the user dismissed, so the nudge stays hidden
+    /// until the next one lands.
+    @AppStorage("paydayNudge.dismissedTimestamp") private var dismissedPaydayTS: Double = 0
 
     let arcCount: Int
     let freedomFund: Double
@@ -21,6 +33,52 @@ struct ArcCountView: View {
 
     @State private var showFreedomFundEdit = false
     @State private var showInfoPopover = false
+
+    @Environment(\.modelContext) private var modelContext
+    /// Balance re-anchor via popover: tapping the amount capsule opens a small
+    /// popover with the amount field; saving writes the balance + a ledger row.
+    @State private var showBalancePopover = false
+    /// Separate binding so the nav-bar freshness item's balance popover anchors
+    /// under the nav item, not the balance capsule below it.
+    /// The nav-bar freshness item shows a "last updated" info popover (not a
+    /// balance editor — re-anchoring lives on the balance capsule).
+    @State private var showFreshnessPopover = false
+    @State private var showStatusPopover = false
+    /// Slow breathing glow behind the status capsule so it invites a tap.
+    @State private var statusPulse = false
+    @State private var showInsights = false
+    /// The insight whose write-up is shown as a centered floating card.
+    /// A single card overlaid on the whole view — not a per-row popover —
+    /// so its size and position don't depend on where the row sits.
+    @State private var selectedInsight: InsightDetail?
+    @State private var balanceText = ""
+    @FocusState private var balanceFocused: Bool
+
+    /// The reward shown after a re-anchor: what the update revealed (spend +
+    /// burn), the runway shift, and streak/weekly progress. Re-anchoring is the
+    /// app's lifeblood, so the act pays the user back — a burn lesson plus a
+    /// habit reward — every time.
+    struct ReanchorReward {
+        let spend: Double          // positive = spent since last anchor
+        let added: Double          // positive = added money instead
+        let days: Int?             // days since the previous anchor
+        let perDay: Double         // spend ÷ days
+        let runwayBefore: Int?
+        let runwayAfter: Int?
+        let streak: Int
+        let weekCount: Int
+        let milestone: String?
+        /// Runway got longer this anchor — flips the moment from a burn reveal
+        /// (confession) to a gain celebration (leveling up).
+        let grew: Bool
+        /// Days of runway gained (after − before), when both are known.
+        let daysDelta: Int?
+        /// One-time "a year of freedom" style beat when runway crosses an
+        /// upward threshold. Distinct from the streak `milestone`.
+        let freedomMilestone: String?
+    }
+    @State private var reanchorReward: ReanchorReward?
+    @State private var showReanchorMoment = false
 
     @State private var heroWordCount = 0
     @State private var pillVisible = false
@@ -34,9 +92,88 @@ struct ArcCountView: View {
     private enum RunwayState { case runway, addBill, refill }
 
     private var runwayState: RunwayState {
-        if arcCount > 0 { return .runway }
-        if freedomFund > 0 && totalMonthlyBills <= 0 { return .addBill }
-        return .refill
+        if freedomFund <= 0 { return .refill }
+        if runwayDays == nil { return .addBill }
+        return .runway
+    }
+
+    /// Observed daily burn from the ledger (falls back to bills ÷ 30). Income
+    /// is backed out so a paycheck landing between anchors doesn't hide spend.
+    private var dailyBurn: Double {
+        let userId = sessionViewModel.currentUser?.userId
+        let entries = allEntries.filter { $0.userId == userId }
+        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
+        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills, monthlyIncome: income)
+    }
+
+    /// Runway in days: balance ÷ burn. Nil when there's no balance or no burn
+    /// source (no bills and no observed history) — the "add a bill" state.
+    private var runwayDays: Int? {
+        guard dailyBurn > 0, freedomFund > 0 else { return nil }
+        return Int(floor(freedomFund / dailyBurn))
+    }
+
+    private func runwayDays(for balance: Double) -> Int? {
+        guard dailyBurn > 0, balance > 0 else { return nil }
+        return Int(floor(balance / dailyBurn))
+    }
+
+    // MARK: - Re-anchor engagement (freshness / streak / weekly)
+
+    /// User balance updates, newest first. These are the re-anchors the whole
+    /// app depends on — every reward mechanic is derived from their timestamps.
+    private var manualEntries: [FreedomFundEntry] {
+        let userId = sessionViewModel.currentUser?.userId
+        return allEntries
+            .filter { $0.userId == userId && $0.source == .manualEdit }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Distinct calendar days the user re-anchored, newest first.
+    private var anchorDays: [Date] {
+        let cal = Calendar.current
+        return Array(Set(manualEntries.map { cal.startOfDay(for: $0.createdAt) })).sorted(by: >)
+    }
+
+    private var daysSinceLastAnchor: Int? {
+        guard let last = manualEntries.first else { return nil }
+        let cal = Calendar.current
+        return cal.dateComponents([.day], from: cal.startOfDay(for: last.createdAt), to: cal.startOfDay(for: Date())).day
+    }
+
+    private var isRunwayLive: Bool { (daysSinceLastAnchor ?? 99) == 0 }
+
+    private var anchorStreak: Int { streak(from: anchorDays) }
+    private var weekAnchorCount: Int { weekCount(from: anchorDays) }
+
+    /// Consecutive days ending today or yesterday. A gap of 2+ days breaks it.
+    private func streak(from daysDesc: [Date]) -> Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let mostRecent = daysDesc.first else { return 0 }
+        let gap = cal.dateComponents([.day], from: mostRecent, to: today).day ?? 99
+        guard gap <= 1 else { return 0 }
+        let daySet = Set(daysDesc)
+        var streak = 0
+        var cursor = mostRecent
+        while daySet.contains(cursor) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
+
+    /// Distinct re-anchor days within the current calendar week (0–7).
+    private func weekCount(from days: [Date]) -> Int {
+        let cal = Calendar.current
+        guard let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return 0 }
+        return days.filter { week.contains($0) }.count
+    }
+
+    /// Compact runway value + unit for the hero (e.g. "7" / "weeks").
+    private var compactRunway: (value: String, unit: String) {
+        ArcCalculationService.compactRunway(days: runwayDays ?? 0)
     }
 
     private var heroWordTotal: Int {
@@ -54,7 +191,9 @@ struct ArcCountView: View {
     private var accentPurple: Color { NormaPalette.lavender }
     private var glassBorder: Color { cream.opacity(0.22) }
     private var glassFill: Color { Color.white.opacity(0.04) }
-    private var heroFont: Font { .system(size: 64, weight: .bold) }
+    private let warning = Color(red: 0.93, green: 0.58, blue: 0.35)
+    private var liveGreen: Color { Color(red: 0.45, green: 0.80, blue: 0.55) }
+    private var heroFont: Font { .system(size: 70, weight: .bold) }
 
     private struct ActivityItem: Identifiable {
         let id: UUID
@@ -63,6 +202,18 @@ struct ArcCountView: View {
         let amount: String
         let isIncome: Bool
         var faded: Bool = false
+    }
+
+    /// A merged timeline row — either a fund-balance change or an AI insight,
+    /// carried together in one date-sorted feed.
+    private struct TimelineRow: Identifiable {
+        let id: UUID
+        let date: Date
+        let kind: Kind
+        enum Kind {
+            case fund(ActivityItem)
+            case insight(headline: String, detail: String, dateLabel: String)
+        }
     }
 
     /// True once the user has connected a bank account as their fund source.
@@ -75,22 +226,41 @@ struct ArcCountView: View {
     /// distinct from "time to refill" (arcCount == 0), which means they've
     /// funded it before and since drawn it down.
     private var isFirstTime: Bool {
-        freedomFund <= 0 && !hasLinkedAccount && activityItems.isEmpty
+        let hasHistory = allEntries.contains { $0.userId == sessionViewModel.currentUser?.userId }
+        return freedomFund <= 0 && !hasLinkedAccount && !hasHistory
     }
 
-    private var activityItems: [ActivityItem] {
+    /// The merged activity feed: fund-balance changes + AI insights, sorted
+    /// together newest-first. Insights long-press into the full InsightsView.
+    private var timelineRows: [TimelineRow] {
         guard let userId = sessionViewModel.currentUser?.userId else { return [] }
-        return allEntries
+        let fundRows = allEntries
             .filter { $0.userId == userId }
             .map { entry in
-                ActivityItem(
+                TimelineRow(
                     id: UUID(uuidString: entry.id) ?? UUID(),
-                    date: Self.dateLabel(for: entry.createdAt),
-                    label: Self.activityLabel(for: entry),
-                    amount: formatSignedCurrency(entry.delta),
-                    isIncome: entry.delta > 0
+                    date: entry.createdAt,
+                    kind: .fund(ActivityItem(
+                        id: UUID(uuidString: entry.id) ?? UUID(),
+                        date: Self.dateLabel(for: entry.createdAt),
+                        label: Self.activityLabel(for: entry),
+                        amount: formatSignedCurrency(entry.delta),
+                        isIncome: entry.delta > 0
+                    ))
                 )
             }
+        let insightRows = insights.map { insight in
+            TimelineRow(
+                id: insight.id,
+                date: insight.createdAt,
+                kind: .insight(
+                    headline: insight.headline,
+                    detail: insight.detail,
+                    dateLabel: Self.dateLabel(for: insight.createdAt)
+                )
+            )
+        }
+        return (fundRows + insightRows).sorted { $0.date > $1.date }
     }
 
     private static func dateLabel(for date: Date) -> String {
@@ -105,7 +275,7 @@ struct ArcCountView: View {
     private static func activityLabel(for entry: FreedomFundEntry) -> String {
         switch entry.source {
         case .manualEdit:
-            return entry.delta >= 0 ? "added to fund" : "withdrew from fund"
+            return entry.delta >= 0 ? "added to balance" : "withdrew from balance"
         case .linkedAccountSync:
             return "balance synced"
         }
@@ -129,10 +299,22 @@ struct ArcCountView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
+    /// Offset (in months from now) of the last month a bill payment lands.
+    /// = ceil(fund / bills) - 1: this month is offset 0, and a fund that only
+    /// partially covers a month still "pays" in that month, so the endpoint is
+    /// one month past arcCount whenever the fund isn't an exact multiple.
+    private var lastBillMonthOffset: Int {
+        guard totalMonthlyBills > 0, freedomFund > 0 else { return 0 }
+        return max(0, Int(ceil(freedomFund / totalMonthlyBills)) - 1)
+    }
+
     private var upcomingMonths: [(name: String, shortName: String, isCovered: Bool, year: Int)] {
         let calendar = Calendar.current
         let now = Date()
-        return (1...24).map { offset in
+        // Start at offset 0 so the first capsule is THIS month. arcCount is the
+        // number of months of runway, so month N (0-based) is covered when
+        // N < arcCount (this month covered once you can cover ≥ 1 cycle).
+        return (0..<24).map { offset in
             guard let futureDate = calendar.date(byAdding: .month, value: offset, to: now) else {
                 return (name: "", shortName: "", isCovered: false, year: 0)
             }
@@ -142,12 +324,21 @@ struct ArcCountView: View {
             formatter.dateFormat = "MMM"
             let shortName = formatter.string(from: futureDate).lowercased()
             let year = calendar.component(.year, from: futureDate)
-            return (name: fullName, shortName: shortName, isCovered: offset <= arcCount, year: year)
+            return (name: fullName, shortName: shortName, isCovered: offset < arcCount, year: year)
         }
     }
 
+    /// Identifiable payload for the centered insight card.
+    private struct InsightDetail: Identifiable {
+        let id: UUID
+        let headline: String
+        let detail: String
+    }
+
     var body: some View {
-        NavigationStack {
+        // No NavigationStack here — HomeView owns the stack and the chrome
+        // (settings + notes). This view is pure content now.
+        Group {
             if isFirstTime {
                 firstTimeContent
             } else {
@@ -155,14 +346,57 @@ struct ArcCountView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Centered insight card, overlaid on the whole view so it can float
+        // over the arc/balance regardless of which row was long-pressed.
+        .overlay {
+            if let insight = selectedInsight {
+                insightCardOverlay(insight)
+            }
+        }
+        .overlay {
+            reanchorMomentOverlay
+        }
         .sheet(isPresented: $showFreedomFundEdit) {
             FreedomFundEditSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onAppear {
-            if !isFirstTime { runEntranceAnimation() }
+        .sheet(isPresented: $showInsights) {
+            InsightsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
+        .onAppear {
+            if !isFirstTime {
+                runEntranceAnimation()
+                generateInsights()
+            }
+        }
+        .toolbar {
+            if !isFirstTime && runwayState == .runway {
+                ToolbarItem(placement: .topBarTrailing) {
+                    freshnessNavItem
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+        }
+    }
+
+    /// Kicks the rule-based insight engine on home-appear (self-throttled to
+    /// once every 6h). Reads bills from the view model and the ledger from the
+    /// local store; new insights land in the Recent Activity timeline.
+    private func generateInsights() {
+        let userId = sessionViewModel.currentUser?.userId
+        let entries = allEntries.filter { userId == nil || $0.userId == userId }
+        RunwayInsightEngine.shared.analyzeIfNeeded(
+            modelContext: modelContext,
+            bills: billViewModel.bills,
+            entries: entries,
+            freedomFund: freedomFund,
+            monthlyBills: totalMonthlyBills,
+            monthlyIncome: sessionViewModel.currentUser?.settings.monthlyIncome ?? 0,
+            currency: currency
+        )
     }
 
     // MARK: - First-time content (never engaged with the fund)
@@ -178,17 +412,6 @@ struct ArcCountView: View {
         .background(bg.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(mutedText)
-                }
-            }
-        }
     }
 
     // MARK: - Funded / Refill content (arcCount >= 0, has history)
@@ -196,39 +419,106 @@ struct ArcCountView: View {
     @ViewBuilder
     private var fundedContent: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    showFreedomFundEdit = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Text("freedom fund")
-                            .font(.custom(FontFamily.Rubik.medium, size: 13))
-                            .foregroundColor(mutedText)
-                        Text(formatCurrency(freedomFund))
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 14))
-                            .foregroundColor(cream)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(dimText)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(glassFill))
-                    .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                if let payday = pendingPayday {
+                    paydayNudgeBanner(payday: payday)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .buttonStyle(PlainButtonStyle())
+
+                // Status + amount capsules. The status capsule uses the theme
+                // color; the amount capsule opens the balance-edit popover.
+                HStack(spacing: 8) {
+                    Button {
+                        beginBalanceEdit()
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: "banknote.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(accentPurple.opacity(0.9))
+                            HStack(spacing: 5) {
+                                Text("balance")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                                    .foregroundColor(cream.opacity(0.55))
+                                Text(formatCurrency(freedomFund))
+                                    .font(.custom(FontFamily.Rubik.bold, size: 15))
+                                    .foregroundColor(cream)
+                                    .contentTransition(.numericText())
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.09), Color.white.opacity(0.03)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        )
+                        .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .popover(isPresented: $showBalancePopover, arrowEdge: .top) {
+                        balanceEditPopover
+                            .presentationCompactAdaptation(.popover)
+                    }
+
+                    if runwayState == .runway {
+                        Button {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showStatusPopover = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: statusIcon)
+                                    .font(.system(size: 12, weight: .bold))
+                                Text(statusLine)
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            }
+                            .foregroundColor(accentPurple)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [accentPurple.opacity(0.24), accentPurple.opacity(0.10)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            )
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
+                            .shadow(
+                                color: accentPurple.opacity(statusPulse ? 0.5 : 0.12),
+                                radius: statusPulse ? 11 : 4
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
+                                statusPulse = true
+                            }
+                        }
+                        .popover(isPresented: $showStatusPopover, arrowEdge: .top) {
+                            statusInfoPopover
+                                .presentationCompactAdaptation(.popover)
+                        }
+                    }
+                }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
 
+                // Runway hero — the wave-text headline, restored.
                 VStack(alignment: .leading, spacing: 0) {
                     switch runwayState {
                     case .runway:
                         HStack(spacing: 14) {
-                            waveWord("\(arcCount)", index: 0)
-                            waveWord(arcCount == 1 ? "month" : "months", index: 1)
+                            waveWord(compactRunway.value, index: 0)
+                            waveWord(compactRunway.unit, index: 1)
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             waveWord("of", index: 2)
@@ -267,16 +557,19 @@ struct ArcCountView: View {
                 .padding(.vertical, 20)
 
                 if arcCount > 0 {
-                    let firstCovered = upcomingMonths.first(where: { $0.isCovered })
-                    let lastCovered = upcomingMonths.last(where: { $0.isCovered })
+                    // First pill = this month (offset 0). Last pill = the last
+                    // month a (possibly partial) bill payment lands, which is
+                    // ceil(fund / bills) - 1 — one month past arcCount whenever
+                    // the fund isn't an exact multiple of the monthly bills.
+                    let first = upcomingMonths[0]
+                    let lastIdx = min(lastBillMonthOffset, upcomingMonths.count - 1)
+                    let last = upcomingMonths[lastIdx]
                     HStack(spacing: 12) {
-                        if let first = firstCovered {
-                            rangePill(first.shortName, year: first.year)
-                        }
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(mutedText)
-                        if let last = lastCovered {
+                        rangePill(first.shortName, year: first.year)
+                        if lastIdx > 0 {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(mutedText)
                             rangePill(last.shortName, year: last.year)
                         }
                     }
@@ -294,7 +587,7 @@ struct ArcCountView: View {
                     .opacity(activityVisible ? 1 : 0)
 
                 ZStack(alignment: .top) {
-                    if activityItems.isEmpty {
+                    if timelineRows.isEmpty {
                         Text("no activity yet.")
                             .font(.custom(FontFamily.Rubik.regular, size: 14).italic())
                             .foregroundColor(dimText)
@@ -304,18 +597,13 @@ struct ArcCountView: View {
                     } else {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 10) {
-                                ForEach(activityItems) { item in
-                                    HStack(spacing: 0) {
-                                        if !item.isIncome { Spacer(minLength: 0) }
-                                        activityRow(item)
-                                        if item.isIncome { Spacer(minLength: 0) }
-                                    }
-                                    .opacity(item.faded ? 0.55 : 1)
+                                ForEach(timelineRows) { row in
+                                    timelineRowView(row)
                                 }
                             }
                             .padding(.horizontal, 24)
                             .padding(.top, 24)
-                            .padding(.bottom, 40)
+                            .padding(.bottom, 120)
                         }
                         LinearGradient(
                             colors: [bg, bg.opacity(0)],
@@ -333,23 +621,568 @@ struct ArcCountView: View {
             .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        showInfoPopover = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 18))
+    }
+
+    /// Flight-metaphor glyph for the runway tier — climbs from a warning to
+    /// full flight to sparkle as the runway lengthens.
+    private var statusIcon: String {
+        switch runwayDays ?? 0 {
+        case ..<14: return "exclamationmark.triangle.fill"
+        case 14..<45: return "wind"
+        case 45..<120: return "airplane"
+        case 120..<270: return "airplane.departure"
+        default: return "sparkles"
+        }
+    }
+
+    /// Status word shown above the balance hero.
+    private var statusLine: String {
+        switch runwayState {
+        case .runway:
+            return ArcCalculationService.getStateName(days: runwayDays ?? 0).lowercased()
+        case .addBill:
+            return "add a bill to see your runway"
+        case .refill:
+            return "time to refill"
+        }
+    }
+
+    private var currencySymbol: String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currency
+        return f.currencySymbol ?? "$"
+    }
+
+    /// The popover balance editor — reuses AnimatedAmountField in a compact
+    /// form. Save writes through commitBalance and dismisses.
+    @ViewBuilder
+    private var balanceEditPopover: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("total spendable balance")
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundColor(mutedText)
+
+            HStack(alignment: .center, spacing: 6) {
+                Text(currencySymbol)
+                    .font(.system(size: 46, weight: .bold))
+                    .foregroundColor(cream.opacity(0.55))
+                AnimatedAmountField(
+                    text: $balanceText,
+                    focused: $balanceFocused,
+                    font: .system(size: 68, weight: .bold),
+                    textColor: cream,
+                    placeholderColor: cream.opacity(0.3),
+                    caretColor: accentPurple,
+                    caretHeight: 60,
+                    tracking: -1.5
+                )
+            }
+
+            Button {
+                commitBalance()
+                showBalancePopover = false
+            } label: {
+                Text("save")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .foregroundColor(cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(glassFill))
+                    .overlay(Capsule().stroke(accentPurple.opacity(0.55), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(width: 340)
+        .background(bg)
+    }
+
+    /// Legend of the runway status tiers, highlighting the user's current one.
+    @ViewBuilder
+    private var statusInfoPopover: some View {
+        let current = ArcCalculationService.getStateName(days: runwayDays ?? 0)
+        let tiers: [(name: String, desc: String)] = [
+            ("Urgency", "less than two weeks. every decision matters."),
+            ("Cautionary", "a couple weeks to a month. breathing room, not comfort."),
+            ("Steady", "one to four months. solid ground."),
+            ("Calm", "four to nine months. real distance from zero."),
+            ("Abundant", "nine months or more. serious cushion.")
+        ]
+        VStack(alignment: .leading, spacing: 16) {
+            Text("what your status means")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 20))
+                .foregroundColor(cream)
+            ForEach(tiers, id: \.name) { tier in
+                let isCurrent = tier.name == current
+                HStack(alignment: .top, spacing: 12) {
+                    Circle()
+                        .fill(isCurrent ? accentPurple : cream.opacity(0.25))
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 7)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(tier.name.lowercased())
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                            .foregroundColor(isCurrent ? accentPurple : cream)
+                        Text(tier.desc)
+                            .font(.custom(FontFamily.Rubik.regular, size: 16))
                             .foregroundColor(mutedText)
-                    }
-                    .popover(isPresented: $showInfoPopover, arrowEdge: .top) {
-                        ArcInfoPopover()
-                            .presentationCompactAdaptation(.popover)
                     }
                 }
             }
+        }
+        .padding(24)
+        .frame(width: 340)
+        .background(bg)
+    }
+
+    // MARK: - Re-anchor pill + reward moment
+
+    /// Compact freshness/streak glance for the nav bar's trailing slot. The
+    /// full-width pill read unevenly on the home; the nav bar is its home now.
+    /// Shows a streak count when there's one, else a live/stale word; tapping
+    /// opens the balance editor (loss-aversion shortcut to keep runway true).
+    /// Timestamp of the most recent re-anchor, if any.
+    private var lastAnchorDate: Date? { manualEntries.first?.createdAt }
+
+    // MARK: - Payday nudge (P5)
+
+    private var incomeProfile: UserProfile? { profiles.first }
+
+    /// Amount expected each payday. Prefers per-paycheck; falls back to a
+    /// legacy monthly figure stored only in settings.
+    private var perPaycheckAmount: Double {
+        if let amt = incomeProfile?.incomeAmount, amt > 0 { return amt }
+        if let c = incomeProfile?.incomeCadence, case .monthly = c,
+           let m = sessionViewModel.currentUser?.settings.monthlyIncome, m > 0 { return m }
+        return 0
+    }
+
+    /// The most recent predicted payday (on or before today) that the user
+    /// hasn't yet re-anchored past or dismissed. Nil for irregular/no income.
+    private var pendingPayday: Date? {
+        guard let profile = incomeProfile, perPaycheckAmount > 0,
+              let cadence = profile.incomeCadence else { return nil }
+        if case .irregular = cadence { return nil }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let from = cal.date(byAdding: .day, value: -45, to: today) else { return nil }
+        guard let lastPayday = profile.nextPaydays(from: from, through: today, calendar: cal).last else { return nil }
+        // Already re-anchored on/after this payday → balance is current.
+        if let anchor = lastAnchorDate, cal.startOfDay(for: anchor) >= lastPayday { return nil }
+        // Dismissed this specific payday.
+        if abs(dismissedPaydayTS - lastPayday.timeIntervalSince1970) < 1 { return nil }
+        return lastPayday
+    }
+
+    /// Compact "updated 2h ago" style freshness for the nav label.
+    private var freshnessLabel: String {
+        guard let date = lastAnchorDate else { return "not updated" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        let secs = Date().timeIntervalSince(date)
+        if secs < 60 { return "updated just now" }
+        return "updated \(f.localizedString(for: date, relativeTo: Date()))"
+    }
+
+    /// Full "last updated" line for the info popover.
+    private var lastUpdatedLine: String {
+        guard let date = lastAnchorDate else { return "you haven't set your balance yet." }
+        let f = DateFormatter()
+        f.dateFormat = Calendar.current.isDateInToday(date) ? "'today at' h:mm a"
+            : (Calendar.current.isDateInYesterday(date) ? "'yesterday at' h:mm a" : "MMM d 'at' h:mm a")
+        return f.string(from: date).lowercased()
+    }
+
+    /// Gentle in-app nudge shown when a predicted payday has landed since the
+    /// last re-anchor: an invitation to reconcile the balance, never a demand.
+    /// Income is projection-only, so payday is exactly when reality and the
+    /// projection diverge — the natural moment to re-anchor.
+    private func paydayNudgeBanner(payday: Date) -> some View {
+        let f = DateFormatter(); f.dateFormat = "MMM d"
+        let when = f.string(from: payday).lowercased()
+        return HStack(spacing: 12) {
+            Image(systemName: "banknote.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(liveGreen)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("payday landed · \(when)")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                    .foregroundColor(cream)
+                Text("you should've gotten about \(formatCurrency(perPaycheckAmount)) — update your balance?")
+                    .font(.custom(FontFamily.Rubik.regular, size: 12))
+                    .foregroundColor(mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    dismissedPaydayTS = payday.timeIntervalSince1970
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(mutedText)
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(liveGreen.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(liveGreen.opacity(0.45), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { beginBalanceEdit() }
+    }
+
+    private var freshnessNavItem: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showFreshnessPopover = true
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(isRunwayLive ? liveGreen : warning)
+                    .frame(width: 6, height: 6)
+                Text(freshnessLabel)
+                    .font(.custom(FontFamily.Rubik.medium, size: 12))
+                    .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(glassFill))
+            .overlay(Capsule().stroke(glassBorder.opacity(0.6), lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+        .popover(isPresented: $showFreshnessPopover, arrowEdge: .top) {
+            freshnessInfoPopover
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// Read-only status: when the runway was last re-anchored and whether it's
+    /// still live. Not an editor — re-anchoring is the balance capsule's job.
+    private var freshnessInfoPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(isRunwayLive ? liveGreen : warning)
+                    .frame(width: 8, height: 8)
+                Text(isRunwayLive ? "runway is live" : "runway is stale")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                    .foregroundColor(cream)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("last updated")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .foregroundColor(mutedText)
+                Text(lastUpdatedLine)
+                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .foregroundColor(cream)
+            }
+
+            if anchorStreak >= 2 {
+                Text("\(anchorStreak)-day check-in streak")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundColor(accentPurple)
+            }
+
+            Text(isRunwayLive
+                 ? "your runway reflects today's balance."
+                 : "update your balance to keep the runway true.")
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundColor(mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(width: 250)
+        .background(bg)
+    }
+
+    private func weeklyDots(_ count: Int) -> some View {
+        HStack(spacing: 5) {
+            ForEach(0..<7, id: \.self) { i in
+                Circle()
+                    .fill(i < count ? accentPurple : cream.opacity(0.15))
+                    .frame(width: 6, height: 6)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reanchorMomentOverlay: some View {
+        if showReanchorMoment, let r = reanchorReward {
+            ZStack {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissReanchorMoment() }
+                DitherShaderView(intensity: 1.0)
+                    .blur(radius: 30)
+                    .opacity(0.5)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    // Headline — a gain celebrates, a spend informs.
+                    if r.grew {
+                        Text(r.freedomMilestone ?? gainHeadline(r))
+                            .font(.custom(FontFamily.Rubik.bold, size: 24))
+                            .foregroundColor(liveGreen)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(r.milestone ?? "runway updated")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: r.milestone != nil ? 20 : 22))
+                            .foregroundColor(r.milestone != nil ? accentPurple : cream)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    // Detail — what the anchor bought (gain) or taught (burn).
+                    VStack(alignment: .leading, spacing: 3) {
+                        if r.grew {
+                            if r.added > 0 {
+                                Text("you added \(formatCurrency(r.added)).")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                                if let d = r.daysDelta, d > 0 {
+                                    Text("that's \(d) more \(d == 1 ? "day" : "days") of freedom.")
+                                        .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                        .foregroundColor(liveGreen)
+                                }
+                            } else if let d = r.daysDelta, d > 0 {
+                                Text("your bills eased — \(d) more \(d == 1 ? "day" : "days") of freedom.")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                            } else {
+                                Text("runway extended.")
+                                    .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                    .foregroundColor(cream)
+                            }
+                        } else if r.spend > 0 {
+                            let span = r.days.map { $0 == 1 ? " over 1 day" : ($0 == 0 ? "" : " over \($0) days") } ?? ""
+                            Text("you spent \(formatCurrency(r.spend))\(span)")
+                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                .foregroundColor(cream)
+                            if r.perDay > 0 {
+                                Text("≈ \(formatCurrency(r.perDay))/day")
+                                    .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                    .foregroundColor(mutedText)
+                            }
+                        } else {
+                            Text("balance confirmed. runway stays true.")
+                                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                                .foregroundColor(mutedText)
+                        }
+                    }
+
+                    if let b = r.runwayBefore, let a = r.runwayAfter {
+                        let cb = ArcCalculationService.compactRunway(days: b)
+                        let ca = ArcCalculationService.compactRunway(days: a)
+                        HStack(spacing: 8) {
+                            Text("runway")
+                                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                                .foregroundColor(mutedText)
+                            Text("\(cb.value) \(cb.unit)")
+                                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                                .foregroundColor(dimText)
+                            Image(systemName: r.grew ? "arrow.up.right" : "arrow.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(r.grew ? liveGreen : mutedText)
+                            Text("\(ca.value) \(ca.unit)")
+                                .font(.custom(FontFamily.Rubik.bold, size: 15))
+                                .foregroundColor(r.grew ? liveGreen : cream)
+                        }
+                    }
+
+                    Divider().overlay(cream.opacity(0.1))
+
+                    // Habit reward — streak + weekly ring.
+                    HStack {
+                        Text(r.streak >= 2 ? "\(r.streak)-day streak" : "kept true")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                            .foregroundColor(accentPurple)
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 4) {
+                            weeklyDots(r.weekCount)
+                            Text("\(r.weekCount)/7 this week")
+                                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                                .foregroundColor(mutedText)
+                        }
+                    }
+
+                    Button { dismissReanchorMoment() } label: {
+                        Text("nice")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                            .foregroundColor(accentPurple)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(accentPurple.opacity(0.12)))
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(24)
+                .frame(maxWidth: 360)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(bg)
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(cream.opacity(0.1), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+                )
+                .padding(.horizontal, 28)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func dismissReanchorMoment() {
+        withAnimation(.easeOut(duration: 0.3)) { showReanchorMoment = false }
+    }
+
+    /// Headline for a runway gain when no freedom milestone fired.
+    private func gainHeadline(_ r: ReanchorReward) -> String {
+        if let d = r.daysDelta, d > 0 { return "+\(d) \(d == 1 ? "day" : "days") of freedom" }
+        return "runway extended"
+    }
+
+    private func beginBalanceEdit() {
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        if freedomFund > 0 {
+            let isWhole = freedomFund.truncatingRemainder(dividingBy: 1) == 0
+            balanceText = String(format: isWhole ? "%.0f" : "%.2f", freedomFund)
+        } else {
+            balanceText = ""
+        }
+        showBalancePopover = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            balanceFocused = true
+        }
+    }
+
+    /// The re-anchor. Writes the new balance to settings + a manual-edit ledger
+    /// entry, mirroring FreedomFundEditSheet's save path. No-ops if unchanged or
+    /// unparseable.
+    private func commitBalance() {
+        balanceFocused = false
+        guard var updatedProfile = sessionViewModel.currentUser else { return }
+        let cleaned = balanceText.filter { $0.isNumber || $0 == "." }
+        guard let newFund = Double(cleaned) else { return }
+        var updatedSettings = updatedProfile.settings
+        let prevFund = updatedSettings.freedomFund
+        guard prevFund != newFund else { return }
+
+        // Capture reward inputs BEFORE mutating — burn + the previous anchor's
+        // date drive the spend/burn lesson.
+        let burn = dailyBurn
+        let prevAnchorDate = manualEntries.first?.createdAt
+
+        updatedSettings.freedomFund = newFund
+        updatedProfile.freedomFund = newFund
+        FreedomFundLedger.recordIfChanged(
+            in: modelContext,
+            userId: updatedProfile.userId,
+            newBalance: newFund,
+            source: .manualEdit
+        )
+        updatedProfile.settings = updatedSettings
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+
+        presentReanchorReward(prevFund: prevFund, newFund: newFund, prevAnchorDate: prevAnchorDate, burn: burn)
+    }
+
+    /// Builds the post-re-anchor reward and shows the moment. Streak/week are
+    /// computed with today folded in, since the just-inserted ledger entry may
+    /// not have propagated to `@Query` yet.
+    private func presentReanchorReward(prevFund: Double, newFund: Double, prevAnchorDate: Date?, burn: Double) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let daysWithToday = Array(Set(anchorDays + [today])).sorted(by: >)
+        let newStreak = streak(from: daysWithToday)
+        let newWeek = weekCount(from: daysWithToday)
+
+        let days: Int? = prevAnchorDate.map {
+            max(0, cal.dateComponents([.day], from: cal.startOfDay(for: $0), to: today).day ?? 0)
+        }
+        let spend = max(0, prevFund - newFund)
+        let added = max(0, newFund - prevFund)
+        let perDay = (days ?? 0) > 0 ? spend / Double(days!) : spend
+
+        let runwayBefore = burn > 0 && prevFund > 0 ? Int(floor(prevFund / burn)) : nil
+        let runwayAfter = burn > 0 && newFund > 0 ? Int(floor(newFund / burn)) : nil
+
+        // Milestone: celebrate a streak crossing once.
+        var milestone: String?
+        let lastCelebrated = UserDefaults.standard.integer(forKey: "reanchor.lastCelebratedStreak")
+        if newStreak > lastCelebrated {
+            switch newStreak {
+            case 7: milestone = "a week of keeping your runway honest."
+            case 30: milestone = "30 days true. remarkable."
+            case 100: milestone = "100 days. you live by this number now."
+            default: break
+            }
+            if milestone != nil {
+                UserDefaults.standard.set(newStreak, forKey: "reanchor.lastCelebratedStreak")
+            }
+        }
+        if newStreak < lastCelebrated {
+            // Streak reset — allow future milestones to fire again.
+            UserDefaults.standard.set(0, forKey: "reanchor.lastCelebratedStreak")
+        }
+
+        // Growth: did this anchor buy more freedom? Prefer the runway-day delta;
+        // fall back to a straight "added money" when burn isn't known yet.
+        let daysDelta: Int? = (runwayBefore != nil && runwayAfter != nil) ? (runwayAfter! - runwayBefore!) : nil
+        let grew = (daysDelta ?? 0) > 0 || (added > 0 && runwayBefore == nil)
+
+        // Freedom milestone: fire once when runway crosses an upward threshold.
+        var freedomMilestone: String?
+        if grew, let after = runwayAfter {
+            let thresholds: [(Int, String)] = [
+                (30, "a month of freedom."),
+                (90, "three months of freedom."),
+                (180, "half a year of freedom."),
+                (365, "a year of freedom. escape velocity."),
+                (730, "two years of freedom.")
+            ]
+            let lastCrossed = UserDefaults.standard.integer(forKey: "reanchor.lastFreedomMilestoneDays")
+            if let hit = thresholds.last(where: { after >= $0.0 }), hit.0 > lastCrossed {
+                freedomMilestone = hit.1
+                UserDefaults.standard.set(hit.0, forKey: "reanchor.lastFreedomMilestoneDays")
+            }
+        }
+
+        reanchorReward = ReanchorReward(
+            spend: spend, added: added, days: days, perDay: perDay,
+            runwayBefore: runwayBefore, runwayAfter: runwayAfter,
+            streak: newStreak, weekCount: newWeek, milestone: milestone,
+            grew: grew, daysDelta: daysDelta, freedomMilestone: freedomMilestone
+        )
+        // A gain deserves a brighter tap than a spend.
+        if grew { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        withAnimation(.easeOut(duration: 0.4)) { showReanchorMoment = true }
+        // Gentle auto-dismiss if the user just walks away.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            if showReanchorMoment { dismissReanchorMoment() }
+        }
     }
 
     @ViewBuilder
@@ -412,10 +1245,133 @@ struct ArcCountView: View {
     }
 
     @ViewBuilder
+    private func timelineRowView(_ row: TimelineRow) -> some View {
+        switch row.kind {
+        case .fund(let item):
+            HStack(spacing: 0) {
+                if !item.isIncome { Spacer(minLength: 0) }
+                activityRow(item)
+                if item.isIncome { Spacer(minLength: 0) }
+            }
+        case .insight(let headline, let detail, let dateLabel):
+            HStack(spacing: 0) {
+                insightRow(headline: headline, dateLabel: dateLabel)
+                    .onLongPressGesture {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            selectedInsight = InsightDetail(id: row.id, headline: headline, detail: detail)
+                        }
+                    }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// Centered floating card for a long-pressed insight — shows the full
+    /// write-up plus a button through to the complete InsightsView. Overlaid
+    /// on the whole view with a dimmed, tap-to-dismiss backdrop, so its size
+    /// and position are constant regardless of the source row's location.
+    @ViewBuilder
+    private func insightCardOverlay(_ insight: InsightDetail) -> some View {
+        ZStack {
+            // Dimmed backdrop — tap anywhere outside the card to dismiss.
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { dismissInsightCard() }
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("norma")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundColor(accentPurple)
+                Text(insight.headline)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .foregroundColor(cream)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(insight.detail)
+                    .font(.custom(FontFamily.Rubik.regular, size: 15))
+                    .foregroundColor(mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    dismissInsightCard()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        showInsights = true
+                    }
+                } label: {
+                    Text("see all insights")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(accentPurple)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(accentPurple.opacity(0.12)))
+                        .overlay(Capsule().stroke(accentPurple.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(22)
+            .frame(maxWidth: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(cream.opacity(0.10), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+            )
+            .padding(.horizontal, 28)
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
+        }
+    }
+
+    private func dismissInsightCard() {
+        withAnimation(.easeOut(duration: 0.2)) { selectedInsight = nil }
+    }
+
+    /// AI-insight row — Norma's commentary as a capsule matching the fund rows.
+    /// Content-width, max two lines (ellipsis past that). The norma·date pill
+    /// hovers over the bottom-trailing edge so it reads as a signature.
+    @ViewBuilder
+    private func insightRow(headline: String, dateLabel: String) -> some View {
+        Text(headline)
+            .font(.custom(FontFamily.Rubik.medium, size: 16))
+            .foregroundColor(cream)
+            .multilineTextAlignment(.leading)
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .frame(maxWidth: 300, alignment: .leading)
+            .glassEffect(in: Capsule())
+            .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 5) {
+                    Text("norma")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+                        .foregroundColor(accentPurple)
+                    Text("·")
+                        .font(.custom(FontFamily.Rubik.regular, size: 12))
+                        .foregroundColor(dimText)
+                    Text(dateLabel)
+                        .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
+                        .foregroundColor(dimText)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(bg))
+                .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                .offset(x: 14, y: 12)
+            }
+            .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
     private func activityRow(_ item: ActivityItem) -> some View {
         HStack(spacing: 10) {
             Text(item.date)
-                .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
                 .foregroundColor(dimText)
 
             if item.isIncome {
@@ -429,11 +1385,11 @@ struct ArcCountView: View {
             }
 
             Text(item.label)
-                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .font(.custom(FontFamily.Rubik.medium, size: 16))
                 .foregroundColor(mutedText)
 
             Text(item.amount)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                 .foregroundColor(item.isIncome ? accentPurple : mutedText)
         }
         .padding(.horizontal, 16)
@@ -493,7 +1449,7 @@ struct FreedomFundFirstTimeView: View {
 
     /// What it is / why it matters, delivered one line at a time.
     private let introPhases = [
-        "this is your freedom fund.",
+        "this is your balance.",
         "money you set aside to cover your bills.",
         "norma reads it as runway — how many months you're covered."
     ]
@@ -610,7 +1566,8 @@ struct FreedomFundFirstTimeView: View {
                         methodCard(
                             icon: "building.columns.fill",
                             title: "connect an account",
-                            detail: "link a bank and your balance syncs on its own — no manual updates."
+                            detail: "link a bank and your balance syncs on its own — no manual updates.",
+                            comingSoon: true
                         )
                     }
                     .padding(.top, 28)
@@ -626,7 +1583,7 @@ struct FreedomFundFirstTimeView: View {
             Button {
                 onSetUp()
             } label: {
-                Text("set up my fund")
+                Text("set my balance")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 16))
                     .foregroundColor(cream)
                     .frame(maxWidth: .infinity)
@@ -653,7 +1610,7 @@ struct FreedomFundFirstTimeView: View {
     }
 
     @ViewBuilder
-    private func methodCard(icon: String, title: String, detail: String) -> some View {
+    private func methodCard(icon: String, title: String, detail: String, comingSoon: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 18))
@@ -661,9 +1618,22 @@ struct FreedomFundFirstTimeView: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                    .foregroundColor(cream)
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(cream)
+                    if comingSoon {
+                        Text("coming soon")
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 9))
+                            .tracking(0.6)
+                            .textCase(.uppercase)
+                            .foregroundColor(accentPurple)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(accentPurple.opacity(0.14)))
+                            .overlay(Capsule().stroke(accentPurple.opacity(0.4), lineWidth: 1))
+                    }
+                }
                 Text(detail)
                     .font(.custom(FontFamily.Rubik.regular, size: 13))
                     .foregroundColor(mutedText)
@@ -680,6 +1650,7 @@ struct FreedomFundFirstTimeView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(glassBorder, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         )
+        .opacity(comingSoon ? 0.5 : 1)
     }
 }
 
@@ -784,7 +1755,7 @@ struct FreedomFundEditSheet: View {
                         }
                     }
 
-                    Text(useLinkedAccount ? "from linked account" : "how much is in your freedom fund?")
+                    Text(useLinkedAccount ? "from linked account" : "how much is your balance?")
                         .font(.custom(FontFamily.Rubik.medium, size: 13))
                         .foregroundColor(mutedText)
                 }
@@ -1027,179 +1998,6 @@ struct FreedomFundEditSheet: View {
     }
 }
 
-// MARK: - Income Edit Sheet
-struct IncomeEditSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var sessionViewModel: SessionViewModel
-
-    @State private var incomeText: String = ""
-    @State private var isSaving = false
-    @FocusState private var isTextFieldFocused: Bool
-
-    private var currentIncome: Double {
-        sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-    }
-
-    private var currency: String {
-        sessionViewModel.currentUser?.settings.currency ?? "USD"
-    }
-
-    private var currencySymbol: String {
-        CurrencyData.getSymbol(for: currency)
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(Color("NormaPastelTeal"))
-
-                    Text("Update Monthly Income")
-                        .font(.custom(FontFamily.Rubik.medium, size: 18))
-                        .foregroundColor(.primary)
-
-                    Text("Enter your monthly income after taxes")
-                        .font(.normaInput(14))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 24)
-
-                // Amount input
-                HStack(spacing: 8) {
-                    Text(currencySymbol)
-                        .font(.custom(FontFamily.Rubik.medium, size: 24))
-                        .foregroundColor(.primary)
-
-                    TextField("0", text: $incomeText)
-                        .font(.custom(FontFamily.Rubik.regular, size: 24))
-                        .keyboardType(.decimalPad)
-                        .focused($isTextFieldFocused)
-                        .multilineTextAlignment(.leading)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.gray.opacity(0.1))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            isTextFieldFocused ? Color("NormaPastelTeal") : Color.clear,
-                            lineWidth: 2
-                        )
-                )
-                .padding(.horizontal, 24)
-
-                Spacer()
-
-                // Save button
-                Button {
-                    saveChanges()
-                } label: {
-                    HStack {
-                        if isSaving {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                        } else {
-                            Text("Save")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color("NormaPastelTeal"))
-                    )
-                    .foregroundColor(.white)
-                }
-                .disabled(isSaving)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-            }
-            .background(Color("NormaBackground"))
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Monthly Income")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 18))
-                        .foregroundColor(.primary)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            // Pre-populate with current value
-            if currentIncome > 0 {
-                incomeText = formatNumberWithoutCurrency(currentIncome)
-            }
-
-            // Auto-focus
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTextFieldFocused = true
-            }
-        }
-    }
-
-    private func formatNumberWithoutCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
-    }
-
-    private func parseNumber(_ text: String) -> Double {
-        let cleanedText = text.replacingOccurrences(of: ",", with: "")
-        return Double(cleanedText) ?? 0
-    }
-
-    private func saveChanges() {
-        guard let currentUser = sessionViewModel.currentUser else { return }
-
-        isSaving = true
-
-        let newIncome = parseNumber(incomeText)
-
-        // Create updated settings
-        var updatedSettings = currentUser.settings
-        updatedSettings.monthlyIncome = newIncome
-
-        // Create updated profile - encryption handled by Edge Function via updateUserProfile
-        var updatedProfile = currentUser
-        updatedProfile.settings = updatedSettings
-
-        Task {
-            await sessionViewModel.updateUserProfile(updatedProfile)
-
-            await MainActor.run {
-                isSaving = false
-
-                // Haptic feedback
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-
-                dismiss()
-            }
-        }
-    }
-}
-
 // MARK: - Arc Info Popover
 struct ArcInfoPopover: View {
     var body: some View {
@@ -1215,7 +2013,7 @@ struct ArcInfoPopover: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("runway is how many months your freedom fund can cover your bills.")
+                Text("runway is how many months your balance can cover your bills.")
                     .font(.normaInput(14))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1238,7 +2036,7 @@ struct ArcInfoPopover: View {
                     .foregroundColor(.primary)
             }
 
-            Text("link a bank account and your balance becomes your freedom fund automatically — no manual updates.")
+            Text("link a bank account and your balance syncs automatically — no manual updates.")
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1258,13 +2056,13 @@ struct FreedomFundInfoPopover: View {
                     .font(.system(size: 24))
                     .foregroundColor(Color("NormaPastelTeal"))
 
-                Text("Freedom Fund")
+                Text("Balance")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 18))
                     .foregroundColor(.primary)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Your Freedom Fund is the total amount you have saved to cover bills.")
+                Text("Your balance is the total amount you have to cover bills.")
                     .font(.normaInput(14))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1287,7 +2085,7 @@ struct FreedomFundInfoPopover: View {
                     .foregroundColor(.primary)
             }
 
-            Text("Connect a bank account to automatically sync your balance as your Freedom Fund. No more manual updates.")
+            Text("Connect a bank account to automatically sync your balance. No more manual updates.")
                 .font(.normaInput(14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

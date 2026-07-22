@@ -31,6 +31,13 @@ final class Insight {
     /// rows migrate cleanly.
     var dismissedAt: Date? = nil
 
+    /// Stable identity for a generated insight, independent of the dynamic
+    /// numbers in its headline. The rule-based RunwayInsightEngine dedupes on
+    /// this so the same collision/spike/tier event isn't re-surfaced every run
+    /// (live match = skip; dismissed match = never resurface). Defaulted nil so
+    /// existing rows migrate cleanly. Legacy note-era insights have no key.
+    var ruleKey: String? = nil
+
     init(
         id: UUID = UUID(),
         type: InsightType,
@@ -39,7 +46,8 @@ final class Insight {
         sourceNoteIds: [UUID] = [],
         createdAt: Date = Date(),
         isRead: Bool = false,
-        dismissedAt: Date? = nil
+        dismissedAt: Date? = nil,
+        ruleKey: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -49,5 +57,6 @@ final class Insight {
         self.createdAt = createdAt
         self.isRead = isRead
         self.dismissedAt = dismissedAt
+        self.ruleKey = ruleKey
     }
 }

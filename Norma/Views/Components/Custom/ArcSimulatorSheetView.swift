@@ -142,7 +142,7 @@ struct ArcSimulatorSheetView: View {
 
     private var freedomFundDisplay: some View {
         VStack(spacing: 6) {
-            Text("Freedom Fund")
+            Text("Balance")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
 
@@ -213,7 +213,7 @@ struct ArcSimulatorSheetView: View {
     private var summaryText: some View {
         Group {
             if simulatedArcs > 0 {
-                Text("Your freedom fund covers **\(simulatedArcs) month\(simulatedArcs == 1 ? "" : "s")** of bills")
+                Text("Your balance covers **\(simulatedArcs) month\(simulatedArcs == 1 ? "" : "s")** of bills")
                     .font(.normaInput(15))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
