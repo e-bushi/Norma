@@ -350,12 +350,16 @@ final class MiniChatToolExecutor {
         guard let occurredAt = parseDate(input["date"] as? String) else {
             return "error: missing or invalid date (use ISO8601)."
         }
+        // userAdjustedAt doubles as the commitment stamp: `occurredAt` holds
+        // the due date, so without this the activity feed would have no
+        // trustworthy "committed on" date.
         let token = NoteToken(
             kind: .commit,
             amount: amount,
             currency: currencyCode(sessionViewModel),
             subject: subject,
-            occurredAt: occurredAt
+            occurredAt: occurredAt,
+            userAdjustedAt: Date()
         )
         modelContext.insert(token)
         try? modelContext.save()
@@ -384,8 +388,7 @@ final class MiniChatToolExecutor {
         let userId = sessionViewModel.currentUser?.userId
         let entries = ((try? modelContext.fetch(FetchDescriptor<FreedomFundEntry>())) ?? [])
             .filter { userId == nil || $0.userId == userId }
-        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills, monthlyIncome: income)
+        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills)
         guard burn > 0 else { return "can't project runway yet — no burn rate and no bills to estimate from." }
         let nowDays = Int(floor(freedomFund / burn))
         let afterDays = Int(floor(max(0, freedomFund - cost) / burn))

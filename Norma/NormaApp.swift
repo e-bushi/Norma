@@ -24,9 +24,13 @@ struct NormaApp: App {
                     NoteToken.self,
                     CachedBill.self,
                     FreedomFundEntry.self,
+                    CapturedTransaction.self,
                     Insight.self,
                     UserProfile.self
             )
+            // Published for non-View code: the logout path wipes local data
+            // through this handle (LocalDataReset).
+            AppModelContainer.shared = modelContainer
 
 //            Purchases.logLevel = .debug
             Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf", appUserID: nil)
@@ -39,6 +43,8 @@ struct NormaApp: App {
 //            config.debug = true  // Enable debug logging to see events in console
 //            config.flushAt = 1   // Flush after every event for testing (remove in production)
 //            PostHogSDK.shared.setup(config)
+
+            AppTheme.mirrorToSharedDefaults()
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

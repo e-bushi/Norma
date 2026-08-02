@@ -49,6 +49,7 @@ struct ForecastSheet: View {
     @State private var selectedBillIds: Set<String> = []
     @State private var selectedIntentionIds: Set<UUID> = []
     @State private var showDeleteConfirm: Bool = false
+    @State private var showDeleteIntentionsConfirm: Bool = false
     @State private var showMarkPaidConfirm: Bool = false
     @State private var showUpgradeSheet: Bool = false
     @State private var upgradeDueDate: Date = Date()
@@ -117,6 +118,12 @@ struct ForecastSheet: View {
                 Button("delete", role: .destructive) { performBulkDelete() }
             } message: {
                 Text("this will remove \(selectedBillIds.count) \(selectedBillIds.count == 1 ? "bill" : "bills") permanently.")
+            }
+            .alert("delete intentions?", isPresented: $showDeleteIntentionsConfirm) {
+                Button("cancel", role: .cancel) {}
+                Button("delete", role: .destructive) { performDeleteIntentions() }
+            } message: {
+                Text("this will remove \(selectedIntentionIds.count) \(selectedIntentionIds.count == 1 ? "intention" : "intentions") permanently.")
             }
             .alert("mark as paid?", isPresented: $showMarkPaidConfirm) {
                 Button("cancel", role: .cancel) {}
@@ -210,6 +217,17 @@ struct ForecastSheet: View {
                             Label("push to next month", systemImage: "calendar.badge.plus")
                         }
                         .disabled(!hasSelection || isAdvancing)
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            showDeleteIntentionsConfirm = true
+                        } label: {
+                            Label("delete", systemImage: "trash")
+                        }
+                        .disabled(!hasSelection || isDeleting)
                     }
                 } label: {
                     Text(hasSelection
@@ -1133,6 +1151,25 @@ struct ForecastSheet: View {
         }
     }
 
+    /// Deletes the selected intention tokens from the local store. Intentions
+    /// live only in SwiftData (NoteToken), so this is a local delete — nothing
+    /// server-side to reconcile.
+    private func performDeleteIntentions() {
+        let targets = allTokens.filter { selectedIntentionIds.contains($0.id) && $0.kind == .intent }
+        guard !targets.isEmpty else { return }
+        isDeleting = true
+        for token in targets {
+            modelContext.delete(token)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("ForecastSheet: failed to delete intentions — \(error)")
+        }
+        isDeleting = false
+        exitSelection()
+    }
+
     // MARK: - Upgrade sheet
 
     private var upgradeSheet: some View {
@@ -1369,8 +1406,7 @@ struct ForecastSheet: View {
     }
 
     private var dailyBurn: Double {
-        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        return ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills, monthlyIncome: income)
+        ArcCalculationService.dailyBurn(entries: userEntries, monthlyBills: allMonthlyBills)
     }
 
     private func runwayDays(for balance: Double) -> Int? {

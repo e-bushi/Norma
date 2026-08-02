@@ -722,6 +722,7 @@ struct SettingsView: View {
             withAnimation(.easeOut(duration: 0.18)) {
                 selectedAccentThemeID = theme.id
             }
+            AppTheme.mirrorToSharedDefaults()
         } label: {
             ZStack {
                 Circle()

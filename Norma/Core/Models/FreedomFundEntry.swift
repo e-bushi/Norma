@@ -19,6 +19,15 @@ import SwiftData
 enum FreedomFundEntrySource: String, Codable {
     case manualEdit
     case linkedAccountSync
+    /// Receipt-scanned transactions confirmed from the pending queue. All
+    /// confirmations in a single day collapse into one entry (see
+    /// FreedomFundLedger.recordReceiptBatch).
+    case receiptImport
+    /// A payday the user explicitly confirmed landed ("yes" on the payday
+    /// nudge). The only form of income that ever enters the burn math — it
+    /// re-baselines the balance upward so the next lower anchor books the
+    /// spend the paycheck masked.
+    case paydayConfirm
 }
 
 @Model

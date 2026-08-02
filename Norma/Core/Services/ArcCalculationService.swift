@@ -135,41 +135,33 @@ struct ArcCalculationService {
 
     // MARK: - Burn-based runway (decision A: income ignored)
 
-    /// Observed daily burn from the freedom-fund ledger, over the span between
-    /// the first and last anchor. Falls back to bills ÷ 30 until there are two
-    /// anchors spanning at least a day.
+    /// Observed daily burn from the freedom-fund ledger: the sum of downward
+    /// balance deltas over the span between the first and last anchor.
     ///
-    /// **Income back-out (P4):** when income is known, the raw balance deltas
-    /// *understate* real outflow — a paycheck landing between anchors masks the
-    /// spend it offset. So we recover true total outflow as
-    /// `income received − net balance change` (income − (last − first)), which
-    /// equals bills + life actually spent. With no income this reduces to the
-    /// observed downward-delta sum, so income-less ("Living") users are
-    /// unchanged. Runway stays conservative — it measures outflow as if income
-    /// stopped; when you're net-positive (building), it floors at bill coverage.
+    /// Income is never inferred. A paycheck only enters the ledger as a
+    /// user-confirmed payday entry (an upward delta), which re-baselines the
+    /// balance so the next lower anchor books the true spend the paycheck
+    /// masked. No smoothing, no assumptions about where reported income went.
+    ///
+    /// Floored at bill coverage (bills ÷ 30), so runway is never rosier than
+    /// balance ÷ bills — the worst case is the "bills only" read.
     ///
     /// - Parameters:
     ///   - entries: The user's FreedomFundEntry ledger (any order).
-    ///   - monthlyBills: Total monthly bills, the fallback burn source.
-    ///   - monthlyIncome: Derived monthly income; 0 keeps the legacy behavior.
+    ///   - monthlyBills: Total monthly bills — the floor and the fallback
+    ///     until two anchors span at least a day.
     /// - Returns: Estimated burn per day (always ≥ 0).
-    static func dailyBurn(entries: [FreedomFundEntry], monthlyBills: Double, monthlyIncome: Double = 0) -> Double {
+    static func dailyBurn(entries: [FreedomFundEntry], monthlyBills: Double) -> Double {
+        let floorBurn = monthlyBills / 30.0
         let sorted = entries.sorted { $0.createdAt < $1.createdAt }
         if let first = sorted.first, let last = sorted.last, sorted.count >= 2 {
             let days = last.createdAt.timeIntervalSince(first.createdAt) / 86_400
             if days >= 1 {
-                if monthlyIncome > 0 {
-                    let netChange = last.balanceAfter - first.balanceAfter
-                    let incomeInWindow = monthlyIncome * (days / 30.0)
-                    let outflow = incomeInWindow - netChange
-                    if outflow > 0 { return outflow / days }
-                } else {
-                    let burn = sorted.reduce(0.0) { $0 + ($1.delta < 0 ? -$1.delta : 0) }
-                    if burn > 0 { return burn / days }
-                }
+                let drops = sorted.reduce(0.0) { $0 + ($1.delta < 0 ? -$1.delta : 0) }
+                if drops > 0 { return max(drops / days, floorBurn) }
             }
         }
-        return monthlyBills / 30.0
+        return floorBurn
     }
 
     /// Runway expressed as a compact time value + unit ("47" / "days",

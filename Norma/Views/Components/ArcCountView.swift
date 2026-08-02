@@ -21,6 +21,9 @@ struct ArcCountView: View {
     )
     private var insights: [Insight]
     @Query private var profiles: [UserProfile]
+    /// All tokens; the activity feed derives reminder/intent/commitment rows
+    /// from their timestamps rather than a persisted event log.
+    @Query private var tokens: [NoteToken]
 
     /// Timestamp of the payday the user dismissed, so the nudge stays hidden
     /// until the next one lands.
@@ -33,6 +36,11 @@ struct ArcCountView: View {
 
     @State private var showFreedomFundEdit = false
     @State private var showInfoPopover = false
+
+    /// Receipt-scanned transactions awaiting review. Drives the badge next to
+    /// the freshness capsule; the sheet mutates the same store.
+    @StateObject private var pendingStore = PendingTransactionsStore()
+    @State private var showPendingTransactions = false
 
     @Environment(\.modelContext) private var modelContext
     /// Balance re-anchor via popover: tapping the amount capsule opens a small
@@ -53,6 +61,10 @@ struct ArcCountView: View {
     @State private var selectedInsight: InsightDetail?
     @State private var balanceText = ""
     @FocusState private var balanceFocused: Bool
+    /// Ledger entry pending delete confirmation (set by long-pressing its
+    /// activity row). Deleting an anchor rewrites history, so it always
+    /// confirms first.
+    @State private var entryPendingDelete: FreedomFundEntry?
 
     /// The reward shown after a re-anchor: what the update revealed (spend +
     /// burn), the runway shift, and streak/weekly progress. Re-anchoring is the
@@ -81,6 +93,9 @@ struct ArcCountView: View {
     @State private var showReanchorMoment = false
 
     @State private var heroWordCount = 0
+    /// Month position under the dial's needle while the user drags it; the
+    /// balance capsule runs along via months × 30 × daily burn.
+    @State private var dialDragMonths: Double?
     @State private var pillVisible = false
     @State private var rangeVisible = false
     @State private var activityVisible = false
@@ -97,13 +112,13 @@ struct ArcCountView: View {
         return .runway
     }
 
-    /// Observed daily burn from the ledger (falls back to bills ÷ 30). Income
-    /// is backed out so a paycheck landing between anchors doesn't hide spend.
+    /// Observed daily burn from the ledger — downward deltas only, floored at
+    /// bill coverage. Confirmed paydays live in the ledger itself, so income
+    /// never needs to be inferred here.
     private var dailyBurn: Double {
         let userId = sessionViewModel.currentUser?.userId
         let entries = allEntries.filter { $0.userId == userId }
-        let income = sessionViewModel.currentUser?.settings.monthlyIncome ?? 0
-        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills, monthlyIncome: income)
+        return ArcCalculationService.dailyBurn(entries: entries, monthlyBills: totalMonthlyBills)
     }
 
     /// Runway in days: balance ÷ burn. Nil when there's no balance or no burn
@@ -135,13 +150,22 @@ struct ArcCountView: View {
         return Array(Set(manualEntries.map { cal.startOfDay(for: $0.createdAt) })).sorted(by: >)
     }
 
-    private var daysSinceLastAnchor: Int? {
-        guard let last = manualEntries.first else { return nil }
-        let cal = Calendar.current
-        return cal.dateComponents([.day], from: cal.startOfDay(for: last.createdAt), to: cal.startOfDay(for: Date())).day
+    /// Last event that moved the balance — manual re-anchor OR confirmed
+    /// receipts. The freshness capsule reads this; streaks and the payday
+    /// nudge stay on true re-anchors (manualEntries), since confirming
+    /// receipts deducts an estimate rather than observing the real balance.
+    private var lastBalanceUpdateDate: Date? {
+        let userId = sessionViewModel.currentUser?.userId
+        return allEntries
+            .filter { $0.userId == userId && ($0.source == .manualEdit || $0.source == .receiptImport) }
+            .map(\.createdAt)
+            .max()
     }
 
-    private var isRunwayLive: Bool { (daysSinceLastAnchor ?? 99) == 0 }
+    private var isRunwayLive: Bool {
+        guard let last = lastBalanceUpdateDate else { return false }
+        return Calendar.current.isDateInToday(last)
+    }
 
     private var anchorStreak: Int { streak(from: anchorDays) }
     private var weekAnchorCount: Int { weekCount(from: anchorDays) }
@@ -197,6 +221,9 @@ struct ArcCountView: View {
 
     private struct ActivityItem: Identifiable {
         let id: UUID
+        /// Backing FreedomFundEntry.id, so long-press → delete can find the
+        /// ledger row this feed row was derived from.
+        let entryId: String
         let date: String
         let label: String
         let amount: String
@@ -213,6 +240,11 @@ struct ArcCountView: View {
         enum Kind {
             case fund(ActivityItem)
             case insight(headline: String, detail: String, dateLabel: String)
+            /// Whitelisted bill/token event (bill added/paid, intent advanced,
+            /// commitment made, reminder fired). Rendered dimmer than fund rows
+            /// so re-anchors stay the loudest thing in the feed. `detail` is an
+            /// optional trailing amount or runway-impact suffix.
+            case event(label: String, detail: String?, dateLabel: String)
         }
     }
 
@@ -242,6 +274,7 @@ struct ArcCountView: View {
                     date: entry.createdAt,
                     kind: .fund(ActivityItem(
                         id: UUID(uuidString: entry.id) ?? UUID(),
+                        entryId: entry.id,
                         date: Self.dateLabel(for: entry.createdAt),
                         label: Self.activityLabel(for: entry),
                         amount: formatSignedCurrency(entry.delta),
@@ -260,7 +293,169 @@ struct ArcCountView: View {
                 )
             )
         }
-        return (fundRows + insightRows).sorted { $0.date > $1.date }
+        return (fundRows + insightRows + eventRows).sorted { $0.date > $1.date }
+    }
+
+    /// Month buckets over the merged feed, newest first. The current month is
+    /// titled "this month"; older months use their name, with the year
+    /// appended once the bucket leaves the current year.
+    private struct TimelineSection: Identifiable {
+        let id: String
+        let title: String
+        let rows: [TimelineRow]
+    }
+
+    private var timelineSections: [TimelineSection] {
+        let cal = Calendar.current
+        let now = Date()
+        let grouped = Dictionary(grouping: timelineRows) { row -> String in
+            let comps = cal.dateComponents([.year, .month], from: row.date)
+            return "\(comps.year ?? 0)-\(comps.month ?? 0)"
+        }
+        return grouped
+            .map { key, rows -> TimelineSection in
+                let date = rows[0].date
+                let title: String
+                if cal.isDate(date, equalTo: now, toGranularity: .month) {
+                    title = "this month"
+                } else {
+                    let formatter = DateFormatter()
+                    let sameYear = cal.isDate(date, equalTo: now, toGranularity: .year)
+                    formatter.dateFormat = sameYear ? "MMMM" : "MMMM yyyy"
+                    title = formatter.string(from: date).lowercased()
+                }
+                return TimelineSection(id: key, title: title, rows: rows.sorted { $0.date > $1.date })
+            }
+            .sorted { ($0.rows.first?.date ?? .distantPast) > ($1.rows.first?.date ?? .distantPast) }
+    }
+
+    /// Whitelisted bill/token events, derived on the fly from timestamps the
+    /// models already carry — no event table. The whitelist rule: a row earns
+    /// its place only if it changed the runway or demanded action. Bill
+    /// amount-edits and deletions are NOT here — deletes are hard deletes
+    /// (gone from the fetch) and `updatedAt` can't distinguish an amount
+    /// change from blacklisted settings churn.
+    private var eventRows: [TimelineRow] {
+        var rows: [TimelineRow] = []
+        let now = Date()
+
+        for bill in billViewModel.bills {
+            let name = bill.name.lowercased()
+            let key = bill.id ?? bill.name
+            if let created = Self.parseSupabaseDate(bill.createdAt) {
+                rows.append(TimelineRow(
+                    id: Self.stableUUID("bill-added-\(key)"),
+                    date: created,
+                    kind: .event(
+                        label: "added \(name)",
+                        detail: runwayImpact(ofMonthlyAmount: ArcCalculationService.calculateMonthlyBillsTotal(bills: [bill])),
+                        dateLabel: Self.dateLabel(for: created)
+                    )
+                ))
+            }
+            if let paid = bill.paidAt {
+                rows.append(TimelineRow(
+                    id: Self.stableUUID("bill-paid-\(key)-\(Int(paid.timeIntervalSince1970))"),
+                    date: paid,
+                    kind: .event(
+                        label: "paid \(name)",
+                        detail: formatCurrency(bill.amount),
+                        dateLabel: Self.dateLabel(for: paid)
+                    )
+                ))
+            }
+        }
+
+        for token in tokens {
+            let subject = token.subject ?? ""
+            switch token.kind {
+            case .intent:
+                // Only advanced intentions surface; creation is confirmed
+                // inline in chat and would be feed noise.
+                guard let adjusted = token.userAdjustedAt else { continue }
+                rows.append(TimelineRow(
+                    id: Self.stableUUID("intent-\(token.id.uuidString)-\(Int(adjusted.timeIntervalSince1970))"),
+                    date: adjusted,
+                    kind: .event(
+                        label: "still planning: \(subject)",
+                        detail: token.amount > 0 ? formatCurrency(token.amount) : nil,
+                        dateLabel: Self.dateLabel(for: adjusted)
+                    )
+                ))
+            case .commit:
+                // userAdjustedAt is the commit stamp (upgrade in the forecast
+                // or creation via chat). Legacy commits without it have no
+                // trustworthy event date, so they stay out of the feed.
+                guard let committed = token.userAdjustedAt else { continue }
+                rows.append(TimelineRow(
+                    id: Self.stableUUID("commit-\(token.id.uuidString)"),
+                    date: committed,
+                    kind: .event(
+                        label: "committed: \(subject)",
+                        detail: token.amount > 0 ? formatCurrency(token.amount) : nil,
+                        dateLabel: Self.dateLabel(for: committed)
+                    )
+                ))
+            case .reminder:
+                // A reminder earns a row when it fires, not when it's created.
+                guard let fire = token.remindAt, fire <= now else { continue }
+                rows.append(TimelineRow(
+                    id: Self.stableUUID("reminder-\(token.id.uuidString)"),
+                    date: fire,
+                    kind: .event(
+                        label: "remind: \(subject)",
+                        detail: nil,
+                        dateLabel: Self.dateLabel(for: fire)
+                    )
+                ))
+            default:
+                continue
+            }
+        }
+        return rows
+    }
+
+    /// Runway impact of adding `monthly` to the burn, as a signed day-delta
+    /// suffix ("−4 days"). Approximated against the current observed burn:
+    /// impact = fund/burnWith − fund/burnWithout. Nil whenever the math has
+    /// nothing to stand on or the delta rounds to zero.
+    private func runwayImpact(ofMonthlyAmount monthly: Double) -> String? {
+        guard freedomFund > 0, monthly > 0, dailyBurn > 0 else { return nil }
+        let burnWithout = dailyBurn - monthly / 30.0
+        guard burnWithout > 0 else { return nil }
+        let delta = freedomFund / dailyBurn - freedomFund / burnWithout
+        let magnitude = abs(delta)
+        if magnitude < 0.05 { return nil }
+        let sign = delta < 0 ? "−" : "+"
+        if magnitude < 1 { return "\(sign)\(String(format: "%.1f", magnitude)) days" }
+        let whole = Int(magnitude.rounded())
+        return "\(sign)\(whole) \(whole == 1 ? "day" : "days")"
+    }
+
+    /// Supabase timestamps arrive as ISO8601 strings, with or without
+    /// fractional seconds depending on the column.
+    private static func parseSupabaseDate(_ string: String?) -> Date? {
+        guard let string else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: string) { return date }
+        return ISO8601DateFormatter().date(from: string)
+    }
+
+    /// Deterministic UUID from a string key (FNV-1a over two lanes), so
+    /// derived rows keep a stable identity across recomputes — the feed is
+    /// rebuilt every render and fresh UUID()s would defeat ForEach diffing.
+    private static func stableUUID(_ key: String) -> UUID {
+        var h1: UInt64 = 0xcbf29ce484222325
+        var h2: UInt64 = 0x84222325cbf29ce4
+        for byte in key.utf8 {
+            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
+            h2 = (h2 &+ UInt64(byte)) &* 0x100000001b3
+        }
+        let bytes = withUnsafeBytes(of: h1.bigEndian) { Array($0) }
+            + withUnsafeBytes(of: h2.bigEndian) { Array($0) }
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
     }
 
     private static func dateLabel(for date: Date) -> String {
@@ -278,6 +473,10 @@ struct ArcCountView: View {
             return entry.delta >= 0 ? "added to balance" : "withdrew from balance"
         case .linkedAccountSync:
             return "balance synced"
+        case .receiptImport:
+            return "receipts added"
+        case .paydayConfirm:
+            return "payday confirmed"
         }
     }
 
@@ -353,6 +552,13 @@ struct ArcCountView: View {
                 insightCardOverlay(insight)
             }
         }
+        // Custom delete-confirmation card (not a system confirmationDialog —
+        // its width isn't controllable and it clashes with the brand).
+        .overlay {
+            if let entry = entryPendingDelete {
+                deleteEntryCardOverlay(entry)
+            }
+        }
         .overlay {
             reanchorMomentOverlay
         }
@@ -372,7 +578,28 @@ struct ArcCountView: View {
                 generateInsights()
             }
         }
+        .task {
+            await pendingStore.refresh(userId: sessionViewModel.currentUser?.userId)
+            // Once per login: merge the server ledger down (and push up any
+            // local history the server hasn't seen), then mirror-sync the
+            // user-authored content (tokens + captured transactions).
+            if let userId = sessionViewModel.currentUser?.userId {
+                await FreedomFundSync.pullIfNeeded(context: modelContext, userId: userId)
+                await UserContentSync.activate(context: modelContext, userId: userId)
+            }
+        }
+        .sheet(isPresented: $showPendingTransactions) {
+            PendingTransactionsSheet(store: pendingStore, currency: currency)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .toolbar {
+            if !isFirstTime && !pendingStore.items.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    pendingTransactionsBadge
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
             if !isFirstTime && runwayState == .runway {
                 ToolbarItem(placement: .topBarTrailing) {
                     freshnessNavItem
@@ -394,7 +621,6 @@ struct ArcCountView: View {
             entries: entries,
             freedomFund: freedomFund,
             monthlyBills: totalMonthlyBills,
-            monthlyIncome: sessionViewModel.currentUser?.settings.monthlyIncome ?? 0,
             currency: currency
         )
     }
@@ -440,10 +666,11 @@ struct ArcCountView: View {
                                 Text("balance")
                                     .font(.custom(FontFamily.Rubik.medium, size: 13))
                                     .foregroundColor(cream.opacity(0.55))
-                                Text(formatCurrency(freedomFund))
+                                Text(formatCurrency(dialDragMonths.map { $0 * 30 * dailyBurn } ?? freedomFund))
                                     .font(.custom(FontFamily.Rubik.bold, size: 15))
                                     .foregroundColor(cream)
                                     .contentTransition(.numericText())
+                                    .animation(.snappy(duration: 0.2), value: dialDragMonths ?? -1)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -512,49 +739,55 @@ struct ArcCountView: View {
                 .opacity(pillVisible ? 1 : 0)
                 .offset(y: pillVisible ? 0 : 8)
 
-                // Runway hero — the wave-text headline, restored.
-                VStack(alignment: .leading, spacing: 0) {
-                    switch runwayState {
-                    case .runway:
-                        HStack(spacing: 14) {
-                            waveWord(compactRunway.value, index: 0)
-                            waveWord(compactRunway.unit, index: 1)
-                        }
-                        HStack(alignment: .firstTextBaseline, spacing: 14) {
-                            waveWord("of", index: 2)
+                // Runway hero — in the runway state the dial IS the header
+                // (with its own small readout); the wave-text words remain
+                // for the empty states.
+                if runwayState == .runway, let days = runwayDays {
+                    RunwayDialView(
+                        value: days,
+                        accent: accentPurple,
+                        cream: cream,
+                        muted: mutedText,
+                        liveDragMonths: $dialDragMonths
+                    )
+                    .frame(height: 240)
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+                    .opacity(pillVisible ? 1 : 0)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch runwayState {
+                        case .runway:
+                            EmptyView()
+                        case .addBill:
+                            HStack(spacing: 14) {
+                                waveWord("add", index: 0)
+                                waveWord("a", index: 1)
+                                waveWord("bill", index: 2)
+                            }
+                            HStack(spacing: 14) {
+                                waveWord("to", index: 3)
+                                waveWord("see", index: 4)
+                                waveWord("your", index: 5)
+                            }
                             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                                waveWord("runway", index: 3)
-                                waveWord(".", index: 4, color: accentPurple)
+                                waveWord("runway", index: 6)
+                                waveWord(".", index: 7, color: accentPurple)
+                            }
+                        case .refill:
+                            HStack(spacing: 14) {
+                                waveWord("time", index: 0)
+                                waveWord("to", index: 1)
+                            }
+                            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                                waveWord("refill", index: 2)
+                                waveWord(".", index: 3, color: accentPurple)
                             }
                         }
-                    case .addBill:
-                        HStack(spacing: 14) {
-                            waveWord("add", index: 0)
-                            waveWord("a", index: 1)
-                            waveWord("bill", index: 2)
-                        }
-                        HStack(spacing: 14) {
-                            waveWord("to", index: 3)
-                            waveWord("see", index: 4)
-                            waveWord("your", index: 5)
-                        }
-                        HStack(alignment: .firstTextBaseline, spacing: 0) {
-                            waveWord("runway", index: 6)
-                            waveWord(".", index: 7, color: accentPurple)
-                        }
-                    case .refill:
-                        HStack(spacing: 14) {
-                            waveWord("time", index: 0)
-                            waveWord("to", index: 1)
-                        }
-                        HStack(alignment: .firstTextBaseline, spacing: 0) {
-                            waveWord("refill", index: 2)
-                            waveWord(".", index: 3, color: accentPurple)
-                        }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 20)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 20)
 
                 if arcCount > 0 {
                     // First pill = this month (offset 0). Last pill = the last
@@ -596,9 +829,25 @@ struct ArcCountView: View {
                             .padding(.bottom, 40)
                     } else {
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: 10) {
-                                ForEach(timelineRows) { row in
-                                    timelineRowView(row)
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(timelineSections) { section in
+                                    // First header sits flush with the top;
+                                    // later ones get breathing room above.
+                                    if section.id != timelineSections.first?.id {
+                                        Spacer().frame(height: 14)
+                                    }
+                                    HStack(spacing: 10) {
+                                        Text(section.title)
+                                            .font(.custom(FontFamily.Rubik.medium, size: 17))
+                                            .foregroundColor(dimText)
+                                            .fixedSize()
+                                        Rectangle()
+                                            .fill(cream.opacity(0.08))
+                                            .frame(height: 1)
+                                    }
+                                    ForEach(section.rows) { row in
+                                        timelineRowView(row)
+                                    }
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -621,6 +870,121 @@ struct ArcCountView: View {
             .background(bg.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Centered delete-confirmation card, same construction as the insight
+    /// card: dimmed tap-to-dismiss backdrop, fixed max width, brand type.
+    @ViewBuilder
+    private func deleteEntryCardOverlay(_ entry: FreedomFundEntry) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { dismissDeleteEntryCard() }
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("delete this balance update?")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 18))
+                    .foregroundColor(cream)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Text(Self.dateLabel(for: entry.createdAt))
+                        .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
+                        .foregroundColor(dimText)
+                    Text(formatSignedCurrency(entry.delta))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                        .foregroundColor(entry.delta > 0 ? accentPurple : mutedText)
+                }
+                Text("removing an anchor rewrites history — your burn and runway are measured from these updates.")
+                    .font(.custom(FontFamily.Rubik.regular, size: 15))
+                    .foregroundColor(mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    deletePendingEntry()
+                } label: {
+                    Text("delete")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(warning)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(warning.opacity(0.12)))
+                        .overlay(Capsule().stroke(warning.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    dismissDeleteEntryCard()
+                } label: {
+                    Text("cancel")
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                        .foregroundColor(cream)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .overlay(Capsule().stroke(glassBorder, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(22)
+            .frame(maxWidth: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(cream.opacity(0.10), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+            )
+            .padding(.horizontal, 28)
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
+        }
+    }
+
+    private func dismissDeleteEntryCard() {
+        withAnimation(.easeOut(duration: 0.2)) { entryPendingDelete = nil }
+    }
+
+    /// Deletes the long-pressed ledger entry and repairs the chain:
+    /// the next entry's delta is recomputed against the entry before the
+    /// deleted one (the ledger's baseline is 0 when nothing precedes it).
+    /// When the deleted entry was the newest anchor, the profile balance
+    /// rolls back to the previous anchor's balanceAfter so the ledger and
+    /// the displayed fund stay in agreement — without writing a new entry.
+    private func deletePendingEntry() {
+        defer { dismissDeleteEntryCard() }
+        guard let entry = entryPendingDelete,
+              let userId = sessionViewModel.currentUser?.userId else { return }
+
+        let chain = allEntries
+            .filter { $0.userId == userId }
+            .sorted { $0.createdAt < $1.createdAt }
+        guard let index = chain.firstIndex(where: { $0.id == entry.id }) else { return }
+
+        let previous = index > 0 ? chain[index - 1] : nil
+        let next = index + 1 < chain.count ? chain[index + 1] : nil
+
+        if let next {
+            next.delta = next.balanceAfter - (previous?.balanceAfter ?? 0)
+        }
+        let deletedId = entry.id
+        modelContext.delete(entry)
+        try? modelContext.save()
+        // Mirror both the removal and the repaired neighbor to the server.
+        FreedomFundSync.pushDelete(id: deletedId)
+        if let next { FreedomFundSync.push(next) }
+
+        if next == nil, var updatedProfile = sessionViewModel.currentUser {
+            let restored = previous?.balanceAfter ?? 0
+            var updatedSettings = updatedProfile.settings
+            updatedSettings.freedomFund = restored
+            updatedProfile.settings = updatedSettings
+            updatedProfile.freedomFund = restored
+            Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+        }
+
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 
     /// Flight-metaphor glyph for the runway tier — climbs from a warning to
@@ -777,7 +1141,7 @@ struct ArcCountView: View {
 
     /// Compact "updated 2h ago" style freshness for the nav label.
     private var freshnessLabel: String {
-        guard let date = lastAnchorDate else { return "not updated" }
+        guard let date = lastBalanceUpdateDate else { return "not updated" }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
         let secs = Date().timeIntervalSince(date)
@@ -787,7 +1151,7 @@ struct ArcCountView: View {
 
     /// Full "last updated" line for the info popover.
     private var lastUpdatedLine: String {
-        guard let date = lastAnchorDate else { return "you haven't set your balance yet." }
+        guard let date = lastBalanceUpdateDate else { return "you haven't set your balance yet." }
         let f = DateFormatter()
         f.dateFormat = Calendar.current.isDateInToday(date) ? "'today at' h:mm a"
             : (Calendar.current.isDateInYesterday(date) ? "'yesterday at' h:mm a" : "MMM d 'at' h:mm a")
@@ -807,10 +1171,10 @@ struct ArcCountView: View {
                 .foregroundColor(liveGreen)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("payday landed · \(when)")
+                Text("payday · \(when)")
                     .font(.custom(FontFamily.Rubik.semiBold, size: 14))
                     .foregroundColor(cream)
-                Text("you should've gotten about \(formatCurrency(perPaycheckAmount)) — update your balance?")
+                Text("did about \(formatCurrency(perPaycheckAmount)) land?")
                     .font(.custom(FontFamily.Rubik.regular, size: 12))
                     .foregroundColor(mutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -818,6 +1182,21 @@ struct ArcCountView: View {
 
             Spacer(minLength: 4)
 
+            Button {
+                confirmPayday(payday)
+            } label: {
+                Text("yes")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .foregroundColor(liveGreen)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(liveGreen.opacity(0.14)))
+                    .overlay(Capsule().stroke(liveGreen.opacity(0.5), lineWidth: 1))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            // "Not yet" — dismisses this payday without recording anything.
             Button {
                 let impact = UIImpactFeedbackGenerator(style: .light)
                 impact.impactOccurred()
@@ -847,6 +1226,64 @@ struct ArcCountView: View {
         .onTapGesture { beginBalanceEdit() }
     }
 
+    /// "Yes, it landed." Records the paycheck as a confirmed-payday ledger
+    /// entry — the only income that ever enters the burn math — bumps the
+    /// stored balance to match, then opens the balance editor prefilled so the
+    /// user can true it up in the same moment. Confirmation and re-anchor are
+    /// one gesture.
+    private func confirmPayday(_ payday: Date) {
+        guard var updatedProfile = sessionViewModel.currentUser else { return }
+        let newFund = freedomFund + perPaycheckAmount
+
+        var updatedSettings = updatedProfile.settings
+        updatedSettings.freedomFund = newFund
+        updatedProfile.freedomFund = newFund
+        updatedProfile.settings = updatedSettings
+        FreedomFundLedger.recordIfChanged(
+            in: modelContext,
+            userId: updatedProfile.userId,
+            newBalance: newFund,
+            source: .paydayConfirm
+        )
+        Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            dismissedPaydayTS = payday.timeIntervalSince1970
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        // Invite the true-up: editor opens on the post-paycheck figure.
+        let isWhole = newFund.truncatingRemainder(dividingBy: 1) == 0
+        balanceText = String(format: isWhole ? "%.0f" : "%.2f", newFund)
+        showBalancePopover = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            balanceFocused = true
+        }
+    }
+
+    /// Badge for the receipt review queue — sits next to the freshness capsule.
+    /// Accent-tinted (active capsule pattern) so it reads as "something waits".
+    private var pendingTransactionsBadge: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showPendingTransactions = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("\(pendingStore.items.count)")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 12))
+            }
+            .foregroundColor(accentPurple)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(accentPurple.opacity(0.14)))
+            .overlay(Capsule().stroke(accentPurple.opacity(0.45), lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     private var freshnessNavItem: some View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
@@ -860,6 +1297,8 @@ struct ArcCountView: View {
                 Text(freshnessLabel)
                     .font(.custom(FontFamily.Rubik.medium, size: 12))
                     .foregroundColor(isRunwayLive ? cream.opacity(0.72) : warning)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -1251,6 +1690,14 @@ struct ArcCountView: View {
             HStack(spacing: 0) {
                 if !item.isIncome { Spacer(minLength: 0) }
                 activityRow(item)
+                    .onLongPressGesture {
+                        guard let entry = allEntries.first(where: { $0.id == item.entryId }) else { return }
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            entryPendingDelete = entry
+                        }
+                    }
                 if item.isIncome { Spacer(minLength: 0) }
             }
         case .insight(let headline, let detail, let dateLabel):
@@ -1265,7 +1712,45 @@ struct ArcCountView: View {
                     }
                 Spacer(minLength: 0)
             }
+        case .event(let label, let detail, let dateLabel):
+            HStack(spacing: 0) {
+                eventRow(label: label, detail: detail, dateLabel: dateLabel)
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    /// Derived bill/token event — visually quieter than fund rows (dim text,
+    /// dashed border, no fill) so balance re-anchors keep the visual lead.
+    @ViewBuilder
+    private func eventRow(label: String, detail: String?, dateLabel: String) -> some View {
+        HStack(spacing: 10) {
+            Text(dateLabel)
+                .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
+                .foregroundColor(dimText)
+
+            Rectangle()
+                .fill(cream.opacity(0.3))
+                .frame(width: 8, height: 1)
+
+            Text(label)
+                .font(.custom(FontFamily.Rubik.medium, size: 15))
+                .foregroundColor(mutedText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if let detail {
+                Text(detail)
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundColor(dimText)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .overlay(
+            Capsule()
+                .stroke(glassBorder.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        )
     }
 
     /// Centered floating card for a long-pressed insight — shows the full
@@ -1423,6 +1908,270 @@ struct ArcCountView: View {
 ///      norma reads it. Auto-advances; tap anywhere to skip forward.
 ///   2. `.setup` — a stripped-down action screen: just the "keep it current"
 ///      methods and the CTA that hands off to `FreedomFundEditSheet`.
+/// Instrument dial that IS the runway header — the visible bottom edge of a
+/// huge drum ruled in months of runway (numbers) with fine day hatching
+/// between, drawn straight on the background (no card, no face). It spins in
+/// on entrance, and can be grabbed and dragged like a physical wheel — the
+/// readout underneath counts along via the numeric-text transition — then
+/// snaps back to the true value on release.
+private struct RunwayDialView: View {
+    /// Runway in days — the value the needle rests on.
+    let value: Int
+    let accent: Color
+    let cream: Color
+    let muted: Color
+    /// Non-nil while the user is dragging the wheel — the month position under
+    /// the needle. The parent uses it to run the balance capsule along with
+    /// the drag (months × 30 × daily burn).
+    @Binding var liveDragMonths: Double?
+
+    /// The month position the wheel currently points at; animates during the
+    /// spin-in and follows the finger during a drag.
+    @State private var dialProgress: Double = 0
+    @State private var hasSpunIn = false
+    /// dialProgress captured at the moment a drag began.
+    @State private var dragBase: Double?
+
+    private let degreesPerMonth: Double = 24
+    private let radius: CGFloat = 500
+    /// Where the wheel's lowest point sits inside the strip.
+    private let rimY: CGFloat = 56
+
+    private var targetMonths: Double { Double(value) / 30.0 }
+
+    /// Months the wheel needs artwork for: entrance sweep + drag slack on
+    /// either side of the resting value.
+    private var monthRange: ClosedRange<Int> {
+        let cur = Int(targetMonths.rounded())
+        return max(0, cur - 5)...(cur + 5)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack {
+                wheel
+                    .position(x: w / 2, y: rimY - radius)
+                needle
+                    .position(x: w / 2, y: rimY)
+                readout
+                    .position(x: w / 2, y: rimY + 138)
+            }
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.14),
+                        .init(color: .black, location: 0.86),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .contentShape(Rectangle())
+            .gesture(dragGesture)
+        }
+        .clipped()
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { spinIn() }
+        }
+        .onChange(of: value) {
+            guard dragBase == nil else { return }
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.85)) {
+                dialProgress = targetMonths
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("\(value) days of runway")
+    }
+
+    // MARK: Wheel (rotates)
+
+    /// The full 2R×2R wheel, rotated so `dialProgress` sits at the bottom.
+    /// Elements are placed at "month angles": month m lives at 90° − m·deg,
+    /// so rotating the wheel by +m·deg brings it to the bottom (90°).
+    private var wheel: some View {
+        ZStack {
+            // Fine hatching riding the rim: one small dash per day, a taller
+            // brighter dash on each month boundary.
+            ForEach(Array((monthRange.lowerBound * 30)...(monthRange.upperBound * 30)), id: \.self) { day in
+                let month = Double(day) / 30.0
+                let isMonth = day % 30 == 0
+                Capsule()
+                    .fill(cream.opacity(isMonth ? 0.50 : 0.16))
+                    .frame(width: isMonth ? 2.6 : 1.5, height: isMonth ? 36 : 14)
+                    .rotationEffect(.degrees(-month * degreesPerMonth))
+                    .position(rimPoint(month: month, radius: radius + (isMonth ? 25 : 15)))
+            }
+
+            // Month numbers, tangent to the wheel like a scale drum. The one
+            // nearest the needle reads full-cream and hands off as you drag.
+            ForEach(Array(monthRange), id: \.self) { month in
+                Text("\(month)")
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 20))
+                    .foregroundColor(month == Int(dialProgress.rounded()) ? cream : cream.opacity(0.32))
+                    .rotationEffect(.degrees(-Double(month) * degreesPerMonth))
+                    .position(rimPoint(month: Double(month), radius: radius + 64))
+            }
+        }
+        .frame(width: radius * 2, height: radius * 2)
+        .rotationEffect(.degrees(dialProgress * degreesPerMonth))
+    }
+
+    /// Point on the wheel (local 2R×2R coords) for a month value at a given
+    /// radius. Bottom of the wheel is 90°; larger months sit further left, so
+    /// the wheel sweeps leftward as runway grows — matching the spin-in.
+    private func rimPoint(month: Double, radius r: CGFloat) -> CGPoint {
+        let γ = (90 - month * degreesPerMonth) * .pi / 180
+        return CGPoint(
+            x: radius + r * CGFloat(cos(γ)),
+            y: radius + r * CGFloat(sin(γ))
+        )
+    }
+
+    // MARK: Readout (fixed, under the needle)
+
+    /// The "[x] [unit] of runway." line — the hero text as an instrument
+    /// readout. Counts along with the wheel via the numeric-text transition.
+    /// Under a month it reads whole days; from one month up it reads months
+    /// to at most the hundredth ("7.47 months").
+    private var readout: some View {
+        let months = max(0, dialProgress)
+        let days = months * 30
+        let value: String
+        let unit: String
+        if days < 30 {
+            let d = Int(days.rounded())
+            value = "\(d)"
+            unit = d == 1 ? "day" : "days"
+        } else {
+            value = Self.trimmedMonths(months)
+            unit = value == "1" ? "month" : "months"
+        }
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(value)
+                .font(.system(size: 44, weight: .bold))
+                .tracking(-1.2)
+                .foregroundColor(cream)
+                .contentTransition(.numericText(value: months))
+            Text("\(unit) of runway")
+                .font(.custom(FontFamily.Rubik.medium, size: 18))
+                .foregroundColor(muted)
+            + Text(".")
+                .font(.custom(FontFamily.Rubik.medium, size: 18))
+                .foregroundColor(accent)
+        }
+        .animation(.snappy(duration: 0.2), value: months)
+    }
+
+    /// "7.47", "7.4", "7" — up to two decimals, trailing zeros trimmed.
+    private static func trimmedMonths(_ m: Double) -> String {
+        var s = String(format: "%.2f", m)
+        while s.hasSuffix("0") { s.removeLast() }
+        if s.hasSuffix(".") { s.removeLast() }
+        return s
+    }
+
+    // MARK: Drag (spin the drum, snap back)
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { g in
+                let base = dragBase ?? dialProgress
+                if dragBase == nil { dragBase = base }
+                // Arc length per month at the rim, so the wheel tracks the
+                // finger 1:1. Dragging right rolls back toward zero.
+                let pxPerMonth = Double(radius) * .pi / 180 * degreesPerMonth
+                let lo = Double(monthRange.lowerBound)
+                let hi = Double(monthRange.upperBound) - 0.5
+                let next = min(hi, max(lo, base - Double(g.translation.width) / pxPerMonth))
+                // Detents: a light pulse on every day-step under the needle,
+                // a firmer tap when a month boundary crosses.
+                if Int(next.rounded()) != Int(dialProgress.rounded()) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } else if Int((next * 30).rounded()) != Int((dialProgress * 30).rounded()) {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+                dialProgress = next
+                liveDragMonths = next
+            }
+            .onEnded { _ in
+                dragBase = nil
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.68)) {
+                    dialProgress = targetMonths
+                    liveDragMonths = nil
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            }
+    }
+
+    // MARK: Needle (fixed)
+
+    /// Glass window over the tick band with a solid lavender needle — the
+    /// active-element language (glass + solid border), with the pointer line
+    /// and small triangle from the reference dial.
+    private var needle: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(cream.opacity(0.25), lineWidth: 1)
+                )
+                .frame(width: 34, height: 56)
+                .offset(y: 20)
+
+            Capsule()
+                .fill(accent)
+                .frame(width: 4, height: 38)
+                .shadow(color: accent.opacity(0.7), radius: 6)
+                .offset(y: 20)
+
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 11))
+                .foregroundColor(accent)
+                .offset(y: 84)
+        }
+    }
+
+    // MARK: Spin-in
+
+    /// Sweeps the wheel up to 3.5 months into the value, steps decelerating
+    /// like a scale settling, with a selection haptic per month boundary
+    /// crossed and a firmer tap on landing.
+    private func spinIn() {
+        guard !hasSpunIn else { return }
+        hasSpunIn = true
+        let target = targetMonths
+        let start = max(0, target - 3.5)
+        guard target > start else { dialProgress = target; return }
+        dialProgress = start
+        let steps = 10
+        let total = 1.15
+        let tick = UISelectionFeedbackGenerator()
+        for i in 1...steps {
+            let p = Double(i) / Double(steps)
+            let v = start + (target - start) * p
+            let prev = start + (target - start) * Double(i - 1) / Double(steps)
+            // Ease-in on time: steps start rapid, slow into the landing.
+            DispatchQueue.main.asyncAfter(deadline: .now() + total * pow(p, 2.0)) {
+                guard dragBase == nil else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    dialProgress = v
+                }
+                if i == steps {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } else if Int(v) != Int(prev) {
+                    tick.selectionChanged()
+                }
+            }
+        }
+    }
+}
+
 struct FreedomFundFirstTimeView: View {
     let onSetUp: () -> Void
 

@@ -25,6 +25,7 @@ class ShareViewController: UIViewController {
     private let imagePreview = UIImageView()
     private let sendButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
+    private let cancelDashBorder = CAShapeLayer()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
 
     // MARK: - Constants
@@ -37,9 +38,24 @@ class ShareViewController: UIViewController {
     private let normaCream = UIColor(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255, alpha: 1.0)
     private let normaMuted = UIColor(red: 0x7A/255, green: 0x76/255, blue: 0x70/255, alpha: 1.0)
     private let normaDim = UIColor(red: 0x5C/255, green: 0x58/255, blue: 0x52/255, alpha: 1.0)
-    private let normaLavender = UIColor(red: 0x96/255, green: 0x76/255, blue: 0xD9/255, alpha: 1.0)
     private let normaOnAccent = UIColor(red: 0x0E/255, green: 0x0E/255, blue: 0x10/255, alpha: 1.0)
     private let normaCoral = UIColor(red: 0xE0/255, green: 0x7B/255, blue: 0x6F/255, alpha: 1.0)
+
+    /// The user's accent theme, mirrored into the app-group defaults by the
+    /// main app (see AppTheme.mirrorToSharedDefaults). UIColor copies of the
+    /// AppTheme presets; falls back to brand lavender if never mirrored.
+    private lazy var normaAccent: UIColor = {
+        let presets: [String: UIColor] = [
+            "lavender": UIColor(red: 0.588, green: 0.463, blue: 0.851, alpha: 1.0),
+            "ocean": UIColor(red: 0.380, green: 0.541, blue: 0.780, alpha: 1.0),
+            "sage": UIColor(red: 0.573, green: 0.663, blue: 0.494, alpha: 1.0),
+            "amber": UIColor(red: 0.827, green: 0.639, blue: 0.361, alpha: 1.0),
+            "berry": UIColor(red: 0.780, green: 0.412, blue: 0.573, alpha: 1.0),
+        ]
+        let id = UserDefaults(suiteName: "group.com.myndfruit.norma")?
+            .string(forKey: "selectedAccentThemeID")
+        return id.flatMap { presets[$0] } ?? presets["lavender"]!
+    }()
 
     // MARK: - Fonts
 
@@ -68,6 +84,15 @@ class ShareViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         extractImage()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        cancelDashBorder.frame = cancelButton.bounds
+        cancelDashBorder.path = UIBezierPath(
+            roundedRect: cancelButton.bounds.insetBy(dx: 0.5, dy: 0.5),
+            cornerRadius: cancelButton.bounds.height / 2
+        ).cgPath
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -106,28 +131,31 @@ class ShareViewController: UIViewController {
         containerView.addSubview(titleLabel)
 
         // Subtitle — muted eyebrow under hero
-        subtitleLabel.text = "scan receipt for expense tracking"
+        subtitleLabel.text = "norma will read it and file what matters"
         subtitleLabel.font = rubikFont(size: 14, weight: .medium)
         subtitleLabel.textAlignment = .left
         subtitleLabel.textColor = normaMuted
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(subtitleLabel)
 
-        // Image Preview — lavender dashed border on a dim card fill
+        // Image Preview — cream card fill + hairline stroke, matching the
+        // in-app field cards (cream 4% fill / cream 8% stroke, radius 16)
         imagePreview.contentMode = .scaleAspectFit
         imagePreview.clipsToBounds = true
-        imagePreview.layer.cornerRadius = 18
+        imagePreview.layer.cornerRadius = 16
         imagePreview.layer.cornerCurve = .continuous
-        imagePreview.backgroundColor = normaLavender.withAlphaComponent(0.06)
+        imagePreview.backgroundColor = normaCream.withAlphaComponent(0.04)
+        imagePreview.layer.borderWidth = 1
+        imagePreview.layer.borderColor = normaCream.withAlphaComponent(0.08).cgColor
         imagePreview.translatesAutoresizingMaskIntoConstraints = false
         imagePreview.setContentHuggingPriority(.defaultLow, for: .vertical)
         imagePreview.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         containerView.addSubview(imagePreview)
 
         // Status Label
-        statusLabel.text = "ready to scan."
+        statusLabel.text = "ready to send."
         statusLabel.font = rubikFont(size: 13, weight: .medium)
-        statusLabel.textColor = normaLavender
+        statusLabel.textColor = normaAccent
         statusLabel.textAlignment = .left
         statusLabel.numberOfLines = 2
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -135,14 +163,14 @@ class ShareViewController: UIViewController {
 
         // Activity Indicator
         activityIndicator.hidesWhenStopped = true
-        activityIndicator.color = normaLavender
+        activityIndicator.color = normaAccent
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(activityIndicator)
 
-        // Send Button — solid lavender capsule with dark text (matches in-app FAB)
+        // Send Button — active capsule: solid accent fill with dark text
         sendButton.setTitle("send to norma", for: .normal)
         sendButton.titleLabel?.font = rubikFont(size: 16, weight: .semibold)
-        sendButton.backgroundColor = normaLavender
+        sendButton.backgroundColor = normaAccent
         sendButton.setTitleColor(normaOnAccent, for: .normal)
         sendButton.setTitleColor(normaOnAccent.withAlphaComponent(0.7), for: .highlighted)
         sendButton.setTitleColor(normaOnAccent.withAlphaComponent(0.5), for: .disabled)
@@ -152,10 +180,23 @@ class ShareViewController: UIViewController {
         sendButton.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(sendButton)
 
-        // Cancel Button — dashed capsule (matches inactive capsule pattern)
-        cancelButton.setTitle("cancel", for: .normal)
-        cancelButton.titleLabel?.font = rubikFont(size: 14, weight: .medium)
-        cancelButton.setTitleColor(normaMuted, for: .normal)
+        // Cancel Button — inactive capsule: dashed border (dash [3,3], 1pt),
+        // drawn by a CAShapeLayer sized in viewDidLayoutSubviews
+        var cancelConfig = UIButton.Configuration.plain()
+        cancelConfig.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 24, bottom: 10, trailing: 24)
+        cancelConfig.attributedTitle = AttributedString(
+            "cancel",
+            attributes: AttributeContainer([
+                .font: rubikFont(size: 14, weight: .medium),
+                .foregroundColor: normaMuted,
+            ])
+        )
+        cancelButton.configuration = cancelConfig
+        cancelDashBorder.fillColor = nil
+        cancelDashBorder.strokeColor = normaMuted.withAlphaComponent(0.6).cgColor
+        cancelDashBorder.lineWidth = 1
+        cancelDashBorder.lineDashPattern = [3, 3]
+        cancelButton.layer.addSublayer(cancelDashBorder)
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(cancelButton)
@@ -442,11 +483,11 @@ class ShareViewController: UIViewController {
         }
 
         statusLabel.text = message
-        statusLabel.textColor = normaLavender
+        statusLabel.textColor = normaAccent
 
         // Success animation
         UIView.animate(withDuration: 0.3) {
-            self.sendButton.backgroundColor = self.normaLavender
+            self.sendButton.backgroundColor = self.normaAccent
             self.sendButton.alpha = 1
         }
 

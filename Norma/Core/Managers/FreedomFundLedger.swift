@@ -43,7 +43,47 @@ enum FreedomFundLedger {
         } catch {
             print("FreedomFundLedger: failed to save entry — \(error)")
         }
+        FreedomFundSync.push(entry)
         return entry
+    }
+
+    /// Records a receipt-import batch. Same-day batches collapse: if the most
+    /// recent entry is already a receiptImport from the same calendar day, the
+    /// new observation folds into it (delta accumulates, balanceAfter moves)
+    /// instead of inserting a second row. Otherwise inserts a fresh entry.
+    @discardableResult
+    static func recordReceiptBatch(
+        in context: ModelContext,
+        userId: String,
+        newBalance: Double,
+        date: Date = Date()
+    ) -> FreedomFundEntry? {
+        guard !userId.isEmpty else { return nil }
+
+        if let latest = latestEntry(in: context, userId: userId),
+           latest.source == .receiptImport,
+           Calendar.current.isDate(latest.createdAt, inSameDayAs: date) {
+            let move = newBalance - latest.balanceAfter
+            guard !move.isNearZero else { return nil }
+            latest.delta += move
+            latest.balanceAfter = newBalance
+            latest.createdAt = date
+            do {
+                try context.save()
+            } catch {
+                print("FreedomFundLedger: failed to merge receipt batch — \(error)")
+            }
+            FreedomFundSync.push(latest)
+            return latest
+        }
+
+        return recordIfChanged(
+            in: context,
+            userId: userId,
+            newBalance: newBalance,
+            source: .receiptImport,
+            date: date
+        )
     }
 
     /// Most recent entry for the user, or nil if none.

@@ -27,6 +27,10 @@ struct AccentTheme: Identifiable, Equatable {
 enum AppTheme {
     static let storageKey = "selectedAccentThemeID"
     static let defaultID = "lavender"
+    /// App-group suite so extensions (share extension) can render with the
+    /// user's chosen accent. Standard defaults aren't visible across the
+    /// group boundary, so the id is mirrored here on launch and on change.
+    static let sharedSuiteName = "group.com.myndfruit.norma"
 
     static let presets: [AccentTheme] = [
         AccentTheme(id: "lavender", name: "lavender", color: Color(red: 0.588, green: 0.463, blue: 0.851)),
@@ -41,5 +45,9 @@ enum AppTheme {
     static var current: AccentTheme {
         let id = UserDefaults.standard.string(forKey: storageKey) ?? defaultID
         return presets.first(where: { $0.id == id }) ?? presets[0]
+    }
+
+    static func mirrorToSharedDefaults() {
+        UserDefaults(suiteName: sharedSuiteName)?.set(current.id, forKey: storageKey)
     }
 }

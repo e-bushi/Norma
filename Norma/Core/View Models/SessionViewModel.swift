@@ -160,6 +160,11 @@ class SessionViewModel: ObservableObject {
 
             try await dataManager.signOut()
 
+            // Explicit sign-out: clear all locally persisted data so the next
+            // account on this device starts clean. The ledger lives on in
+            // Supabase and is pulled back down on next login.
+            LocalDataReset.wipeAll()
+
             await handleNoAuthentication()
         } catch {
             showError(error.localizedDescription)
@@ -172,6 +177,7 @@ class SessionViewModel: ObservableObject {
 
         // Delete all user data and sign out
         try await dataManager.deleteAccount()
+        LocalDataReset.wipeAll()
         await handleNoAuthentication()
     }
     

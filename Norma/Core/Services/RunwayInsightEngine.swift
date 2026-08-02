@@ -52,7 +52,6 @@ final class RunwayInsightEngine {
         entries: [FreedomFundEntry],
         freedomFund: Double,
         monthlyBills: Double,
-        monthlyIncome: Double = 0,
         currency: String,
         now: Date = Date()
     ) {
@@ -66,7 +65,7 @@ final class RunwayInsightEngine {
         // A key already showing (live) or dismissed must not be re-inserted.
         let blockedKeys = Set(existing.compactMap { $0.ruleKey })
 
-        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: monthlyBills, monthlyIncome: monthlyIncome)
+        let burn = ArcCalculationService.dailyBurn(entries: entries, monthlyBills: monthlyBills)
         let runwayDays = burn > 0 ? Int(floor(freedomFund / burn)) : nil
 
         var candidates: [Insight] = []

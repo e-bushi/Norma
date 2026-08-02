@@ -1,0 +1,2 @@
+-- Applied directly to the remote database (dashboard/MCP) before this
+-- file existed. Placeholder so local and remote migration history align.
