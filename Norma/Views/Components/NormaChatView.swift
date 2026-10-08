@@ -289,7 +289,6 @@ struct NormaChatView: View {
             do {
                 let response = try await chatService.send(
                     userText: text,
-                    noteContext: "",
                     profileContext: profileContextString,
                     history: priorHistory,
                     toolContext: toolContext

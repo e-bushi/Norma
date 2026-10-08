@@ -49,21 +49,10 @@ class ProfileViewModel: ObservableObject {
         sessionViewModel.$currentUser
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
-                if user != nil {
-                    self?.loadProfile()
-                }
-            }
-            .store(in: &cancellables)
-
-        dataManager.$profiles
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] profiles in
-                if let userId = self?.sessionViewModel.currentUser?.userId,
-                   let userProfile = profiles.first(where: { $0.userId == userId }) {
-                    self?.profile = userProfile
-                    self?.editableProfile = userProfile
-                    self?.updateCurrencyInfo()
-                }
+                guard let self, let user else { return }
+                self.profile = user
+                self.editableProfile = user
+                self.updateCurrencyInfo()
             }
             .store(in: &cancellables)
 
@@ -80,56 +69,22 @@ class ProfileViewModel: ObservableObject {
     // MARK: - Data Loading
 
     func loadProfile() {
-        guard let userId = sessionViewModel.currentUser?.userId else { return }
-
-        isLoading = true
-        clearError()
-
-        Task {
-            if let existingProfile = dataManager.profiles.first(where: { $0.userId == userId }) {
-                profile = existingProfile
-                editableProfile = existingProfile
-            } else {
-                let defaultProfile = Profile(
-                    userId: userId,
-                    email: sessionViewModel.currentUser?.email ?? "",
-                    name: sessionViewModel.currentUser?.name ?? "User"
-                )
-                profile = defaultProfile
-                editableProfile = defaultProfile
-            }
-            updateCurrencyInfo()
-
-            await MainActor.run {
-                isLoading = false
-            }
-        }
+        guard let currentProfile = sessionViewModel.currentUser else { return }
+        profile = currentProfile
+        editableProfile = currentProfile
+        updateCurrencyInfo()
     }
 
     // MARK: - Profile Management
 
     func updateProfile(_ updatedProfile: Profile) async {
-        isLoading = true
         clearError()
-
-        if let index = dataManager.profiles.firstIndex(where: { $0.userId == updatedProfile.userId }) {
-            dataManager.profiles[index] = updatedProfile
-        } else {
-            dataManager.profiles.append(updatedProfile)
-        }
         profile = updatedProfile
         editableProfile = updatedProfile
         hasUnsavedChanges = false
         isEditingProfile = false
         updateCurrencyInfo()
-
-        // Keep SessionViewModel.currentUser in sync — views read settings from
-        // it and stale reads make changes look like nothing happened.
-        if sessionViewModel.currentUser?.userId == updatedProfile.userId {
-            sessionViewModel.currentUser = updatedProfile
-        }
-
-        isLoading = false
+        sessionViewModel.updateUserProfile(updatedProfile)
     }
 
     func saveProfileChanges() async {

@@ -27,9 +27,6 @@ class BillViewModel: ObservableObject {
     @Published var selectedStatus: BillStatus?
     @Published var selectedBill: Bill?
     
-    // Task Management
-    private var refreshTask: Task<Void, Never>?
-    
     // Statistics
     @Published var totalMonthlyBills: Double = 0
     @Published var nextBillDue: Bill?
@@ -113,41 +110,11 @@ class BillViewModel: ObservableObject {
         for bill in dataManager.bills where !bill.isReminderOn {
             var updated = bill
             updated.isReminderOn = true
-            try? await dataManager.updateBillWithEncryption(updated)
+            try? dataManager.updateBill(updated)
         }
         UserDefaults.standard.set(true, forKey: key)
     }
-    
-    func refreshBills() async {
-        // Cancel any existing refresh task
-        refreshTask?.cancel()
-        
-        // Create new refresh task
-        refreshTask = Task {
-            await performRefresh()
-        }
-        
-        await refreshTask?.value
-    }
-    
-    private func performRefresh() async {
-        guard let userId = sessionViewModel.currentUser?.userId else { return }
-        
-        isLoading = true
-        clearError()
-        
-        do {
-            try await dataManager.fetchBills(userId: userId)
-            loadBills()
-        } catch {
-            if !Task.isCancelled {
-                showError(error.localizedDescription)
-            }
-        }
-        
-        isLoading = false
-    }
-    
+
     // MARK: - Bill Management
     
     func addBill(
@@ -163,16 +130,8 @@ class BillViewModel: ObservableObject {
         notes: String? = nil,
         isMostCritical: Bool? = nil
     ) async -> Bill? {
-        print("🔍 [DEBUG] BillViewModel.addBill called with name: \(name), amount: \(amount)")
-        
-        guard let userId = sessionViewModel.currentUser?.userId else {
-            print("❌ [DEBUG] BillViewModel.addBill: No user ID found")
-            showError("No user found")
-            return nil
-        }
-        
-        print("✅ [DEBUG] BillViewModel.addBill: User ID found: \(userId)")
-        
+        let userId = LocalStore.userId
+
         isLoading = true
         clearError()
         
@@ -196,14 +155,9 @@ class BillViewModel: ObservableObject {
             verificationDate: todayString
         )
         
-        print("🔄 [DEBUG] BillViewModel.addBill: About to call dataManager.addBill...")
-        print("🔄 [DEBUG] BillViewModel.addBill: Bill object: \(newBill)")
-        
         do {
-            try await dataManager.addBillWithEncryption(newBill)
-            print("✅ [DEBUG] BillViewModel.addBill: dataManager.addBill completed successfully")
+            try dataManager.addBill(newBill)
             loadBills()
-            print("✅ [DEBUG] BillViewModel.addBill: loadBills completed")
 
             // Track bill created
             AnalyticsService.shared.track(.billCreated(
@@ -222,10 +176,8 @@ class BillViewModel: ObservableObject {
             }
 
             isLoading = false
-            print("🔄 [DEBUG] BillViewModel.addBill: Method completed, returning bill with ID: \(createdBill?.id ?? "nil")")
             return createdBill
         } catch {
-            print("❌ [DEBUG] BillViewModel.addBill: dataManager.addBill failed with error: \(error)")
             showError("Failed to add bill: \(error.localizedDescription)")
             isLoading = false
             return nil
@@ -247,7 +199,7 @@ class BillViewModel: ObservableObject {
             updated.paidAt = now
             updated.status = .paid
             do {
-                try await dataManager.updateBillWithEncryption(updated)
+                try dataManager.updateBill(updated)
             } catch {
                 showError("Failed to mark bill paid: \(error.localizedDescription)")
             }
@@ -261,7 +213,7 @@ class BillViewModel: ObservableObject {
         clearError()
 
         do {
-            try await dataManager.updateBillWithEncryption(bill)
+            try dataManager.updateBill(bill)
             loadBills()
 
             // Reschedule (or cancel) reminder notifications to reflect the new state.
@@ -285,7 +237,7 @@ class BillViewModel: ObservableObject {
         clearError()
 
         do {
-            try await dataManager.deleteBill(bill)
+            try dataManager.deleteBill(bill)
             loadBills()
 
             // Cancel any scheduled reminder notifications for this bill.
@@ -295,33 +247,6 @@ class BillViewModel: ObservableObject {
             AnalyticsService.shared.track(.billDeleted(billId: bill.id ?? ""))
         } catch {
             showError("Failed to delete bill: \(error.localizedDescription)")
-        }
-
-        isLoading = false
-    }
-    
-    func markBillAsPaid(_ bill: Bill, notes: String? = nil) async {
-        isLoading = true
-        clearError()
-
-        do {
-            try await dataManager.markBillAsPaid(bill, notes: notes)
-            loadBills()
-
-            // Calculate days before due
-            let calendar = Calendar.current
-            let daysBeforeDue = calendar.dateComponents([.day], from: Date(), to: bill.effectiveDueDate).day ?? 0
-
-            // Track bill marked as paid
-            AnalyticsService.shared.track(.billMarkedPaid(
-                amount: bill.amount,
-                daysBeforeDue: daysBeforeDue
-            ))
-
-            // Deduct bill amount from freedom fund and show toast
-            await sessionViewModel.deductFreedomFundForBillPayment(amount: bill.amount, bills: bills)
-        } catch {
-            showError("Failed to mark bill as paid: \(error.localizedDescription)")
         }
 
         isLoading = false
@@ -342,7 +267,7 @@ class BillViewModel: ObservableObject {
             updatedBill.status = bill.effectiveDueDate < Date() ? .overdue : .scheduled
             updatedBill.updatedAt = dateFormatter.string(from: Date())
 
-            try await dataManager.updateBillWithEncryption(updatedBill)
+            try dataManager.updateBill(updatedBill)
 
             loadBills()
 

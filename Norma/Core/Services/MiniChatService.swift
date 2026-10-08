@@ -4,18 +4,17 @@
 //
 //  Created by Claude on 5/26/26.
 //
-//  Lightweight chat scoped to a single note. Supports tool use so Norma
-//  can read bills, freedom fund, profile, and save facts. Handles the
-//  tool_use → tool_result loop before returning the final text response.
+//  Norma's chat, running entirely on Apple's on-device foundation model.
+//  Each turn opens a fresh LanguageModelSession with the chat tools attached;
+//  the framework drives the tool-call loop and returns the final text.
 //
 
 import Foundation
+import FoundationModels
 import SwiftData
 
 @MainActor
 final class MiniChatService {
-    private let baseURL = "https://tafoviioqavefsyxskpo.supabase.co/functions/v1/anthropic-proxy"
-    private let model = "claude-haiku-4-5-20251001"
 
     struct ToolContext {
         let modelContext: ModelContext
@@ -41,171 +40,202 @@ final class MiniChatService {
         let outcomes: [ToolOutcome]
     }
 
+    /// Prior turns replayed into each prompt. The on-device context window is
+    /// 4,096 tokens and the tool schemas take a sizable share, so keep it short.
+    private static let historyLimit = 6
+
+    func send(
+        userText: String,
+        profileContext: String = "",
+        history: [MiniChatMessage],
+        toolContext: ToolContext
+    ) async throws -> Response {
+        let model = SystemLanguageModel.default
+        if case .unavailable(let reason) = model.availability {
+            return Response(text: Self.unavailableMessage(for: reason), outcomes: [])
+        }
+
+        let runner = ChatToolRunner(context: toolContext)
+        let tools = MiniChatToolsProvider.all.compactMap { spec -> NormaTool? in
+            do {
+                return try NormaTool(spec: spec, runner: runner)
+            } catch {
+                print("MiniChatService: invalid schema for \(spec.name) — \(error)")
+                return nil
+            }
+        }
+
+        let session = LanguageModelSession(
+            model: model,
+            tools: tools,
+            instructions: Self.instructions(profileContext: profileContext)
+        )
+
+        do {
+            let response = try await session.respond(to: Self.prompt(userText: userText, history: history))
+            return Response(text: response.content, outcomes: runner.outcomes)
+        } catch let error as LanguageModelSession.GenerationError {
+            return Response(text: Self.message(for: error), outcomes: runner.outcomes)
+        }
+    }
+
+    // MARK: - Prompt construction
+
+    private static func instructions(profileContext: String) -> String {
+        let today = Date().formatted(.iso8601.year().month().day())
+        let profileBlock = profileContext.isEmpty ? "" : """
+
+        What you know about the user:
+        \(profileContext)
+        """
+
+        return """
+        You are Norma, the user's financial copilot. You help them track what's coming and understand their runway — how long their money lasts.
+        Today is \(today). Write dates for tools as yyyy-MM-dd.
+        \(profileBlock)
+
+        What you can do:
+        - Add what the user tells you about: add_bill (recurring or one-time bills), add_reminder (a dated nudge), add_intention (a maybe-purchase they're weighing), add_commitment (a decided, dated expense).
+        - Re-anchor their balance with set_balance when they tell you their current total.
+        - Answer "can I afford X?" with project_runway.
+        - Look things up with get_bills, get_freedom_fund, get_profile before answering.
+        - Remember durable financial facts with save_fact.
+
+        Rules:
+        - Confirm amount and timing before creating anything, then call the tool and report what you added in one short line.
+        - Keep replies to one or two sentences. Lowercase, conversational, no greetings or sign-offs.
+        - The app tracks bills, income, intents, commitments, and reminders. It does NOT track day-to-day expenses — never offer to log spending.
+        - When doing math, show the result clearly.
+        """
+    }
+
+    private static func prompt(userText: String, history: [MiniChatMessage]) -> String {
+        let recent = history.suffix(historyLimit)
+        guard !recent.isEmpty else { return userText }
+        let transcript = recent
+            .map { "\($0.role == .user ? "user" : "norma"): \($0.text)" }
+            .joined(separator: "\n")
+        return """
+        Conversation so far:
+        \(transcript)
+
+        user: \(userText)
+        """
+    }
+
+    // MARK: - Failure copy
+
+    private static func unavailableMessage(for reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch reason {
+        case .deviceNotEligible:
+            return "i think with apple intelligence, and this iphone doesn't support it — so i can't chat here."
+        case .appleIntelligenceNotEnabled:
+            return "turn on apple intelligence in settings and i can start chatting."
+        case .modelNotReady:
+            return "apple intelligence is still getting ready on this iphone — try me again in a bit."
+        @unknown default:
+            return "i can't think right now — apple intelligence isn't available."
+        }
+    }
+
+    private static func message(for error: LanguageModelSession.GenerationError) -> String {
+        switch error {
+        case .exceededContextWindowSize:
+            return "that's more than i can hold at once — close the chat and start fresh."
+        case .guardrailViolation, .refusal:
+            return "i can't help with that one. try asking about your bills or runway."
+        case .unsupportedLanguageOrLocale:
+            return "i can only chat in a supported language right now."
+        default:
+            return "sorry, i couldn't process that — try again."
+        }
+    }
+}
+
+// MARK: - Tool plumbing
+
+/// Runs tool calls on the main actor and records the ones that earn a chip.
+/// Shared by every tool in a turn, so outcomes come back in firing order.
+@MainActor
+final class ChatToolRunner {
+    private let context: MiniChatService.ToolContext
+    private(set) var outcomes: [MiniChatService.ToolOutcome] = []
+
     /// Tools whose success produces a visible confirmation chip. Reads
     /// (get_*, project_runway) and save_fact don't — Norma just speaks those.
     private static let chipTools: Set<String> = [
         "add_bill", "add_reminder", "add_intention", "add_commitment", "set_balance"
     ]
 
-    func send(
-        userText: String,
-        noteContext: String,
-        profileContext: String = "",
-        history: [MiniChatMessage],
-        toolContext: ToolContext? = nil
-    ) async throws -> Response {
-        let profileBlock = profileContext.isEmpty ? "" : """
+    init(context: MiniChatService.ToolContext) {
+        self.context = context
+    }
 
-        What norma knows about this user:
-        \(profileContext)
-        """
+    func run(name: String, argumentsJSON: String) async -> String {
+        let input = (try? JSONSerialization.jsonObject(with: Data(argumentsJSON.utf8))) as? [String: Any] ?? [:]
+        let result = await MiniChatToolExecutor.execute(
+            name: name,
+            input: input,
+            modelContext: context.modelContext,
+            bills: context.bills,
+            billViewModel: context.billViewModel,
+            sessionViewModel: context.sessionViewModel,
+            freedomFund: context.freedomFund,
+            totalMonthlyBills: context.totalMonthlyBills
+        )
 
-        let isNoteScoped = !noteContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        let systemPrompt: String
-        if isNoteScoped {
-            systemPrompt = """
-            You are Norma, a concise financial companion embedded inside a note. The user is looking at a specific note and wants a quick exchange — a calculation, a clarification, or a suggestion.
-
-            Context from the current note:
-            \(noteContext)
-            \(profileBlock)
-
-            Rules:
-            - Keep responses under 120 characters. One sentence. No exceptions.
-            - Stay grounded in the note's content. Reference specific amounts, dates, names.
-            - Use tools to look up bills, freedom fund, or profile before answering questions about them.
-            - You can create things: add_bill, add_reminder, add_intention, add_commitment. Confirm amount and timing first, then call the tool and report what you added.
-            - When the user tells you their current balance, call set_balance to re-anchor it. For "can I afford X?" questions, call project_runway.
-            - When the user shares important financial info (loans, commitments, habits), use save_fact to remember it.
-            - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses.
-            - Use lowercase, conversational tone. No greetings or sign-offs.
-            - When doing math, show the result clearly.
-            """
-        } else {
-            systemPrompt = """
-            You are Norma, the user's financial copilot. You help them track what's coming and understand their runway — how long their money lasts. This is a full conversation, not a note.
-            \(profileBlock)
-
-            What you can do:
-            - Add things the user tells you about: add_bill (recurring/one-time bills), add_reminder (a dated nudge), add_intention (a maybe-purchase they're weighing), add_commitment (a decided, dated expense).
-            - Re-anchor their balance with set_balance when they tell you their current total.
-            - Answer "can I afford X?" with project_runway.
-            - Look things up with get_bills, get_freedom_fund, get_profile before answering.
-            - Remember durable financial facts with save_fact.
-
-            Rules:
-            - Confirm amount and timing before creating anything, then call the tool and report what you added in one short line.
-            - Keep replies to one or two sentences. Lowercase, conversational, no greetings or sign-offs.
-            - The app tracks bills, income, intents, commitments, reminders, and TODOs. It does NOT track day-to-day expenses — never offer to log spending.
-            - When doing math, show the result clearly.
-            """
+        let lowered = result.lowercased()
+        let failed = lowered.hasPrefix("error") || lowered.hasPrefix("couldn't") || lowered.hasPrefix("no user")
+        if Self.chipTools.contains(name), !failed {
+            outcomes.append(.init(name: name, summary: result))
         }
+        return result
+    }
+}
 
-        let systemBlock: [[String: Any]] = [
-            [
-                "type": "text",
-                "text": systemPrompt,
-                "cache_control": ["type": "ephemeral"]
-            ]
-        ]
+/// Adapts a `ChatToolSpec` to the Foundation Models `Tool` protocol. Arguments
+/// arrive as untyped `GeneratedContent` constrained by the spec's schema, and
+/// are handed to the shared executor as JSON.
+struct NormaTool: Tool {
+    let name: String
+    let description: String
+    let parameters: GenerationSchema
+    private let runner: ChatToolRunner
 
-        var messages: [[String: Any]] = []
-        for msg in history.suffix(6) {
-            messages.append([
-                "role": msg.role == .user ? "user" : "assistant",
-                "content": msg.text
-            ])
+    init(spec: ChatToolSpec, runner: ChatToolRunner) throws {
+        self.name = spec.name
+        self.description = spec.description
+        self.parameters = try spec.generationSchema()
+        self.runner = runner
+    }
+
+    func call(arguments: GeneratedContent) async throws -> String {
+        await runner.run(name: name, argumentsJSON: arguments.jsonString)
+    }
+}
+
+extension ChatToolSpec {
+    func generationSchema() throws -> GenerationSchema {
+        let properties = parameters.map { parameter in
+            DynamicGenerationSchema.Property(
+                name: parameter.name,
+                description: parameter.description,
+                schema: parameter.type.schema(named: "\(name).\(parameter.name)"),
+                isOptional: parameter.isOptional
+            )
         }
-        messages.append(["role": "user", "content": userText])
+        let root = DynamicGenerationSchema(name: name, description: description, properties: properties)
+        return try GenerationSchema(root: root, dependencies: [])
+    }
+}
 
-        let hasTools = toolContext != nil
-        let maxRounds = 3
-        var round = 0
-        var outcomes: [ToolOutcome] = []
-
-        while round < maxRounds {
-            round += 1
-
-            var body: [String: Any] = [
-                "model": model,
-                "max_tokens": 800,
-                "system": systemBlock,
-                "messages": messages
-            ]
-            if hasTools {
-                body["tools"] = MiniChatToolsProvider.allTools()
-            }
-
-            // The Anthropic edge proxy injects the API key server-side; authenticate
-            // with the Supabase JWT instead of shipping x-api-key in the client.
-            let session = try await SupabaseService.shared.getSession()
-            var request = URLRequest(url: URL(string: baseURL)!)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(SupabaseService.supabaseAnonKey, forHTTPHeaderField: "apikey")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            request.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
-
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, _) = try await URLSession.shared.data(for: request)
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let content = json["content"] as? [[String: Any]] else {
-                return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
-            }
-
-            let stopReason = json["stop_reason"] as? String
-
-            if stopReason == "tool_use", let ctx = toolContext {
-                var assistantContent: [[String: Any]] = content
-                var toolResults: [[String: Any]] = []
-
-                for block in content where (block["type"] as? String) == "tool_use" {
-                    guard let toolId = block["id"] as? String,
-                          let toolName = block["name"] as? String,
-                          let toolInput = block["input"] as? [String: Any] else { continue }
-
-                    let result = await MiniChatToolExecutor.execute(
-                        name: toolName,
-                        input: toolInput,
-                        modelContext: ctx.modelContext,
-                        bills: ctx.bills,
-                        billViewModel: ctx.billViewModel,
-                        sessionViewModel: ctx.sessionViewModel,
-                        freedomFund: ctx.freedomFund,
-                        totalMonthlyBills: ctx.totalMonthlyBills
-                    )
-
-                    // Surface a chip only for successful create/mutate tools.
-                    if Self.chipTools.contains(toolName),
-                       !result.lowercased().hasPrefix("error"),
-                       !result.lowercased().hasPrefix("couldn't"),
-                       !result.lowercased().hasPrefix("no user") {
-                        outcomes.append(ToolOutcome(name: toolName, summary: result))
-                    }
-
-                    toolResults.append([
-                        "type": "tool_result",
-                        "tool_use_id": toolId,
-                        "content": result
-                    ])
-                }
-
-                messages.append(["role": "assistant", "content": assistantContent] as [String: Any])
-                messages.append(["role": "user", "content": toolResults] as [String: Any])
-                continue
-            }
-
-            if let textBlock = content.first(where: { ($0["type"] as? String) == "text" }),
-               let text = textBlock["text"] as? String {
-                return Response(text: text, outcomes: outcomes)
-            }
-
-            return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
+private extension ChatToolSpec.ParameterType {
+    func schema(named name: String) -> DynamicGenerationSchema {
+        switch self {
+        case .string: return DynamicGenerationSchema(type: String.self)
+        case .number: return DynamicGenerationSchema(type: Double.self)
+        case .integer: return DynamicGenerationSchema(type: Int.self)
+        case .choice(let values): return DynamicGenerationSchema(name: name, anyOf: values)
         }
-
-        return Response(text: "sorry, I couldn't process that.", outcomes: outcomes)
     }
 }

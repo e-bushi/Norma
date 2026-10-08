@@ -247,7 +247,7 @@ struct PendingTransactionsSheet: View {
                         newBalance: newFund
                     )
                     updatedProfile.settings = updatedSettings
-                    await sessionViewModel.updateUserProfile(updatedProfile)
+                    sessionViewModel.updateUserProfile(updatedProfile)
                 }
 
                 let generator = UINotificationFeedbackGenerator()

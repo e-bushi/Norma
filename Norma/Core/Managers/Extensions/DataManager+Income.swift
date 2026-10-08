@@ -20,7 +20,6 @@ extension DataManager {
     
     func addIncome(_ incomeItem: Income) async throws {
         income.append(incomeItem)
-        hasUnsyncedChanges = true
         
         // try await supabaseService.createIncome(incomeItem)
         
@@ -30,7 +29,6 @@ extension DataManager {
     func updateIncome(_ incomeItem: Income) async throws {
         if let index = income.firstIndex(where: { $0.id == incomeItem.id }) {
             income[index] = incomeItem
-            hasUnsyncedChanges = true
         }
         
         // try await supabaseService.updateIncome(incomeItem)
@@ -40,7 +38,6 @@ extension DataManager {
     
     func deleteIncome(_ incomeItem: Income) async throws {
         income.removeAll { $0.id == incomeItem.id }
-        hasUnsyncedChanges = true
         
         // try await supabaseService.deleteIncome(incomeItem.id)
         

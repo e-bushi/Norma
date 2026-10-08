@@ -8,14 +8,6 @@
 import Foundation
 import PostHog
 
-// MARK: - Auth Method
-
-enum AuthMethod: String {
-    case email = "email"
-    case apple = "apple"
-    case google = "google"
-}
-
 // MARK: - Creation Source
 
 enum CreationSource: String {
@@ -32,9 +24,6 @@ enum AnalyticsScreen: String {
     // Onboarding
     case landing = "Landing"
     case welcome = "Welcome"
-    case signUp = "Sign Up"
-    case login = "Login"
-    case verification = "Verification"
     case notificationsPermission = "Notifications Permission"
     case normaChat = "Norma Chat"
     case onboardingComplete = "Onboarding Complete"
@@ -42,7 +31,7 @@ enum AnalyticsScreen: String {
     // Main App
     case chat = "Chat"
     case settings = "Settings"
-    case notes = "Notes"
+    case home = "Home"
 
     // Bills
     case myBills = "My Bills"
@@ -54,9 +43,6 @@ enum AnalyticsScreen: String {
     case incomeDetail = "Income Detail"
 
     // Other
-    case paywall = "Paywall"
-    case welcomePaywall = "Welcome Paywall"
-    case freeTrial = "Free Trial"
     case profile = "Profile"
     case upcomingNotifications = "Upcoming Notifications"
 }
@@ -64,16 +50,6 @@ enum AnalyticsScreen: String {
 // MARK: - Analytics Event
 
 enum AnalyticsEvent {
-    // Auth Events
-    case signUpStarted(method: AuthMethod)
-    case signUpCompleted(method: AuthMethod)
-    case signUpFailed(method: AuthMethod, error: String)
-    case signInStarted(method: AuthMethod)
-    case signInCompleted(method: AuthMethod)
-    case signInFailed(method: AuthMethod, error: String)
-    case signOut
-    case accountDeleted
-
     // Onboarding Events
     case onboardingStepViewed(step: String, index: Int)
     case onboardingStepCompleted(step: String, index: Int)
@@ -102,26 +78,11 @@ enum AnalyticsEvent {
     case notificationPermissionGranted
     case notificationPermissionDenied
 
-    // Subscription Events
-    case paywallViewed(source: String)
-    case subscriptionStarted(planType: String)
-    case trialStarted(planType: String)
-
     // Error Events
     case errorOccurred(screen: String, error: String)
 
     var name: String {
         switch self {
-        // Auth
-        case .signUpStarted: return "sign_up_started"
-        case .signUpCompleted: return "sign_up_completed"
-        case .signUpFailed: return "sign_up_failed"
-        case .signInStarted: return "sign_in_started"
-        case .signInCompleted: return "sign_in_completed"
-        case .signInFailed: return "sign_in_failed"
-        case .signOut: return "sign_out"
-        case .accountDeleted: return "account_deleted"
-
         // Onboarding
         case .onboardingStepViewed: return "onboarding_step_viewed"
         case .onboardingStepCompleted: return "onboarding_step_completed"
@@ -150,11 +111,6 @@ enum AnalyticsEvent {
         case .notificationPermissionGranted: return "notification_permission_granted"
         case .notificationPermissionDenied: return "notification_permission_denied"
 
-        // Subscription
-        case .paywallViewed: return "paywall_viewed"
-        case .subscriptionStarted: return "subscription_started"
-        case .trialStarted: return "trial_started"
-
         // Errors
         case .errorOccurred: return "error_occurred"
         }
@@ -162,24 +118,6 @@ enum AnalyticsEvent {
 
     var properties: [String: Any] {
         switch self {
-        // Auth
-        case .signUpStarted(let method):
-            return ["method": method.rawValue]
-        case .signUpCompleted(let method):
-            return ["method": method.rawValue]
-        case .signUpFailed(let method, let error):
-            return ["method": method.rawValue, "error": error]
-        case .signInStarted(let method):
-            return ["method": method.rawValue]
-        case .signInCompleted(let method):
-            return ["method": method.rawValue]
-        case .signInFailed(let method, let error):
-            return ["method": method.rawValue, "error": error]
-        case .signOut:
-            return [:]
-        case .accountDeleted:
-            return [:]
-
         // Onboarding
         case .onboardingStepViewed(let step, let index):
             return ["step": step, "step_index": index]
@@ -225,14 +163,6 @@ enum AnalyticsEvent {
             return [:]
         case .notificationPermissionDenied:
             return [:]
-
-        // Subscription
-        case .paywallViewed(let source):
-            return ["source": source]
-        case .subscriptionStarted(let planType):
-            return ["plan_type": planType]
-        case .trialStarted(let planType):
-            return ["plan_type": planType]
 
         // Errors
         case .errorOccurred(let screen, let error):

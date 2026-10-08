@@ -2,17 +2,16 @@
 //  LocalDataReset.swift
 //  Norma
 //
-//  Wipes everything client-side on explicit sign-out / account deletion, so
-//  the next account on this device starts clean. Only called on deliberate
-//  logout — never on a mere session expiry, where unsynced offline data
-//  would be lost.
+//  Wipes every piece of user data on the device. Backs "reset all data" in
+//  Settings — there's no server copy, so this is irreversible.
 //
 
 import Foundation
 import SwiftData
+import UserNotifications
 
 /// The app's single ModelContainer, published at launch so non-View code
-/// (session/logout paths) can reach SwiftData.
+/// (the reset path) can reach SwiftData.
 enum AppModelContainer {
     static var shared: ModelContainer?
 }
@@ -20,18 +19,20 @@ enum AppModelContainer {
 @MainActor
 enum LocalDataReset {
 
-    /// Per-user UserDefaults artifacts that must not leak across accounts.
+    /// User-scoped UserDefaults artifacts — engagement state and engine caches.
     private static let userDefaultsKeys = [
         "reanchor.lastCelebratedStreak",
         "reanchor.lastFreedomMilestoneDays",
-        "paydayNudge.dismissedTimestamp"
+        "paydayNudge.dismissedTimestamp",
+        "runwayInsight.lastRunAt",
+        "runwayInsight.lastTier",
+        "didBackfillBillReminders"
     ]
 
-    /// Deletes every locally persisted row of every model, plus per-user
-    /// defaults, and resets the sync session marker.
+    /// Deletes every locally persisted row of every model, plus user-scoped
+    /// defaults and any scheduled notifications.
     static func wipeAll() {
-        FreedomFundSync.reset()
-        UserContentSync.reset()
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         userDefaultsKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
 
         guard let container = AppModelContainer.shared else { return }

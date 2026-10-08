@@ -15,15 +15,9 @@ class AppCoordinator: ObservableObject {
 
     // MARK: - Published Properties
 
-    @Published var currentView: AppView = .loading
-    @Published var isReady = false
-    @Published var dataLoaded = false
-    @Published var userStartedApp = false
-    @Published var mainLayerView: MainLayerViewType = .notes
+    @Published var currentView: AppView
+    @Published var mainLayerView: MainLayerViewType = .home
 
-    /// Loading view removed — go straight to the main app once auth is resolved.
-    var shouldShowAppLoadingView: Bool { false }
-    
     // MARK: - Core Managers and ViewModels
 
     let dataManager: DataManager
@@ -32,153 +26,46 @@ class AppCoordinator: ObservableObject {
     // Lazy-loaded ViewModels
     lazy var onboardingViewModel = OnboardingViewModel(sessionViewModel: sessionViewModel)
 
+    private var cancellables = Set<AnyCancellable>()
+
     // MARK: - Initialization
-    
+
     init() {
-        // Initialize core components
-        self.dataManager = DataManager()
-        self.sessionViewModel = SessionViewModel(dataManager: dataManager)
+        let dataManager = DataManager()
+        let sessionViewModel = SessionViewModel(dataManager: dataManager)
+        self.dataManager = dataManager
+        self.sessionViewModel = sessionViewModel
+        self.currentView = sessionViewModel.hasCompletedOnboarding ? .main : .onboarding
 
-        // Bridge note-extracted bill tokens into the canonical Bill model so
-        // recurring bill mentions written in notes surface in BillsView.
-        BillTokenBridge.shared.configure(
-            dataManager: dataManager,
-            sessionViewModel: sessionViewModel
-        )
-
-        setupAppFlow()
-        setupNotificationObservers()
-    }
-    
-    // MARK: - App Flow Methods
-    
-    private func setupAppFlow() {
-        Task {
-            // Initial setup
-            await sessionViewModel.checkAuthenticationState()
-
-            // Determine initial view
-            updateCurrentView()
-
-            // No artificial loading delay — drop straight into the destination.
-            dataLoaded = true
-            userStartedApp = true
-            isReady = true
-
-            // Observe session changes
-            observeSessionChanges()
-        }
-    }
-
-    /// Legacy hook from the old loading screen — kept for any stragglers, no-op.
-    func userTappedStart() {
-        userStartedApp = true
-        isReady = true
-    }
-    
-    private func setupNotificationObservers() {
-        // App lifecycle observers can be added here if needed
-    }
-    
-    private func updateCurrentView() {
-        let previousView = currentView
-
-        if sessionViewModel.isLoadingAuth {
-            currentView = .loading
-        } else if sessionViewModel.shouldShowMainApp {
-            currentView = .main
-        } else if sessionViewModel.shouldShowAuthFlow {
-            currentView = .onboarding
-        } else if sessionViewModel.shouldShowInitialSetup {
-            currentView = .onboarding
-        } else {
-            // Default to onboarding if no other condition is met
-            currentView = .onboarding
-        }
-
-        if previousView != currentView {
-            print("🧭 AppCoordinator: View changed from \(previousView) to \(currentView) | isAuth: \(sessionViewModel.isAuthenticated), hasOnboarding: \(sessionViewModel.hasCompletedOnboarding), hasSetup: \(sessionViewModel.hasCompletedInitialSetup)")
-        }
-    }
-    
-    private func observeSessionChanges() {
-        // Listen for authentication state changes
-        Task {
-            for await isAuth in sessionViewModel.$isAuthenticated.values {
-                print("👀 Observed isAuthenticated change: \(isAuth)")
-                updateCurrentView()
+        sessionViewModel.$hasCompletedOnboarding
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] completed in
+                self?.currentView = completed ? .main : .onboarding
             }
-        }
-
-        // Listen for onboarding completion
-        Task {
-            for await completed in sessionViewModel.$hasCompletedOnboarding.values {
-                print("👀 Observed hasCompletedOnboarding change: \(completed)")
-                updateCurrentView()
-            }
-        }
-
-        // Listen for initial setup completion
-        Task {
-            for await setup in sessionViewModel.$hasCompletedInitialSetup.values {
-                print("👀 Observed hasCompletedInitialSetup change: \(setup)")
-                updateCurrentView()
-            }
-        }
+            .store(in: &cancellables)
     }
-    
+
     // MARK: - Navigation Helpers
-    
-    func resetToOnboarding() {
-        currentView = .onboarding
+
+    /// Erases everything on device and restarts onboarding from the landing screen.
+    func resetAllData() {
         onboardingViewModel.startOnboardingFlow()
-    }
-    
-    func completeOnboarding() {
-        sessionViewModel.completeOnboarding()
-        currentView = .main
-    }
-    
-    func logout() async {
-        await sessionViewModel.logout()
-        dataManager.clearAllData()
-        onboardingViewModel.startOnboardingFlow()
-        currentView = .onboarding
+        sessionViewModel.resetAllData()
     }
 
-    /// Mirrors `logout()` but performs the irreversible account-delete first.
-    /// Without resetting the onboarding flow + currentView here the app would
-    /// re-render the OnboardingViewModel at its last `currentStep` (often
-    /// "save answers"), since `sessionViewModel.deleteAccount` only flips the
-    /// auth flag — it doesn't know about the onboarding flow state.
-    func deleteAccount() async throws {
-        try await sessionViewModel.deleteAccount()
-        dataManager.clearAllData()
-        onboardingViewModel.startOnboardingFlow()
-        currentView = .onboarding
-    }
-    
     // MARK: - View Building
-    
+
     @ViewBuilder
     var currentViewContent: some View {
         switch currentView {
-        case .loading:
-            // Brief auth-resolution moment — show the canvas color, no spinner.
-            Color("NormaBackground").ignoresSafeArea()
-
         case .onboarding:
             OnboardingCoordinatorView()
                 .environmentObject(onboardingViewModel)
                 .environmentObject(sessionViewModel)
                 .environmentObject(dataManager)
-        
+
         case .main:
-            // The hard paywall is presented from NotesListScreen (after the
-            // user's first note, or immediately on an expired subscription),
-            // not wrapped here — gating at this level would tear down the
-            // notes NavigationStack and yank the user out of the note canvas
-            // mid-write. See NotesListScreen's hard-wall fullScreenCover.
             RootView()
                 .environmentObject(self.dataManager)
                 .environmentObject(self.sessionViewModel)
@@ -187,64 +74,16 @@ class AppCoordinator: ObservableObject {
     }
 }
 
-// MARK: - Paywall gate
-
-/// Wraps the main app and swaps in the PaywallView when the user is not
-/// subscribed and not in a trial. Observes SubscriptionManager so the gate
-/// dissolves automatically once a purchase or restore lands.
-struct PaywallGate<Content: View>: View {
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
-    let content: () -> Content
-
-    init(@ViewBuilder content: @escaping () -> Content) {
-        self.content = content
-    }
-
-    var body: some View {
-        ZStack {
-            if hasAccess {
-                content()
-                    .transition(.opacity)
-            } else {
-                PaywallView(context: paywallContext)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: hasAccess)
-        .task {
-            // Refresh subscription status on entry so a returning user's
-            // gate reflects the latest reality (trial may have expired
-            // server-side, purchase may have been made on another device).
-            await subscriptionManager.checkSubscriptionStatus()
-        }
-    }
-
-    private var hasAccess: Bool {
-        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
-    }
-
-    /// Returning users who've already burned their trial see the
-    /// "your trial wrapped" framing; everyone else sees the onboarding
-    /// trial-offer framing.
-    private var paywallContext: PaywallContext {
-        if subscriptionManager.hasUsedFreeTrial && !subscriptionManager.isInFreeTrial {
-            return .trialExpired
-        }
-        return .onboarding
-    }
-}
-
 // MARK: - Supporting Types
 
 enum AppView {
-    case loading
     case onboarding
     case main
 }
 
 enum MainLayerViewType: Hashable {
     case settings
-    case notes
+    case home
 }
 
 // MARK: - Coordinator Views
@@ -264,39 +103,8 @@ struct OnboardingCoordinatorView: View {
             Group {
                 switch onboardingViewModel.currentStep {
             case .landing:
-                LandingPageView(
-                    showSignUp: $onboardingViewModel.showSignUp,
-                    showSignIn: Binding(
-                        get: { !onboardingViewModel.showSignUp },
-                        set: { onboardingViewModel.showSignUp = !$0 }
-                    )
-                )
-                .environmentObject(onboardingViewModel)
-
-            case .authentication:
-                if onboardingViewModel.showSignUp {
-                    SignUpView(
-                        isAuthenticated: .constant(false),
-                        showSignUp: $onboardingViewModel.showSignUp
-                    )
+                LandingPageView()
                     .environmentObject(onboardingViewModel)
-                   
-                } else {
-                    LoginView(
-                        isAuthenticated: .constant(false),
-                        showSignUp: $onboardingViewModel.showSignUp
-                    )
-                    .environmentObject(onboardingViewModel)
-                    
-                }
-            
-            case .verification:
-                VerifyCodeView(
-                    email: onboardingViewModel.email ?? "",
-                    isAuthenticated: .constant(false),
-                    showVerifyCode: .constant(true)
-                )
-                .environmentObject(onboardingViewModel)
 
             // MARK: - Intro interstitial
 
@@ -371,19 +179,7 @@ struct OnboardingCoordinatorView: View {
 
             case .currencyIncome:
                 OnboardingCurrencyIncomeView(
-                    onContinue: { onboardingViewModel.moveToNextStep() }
-                )
-                .environmentObject(onboardingViewModel)
-
-            case .saveAnswers:
-                OnboardingSaveAnswersView(
-                    onEmailSignUp: {
-                        onboardingViewModel.showSignUp = true
-                        withAnimation { onboardingViewModel.currentStep = .authentication }
-                    },
-                    onBack: {
-                        withAnimation { onboardingViewModel.currentStep = .currencyIncome }
-                    }
+                    onContinue: { onboardingViewModel.saveProfileAndContinue() }
                 )
                 .environmentObject(onboardingViewModel)
 

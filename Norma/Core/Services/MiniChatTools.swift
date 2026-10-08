@@ -4,8 +4,9 @@
 //
 //  Created by Claude on 5/26/26.
 //
-//  Tool definitions and executor for the mini chat. Norma can read bills,
-//  read the freedom fund, read/update the user profile, and save facts.
+//  Tool definitions and executor for Norma's chat. Norma can read bills,
+//  the balance, and the profile; create bills, reminders, intentions, and
+//  commitments; re-anchor the balance; and save facts.
 //
 
 import Foundation
@@ -13,205 +14,133 @@ import SwiftData
 
 // MARK: - Tool definitions
 
-struct MiniChatToolsProvider {
-    static func allTools() -> [[String: Any]] {
-        [
-            getBillsTool,
-            updateBillTool,
-            getFreedomFundTool,
-            getProfileTool,
-            saveFactTool,
-            updateProfileTool,
-            addBillTool,
-            addReminderTool,
-            addIntentionTool,
-            addCommitmentTool,
-            setBalanceTool,
-            projectRunwayTool
-        ]
+/// Model-agnostic description of a chat tool. MiniChatService turns each
+/// spec into a Foundation Models tool with a matching generation schema.
+struct ChatToolSpec: Sendable {
+    enum ParameterType: Sendable {
+        case string
+        case number
+        case integer
+        case choice([String])
     }
 
-    static let addBillTool: [String: Any] = [
-        "name": "add_bill",
-        "description": "Create a new recurring or one-time bill. Confirm the amount and cadence with the user before calling.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "name": ["type": "string", "description": "Bill name, e.g. rent, phone"] as [String: Any],
-                "amount": ["type": "number", "description": "Bill amount"] as [String: Any],
-                "frequency": ["type": "string", "description": "one of: monthly, quarterly, yearly, onetime"] as [String: Any],
-                "due_date": ["type": "string", "description": "Next due date, ISO8601 (yyyy-MM-dd). Defaults to today if omitted."] as [String: Any]
-            ] as [String: Any],
-            "required": ["name", "amount"]
-        ] as [String: Any]
-    ]
+    struct Parameter: Sendable {
+        let name: String
+        let description: String
+        let type: ParameterType
+        let isOptional: Bool
 
-    static let addReminderTool: [String: Any] = [
-        "name": "add_reminder",
-        "description": "Set a reminder that fires an OS notification. Use for time-based nudges the user asks to be reminded about.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "subject": ["type": "string", "description": "What to remind about"] as [String: Any],
-                "remind_at": ["type": "string", "description": "When to fire, ISO8601 date-time (yyyy-MM-dd'T'HH:mm:ss) or date (yyyy-MM-dd)"] as [String: Any]
-            ] as [String: Any],
-            "required": ["subject", "remind_at"]
-        ] as [String: Any]
-    ]
+        static func required(_ name: String, _ type: ParameterType, _ description: String) -> Parameter {
+            Parameter(name: name, description: description, type: type, isOptional: false)
+        }
 
-    static let addIntentionTool: [String: Any] = [
-        "name": "add_intention",
-        "description": "Record a soft financial intention the user is planning or considering (a trip, a purchase). Not yet scheduled — shows in the forecast as an optional deduction.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "subject": ["type": "string", "description": "What they intend, e.g. visa run, new laptop"] as [String: Any],
-                "amount": ["type": "number", "description": "Estimated cost, 0 if unknown"] as [String: Any],
-                "date": ["type": "string", "description": "Rough date if any, ISO8601 (yyyy-MM-dd)"] as [String: Any]
-            ] as [String: Any],
-            "required": ["subject"]
-        ] as [String: Any]
-    ]
+        static func optional(_ name: String, _ type: ParameterType, _ description: String) -> Parameter {
+            Parameter(name: name, description: description, type: type, isOptional: true)
+        }
+    }
 
-    static let addCommitmentTool: [String: Any] = [
-        "name": "add_commitment",
-        "description": "Record a dated one-time financial commitment the user has decided on (a known upcoming expense on a specific date).",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "subject": ["type": "string", "description": "What the commitment is"] as [String: Any],
-                "amount": ["type": "number", "description": "Amount"] as [String: Any],
-                "date": ["type": "string", "description": "Due date, ISO8601 (yyyy-MM-dd)"] as [String: Any]
-            ] as [String: Any],
-            "required": ["subject", "amount", "date"]
-        ] as [String: Any]
-    ]
+    let name: String
+    let description: String
+    let parameters: [Parameter]
+}
 
-    static let setBalanceTool: [String: Any] = [
-        "name": "set_balance",
-        "description": "Re-anchor the user's total spendable balance to a new amount. Use when they tell you their current balance.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "amount": ["type": "number", "description": "New total spendable balance"] as [String: Any]
-            ] as [String: Any],
-            "required": ["amount"]
-        ] as [String: Any]
-    ]
-
-    static let projectRunwayTool: [String: Any] = [
-        "name": "project_runway",
-        "description": "Project how a one-time expense would change the user's runway. Use to answer 'can I afford X?' style questions.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "cost": ["type": "number", "description": "The one-time cost to model against the current balance"] as [String: Any]
-            ] as [String: Any],
-            "required": ["cost"]
-        ] as [String: Any]
-    ]
-
-    static let getBillsTool: [String: Any] = [
-        "name": "get_bills",
-        "description": "Get the user's active bills with names, amounts, due dates, and frequency.",
-        "input_schema": [
-            "type": "object",
-            "properties": [:] as [String: Any],
-            "required": [] as [String]
-        ] as [String: Any]
-    ]
-
-    static let updateBillTool: [String: Any] = [
-        "name": "update_bill",
-        "description": "Update an existing bill's amount, name, or due date. Use get_bills first to find the bill name.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "bill_name": [
-                    "type": "string",
-                    "description": "Name of the bill to update (case-insensitive match)"
-                ] as [String: Any],
-                "amount": [
-                    "type": "number",
-                    "description": "New amount for the bill"
-                ] as [String: Any],
-                "name": [
-                    "type": "string",
-                    "description": "New name for the bill"
-                ] as [String: Any]
-            ] as [String: Any],
-            "required": ["bill_name"]
-        ] as [String: Any]
-    ]
-
-    static let getFreedomFundTool: [String: Any] = [
-        "name": "get_freedom_fund",
-        "description": "Get the user's freedom fund balance and months of runway.",
-        "input_schema": [
-            "type": "object",
-            "properties": [:] as [String: Any],
-            "required": [] as [String]
-        ] as [String: Any]
-    ]
-
-    static let getProfileTool: [String: Any] = [
-        "name": "get_profile",
-        "description": "Get everything Norma knows about the user — currency, income, payday, runway floor, and saved facts.",
-        "input_schema": [
-            "type": "object",
-            "properties": [:] as [String: Any],
-            "required": [] as [String]
-        ] as [String: Any]
-    ]
-
-    static let saveFactTool: [String: Any] = [
-        "name": "save_fact",
-        "description": "Save an important financial fact about the user that Norma should remember for future conversations. Use this when the user shares something worth remembering — loan details, recurring commitments, financial habits, life context.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "fact": [
-                    "type": "string",
-                    "description": "The fact to remember, in plain language"
-                ] as [String: Any],
-                "source": [
-                    "type": "string",
-                    "description": "Where this fact came from, e.g. 'mini chat, may 26 note'"
-                ] as [String: Any]
-            ] as [String: Any],
-            "required": ["fact", "source"]
-        ] as [String: Any]
-    ]
-
-    static let updateProfileTool: [String: Any] = [
-        "name": "update_profile",
-        "description": "Update the user's structured financial profile fields. Only include fields that should change.",
-        "input_schema": [
-            "type": "object",
-            "properties": [
-                "currency": [
-                    "type": "string",
-                    "description": "Currency code (e.g. USD, THB, EUR)"
-                ] as [String: Any],
-                "income_amount": [
-                    "type": "number",
-                    "description": "Monthly income amount"
-                ] as [String: Any],
-                "income_frequency": [
-                    "type": "string",
-                    "description": "How often they're paid: monthly, biweekly, irregular"
-                ] as [String: Any],
-                "payday": [
-                    "type": "integer",
-                    "description": "Day of month income typically lands"
-                ] as [String: Any],
-                "runway_floor": [
-                    "type": "number",
-                    "description": "Minimum months of runway the user cares about"
-                ] as [String: Any]
-            ] as [String: Any],
-            "required": [] as [String]
-        ] as [String: Any]
+/// Descriptions are deliberately terse: every schema is spent against the
+/// on-device model's 4,096-token context window on each turn.
+enum MiniChatToolsProvider {
+    static let all: [ChatToolSpec] = [
+        ChatToolSpec(
+            name: "get_bills",
+            description: "List the user's bills with amounts, due dates, and frequency.",
+            parameters: []
+        ),
+        ChatToolSpec(
+            name: "update_bill",
+            description: "Change an existing bill's amount or name. Call get_bills first to find it.",
+            parameters: [
+                .required("bill_name", .string, "Current name of the bill"),
+                .optional("amount", .number, "New amount"),
+                .optional("name", .string, "New name")
+            ]
+        ),
+        ChatToolSpec(
+            name: "get_freedom_fund",
+            description: "Get the user's balance and months of runway.",
+            parameters: []
+        ),
+        ChatToolSpec(
+            name: "get_profile",
+            description: "Get the user's currency, income, payday, runway floor, and saved facts.",
+            parameters: []
+        ),
+        ChatToolSpec(
+            name: "save_fact",
+            description: "Remember a durable financial fact the user shared, like a loan or a habit.",
+            parameters: [
+                .required("fact", .string, "The fact, in plain language"),
+                .optional("source", .string, "Where it came from")
+            ]
+        ),
+        ChatToolSpec(
+            name: "update_profile",
+            description: "Update profile fields. Include only fields that change.",
+            parameters: [
+                .optional("currency", .string, "Currency code, e.g. USD"),
+                .optional("income_amount", .number, "Monthly income"),
+                .optional("income_frequency", .choice(["monthly", "biweekly", "irregular"]), "How often they're paid"),
+                .optional("payday", .integer, "Day of month income lands"),
+                .optional("runway_floor", .number, "Minimum months of runway they want")
+            ]
+        ),
+        ChatToolSpec(
+            name: "add_bill",
+            description: "Create a recurring or one-time bill.",
+            parameters: [
+                .required("name", .string, "Bill name, e.g. rent"),
+                .required("amount", .number, "Bill amount"),
+                .optional("frequency", .choice(["monthly", "quarterly", "yearly", "onetime"]), "How often it's due"),
+                .optional("due_date", .string, "Next due date, yyyy-MM-dd")
+            ]
+        ),
+        ChatToolSpec(
+            name: "add_reminder",
+            description: "Schedule a notification reminder.",
+            parameters: [
+                .required("subject", .string, "What to remind about"),
+                .required("remind_at", .string, "When, yyyy-MM-dd or yyyy-MM-dd'T'HH:mm:ss")
+            ]
+        ),
+        ChatToolSpec(
+            name: "add_intention",
+            description: "Record a purchase or trip the user is considering but hasn't scheduled.",
+            parameters: [
+                .required("subject", .string, "What they're considering"),
+                .optional("amount", .number, "Estimated cost"),
+                .optional("date", .string, "Rough date, yyyy-MM-dd")
+            ]
+        ),
+        ChatToolSpec(
+            name: "add_commitment",
+            description: "Record a decided one-time expense on a specific date.",
+            parameters: [
+                .required("subject", .string, "What it is"),
+                .required("amount", .number, "Amount"),
+                .required("date", .string, "Due date, yyyy-MM-dd")
+            ]
+        ),
+        ChatToolSpec(
+            name: "set_balance",
+            description: "Re-anchor the user's total spendable balance.",
+            parameters: [
+                .required("amount", .number, "New total balance")
+            ]
+        ),
+        ChatToolSpec(
+            name: "project_runway",
+            description: "Show how a one-time cost would change runway. Use for 'can I afford X?'.",
+            parameters: [
+                .required("cost", .number, "The one-time cost")
+            ]
+        )
     ]
 }
 
@@ -379,7 +308,7 @@ final class MiniChatToolExecutor {
             source: .manualEdit
         )
         profile.settings = settings
-        await sessionViewModel.updateUserProfile(profile)
+        sessionViewModel.updateUserProfile(profile)
         return "balance re-anchored to \(String(format: "%.2f", amount))"
     }
 
@@ -518,7 +447,7 @@ final class MiniChatToolExecutor {
                 updated.append("income → \(amount)")
             }
             if changed {
-                await sessionViewModel.updateUserProfile(profile)
+                sessionViewModel.updateUserProfile(profile)
             }
         }
 

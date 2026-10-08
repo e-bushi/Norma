@@ -7,8 +7,7 @@
 
 import UIKit
 import UserNotifications
-import GoogleSignIn
-//Plaid recovery code: L6YR3QSTL42LNDZPYV4CW6ZBPU
+
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
     // MARK: - Application Lifecycle
@@ -19,14 +18,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
 
         return true
-    }
-
-    // MARK: - URL Handling for Google Sign-In
-
-    func application(_ app: UIApplication,
-                     open url: URL,
-                     options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        return GIDSignIn.sharedInstance.handle(url)
     }
 
     // MARK: - Push Notification Registration

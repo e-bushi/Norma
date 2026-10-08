@@ -435,7 +435,7 @@ struct NormaKnowsEditSheet: View {
                 || serverProfile.settings.currency != newCurrency {
                 serverProfile.settings.monthlyIncome = newIncome
                 serverProfile.settings.currency = newCurrency
-                Task { await sessionViewModel.updateUserProfile(serverProfile) }
+                sessionViewModel.updateUserProfile(serverProfile)
             }
         }
 

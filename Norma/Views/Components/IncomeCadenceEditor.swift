@@ -79,7 +79,7 @@ struct IncomeEditSheet: View {
             let monthly = p.monthlyEquivalent ?? amount
             if server.settings.monthlyIncome != monthly {
                 server.settings.monthlyIncome = monthly
-                Task { await sessionViewModel.updateUserProfile(server) }
+                sessionViewModel.updateUserProfile(server)
             }
         }
         dismiss()

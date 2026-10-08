@@ -3,9 +3,8 @@
 //  Norma
 //
 //  Settings sheet — matches the dark editorial language of D10/Forecast.
-//  Sectioned list (profile / subscription / support / security / account)
-//  with destructive actions in coral. Presented as a sheet from the gear
-//  icon in the notes-list bottom bar.
+//  Sectioned list (profile / preferences / support / data) with the
+//  destructive reset in coral. Presented as a sheet from the home gear.
 //
 
 import SwiftUI
@@ -20,19 +19,13 @@ struct SettingsView: View {
     @SwiftUI.Environment(\.modelContext) private var modelContext
     @SwiftUI.Environment(\.dismiss) private var dismiss
 
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @StateObject private var plaidService = PlaidService.shared
-    @State private var showLogoutAlert = false
-    @State private var showDeleteAccountAlert = false
-    @State private var showDeleteAccountConfirmation = false
-    @State private var showPaywall = false
+    @State private var showResetAlert = false
     @State private var showTermsOfUse = false
     @State private var showPrivacyPolicy = false
     @State private var showHelpSupport = false
-    @State private var isDeletingAccount = false
-    @State private var showRecoveryPhraseSheet = false
     @State private var showNormaKnowsEdit = false
-    @State private var showProfileMissingNameEdit = false
+    @State private var showNameEdit = false
     @State private var showIncomeEditor = false
 
     #if DEBUG
@@ -72,17 +65,8 @@ struct SettingsView: View {
 
     private var heroFont: Font { .system(size: 56, weight: .heavy) }
 
-    /// Bank connect is the one paywalled action for now — everything else is
-    /// open. Free trial counts as access.
-    private var hasAccess: Bool {
-        subscriptionManager.hasActiveSubscription || subscriptionManager.isInFreeTrial
-    }
-
     var body: some View {
-        ZStack {
-            settingsContent
-            if isDeletingAccount { deletingOverlay }
-        }
+        settingsContent
         .sheet(isPresented: $showIncomeEditor) {
             IncomeEditSheet()
                 .environmentObject(sessionViewModel)
@@ -92,7 +76,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showNormaKnowsEdit) {
             NormaKnowsEditSheet(profile: userProfile)
         }
-        .sheet(isPresented: $showProfileMissingNameEdit) {
+        .sheet(isPresented: $showNameEdit) {
             ProfileSignupInfoSheet()
                 .environmentObject(sessionViewModel)
         }
@@ -112,10 +96,6 @@ struct SettingsView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
 
-                    subscriptionSection
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 18)
-
                     bankingSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
@@ -132,11 +112,7 @@ struct SettingsView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
 
-                    securitySection
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 18)
-
-                    accountSection
+                    dataSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
 
@@ -150,13 +126,14 @@ struct SettingsView: View {
         }
         .background(bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .alert("Sign Out", isPresented: $showLogoutAlert) {
+        .alert("Reset all data?", isPresented: $showResetAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Sign Out", role: .destructive) {
-                Task { await appCoordinator.logout() }
+            Button("Reset", role: .destructive) {
+                dismiss()
+                appCoordinator.resetAllData()
             }
         } message: {
-            Text("Are you sure you want to sign out?")
+            Text("Your balance, bills, history, and everything norma knows will be erased from this iPhone. There's no backup, so this can't be undone.")
         }
         #if DEBUG
         .alert("Balance reset", isPresented: $showFundResetConfirmation) {
@@ -165,38 +142,6 @@ struct SettingsView: View {
             Text("Balance, linked account, and local ledger cleared. Reopen the runway view to see the first-time state.")
         }
         #endif
-        .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) { showDeleteAccountConfirmation = true }
-        } message: {
-            Text("This action cannot be undone. All your data will be permanently deleted.")
-        }
-        .alert("Are you absolutely sure?", isPresented: $showDeleteAccountConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete My Account", role: .destructive) {
-                Task {
-                    isDeletingAccount = true
-                    do {
-                        // Route through AppCoordinator so the onboarding flow
-                        // is reset to .landing (otherwise it stays at whatever
-                        // step the user was on — e.g. "save answers" — and the
-                        // user lands there instead of the landing screen).
-                        try await appCoordinator.deleteAccount()
-                        dismiss()
-                    } catch {
-                        print("❌ Error deleting account: \(error)")
-                        ToastManager.shared.show(.error(
-                            message: "Couldn't delete your account",
-                            detail: error.localizedDescription
-                        ))
-                        isDeletingAccount = false
-                    }
-                }
-            }
-        } message: {
-            Text("This will permanently delete your account and all associated data. This action CANNOT be undone.")
-        }
-        .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showTermsOfUse) {
             WebViewSheet(url: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/", title: "Terms of Use")
         }
@@ -205,9 +150,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showHelpSupport) {
             WebViewSheet(url: "https://norma-app.userjot.com", title: "Help & Support")
-        }
-        .sheet(isPresented: $showRecoveryPhraseSheet) {
-            RecoveryPhraseSheet(dataManager: dataManager)
         }
         .alert("Connection Error", isPresented: $showPlaidError) {
             Button("OK", role: .cancel) {}
@@ -262,72 +204,32 @@ struct SettingsView: View {
                     .tracking(-2.24)
                     .foregroundStyle(accentPurple)
             }
-
-            if let user = sessionViewModel.currentUser {
-                Text(user.email)
-                    .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
-                    .foregroundStyle(mutedText)
-                    .padding(.top, 2)
-            }
         }
-    }
-
-    // MARK: - Overlays
-
-    private var deletingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: 14) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: accentPurple))
-                    .scaleEffect(1.1)
-                Text("deleting account…")
-                    .font(.custom(FontFamily.Rubik.medium, size: 14))
-                    .foregroundStyle(cream)
-            }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 22)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(bg)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(cream.opacity(0.08), lineWidth: 1)
-            )
-        }
-        .transition(.opacity)
     }
 
     // MARK: - Sections
 
     private var profileSection: some View {
         section(title: "profile") {
-            if let user = sessionViewModel.currentUser {
-                let trimmedName = user.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmedName.isEmpty {
-                    // Apple Sign In sometimes doesn't return the user's name
-                    // (after a re-grant, or when the user picked "hide email"
-                    // and skipped the name prompt). Surface a friendly empty
-                    // state so they can fix it from settings.
-                    listRow(
-                        icon: "person.crop.circle.badge.questionmark",
-                        iconColor: accentPurple,
-                        primary: "sorry, we didn't get your name…",
-                        secondary: user.email,
-                        trailingLabel: "add",
-                        showChevron: false,
-                        action: { showProfileMissingNameEdit = true }
-                    )
-                } else {
-                    listRow(
-                        icon: "person.crop.circle",
-                        iconColor: accentPurple,
-                        primary: trimmedName.lowercased(),
-                        secondary: user.email,
-                        showChevron: false
-                    )
-                }
+            let trimmedName = (sessionViewModel.currentUser?.name ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedName.isEmpty {
+                listRow(
+                    icon: "person.crop.circle.badge.questionmark",
+                    iconColor: accentPurple,
+                    primary: "what should norma call you?",
+                    trailingLabel: "add",
+                    showChevron: false,
+                    action: { showNameEdit = true }
+                )
+            } else {
+                listRow(
+                    icon: "person.crop.circle",
+                    iconColor: accentPurple,
+                    primary: trimmedName.lowercased(),
+                    showChevron: true,
+                    action: { showNameEdit = true }
+                )
             }
 
             listRow(
@@ -350,62 +252,6 @@ struct SettingsView: View {
         }
         let currency = sessionViewModel.currentUser?.settings.currency ?? profile.currency
         return "\(formatBalance(amount, currency: currency)) · \(cadence.label)"
-    }
-
-    @ViewBuilder
-    private var subscriptionSection: some View {
-        section(title: "subscription") {
-            if subscriptionManager.isInFreeTrial {
-                listRow(
-                    icon: "sparkles",
-                    iconColor: accentPurple,
-                    primary: "free trial",
-                    secondary: subscriptionManager.trialDaysRemaining.map {
-                        "\($0) day\($0 == 1 ? "" : "s") remaining"
-                    },
-                    trailingLabel: "view plans",
-                    showChevron: false,
-                    action: { showPaywall = true }
-                )
-            } else if subscriptionManager.hasActiveSubscription {
-                listRow(
-                    icon: "checkmark.seal",
-                    iconColor: accentPurple,
-                    primary: "premium",
-                    secondary: subscriptionStatusLine,
-                    showChevron: false
-                )
-                tappableRow(icon: "creditcard", title: "manage subscription") {
-                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                        UIApplication.shared.open(url)
-                    }
-                }
-            } else {
-                listRow(
-                    icon: "lock",
-                    iconColor: dimText,
-                    primary: "limited access",
-                    secondary: "unlock all norma features",
-                    trailingLabel: "subscribe",
-                    showChevron: false,
-                    action: { showPaywall = true }
-                )
-                tappableRow(icon: "arrow.clockwise.circle", title: "restore purchases") {
-                    Task {
-                        do { try await subscriptionManager.restorePurchases() }
-                        catch { print("Failed to restore purchases: \(error)") }
-                    }
-                }
-            }
-        }
-    }
-
-    private var subscriptionStatusLine: String? {
-        guard let expirationDate = subscriptionManager.subscriptionStatus.expirationDate else { return nil }
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        let prefix = subscriptionManager.subscriptionStatus.willRenew ? "renews" : "expires"
-        return "\(prefix) \(f.string(from: expirationDate).lowercased())"
     }
 
     @ViewBuilder
@@ -754,27 +600,16 @@ struct SettingsView: View {
         }
     }
 
-    private var securitySection: some View {
-        section(title: "security") {
-            tappableRow(icon: "key", title: "view recovery phrase") { showRecoveryPhraseSheet = true }
-            Text("your data is encrypted with your personal key. keep your recovery phrase safe to restore access.")
+    private var dataSection: some View {
+        section(title: "your data", titleColor: danger.opacity(0.9), dividerColor: danger.opacity(0.25)) {
+            Text("no account, no servers. everything norma knows lives only on this iPhone, and norma thinks with apple's on-device model.")
                 .font(.custom(FontFamily.Rubik.regular, size: 12).italic())
                 .foregroundStyle(dimText)
-                .padding(.top, 4)
+                .padding(.vertical, 8)
                 .padding(.horizontal, 4)
-        }
-    }
-
-    private var accountSection: some View {
-        section(title: "account", titleColor: danger.opacity(0.9), dividerColor: danger.opacity(0.25)) {
-            destructiveRow(icon: "rectangle.portrait.and.arrow.right", title: "sign out") {
-                showLogoutAlert = true
+            destructiveRow(icon: "trash", title: "reset all data") {
+                showResetAlert = true
             }
-            destructiveRow(icon: "trash", title: "delete account") {
-                showDeleteAccountAlert = true
-            }
-            .disabled(isDeletingAccount)
-            .opacity(isDeletingAccount ? 0.5 : 1.0)
         }
     }
 
@@ -802,7 +637,7 @@ struct SettingsView: View {
             updatedSettings.arcAccountId = nil
             updatedProfile.settings = updatedSettings
             updatedProfile.freedomFund = 0
-            Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+            sessionViewModel.updateUserProfile(updatedProfile)
         }
 
         // 2. Local ledger: drop every FreedomFundEntry so activity is empty.
@@ -954,12 +789,6 @@ struct SettingsView: View {
     // MARK: - Plaid actions
 
     private func connectBank() {
-        // The single paywalled action for now. Subscribers (and trial users)
-        // pass; everyone else gets the paywall instead of the Plaid flow.
-        guard hasAccess else {
-            showPaywall = true
-            return
-        }
         guard let userId = sessionViewModel.currentUser?.userId else {
             plaidErrorMessage = "Please sign in to connect your bank."
             showPlaidError = true

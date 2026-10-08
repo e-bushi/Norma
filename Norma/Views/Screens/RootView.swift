@@ -1,6 +1,6 @@
 //
 //  RootView.swift
-//  Collector
+//  Norma
 //
 //  Created by Chris Mauldin on 5/8/25.
 //
@@ -23,22 +23,11 @@ struct RootView: View {
                 .environmentObject(appCoordinator)
         }
         .onAppear {
-            // Set the model context on DataManager
             dataManager.setModelContext(modelContext)
         }
         .task(id: sessionViewModel.currentUser?.userId) {
-            // Load user data when main app becomes active (only once per user session)
             if let userId = sessionViewModel.currentUser?.userId {
-                do {
-                    // Refresh user profile first
-                    await sessionViewModel.fetchUserProfile()
-                    // Then fetch financial data
-                    try await dataManager.fetchAllFinancialData()
-                    // Sync Plaid transactions if connected
-                    await syncPlaidBalances(userId: userId)
-                } catch {
-                    print("Failed to load financial data: \(error)")
-                }
+                await syncPlaidBalances(userId: userId)
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -57,7 +46,7 @@ struct RootView: View {
         // the last value synced into settings.freedomFund.
         guard FeatureFlags.plaidEnabled else { return }
         do {
-            let plaidItems = try await dataManager.supabaseService.fetchPlaidItems(userId: userId)
+            let plaidItems = try await SupabaseService.shared.fetchPlaidItems(userId: userId)
             guard let plaidItem = plaidItems.first else { return }
 
             // Populate institution info

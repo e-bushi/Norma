@@ -35,4 +35,15 @@ enum FeatureFlags {
     ///
     /// Flip to true to revive. Rotate the leaked Deepgram key before doing so.
     static let voiceCaptureEnabled = false
+
+    /// Master switch for receipt capture: images shared to the Norma share
+    /// extension, extracted server-side into pending transactions, then
+    /// reviewed from the home toolbar badge.
+    ///
+    /// Off while the app has no accounts: the share extension and the
+    /// `pending_transactions` fetch both authenticate with a Supabase session
+    /// that no longer exists. Gates the home badge, the review sheet, and the
+    /// pending fetch. Reviving it means either restoring auth or moving
+    /// extraction on-device (Vision OCR + Foundation Models).
+    static let receiptCaptureEnabled = false
 }

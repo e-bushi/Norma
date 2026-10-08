@@ -579,14 +579,8 @@ struct ArcCountView: View {
             }
         }
         .task {
+            guard FeatureFlags.receiptCaptureEnabled else { return }
             await pendingStore.refresh(userId: sessionViewModel.currentUser?.userId)
-            // Once per login: merge the server ledger down (and push up any
-            // local history the server hasn't seen), then mirror-sync the
-            // user-authored content (tokens + captured transactions).
-            if let userId = sessionViewModel.currentUser?.userId {
-                await FreedomFundSync.pullIfNeeded(context: modelContext, userId: userId)
-                await UserContentSync.activate(context: modelContext, userId: userId)
-            }
         }
         .sheet(isPresented: $showPendingTransactions) {
             PendingTransactionsSheet(store: pendingStore, currency: currency)
@@ -594,7 +588,7 @@ struct ArcCountView: View {
                 .presentationDragIndicator(.visible)
         }
         .toolbar {
-            if !isFirstTime && !pendingStore.items.isEmpty {
+            if FeatureFlags.receiptCaptureEnabled && !isFirstTime && !pendingStore.items.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     pendingTransactionsBadge
                 }
@@ -967,12 +961,8 @@ struct ArcCountView: View {
         if let next {
             next.delta = next.balanceAfter - (previous?.balanceAfter ?? 0)
         }
-        let deletedId = entry.id
         modelContext.delete(entry)
         try? modelContext.save()
-        // Mirror both the removal and the repaired neighbor to the server.
-        FreedomFundSync.pushDelete(id: deletedId)
-        if let next { FreedomFundSync.push(next) }
 
         if next == nil, var updatedProfile = sessionViewModel.currentUser {
             let restored = previous?.balanceAfter ?? 0
@@ -980,7 +970,7 @@ struct ArcCountView: View {
             updatedSettings.freedomFund = restored
             updatedProfile.settings = updatedSettings
             updatedProfile.freedomFund = restored
-            Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+            sessionViewModel.updateUserProfile(updatedProfile)
         }
 
         let generator = UINotificationFeedbackGenerator()
@@ -1245,7 +1235,7 @@ struct ArcCountView: View {
             newBalance: newFund,
             source: .paydayConfirm
         )
-        Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+        sessionViewModel.updateUserProfile(updatedProfile)
 
         withAnimation(.easeInOut(duration: 0.25)) {
             dismissedPaydayTS = payday.timeIntervalSince1970
@@ -1543,7 +1533,7 @@ struct ArcCountView: View {
         updatedProfile.settings = updatedSettings
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
-        Task { await sessionViewModel.updateUserProfile(updatedProfile) }
+        sessionViewModel.updateUserProfile(updatedProfile)
 
         presentReanchorReward(prevFund: prevFund, newFund: newFund, prevAnchorDate: prevAnchorDate, burn: burn)
     }
@@ -2732,18 +2722,10 @@ struct FreedomFundEditSheet: View {
 
         updatedProfile.settings = updatedSettings
 
-        Task {
-            await sessionViewModel.updateUserProfile(updatedProfile)
-
-            await MainActor.run {
-                isSaving = false
-
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-
-                dismiss()
-            }
-        }
+        sessionViewModel.updateUserProfile(updatedProfile)
+        isSaving = false
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        dismiss()
     }
 }
 

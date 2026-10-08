@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import RevenueCat
 import PostHog
 
 @main
@@ -28,12 +27,9 @@ struct NormaApp: App {
                     Insight.self,
                     UserProfile.self
             )
-            // Published for non-View code: the logout path wipes local data
+            // Published for non-View code: "reset all data" wipes local data
             // through this handle (LocalDataReset).
             AppModelContainer.shared = modelContainer
-
-//            Purchases.logLevel = .debug
-            Purchases.configure(withAPIKey: "appl_yYpBhkamzaQglHiLXRoRouGgjTf", appUserID: nil)
 
             // PostHog Analytics
 //            let config = PostHogConfig(

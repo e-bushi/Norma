@@ -36,10 +36,7 @@ struct MainLayerView: View {
                 .environmentObject(dataManager)
                 .environmentObject(appCoordinator)
 
-        case .notes:
-            // Runway-first: the arc home replaces the notes list as the primary
-            // surface. Notes demote to a browse sheet reached from HomeView's
-            // `+`. See plans/runway-first-home.md.
+        case .home:
             HomeView()
         }
     }
@@ -50,8 +47,8 @@ struct MainLayerView: View {
         switch view {
         case .settings:
             return .settings
-        case .notes:
-            return .notes
+        case .home:
+            return .home
         }
     }
 }

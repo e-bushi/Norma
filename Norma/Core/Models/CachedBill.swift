@@ -4,6 +4,9 @@
 //
 //  Created by Claude on 7/5/25.
 //
+//  The on-device store for bills. `Bill` stays the value type the UI works
+//  with; this @Model is its persisted form.
+//
 
 import Foundation
 import SwiftData
@@ -14,6 +17,7 @@ final class CachedBill {
     var userId: String
     var name: String
     var dueDate: Date
+    var nextDueDate: Date?
     var amount: Double
     var status: String
     var frequency: String
@@ -21,15 +25,18 @@ final class CachedBill {
     var merchant: String?
     var isReminderOn: Bool = false
     var reminderDays: Int?
+    var isActive: Bool?
+    var isMostCritical: Bool?
+    var paidAt: Date?
     var createdAt: Date
     var updatedAt: Date
     var notes: String?
     var verificationDate: String?
-    
-    // Sync metadata
+
+    // Legacy sync metadata, kept so existing stores migrate without a schema bump.
     var lastSyncedAt: Date
     var isFromCache: Bool = true
-    
+
     init(
         id: String,
         userId: String,
@@ -38,15 +45,8 @@ final class CachedBill {
         amount: Double,
         status: String,
         frequency: String,
-        categoryId: String? = nil,
-        merchant: String? = nil,
-        isReminderOn: Bool = false,
-        reminderDays: Int? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date(),
-        notes: String? = nil,
-        verificationDate: String? = nil,
-        lastSyncedAt: Date = Date()
+        updatedAt: Date = Date()
     ) {
         self.id = id
         self.userId = userId
@@ -55,22 +55,13 @@ final class CachedBill {
         self.amount = amount
         self.status = status
         self.frequency = frequency
-        self.categoryId = categoryId
-        self.merchant = merchant
-        self.isReminderOn = isReminderOn
-        self.reminderDays = reminderDays
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.notes = notes
-        self.verificationDate = verificationDate
-        self.lastSyncedAt = lastSyncedAt
+        self.lastSyncedAt = Date()
     }
-    
-    // Convert from Supabase Bill model
+
     convenience init(from bill: Bill) {
         let createdDate = ISO8601DateFormatter().date(from: bill.createdAt ?? "") ?? Date()
-        let updatedDate = ISO8601DateFormatter().date(from: bill.updatedAt ?? "") ?? Date()
-        
         self.init(
             id: bill.id ?? UUID().uuidString,
             userId: bill.userId,
@@ -79,27 +70,39 @@ final class CachedBill {
             amount: bill.amount,
             status: bill.status.rawValue,
             frequency: bill.frequency.rawValue,
-            categoryId: bill.categoryId,
-            merchant: bill.merchant,
-            isReminderOn: bill.isReminderOn,
-            reminderDays: bill.reminderDays,
-            createdAt: createdDate,
-            updatedAt: updatedDate,
-            notes: bill.notes,
-            verificationDate: bill.verificationDate,
-            lastSyncedAt: Date()
+            createdAt: createdDate
         )
+        update(from: bill)
     }
-    
-    // Convert to Supabase Bill model
+
+    /// Copies every mutable field from `bill`. Identity and `createdAt` stay put.
+    func update(from bill: Bill) {
+        name = bill.name
+        dueDate = bill.dueDate
+        nextDueDate = bill.nextDueDate
+        amount = bill.amount
+        status = bill.status.rawValue
+        frequency = bill.frequency.rawValue
+        categoryId = bill.categoryId
+        merchant = bill.merchant
+        isReminderOn = bill.isReminderOn
+        reminderDays = bill.reminderDays
+        isActive = bill.isActive
+        isMostCritical = bill.isMostCritical
+        paidAt = bill.paidAt
+        notes = bill.notes
+        verificationDate = bill.verificationDate
+        updatedAt = Date()
+    }
+
     func toBill() -> Bill {
         let formatter = ISO8601DateFormatter()
-        
         return Bill(
             id: id,
             userId: userId,
             name: name,
             dueDate: dueDate,
+            nextDueDate: nextDueDate,
             amount: amount,
             status: BillStatus(rawValue: status) ?? .scheduled,
             frequency: BillFrequency(rawValue: frequency) ?? .monthly,
@@ -107,10 +110,13 @@ final class CachedBill {
             merchant: merchant,
             isReminderOn: isReminderOn,
             reminderDays: reminderDays,
+            isActive: isActive,
             createdAt: formatter.string(from: createdAt),
             updatedAt: formatter.string(from: updatedAt),
             notes: notes,
-            verificationDate: verificationDate
+            verificationDate: verificationDate,
+            isMostCritical: isMostCritical,
+            paidAt: paidAt
         )
     }
 }

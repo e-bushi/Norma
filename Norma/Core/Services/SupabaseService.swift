@@ -4,6 +4,11 @@
 //
 //  Created by Claude on 5/9/25.
 //
+//  Backend client for the dormant server integrations only — Plaid bank
+//  sync, Deepgram voice, and share-extension receipt capture, each switched
+//  off in FeatureFlags. The core app never touches it: all user data lives
+//  on device.
+//
 
 import Foundation
 import Supabase
@@ -16,254 +21,18 @@ class SupabaseService {
 
     private let client: SupabaseClient
 
-    /// Edge Function service that shares this client's auth session
-    lazy var edgeFunctionService = EdgeFunctionService(client: client)
-
     private init() {
         let supabaseURL = URL(string: Self.supabaseURLString)!
         self.client = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: Self.supabaseAnonKey)
     }
-    
-    // MARK: - Authentication
-    
-    /// Sign up a new user
-    func signUp(email: String, password: String, firstName: String, lastName: String) async throws -> AuthResponse {
-        let userMetadata: [String: String] = [
-            "first_name": firstName,
-            "last_name": lastName
-        ]
-        
-        // Guard against nil user data first and last names
-        guard let firstName = userMetadata["first_name"],
-              let lastName = userMetadata["last_name"] else {
-            throw AuthError.supabaseError("Failed to get user data for signup")
-        }
-        
-        let response = try await client.auth.signUp(
-            email: email,
-            password: password,
-            data: [
-                "first_name": .string(firstName),
-                "last_name": .string(lastName)
-            ]
-        )
-        
-        return response
-    }
-    
-    /// Sign in an existing user
-    func signIn(email: String, password: String) async throws -> Session {
-        try await client.auth.signIn(
-            email: email,
-            password: password
-        )
-    }
-    
-    /// Verify OTP code
-    func verifyOTP(email: String, code: String) async throws -> AuthResponse {
-        let response = try await client.auth.verifyOTP(
-            email: email,
-            token: code,
-            type: .signup
-        )
 
-        return response
-    }
-
-    /// Resend OTP code to the user's email
-    func resendOTP(email: String) async throws {
-        try await client.auth.resend(
-            email: email,
-            type: .signup
-        )
-    }
-
-    /// Returns true if an Apple identity with the given `sub` (userIdentifier) already
-    /// exists in `auth.identities`. Used by the login path to refuse silent account
-    /// creation when a user taps "Sign in with Apple" without an existing account.
-    func appleIdentityExists(appleSub: String) async throws -> Bool {
-        struct Args: Encodable { let apple_sub: String }
-        let exists: Bool = try await client
-            .rpc("apple_identity_exists", params: Args(apple_sub: appleSub))
-            .execute()
-            .value
-        return exists
-    }
-
-    /// Same as `appleIdentityExists` but for the Google provider. Apple/Google both
-    /// flow through `signInWithIdToken`, which auto-creates an `auth.users` row when
-    /// no identity matches — this pre-check lets the login path bail before that.
-    func googleIdentityExists(googleSub: String) async throws -> Bool {
-        struct Args: Encodable { let google_sub: String }
-        let exists: Bool = try await client
-            .rpc("google_identity_exists", params: Args(google_sub: googleSub))
-            .execute()
-            .value
-        return exists
-    }
-
-    /// Sign in with Apple using ID token
-    /// - Parameters:
-    ///   - idToken: The identity token from Apple Sign In
-    ///   - nonce: Optional nonce for additional security
-    ///   - firstName: User's first name (only available on first sign-in)
-    ///   - lastName: User's last name (only available on first sign-in)
-    /// - Returns: Session containing the authenticated user
-    func signInWithApple(idToken: String, nonce: String? = nil, firstName: String? = nil, lastName: String? = nil) async throws -> Session {
-        let session = try await client.auth.signInWithIdToken(
-            credentials: .init(
-                provider: .apple,
-                idToken: idToken,
-                nonce: nonce
-            )
-        )
-
-        // If we have name data (first sign-in only), update user metadata
-        if let firstName = firstName, !firstName.isEmpty {
-            _ = try? await client.auth.update(user: UserAttributes(
-                data: [
-                    "first_name": .string(firstName),
-                    "last_name": .string(lastName ?? "")
-                ]
-            ))
-        }
-
-        return session
-    }
-
-    /// Sign in with Google using ID token and access token
-    /// - Parameters:
-    ///   - idToken: The identity token from Google Sign In
-    ///   - accessToken: The access token from Google Sign In
-    ///   - firstName: User's first name
-    ///   - lastName: User's last name
-    /// - Returns: Session containing the authenticated user
-    func signInWithGoogle(idToken: String, accessToken: String, firstName: String? = nil, lastName: String? = nil) async throws -> Session {
-        let session = try await client.auth.signInWithIdToken(
-            credentials: .init(
-                provider: .google,
-                idToken: idToken,
-                accessToken: accessToken
-            )
-        )
-
-        // Update user metadata with name if available
-        if let firstName = firstName, !firstName.isEmpty {
-            _ = try? await client.auth.update(user: UserAttributes(
-                data: [
-                    "first_name": .string(firstName),
-                    "last_name": .string(lastName ?? "")
-                ]
-            ))
-        }
-
-        return session
-    }
-}
-
-// MARK: - Additional Methods
-
-extension SupabaseService {
-    /// Get the current user
-    var currentUser: User? {
-        client.auth.currentUser
-    }
-
-    /// Get the current session
-    var currentSession: Session? {
-        client.auth.currentSession
-    }
-
-    /// Get the current session asynchronously (waits for session restoration on cold start)
+    /// The current session, waiting for restoration on cold start.
     func getSession() async throws -> Session {
         try await client.auth.session
     }
 
-    /// Stream of auth state changes (for token refresh handling)
-    var authStateChanges: AsyncStream<(event: AuthChangeEvent, session: Session?)> {
-        client.auth.authStateChanges
-    }
-    
-    /// Sign out the current user
-    func signOut() async throws {
-        try await client.auth.signOut()
-    }
-    
-    /// Delete the current user's account
-    /// This will delete the user from authentication and all associated data
-    func deleteAccount() async throws {
-        guard let userId = currentUser?.id else {
-            throw AuthError.supabaseError("No user logged in")
-        }
-        let userIdString = userId.uuidString
-
-        // Delete user-scoped rows from every public table currently in use.
-        // (The legacy expenses/budgets/categories/income tables were dropped
-        // during the May 2026 expense-removal cleanup — don't reference them.)
-        // All of these have ON DELETE CASCADE from auth.users, but the client
-        // can't delete the auth.users row itself (that needs service_role), so
-        // we sweep explicitly here.
-        let tables = [
-            "bills",
-            "chat_conversations",
-            "plaid_items",
-            "profiles",
-            "user_encryption_keys",
-        ]
-        for table in tables {
-            _ = try await client.from(table)
-                .delete()
-                .eq("user_id", value: userIdString)
-                .execute()
-        }
-
-        // NOTE: the auth.users row itself can't be deleted from the client.
-        // It needs to be cleaned up via the dashboard or an edge function with
-        // the service_role key. For now we sign out so the local session is
-        // cleared; the orphan auth row is harmless until then.
-        try await signOut()
-    }
-    
-    // MARK: - Internal Database Access Methods
-    // These methods provide controlled access to the database for extensions
-    
-    /// Execute a select query on a table
+    /// Query builder for the extensions in this folder.
     internal func from(_ table: String) -> PostgrestQueryBuilder {
-        return client.from(table)
-    }
-    
-}
-
-// MARK: - Errors
-
-enum AuthError: LocalizedError {
-    case networkError
-    case invalidCredentials
-    case invalidCode
-    case supabaseError(String)
-    case appleSignInError(String)
-    case googleSignInError(String)
-    case accountNotFound
-    case unknownError
-
-    var errorDescription: String? {
-        switch self {
-        case .networkError:
-            return "Network connection error. Please check your internet connection."
-        case .invalidCredentials:
-            return "Invalid email or password."
-        case .invalidCode:
-            return "Invalid verification code."
-        case .supabaseError(let message):
-            return message
-        case .appleSignInError(let message):
-            return "Apple Sign In failed: \(message)"
-        case .googleSignInError(let message):
-            return "Google Sign In failed: \(message)"
-        case .accountNotFound:
-            return "No account found. Please sign up first."
-        case .unknownError:
-            return "An unknown error occurred. Please try again."
-        }
+        client.from(table)
     }
 }

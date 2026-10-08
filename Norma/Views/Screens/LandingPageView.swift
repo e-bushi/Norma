@@ -4,14 +4,12 @@
 //
 //  O1 — Landing. Lavender-dithered shader on dark canvas, n. logomark,
 //  hero "a place for the math in your head.", brand-voice subtitle, and
-//  a lavender begin button that segues into auth.
+//  a lavender begin button that segues into the onboarding questions.
 //
 
 import SwiftUI
 
 struct LandingPageView: View {
-    @Binding var showSignUp: Bool
-    @Binding var showSignIn: Bool
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
 
     @State private var logoAppeared = false
@@ -70,12 +68,7 @@ struct LandingPageView: View {
                         .opacity(ctaAppeared ? 1 : 0)
                         .offset(y: ctaAppeared ? 0 : 16)
 
-                    Spacer().frame(height: 18)
-
-                    signInLink
-                        .opacity(ctaAppeared ? 1 : 0)
-
-                    Spacer().frame(height: 40)
+                    Spacer().frame(height: 56)
                 }
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -152,23 +145,6 @@ struct LandingPageView: View {
         }
         .buttonStyle(LandingButtonStyle())
     }
-
-    private var signInLink: some View {
-        HStack(spacing: 6) {
-            Text("already have an account?")
-                .font(.system(size: 13))
-                .foregroundStyle(NormaPalette.inkMuted)
-            Button(action: {
-                showSignIn = true
-                showSignUp = false
-                onboardingViewModel.currentStep = .authentication
-            }) {
-                Text("sign in")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(NormaPalette.ink)
-            }
-        }
-    }
 }
 
 private struct LandingButtonStyle: ButtonStyle {
@@ -181,6 +157,6 @@ private struct LandingButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    LandingPageView(showSignUp: .constant(false), showSignIn: .constant(false))
+    LandingPageView()
         .environmentObject(OnboardingViewModel(sessionViewModel: SessionViewModel(dataManager: DataManager())))
 }

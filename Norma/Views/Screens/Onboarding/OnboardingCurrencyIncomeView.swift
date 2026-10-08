@@ -105,6 +105,10 @@ struct OnboardingCurrencyIncomeView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // The number pad has no return key, so tapping anywhere outside the
+        // income row dismisses it. Child buttons and the row's own focus tap win.
+        .contentShape(Rectangle())
+        .onTapGesture { incomeFocused = false }
         .preferredColorScheme(.dark)
         .navigationBarBackButtonHidden(true)
         .onAppear {

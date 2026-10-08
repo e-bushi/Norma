@@ -43,7 +43,6 @@ enum FreedomFundLedger {
         } catch {
             print("FreedomFundLedger: failed to save entry — \(error)")
         }
-        FreedomFundSync.push(entry)
         return entry
     }
 
@@ -73,7 +72,6 @@ enum FreedomFundLedger {
             } catch {
                 print("FreedomFundLedger: failed to merge receipt batch — \(error)")
             }
-            FreedomFundSync.push(latest)
             return latest
         }
 
