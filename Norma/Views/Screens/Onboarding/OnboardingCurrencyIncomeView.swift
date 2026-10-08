@@ -2,130 +2,68 @@
 //  OnboardingCurrencyIncomeView.swift
 //  Norma
 //
-//  O4 — "what's the rhythm?". Default currency picker (lavender pill) +
-//  optional monthly take-home input (huge bold number with lavender caret).
-//  Save & continue or skip-for-now.
+//  "what's your rhythm" — currency, take-home per paycheck, and when pay
+//  lands. The payday detail matters: a biweekly month can hold two
+//  paychecks or three, and what's left depends on which.
 //
 
 import SwiftUI
-import UIKit
 
 struct OnboardingCurrencyIncomeView: View {
-    @EnvironmentObject var onboardingViewModel: OnboardingViewModel
+    @Binding var currency: String
+    @Binding var amountText: String
+    @Binding var cadence: CadenceDraft
     let onContinue: () -> Void
 
-    @State private var currencyCode: String = "USD"
-    @State private var incomeText: String = ""
-    @State private var cadence: CadenceChoice = .monthly
-    @FocusState private var incomeFocused: Bool
+    @FocusState private var amountFocused: Bool
+    @State private var appeared = false
 
-    // Onboarding captures the cadence *type* + amount; exact day is refined
-    // later in the calendar/profile editor. Mirrors IncomeCadence.
-    private enum CadenceChoice: String, CaseIterable {
-        case weekly, biweekly, semiMonthly, monthly, irregular
-        var label: String {
-            switch self {
-            case .weekly:      return "weekly"
-            case .biweekly:    return "every 2 weeks"
-            case .semiMonthly: return "twice a month"
-            case .monthly:     return "monthly"
-            case .irregular:   return "it varies"
-            }
-        }
-        /// Average paydays per month — converts the per-paycheck amount to the
-        /// monthly figure settings needs. Keep in sync with IncomeCadence.
-        var occurrencesPerMonth: Double {
-            switch self {
-            case .weekly:      return 52.0 / 12.0
-            case .biweekly:    return 26.0 / 12.0
-            case .semiMonthly: return 2
-            case .monthly, .irregular: return 1
-            }
-        }
-    }
+    /// The form starts staggering in as the title's wave is finishing.
+    private let formDelay = 0.5
+    private let staggerStep = 0.07
 
-    @State private var formAppeared = false
-    @State private var ctaAppeared = false
-
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
-
-    // Common currencies surfaced in the picker. CurrencyData has the full set;
-    // these are the popular ones for the menu. The user can pick any of these.
-    private let popularCurrencies: [(code: String, flag: String)] = [
-        ("USD", "🇺🇸"),
-        ("EUR", "🇪🇺"),
-        ("GBP", "🇬🇧"),
-        ("CAD", "🇨🇦"),
-        ("AUD", "🇦🇺"),
-        ("JPY", "🇯🇵"),
-        ("CNY", "🇨🇳"),
-        ("INR", "🇮🇳"),
-        ("THB", "🇹🇭"),
-        ("MXN", "🇲🇽"),
-        ("BRL", "🇧🇷"),
-        ("SGD", "🇸🇬"),
-        ("HKD", "🇭🇰"),
-        ("KRW", "🇰🇷"),
-        ("CHF", "🇨🇭"),
-    ]
+    private var canProceed: Bool { Money.parse(amountText) != nil }
 
     var body: some View {
-        ZStack {
-            NormaPalette.canvas.ignoresSafeArea()
-
+        ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                Spacer().frame(height: 56)
-
                 titleView
+                    .padding(.top, 56)
                     .padding(.bottom, 36)
 
-                currencyField
-                    .opacity(formAppeared ? 1 : 0)
-                    .offset(y: formAppeared ? 0 : 12)
-                    .padding(.bottom, 28)
-
-                incomeField
-                    .opacity(formAppeared ? 1 : 0)
-                    .offset(y: formAppeared ? 0 : 12)
-                    .padding(.bottom, 24)
-
-                cadenceField
-                    .opacity(formAppeared ? 1 : 0)
-                    .offset(y: formAppeared ? 0 : 12)
-
-                Spacer(minLength: 24)
-
-                continueBlock
-                    .opacity(ctaAppeared ? 1 : 0)
-                    .offset(y: ctaAppeared ? 0 : 12)
-                    .frame(maxWidth: .infinity)
-
-                Spacer().frame(height: 36)
+                VStack(alignment: .leading, spacing: 28) {
+                    currencyField
+                        .staggeredAppear(appeared, index: 0, baseDelay: formDelay, step: staggerStep)
+                    amountField
+                        .staggeredAppear(appeared, index: 1, baseDelay: formDelay, step: staggerStep)
+                    CadencePicker(
+                        draft: $cadence,
+                        isRevealed: appeared,
+                        revealDelay: formDelay + 2 * staggerStep
+                    )
+                }
             }
             .padding(.horizontal, 24)
+            .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollDismissesKeyboard(.interactively)
         // The number pad has no return key, so tapping anywhere outside the
-        // income row dismisses it. Child buttons and the row's own focus tap win.
+        // amount row dismisses it. Child buttons and the row's own focus tap win.
         .contentShape(Rectangle())
-        .onTapGesture { incomeFocused = false }
-        .preferredColorScheme(.dark)
-        .navigationBarBackButtonHidden(true)
-        .onAppear {
-            impactGenerator.prepare()
-            currencyCode = onboardingViewModel.collectedData.currency.isEmpty
-                ? "USD"
-                : onboardingViewModel.collectedData.currency
-            let seed = onboardingViewModel.collectedData.incomeAmountPerPaycheck > 0
-                ? onboardingViewModel.collectedData.incomeAmountPerPaycheck
-                : onboardingViewModel.collectedData.monthlyIncome
-            if seed > 0 { incomeText = formattedNumber(seed) }
-            if let saved = CadenceChoice(rawValue: onboardingViewModel.collectedData.incomeCadenceRaw) {
-                cadence = saved
+        .onTapGesture { amountFocused = false }
+        .safeAreaInset(edge: .bottom) {
+            PrimaryButton(title: "continue", systemImage: "arrow.right", isEnabled: canProceed) {
+                amountFocused = false
+                onContinue()
             }
-            withAnimation(.easeOut(duration: 0.5).delay(0.55)) { formAppeared = true }
-            withAnimation(.easeOut(duration: 0.5).delay(0.70)) { ctaAppeared = true }
+            .staggeredAppear(appeared, index: 4, baseDelay: formDelay, step: staggerStep)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+            .background(NormaPalette.canvas)
         }
+        .onAppear { appeared = true }
     }
 
     // MARK: - Subviews
@@ -148,30 +86,19 @@ struct OnboardingCurrencyIncomeView: View {
 
     private var currencyField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("default currency")
-                .font(.system(size: 11, weight: .medium))
-                .tracking(0.8)
-                .foregroundStyle(NormaPalette.inkSubtle)
+            FieldLabel("currency")
 
             Menu {
-                ForEach(popularCurrencies, id: \.code) { entry in
-                    Button(action: {
-                        impactGenerator.impactOccurred()
-                        currencyCode = entry.code
-                    }) {
-                        HStack {
-                            Text("\(entry.flag) \(entry.code)")
-                            if currencyCode == entry.code {
-                                Image(systemName: "checkmark")
-                            }
-                        }
+                Picker("currency", selection: $currency) {
+                    ForEach(Money.currencies) { entry in
+                        Text("\(entry.flag) \(entry.code)").tag(entry.code)
                     }
                 }
             } label: {
                 HStack(spacing: 10) {
-                    Text(flagForCode(currencyCode))
+                    Text(Money.flag(for: currency))
                         .font(.system(size: 18))
-                    Text(currencyCode)
+                    Text(currency)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(NormaPalette.ink)
                     Image(systemName: "chevron.down")
@@ -180,164 +107,52 @@ struct OnboardingCurrencyIncomeView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(
-                    Capsule().fill(NormaPalette.lavender.opacity(0.10))
-                )
-                .overlay(
-                    Capsule().strokeBorder(NormaPalette.lavender.opacity(0.45), lineWidth: 1)
-                )
+                .background(Capsule().fill(NormaPalette.lavender.opacity(0.10)))
+                .overlay(Capsule().strokeBorder(NormaPalette.lavender.opacity(0.45), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
     }
 
-    private var incomeField: some View {
+    private var amountField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("amount per paycheck (after taxes)")
-                .font(.system(size: 11, weight: .medium))
-                .tracking(0.8)
-                .foregroundStyle(NormaPalette.inkSubtle)
+            FieldLabel(cadence.kind == .irregular ? "about how much a month, after tax" : "amount per paycheck, after tax")
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(currencySymbol(currencyCode))
+                Text(Money.symbol(for: currency))
                     .font(.system(size: 56, weight: .bold))
                     .foregroundStyle(NormaPalette.inkMuted)
 
                 ZStack(alignment: .leading) {
-                    if incomeText.isEmpty {
+                    if amountText.isEmpty {
                         Text("0")
                             .font(.system(size: 56, weight: .bold))
                             .foregroundStyle(NormaPalette.inkMuted.opacity(0.5))
                             .allowsHitTesting(false)
                     }
-                    TextField("", text: $incomeText)
+                    TextField("", text: $amountText)
                         .font(.system(size: 56, weight: .bold))
                         .foregroundStyle(NormaPalette.ink)
                         .tint(NormaPalette.lavender)
                         .keyboardType(.numberPad)
-                        .focused($incomeFocused)
-                        .onChange(of: incomeText) { _, newValue in
-                            // Strip non-digits, then re-format with commas.
+                        .focused($amountFocused)
+                        .onChange(of: amountText) { _, newValue in
                             let digits = newValue.filter(\.isNumber)
-                            if digits.isEmpty {
-                                incomeText = ""
-                            } else if let n = Double(digits) {
-                                let formatted = formattedNumber(n)
-                                if formatted != incomeText {
-                                    incomeText = formatted
-                                }
-                            }
+                            let formatted = Double(digits).map(Self.grouped) ?? ""
+                            if formatted != amountText { amountText = formatted }
                         }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .tracking(-1.2)
-            // Make the whole row a focus target so taps anywhere on it (incl.
-            // the visible "0" placeholder or whitespace next to the symbol)
-            // bring up the keyboard. Without this, an empty TextField had ~0pt
-            // hit area and a currency change could shift the tap zone away
-            // from where the user expected it.
+            // An empty TextField has almost no hit area, so the whole row
+            // focuses it — including the "0" placeholder and the symbol.
             .contentShape(Rectangle())
-            .onTapGesture { incomeFocused = true }
-
-            Text("helps norma show what's left after bills.")
-                .font(.system(size: 12))
-                .foregroundStyle(NormaPalette.inkMuted)
+            .onTapGesture { amountFocused = true }
         }
     }
 
-    private var cadenceField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("how often do you get paid?")
-                .font(.system(size: 11, weight: .medium))
-                .tracking(0.8)
-                .foregroundStyle(NormaPalette.inkSubtle)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], alignment: .leading, spacing: 8) {
-                ForEach(CadenceChoice.allCases, id: \.self) { choice in
-                    cadenceChip(choice)
-                }
-            }
-        }
-    }
-
-    private func cadenceChip(_ choice: CadenceChoice) -> some View {
-        let active = cadence == choice
-        return Button {
-            impactGenerator.impactOccurred()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { cadence = choice }
-        } label: {
-            Text(choice.label)
-                .font(.system(size: 14, weight: active ? .semibold : .medium))
-                .foregroundStyle(active ? NormaPalette.canvas : NormaPalette.ink)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .frame(maxWidth: .infinity)
-                .background {
-                    if active { Capsule().fill(NormaPalette.lavender) }
-                }
-                .overlay(
-                    Capsule().strokeBorder(
-                        active ? NormaPalette.lavender : NormaPalette.ink.opacity(0.28),
-                        style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [3, 3])
-                    )
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var continueBlock: some View {
-        Button(action: {
-            impactGenerator.impactOccurred()
-            saveAndContinue()
-        }) {
-            HStack(spacing: 8) {
-                Text("save and continue")
-                    .font(.system(size: 15, weight: .semibold))
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(NormaPalette.canvas)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Capsule().fill(canProceed ? NormaPalette.lavender : NormaPalette.lavender.opacity(0.40)))
-            .shadow(color: NormaPalette.lavender.opacity(canProceed ? 0.40 : 0), radius: 18, x: 0, y: 10)
-        }
-        .buttonStyle(.plain)
-        .disabled(!canProceed)
-    }
-
-    /// Income is now required — the user must enter at least one digit before
-    /// continue unlocks. Currency defaults to USD so it always validates.
-    private var canProceed: Bool {
-        let digits = incomeText.filter(\.isNumber)
-        return !digits.isEmpty
-    }
-
-    // MARK: - Actions
-
-    private func saveAndContinue() {
-        onboardingViewModel.collectedData.currency = currencyCode
-        let perPaycheck = Double(incomeText.filter(\.isNumber)) ?? 0
-        onboardingViewModel.collectedData.incomeAmountPerPaycheck = perPaycheck
-        onboardingViewModel.collectedData.incomeCadenceRaw = cadence.rawValue
-        // Derived monthly figure for settings (forecast/calendar read this).
-        onboardingViewModel.collectedData.monthlyIncome = perPaycheck * cadence.occurrencesPerMonth
-        incomeFocused = false
-        onContinue()
-    }
-
-    // MARK: - Helpers
-
-    private func flagForCode(_ code: String) -> String {
-        popularCurrencies.first(where: { $0.code == code })?.flag ?? "🏳️"
-    }
-
-    private func currencySymbol(_ code: String) -> String {
-        NormaPalette.currencySymbol(for: code)
-    }
-
-    private func formattedNumber(_ value: Double) -> String {
+    private static func grouped(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
@@ -346,6 +161,11 @@ struct OnboardingCurrencyIncomeView: View {
 }
 
 #Preview {
-    OnboardingCurrencyIncomeView(onContinue: {})
-        .environmentObject(OnboardingViewModel(sessionViewModel: SessionViewModel(dataManager: DataManager())))
+    OnboardingCurrencyIncomeView(
+        currency: .constant("USD"),
+        amountText: .constant(""),
+        cadence: .constant(CadenceDraft()),
+        onContinue: {}
+    )
+    .background(NormaPalette.canvas)
 }

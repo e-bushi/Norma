@@ -2,13 +2,10 @@
 //  OnboardingCelebrationView.swift
 //  Norma
 //
-//  Milestone interstitial sprinkled between question groups. Dither shader
-//  blooms outward from center while a line of copy waves in. Holds, then
-//  either crossfades to the next phrase (multi-phrase callers like the
-//  post-auth welcome) or collapses and hands off. Auto-advances; tap to skip.
-//
-//  One reusable view: pass a single `phrase` for the milestone screens, or
-//  `phrases` for a phased sequence (e.g. the "hi, i'm norma" welcome).
+//  The welcome at the end of onboarding. Dither shader blooms outward from
+//  center while each phrase waves in, holds, and crossfades to the next;
+//  after the last one the bloom collapses and hands off. Auto-advances; tap
+//  to skip ahead.
 //
 
 import SwiftUI
@@ -20,20 +17,13 @@ struct OnboardingCelebrationView: View {
     /// How long each phrase holds on screen before advancing / collapsing.
     var holdPerPhrase: Double = 2.0
 
-    init(phrase: String, holdPerPhrase: Double = 2.0, onContinue: @escaping () -> Void) {
-        self.phrases = [phrase]
-        self.holdPerPhrase = holdPerPhrase
-        self.onContinue = onContinue
-    }
-
     init(phrases: [String], holdPerPhrase: Double = 2.0, onContinue: @escaping () -> Void) {
         self.phrases = phrases
         self.holdPerPhrase = holdPerPhrase
         self.onContinue = onContinue
     }
 
-    /// Drives the dither shader's circular mask. Same idea as NoteCanvasView:
-    /// 0 = collapsed, 1 = full coverage. We bloom from a near-collapsed value
+    /// Drives the dither shader's circular mask: 0 = collapsed, 1 = full coverage. We bloom from a near-collapsed value
     /// at appear, hold briefly, then collapse before handing off so the next
     /// screen lands on a dark canvas.
     @State private var waveScale: CGFloat = 0
@@ -99,8 +89,6 @@ struct OnboardingCelebrationView: View {
             .padding(.horizontal, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .preferredColorScheme(.dark)
-        .navigationBarBackButtonHidden(true)
         .onAppear { runChoreography() }
     }
 
@@ -172,7 +160,7 @@ struct OnboardingCelebrationView: View {
 
 #Preview {
     OnboardingCelebrationView(
-        phrase: "nice. norma's starting to know you.",
+        phrases: ["hi, i'm norma.", "tell me your bills.", "i'll show you what's left."],
         onContinue: {}
     )
 }

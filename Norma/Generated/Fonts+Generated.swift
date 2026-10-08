@@ -20,17 +20,6 @@ public typealias Fonts = FontConvertible.Font
 
 // swiftlint:disable identifier_name line_length type_body_length
 public enum FontFamily {
-  public enum Nunito {
-    public static let black = FontConvertible(name: "Nunito-Black", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let bold = FontConvertible(name: "Nunito-Bold", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let extraBold = FontConvertible(name: "Nunito-ExtraBold", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let extraLight = FontConvertible(name: "Nunito-ExtraLight", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let light = FontConvertible(name: "Nunito-Light", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let medium = FontConvertible(name: "Nunito-Medium", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let regular = FontConvertible(name: "Nunito-Regular", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let semiBold = FontConvertible(name: "Nunito-SemiBold", family: "Nunito", path: "Nunito-Variable.ttf")
-    public static let all: [FontConvertible] = [black, bold, extraBold, extraLight, light, medium, regular, semiBold]
-  }
   public enum Rubik {
     public static let light = FontConvertible(name: "Rubik-Light", family: "Rubik", path: "Rubik-Variable.ttf")
     public static let black = FontConvertible(name: "Rubik-Light_Black", family: "Rubik", path: "Rubik-Variable.ttf")
@@ -41,7 +30,7 @@ public enum FontFamily {
     public static let semiBold = FontConvertible(name: "Rubik-Light_SemiBold", family: "Rubik", path: "Rubik-Variable.ttf")
     public static let all: [FontConvertible] = [light, black, bold, extraBold, medium, regular, semiBold]
   }
-  public static let allCustomFonts: [FontConvertible] = [Nunito.all, Rubik.all].flatMap { $0 }
+  public static let allCustomFonts: [FontConvertible] = [Rubik.all].flatMap { $0 }
   public static func registerAllCustomFonts() {
     allCustomFonts.forEach { $0.register() }
   }

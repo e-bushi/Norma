@@ -2,214 +2,420 @@
 //  HomeView.swift
 //  Norma
 //
-//  Runway-first home. Hosts ArcCountView (the runway + activity component) as
-//  the primary surface and carries the bottom navigation that used to live on
-//  NotesListScreen. Notes demote to a browse surface reached via the `+`.
-//
-//  See plans/runway-first-home.md. This is P1: the arc becomes home and notes
-//  move one layer down. The runway math (freedomFund / bills → arcCount) is
-//  ported from NotesListScreen; that screen keeps its own copy until the
-//  later prune phase, so notes browsing stays fully functional in the interim.
+//  The whole app on one screen: this month's income, minus the bills due in
+//  it, is what's left — then the bills themselves, grouped by what needs
+//  attention. Settings and the calendar open as sheets.
 //
 
 import SwiftUI
 import SwiftData
-import UIKit
 
 struct HomeView: View {
+    let profile: UserProfile
+
     @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject private var sessionViewModel: SessionViewModel
-    @EnvironmentObject private var billViewModel: BillViewModel
-    @EnvironmentObject private var dataManager: DataManager
-    @EnvironmentObject private var appCoordinator: AppCoordinator
-    @State private var showForecast = false
-    @State private var showCalendar = false
-    @State private var showSettings = false
-    @State private var keyboardVisible = false
-    @State private var showChat = false
-    /// Pre-filled chat text when the user taps "add for [day]" on the calendar.
-    @State private var chatSeed: String?
+    @Query(sort: \Bill.dueDate) private var bills: [Bill]
 
-    // MARK: - Runway inputs (ported from NotesListScreen)
+    @State private var monthOffset = 0
+    @State private var sheet: Sheet?
 
-    private var freedomFund: Double {
-        sessionViewModel.currentUser?.settings.freedomFund ?? 0
-    }
+    private enum Sheet: Identifiable {
+        case settings, calendar, income
+        case newBill(dueDate: Date?)
+        case editBill(Bill)
 
-    private var currency: String {
-        sessionViewModel.currentUser?.settings.currency ?? "USD"
-    }
-
-    private var totalMonthlyBills: Double {
-        billViewModel.bills.reduce(0.0) { $0 + $1.amount }
-    }
-
-    private var arcCount: Int {
-        let largestBill = billViewModel.bills.map { $0.amount }.max() ?? 0
-        if freedomFund < largestBill { return 0 }
-        if totalMonthlyBills > 0 {
-            return Int(floor(freedomFund / totalMonthlyBills))
+        var id: String {
+            switch self {
+            case .settings:          return "settings"
+            case .calendar:          return "calendar"
+            case .income:            return "income"
+            case .newBill:           return "newBill"
+            case .editBill(let bill): return "edit-\(bill.id)"
+            }
         }
-        return 0
     }
 
-    // MARK: - Body
+    private var displayedMonth: Date {
+        Calendar.current.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date()
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                NormaPalette.canvas.ignoresSafeArea()
-                NormaPalette.lavender.opacity(0.04).ignoresSafeArea()
+        let summary = MonthSummary(month: displayedMonth, bills: bills, profile: profile)
 
-                ArcCountView(
-                    arcCount: arcCount,
-                    freedomFund: freedomFund,
-                    totalMonthlyBills: totalMonthlyBills,
-                    currency: currency
-                )
-                .environmentObject(sessionViewModel)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                topBar
+                    .padding(.bottom, 40)
 
-                // The bottom nav only makes sense once there's a balance to
-                // reason about — hide it on the first-time empty state.
-                if !keyboardVisible && freedomFund > 0 {
-                    bottomBar
+                LeftoverHeader(summary: summary, currency: profile.currency, hasIncome: profile.hasIncome) {
+                    sheet = .income
                 }
+                .padding(.bottom, 24)
+
+                monthPills
+                    .padding(.bottom, 28)
+
+                billSections(summary)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    settingsToolbarItem
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 120)
         }
-        .preferredColorScheme(.dark)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            withAnimation(.easeOut(duration: 0.2)) { keyboardVisible = true }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            withAnimation(.easeOut(duration: 0.2)) { keyboardVisible = false }
-        }
-        .sheet(isPresented: $showForecast) {
-            ForecastSheet()
-                .environmentObject(sessionViewModel)
-                .environmentObject(billViewModel)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
-        .sheet(isPresented: $showCalendar) {
-            CalendarSheet(onAddForDate: { date in
-                let f = DateFormatter()
-                f.dateFormat = "MMM d"
-                chatSeed = "on \(f.string(from: date).lowercased()), "
-                showCalendar = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    withAnimation(.easeInOut(duration: 0.45)) { showChat = true }
-                }
-            })
-                .environmentObject(sessionViewModel)
-                .environmentObject(billViewModel)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(sessionViewModel)
-                .environmentObject(dataManager)
-                .environmentObject(appCoordinator)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
-        .sheet(isPresented: $showChat, onDismiss: { chatSeed = nil }) {
-            NormaChatView(seedText: chatSeed)
-                .environmentObject(sessionViewModel)
-                .environmentObject(billViewModel)
-                .presentationDetents([.large])
-                .presentationBackground(.clear)
-                .presentationDragIndicator(.visible)
+        .background(NormaPalette.canvas.ignoresSafeArea())
+        .overlay(alignment: .bottom) { addBillButton }
+        .sheet(item: $sheet, content: sheetContent)
+        .task(id: bills.count) {
+            await NotificationService.rescheduleAll(bills, currency: profile.currency)
         }
     }
 
-    // MARK: - Bottom bar
+    // MARK: - Top
 
-    private var bottomBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 4) {
-                bottomIcon(systemName: "chart.line.uptrend.xyaxis") {
-                    showForecast = true
-                }
-                bottomIcon(systemName: "calendar") {
-                    showCalendar = true
-                }
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .glassEffect(in: Capsule())
-            .overlay(
-                Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1)
-            )
-
+    private var topBar: some View {
+        HStack {
+            circleButton("gearshape", label: "settings") { sheet = .settings }
             Spacer()
-
-            HStack(spacing: 0) {
-                bottomIcon(systemName: "bubble.left.and.text.bubble.right") {
-                    withAnimation(.easeInOut(duration: 0.45)) { showChat = true }
-                }
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .glassEffect(in: Capsule())
-            .overlay(
-                Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1)
-            )
+            circleButton("calendar", label: "calendar") { sheet = .calendar }
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 8)
+        .padding(.top, 8)
     }
 
-    private func bottomIcon(systemName: String, action: (() -> Void)? = nil) -> some View {
-        Group {
-            if let action {
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    action()
-                } label: {
-                    Image(systemName: systemName)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(NormaPalette.ink)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else {
-                Image(systemName: systemName)
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(NormaPalette.ink)
-                    .frame(width: 44, height: 44)
-            }
-        }
-    }
-
-    private var settingsToolbarItem: some View {
+    private func circleButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
         Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            showSettings = true
+            Haptics.tap()
+            action()
         } label: {
-            Color.clear
-                .frame(width: 14, height: 14)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(
-                    DitherShaderView(intensity: 1.0, dotSize: 0.8)
-                        .clipShape(Capsule())
-                )
-                .overlay(Capsule().stroke(NormaPalette.ink.opacity(0.22), lineWidth: 1))
-                .fixedSize()
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(NormaPalette.ink.opacity(0.9))
+                .frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private var monthPills: some View {
+        HStack(spacing: 8) {
+            ChoicePill(label: "this month", isActive: monthOffset == 0) { monthOffset = 0 }
+            ChoicePill(label: "next month", isActive: monthOffset == 1) { monthOffset = 1 }
+        }
+    }
+
+    // MARK: - Bills
+
+    @ViewBuilder
+    private func billSections(_ summary: MonthSummary) -> some View {
+        if bills.isEmpty {
+            emptyState
+        } else if summary.occurrences.isEmpty {
+            Text("no bills due \(monthOffset == 0 ? "this" : "next") month.")
+                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .foregroundStyle(NormaPalette.inkMuted)
+                .padding(.vertical, 8)
+        } else {
+            let overdue = summary.occurrences.filter { $0.isOverdue() }
+            let upcoming = summary.occurrences.filter { !$0.isPaid && !$0.isOverdue() }
+            let paid = summary.occurrences.filter(\.isPaid)
+
+            VStack(alignment: .leading, spacing: 28) {
+                section("overdue", overdue, tint: NormaPalette.warning)
+                section("coming up", upcoming)
+                section("paid", paid)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ items: [BillOccurrence], tint: Color = NormaPalette.inkSubtle) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    FieldLabel(title, color: tint)
+                    Spacer()
+                    Text(Money.format(items.reduce(0) { $0 + $1.bill.amount }, currency: profile.currency))
+                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .foregroundStyle(tint)
+                }
+                .padding(.bottom, 4)
+
+                ForEach(items) { occurrence in
+                    BillRow(occurrence: occurrence, currency: profile.currency) {
+                        togglePaid(occurrence)
+                    } onEdit: {
+                        sheet = .editBill(occurrence.bill)
+                    } onDelete: {
+                        delete(occurrence.bill)
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("no bills yet.")
+                .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                .foregroundStyle(NormaPalette.ink)
+            Text("add rent, your phone, subscriptions — anything that comes due. norma subtracts them from your paycheck.")
+                .font(.custom(FontFamily.Rubik.regular, size: 14))
+                .foregroundStyle(NormaPalette.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(NormaPalette.ink.opacity(0.04)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(NormaPalette.ink.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        )
+    }
+
+    private var addBillButton: some View {
+        Button {
+            Haptics.tap()
+            sheet = .newBill(dueDate: nil)
+        } label: {
+            Label("add bill", systemImage: "plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(NormaPalette.onAccent)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 15)
+                .background(Capsule().fill(NormaPalette.lavender))
+                .shadow(color: NormaPalette.lavender.opacity(0.4), radius: 18, y: 10)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .padding(.bottom, 12)
+    }
+
+    // MARK: - Sheets
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: Sheet) -> some View {
+        switch sheet {
+        case .settings:
+            SettingsView(profile: profile)
+        case .calendar:
+            CalendarSheet(profile: profile)
+        case .income:
+            IncomeEditSheet()
+        case .newBill(let dueDate):
+            BillEditorSheet(bill: nil, initialDueDate: dueDate, currency: profile.currency)
+        case .editBill(let bill):
+            BillEditorSheet(bill: bill, currency: profile.currency)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func togglePaid(_ occurrence: BillOccurrence) {
+        let bill = occurrence.bill
+        withAnimation(.snappy) {
+            bill.setPaid(!occurrence.isPaid, for: occurrence.date)
+        }
+        try? modelContext.save()
+        if !occurrence.isPaid { Haptics.success() } else { Haptics.tap() }
+        Task { await NotificationService.scheduleReminders(for: bill, currency: profile.currency) }
+    }
+
+    private func delete(_ bill: Bill) {
+        NotificationService.cancelReminders(for: bill)
+        withAnimation(.snappy) { modelContext.delete(bill) }
+        try? modelContext.save()
+    }
+}
+
+// MARK: - Leftover header
+
+/// "october · left after bills", the big number, and the in/out breakdown.
+private struct LeftoverHeader: View {
+    let summary: MonthSummary
+    let currency: String
+    let hasIncome: Bool
+    let onEditIncome: () -> Void
+
+    private var monthName: String {
+        summary.month.formatted(.dateTime.month(.wide)).lowercased()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            FieldLabel("\(monthName) · left after bills")
+
+            (Text(Money.format(summary.leftover, currency: currency, wholeUnits: true))
+                .foregroundStyle(summary.leftover < 0 ? NormaPalette.warning : NormaPalette.ink)
+                + Text(".").foregroundStyle(NormaPalette.lavender))
+                .font(.system(size: 64, weight: .heavy))
+                .tracking(-2.5)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .contentTransition(.numericText(value: summary.leftover))
+                .animation(.snappy, value: summary.leftover)
+
+            breakdown
+
+            if summary.billsTotal > 0 {
+                SpendBar(summary: summary)
+                    .padding(.top, 6)
+            }
+        }
+    }
+
+    private var breakdown: some View {
+        HStack(spacing: 6) {
+            Button {
+                Haptics.tap()
+                onEditIncome()
+            } label: {
+                if hasIncome {
+                    Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
+                        .foregroundStyle(NormaPalette.income)
+                        .underline(color: NormaPalette.income.opacity(0.35))
+                } else {
+                    Text("add your income")
+                        .foregroundStyle(NormaPalette.lavender)
+                        .underline(color: NormaPalette.lavender.opacity(0.5))
+                }
+            }
+            .buttonStyle(.plain)
+
+            Text("·").foregroundStyle(NormaPalette.inkMuted)
+
+            Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
+                .foregroundStyle(NormaPalette.inkSubtle)
+        }
+        .font(.custom(FontFamily.Rubik.medium, size: 15))
+        .contentTransition(.numericText())
+        .animation(.snappy, value: summary.billsTotal)
+    }
+}
+
+/// Income as a bar: paid bills, bills still to pay, and what's left. When
+/// bills outrun income the bar fills completely and turns to the warning color.
+private struct SpendBar: View {
+    let summary: MonthSummary
+
+    var body: some View {
+        let total = max(summary.income, summary.billsTotal)
+        let overspent = summary.billsTotal > summary.income
+        let fill = overspent ? NormaPalette.warning : NormaPalette.lavender
+
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    segment(summary.paidTotal / total, width: geo.size.width, color: fill)
+                    segment(summary.unpaidTotal / total, width: geo.size.width, color: fill.opacity(0.35))
+                    if !overspent {
+                        segment(summary.leftover / total, width: geo.size.width, color: NormaPalette.ink.opacity(0.08))
+                    }
+                }
+            }
+            .frame(height: 6)
+            .animation(.snappy, value: summary.paidTotal)
+
+            HStack(spacing: 14) {
+                legend("paid", color: fill)
+                legend("to pay", color: fill.opacity(0.35))
+            }
+        }
+    }
+
+    private func segment(_ fraction: Double, width: CGFloat, color: Color) -> some View {
+        Capsule()
+            .fill(color)
+            .frame(width: max(0, width * fraction - 2))
+    }
+
+    private func legend(_ label: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(label)
+                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                .foregroundStyle(NormaPalette.inkMuted)
+        }
+    }
+}
+
+// MARK: - Bill row
+
+private struct BillRow: View {
+    let occurrence: BillOccurrence
+    let currency: String
+    let onTogglePaid: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    private var bill: Bill { occurrence.bill }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Button(action: onTogglePaid) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(
+                            occurrence.isPaid ? NormaPalette.lavender : statusColor.opacity(0.7),
+                            style: occurrence.isPaid ? StrokeStyle(lineWidth: 1.5) : StrokeStyle(lineWidth: 1.5, dash: [3, 3])
+                        )
+                    if occurrence.isPaid {
+                        Circle().fill(NormaPalette.lavender).padding(3)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(NormaPalette.onAccent)
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(occurrence.isPaid ? "mark unpaid" : "mark paid")
+            .padding(.leading, -9)
+
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(bill.name.lowercased())
+                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                            .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+                            .strikethrough(occurrence.isPaid, color: NormaPalette.inkMuted)
+                            .lineLimit(1)
+                        Text(dueLabel)
+                            .font(.custom(FontFamily.Rubik.medium, size: 12))
+                            .foregroundStyle(statusColor)
+                    }
+                    Spacer(minLength: 8)
+                    Text(Money.format(bill.amount, currency: currency))
+                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                        .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 2)
+        .contextMenu {
+            Button(occurrence.isPaid ? "mark unpaid" : "mark paid", systemImage: occurrence.isPaid ? "circle" : "checkmark.circle", action: onTogglePaid)
+            Button("edit", systemImage: "pencil", action: onEdit)
+            Button("delete", systemImage: "trash", role: .destructive, action: onDelete)
+        }
+    }
+
+    private var statusColor: Color {
+        if occurrence.isPaid { return NormaPalette.inkMuted }
+        if occurrence.isOverdue() { return NormaPalette.warning }
+        return NormaPalette.inkSubtle
+    }
+
+    private var dueLabel: String {
+        let calendar = Calendar.current
+        let date = occurrence.date.formatted(.dateTime.month(.abbreviated).day()).lowercased()
+        let frequency = bill.frequency == .oneTime ? "" : " · \(bill.frequency.label)"
+        if occurrence.isPaid { return "paid · \(date)" }
+        if occurrence.isOverdue() {
+            let days = calendar.dateComponents([.day], from: occurrence.date, to: calendar.startOfDay(for: Date())).day ?? 0
+            return "\(date) · \(days) \(days == 1 ? "day" : "days") late"
+        }
+        if calendar.isDateInToday(occurrence.date) { return "due today" + frequency }
+        if calendar.isDateInTomorrow(occurrence.date) { return "due tomorrow" + frequency }
+        return date + frequency
     }
 }

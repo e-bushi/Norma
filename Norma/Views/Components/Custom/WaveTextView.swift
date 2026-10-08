@@ -240,40 +240,17 @@ private struct WaveFlowLayout: Layout {
 
 // MARK: - Previews
 
-#Preview("Wave Text - Success") {
-    VStack(spacing: 40) {
-        WaveTextView(
-            text: "You spent $72.50 of your $100.00 cap and earned 10 points.",
-            font: .normaFinancial(20),
-            color: .primary,
-            isAnimating: true
-        )
-        .padding(.horizontal, 24)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color("NormaBackground"))
-}
-
-#Preview("Wave Text - Over Budget") {
+#Preview {
     WaveTextView(
-        text: "You went $27.30 over your $100.00 cap.",
-        font: .normaFinancial(20),
-        color: .primary,
-        isAnimating: true
+        text: "what's your rhythm",
+        font: .system(size: 56, weight: .bold),
+        color: NormaPalette.ink,
+        isAnimating: true,
+        alignment: .leading,
+        accentSuffix: ".",
+        accentColor: NormaPalette.lavender
     )
     .padding(.horizontal, 24)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color("NormaBackground"))
-}
-
-#Preview("Wave Text - Short") {
-    WaveTextView(
-        text: "You spent $72.50 of your $100.00 cap.",
-        font: .normaFinancial(20),
-        color: .primary,
-        isAnimating: true
-    )
-    .padding(.horizontal, 24)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color("NormaBackground"))
+    .background(NormaPalette.canvas)
 }

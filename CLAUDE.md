@@ -22,23 +22,23 @@ Write to save Chris effort. Always:
 
 ## Architecture Overview
 
-This is a SwiftUI-based iOS app for managing bills via a notes-first canvas, using a standard MVVM-like architecture. Expense tracking has been removed — the app no longer logs day-to-day spending in any form.
+Norma is a free, fully local SwiftUI app: track your bills and your income, and see what's left each month. No account, no server, no analytics. Everything is stored with SwiftData on device.
 
 ### Directory Structure
-- **Core/Models**: Data models (`Bill`, `Note`, `NoteToken`, etc.)
-- **Core/Services**: Business logic and data services
-- **Core/View Models**: View models for state management
-- **Views/Components**: Reusable UI components (`BillCardView`, `ChipView`, etc.)
-- **Views/Screens**: Top-level screens (`NotesListScreen`, `NoteCanvasView`, `BillsView`, etc.)
-- **Utilities**: Extensions and helpers for common functionality
+- **Core/Models**: SwiftData models `Bill` and `UserProfile`, plus `BillFrequency` and `IncomeCadence`. These hold the pure date math: bill occurrences and paydays.
+- **Core/Services**: `MonthSummary` (income − bills = what's left), `NotificationService` (bill reminders), and `LocalDataReset`.
+- **Views/Components**: Shared UI (`NormaComponents`, `CadencePicker`/`IncomeEditSheet`), plus the dither shader and wave text.
+- **Views/Screens**: `RootView`, `HomeView`, `BillEditorSheet`, `CalendarSheet`, `SettingsView`, and `Onboarding/`.
+- **Utilities**: `NormaPalette` (color tokens), `AppTheme` (accent), `Money` (formatting), and `Haptics`.
 
 ### Navigation Flow
-The notes list is the primary surface. Bills, forecast (income vs bills), and settings open as sheets from there.
+`RootView` shows onboarding until a `UserProfile` exists, then `HomeView`. Home is the only screen. Settings, the calendar, the income editor and the bill editor open as sheets from it.
 
 ### Key Design Patterns
-- Component composition for reusable UI elements
-- State management using SwiftUI property wrappers (`@State`, `@StateObject`, etc.)
-- Model conformance to `Identifiable` and `Codable` for list rendering and persistence
+- Views read models directly with `@Query`. There are no view models.
+- Nothing derived is stored. `MonthSummary` is rebuilt from bills and the profile on every render.
+- Bill paid state is "paid through" a date, so paying ahead settles earlier occurrences.
+- Colors come from `NormaPalette` only. Don't redeclare hex colors in views.
 
 ## Code Style Guidelines
 - **Formatting**: 4-space indentation, consistent spacing around operators
@@ -56,8 +56,8 @@ The notes list is the primary surface. Bills, forecast (income vs bills), and se
 - Tests are located in `NormaTests/` and `NormaUITests/` directories
 
 ## Development Notes
-- Minimum iOS deployment target: 17.5
+- Minimum iOS deployment target: 26.0
 - Swift version: 5.0
 - Bundle identifier: com.myndfruit.Norma
-- The app currently uses sample data (see `BillHomeView.sampleBills`)
-- SwiftData integration is imported but not yet fully implemented
+- The SwiftData store is named "Norma". UI tests launch with `--ui-testing` to use an in-memory store.
+- The pre-cut app (runway, chat, Plaid, Supabase, receipts) lives at git tag `pre-core-cut`.

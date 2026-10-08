@@ -24,10 +24,6 @@
 	<string>Norma</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.finance</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Norma needs access to your microphone to record voice commands for tracking expenses and bills using AI voice assistance.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Norma uses speech recognition to convert your voice commands into text for expense and bill tracking.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -45,7 +41,6 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Nunito-Variable.ttf</string>
 		<string>Rubik-Variable.ttf</string>
 	</array>
 </dict>

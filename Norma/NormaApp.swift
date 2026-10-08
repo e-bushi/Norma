@@ -7,40 +7,21 @@
 
 import SwiftUI
 import SwiftData
-import PostHog
 
 @main
 struct NormaApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appCoordinator = AppCoordinator()
 
     let modelContainer: ModelContainer
 
     init() {
         do {
-            self.modelContainer = try ModelContainer(
-                for:
-                    NoteToken.self,
-                    CachedBill.self,
-                    FreedomFundEntry.self,
-                    CapturedTransaction.self,
-                    Insight.self,
-                    UserProfile.self
-            )
-            // Published for non-View code: "reset all data" wipes local data
-            // through this handle (LocalDataReset).
-            AppModelContainer.shared = modelContainer
-
-            // PostHog Analytics
-//            let config = PostHogConfig(
-//                apiKey: "phc_t1kD6Jxu4T8LtnVCEKP1vZW3SrVW8t03vJJ5dhY3ND9",
-//                host: "https://us.i.posthog.com"
-//            )
-//            config.debug = true  // Enable debug logging to see events in console
-//            config.flushAt = 1   // Flush after every event for testing (remove in production)
-//            PostHogSDK.shared.setup(config)
-
-            AppTheme.mirrorToSharedDefaults()
+            // A fresh store name: the bills-and-income schema shares nothing
+            // with the old runway store, so starting clean avoids a migration.
+            // UI tests launch with `--ui-testing` to start from an empty store every run.
+            let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+            let configuration = ModelConfiguration("Norma", isStoredInMemoryOnly: isUITesting)
+            modelContainer = try ModelContainer(for: Bill.self, UserProfile.self, configurations: configuration)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
@@ -48,12 +29,9 @@ struct NormaApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppCoordinatorView()
-                .environmentObject(appCoordinator)
-                .modelContainer(modelContainer)
-                .task {
-                    appCoordinator.onboardingViewModel.modelContainer = modelContainer
-                }
+            RootView()
+                .preferredColorScheme(.dark)
         }
+        .modelContainer(modelContainer)
     }
 }

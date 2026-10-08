@@ -2,44 +2,28 @@
 //  OnboardingIntroInterstitialView.swift
 //  Norma
 //
-//  Two-phase typographic interstitial. Each phase reveals its title with the
-//  shared wave text animation, holds, then crossfades to the next phase.
-//  After the second phase, hands off to the question flow. Tap anywhere to
-//  skip forward (phase 1 → phase 2 → continue).
+//  Typographic beat between landing and the first question. Each phrase
+//  waves in, holds, and crossfades to the next; after the last it hands
+//  off. Tap anywhere to skip ahead.
 //
 
 import SwiftUI
 import UIKit
 
 struct OnboardingIntroInterstitialView: View {
-    let phases: [String]
-    /// How long each phase lingers on screen after the wave-in completes
-    /// before advancing. Defaults are tuned for the initial onboarding
-    /// intro; callers (e.g. the capstone insight) can lengthen this so
-    /// the user has time to read a more meaningful line.
-    let holdDuration: Double
+    var phrases: [String] = [
+        "first, how you get paid.",
+        "then your bills. that's the whole setup.",
+        "oh, and all your data stays on your device where it's safe.",
+        "let's get started."
+    ]
+    /// How long each phrase lingers after its wave-in completes.
+    var holdDuration: Double = 1.7
     let onContinue: () -> Void
 
-    /// Default phrases for the very first interstitial in the onboarding flow.
-    /// New callers should pass their own phrases — the defaults stay for
-    /// backwards compatibility with the existing `.intro` step.
-    init(
-        phases: [String] = [
-            "first, a few questions.",
-            "no wrong answers. just helps norma fit you."
-        ],
-        holdDuration: Double = 1.7,
-        onContinue: @escaping () -> Void
-    ) {
-        self.phases = phases
-        self.holdDuration = holdDuration
-        self.onContinue = onContinue
-    }
+    @State private var phraseIndex = 0
+    @State private var didFinish = false
 
-    @State private var phaseIndex: Int = 0
-    @State private var didFinish: Bool = false
-
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
     /// Soft tick that fires per word as the wave reveals it.
     private let wordHaptic = UIImpactFeedbackGenerator(style: .soft)
 
@@ -47,14 +31,13 @@ struct OnboardingIntroInterstitialView: View {
         ZStack {
             NormaPalette.canvas.ignoresSafeArea()
 
-            // Tap anywhere to skip forward.
             Color.clear
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
-                .onTapGesture { skipForward() }
+                .onTapGesture(perform: advance)
 
             WaveTextView(
-                text: phases[phaseIndex],
+                text: phrases[phraseIndex],
                 font: .system(size: 56, weight: .bold),
                 color: NormaPalette.ink,
                 isAnimating: true,
@@ -67,57 +50,41 @@ struct OnboardingIntroInterstitialView: View {
                     wordHaptic.prepare()
                 }
             )
-            .id(phaseIndex)
+            .id(phraseIndex)
             .transition(.opacity)
             .padding(.horizontal, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
         }
-        .preferredColorScheme(.dark)
-        .navigationBarBackButtonHidden(true)
         .onAppear {
-            impactGenerator.prepare()
             wordHaptic.prepare()
-            schedulePhaseAdvance()
+            scheduleAdvance()
         }
     }
 
-    // MARK: - Phase logic
+    // MARK: - Phrase timing
 
-    private func schedulePhaseAdvance() {
-        // Wave-in finishes ~ (0.5 + (n - 1) * 0.06)s, plus a hold, then advance.
-        let wordCount = phases[phaseIndex].split(separator: " ").count
-        let inDuration = 0.5 + Double(max(0, wordCount - 1)) * 0.06
-        let totalShow = inDuration + holdDuration
-
-        let snapshotIndex = phaseIndex
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalShow) {
-            guard !didFinish, phaseIndex == snapshotIndex else { return }
+    /// The wave-in takes ~0.5s plus 0.06s per extra word; hold after that.
+    private func scheduleAdvance() {
+        let wordCount = phrases[phraseIndex].split(separator: " ").count
+        let waveIn = 0.5 + Double(max(0, wordCount - 1)) * 0.06
+        let snapshot = phraseIndex
+        DispatchQueue.main.asyncAfter(deadline: .now() + waveIn + holdDuration) {
+            guard phraseIndex == snapshot else { return }
             advance()
         }
     }
 
     private func advance() {
         guard !didFinish else { return }
-        if phaseIndex < phases.count - 1 {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                phaseIndex += 1
-            }
-            schedulePhaseAdvance()
+        if phraseIndex < phrases.count - 1 {
+            withAnimation(.easeInOut(duration: 0.35)) { phraseIndex += 1 }
+            scheduleAdvance()
         } else {
-            finish()
+            didFinish = true
+            Haptics.tap()
+            onContinue()
         }
-    }
-
-    private func skipForward() {
-        guard !didFinish else { return }
-        advance()
-    }
-
-    private func finish() {
-        guard !didFinish else { return }
-        didFinish = true
-        impactGenerator.impactOccurred()
-        onContinue()
     }
 }
 

@@ -2,99 +2,20 @@
 //  IncomeCadenceEditor.swift
 //  Norma
 //
-//  The progressive income-capture UX (income spec P2). "How often do you get
-//  paid?" → only the one detail control that matters appears. Flexible, not a
-//  rigid form — weekly, every 2 weeks, twice a month, monthly, or "it varies",
-//  with "it varies" a first-class option. Reused by onboarding, the calendar,
-//  and the profile editor.
-//
-//  Pure UI: it reports (amountPerPaycheck, IncomeCadence) via onSave. The
-//  hosting sheet persists to UserProfile + syncs settings.monthlyIncome.
+//  "How often do you get paid?" → only the one detail control that matters
+//  for that answer appears: a weekday, the last payday, or days of the month.
+//  Shared by onboarding and the income sheet.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Presents the cadence editor in a dark sheet and persists on save:
-/// writes the local `UserProfile` (amount + cadence) and syncs the derived
-/// `monthlyEquivalent` into `settings.monthlyIncome` so Forecast/Calendar read
-/// the correct monthly figure. Income stays a projection — this never touches
-/// the stored balance.
-struct IncomeEditSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject private var sessionViewModel: SessionViewModel
-    @Query private var profiles: [UserProfile]
-
-    private let bg = Color(red: 0x16/255, green: 0x16/255, blue: 0x1A/255)
-    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
-
-    private var profile: UserProfile? { profiles.first }
-    private var currency: String { sessionViewModel.currentUser?.settings.currency ?? "USD" }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                IncomeCadenceEditor(
-                    currencyCode: currency,
-                    initialAmount: profile?.incomeAmount,
-                    initialCadence: profile?.incomeCadence,
-                    onSave: persist
-                )
-                .padding(24)
-            }
-            .background(bg.ignoresSafeArea())
-            .scrollDismissesKeyboard(.interactively)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("your income")
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                        .foregroundStyle(cream)
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("cancel") { dismiss() }
-                        .foregroundStyle(cream.opacity(0.85))
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-
-    private func persist(_ amount: Double, _ cadence: IncomeCadence) {
-        let p: UserProfile
-        if let existing = profile {
-            p = existing
-        } else {
-            p = UserProfile(currency: currency)
-            modelContext.insert(p)
-        }
-        p.incomeAmount = amount
-        p.setIncomeCadence(cadence)
-        try? modelContext.save()
-
-        // Sync the derived monthly figure into settings so the existing
-        // forecast/calendar math reads the correct number.
-        if var server = sessionViewModel.currentUser {
-            let monthly = p.monthlyEquivalent ?? amount
-            if server.settings.monthlyIncome != monthly {
-                server.settings.monthlyIncome = monthly
-                sessionViewModel.updateUserProfile(server)
-            }
-        }
-        dismiss()
-    }
-}
-
-struct IncomeCadenceEditor: View {
-    let currencyCode: String
-    var initialAmount: Double? = nil
-    var initialCadence: IncomeCadence? = nil
-    var onSave: (Double, IncomeCadence) -> Void
-
-    // The five capture buckets — mirror IncomeCadence, minus the payload.
-    private enum CadenceType: String, CaseIterable {
+/// Editable form state for an `IncomeCadence`. Remembers every detail field
+/// so switching cadence back and forth doesn't lose what was picked.
+struct CadenceDraft: Equatable {
+    enum Kind: CaseIterable {
         case weekly, biweekly, semiMonthly, monthly, irregular
+
         var label: String {
             switch self {
             case .weekly:      return "weekly"
@@ -106,276 +27,232 @@ struct IncomeCadenceEditor: View {
         }
     }
 
-    @State private var amountText: String = ""
-    @State private var type: CadenceType = .monthly
-    @State private var weekday: Int = 6            // Fri
-    @State private var anchorDate: Date = Date()
-    @State private var day1: Int = 15
-    @State private var day2: Int = 31              // "last day"
-    @State private var monthlyDay: Int = 1
-    @FocusState private var amountFocused: Bool
+    var kind: Kind = .biweekly
+    var weekday = 6
+    var lastPayday = Date()
+    var day1 = 15
+    var day2 = 31
+    var monthlyDay = 1
 
-    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
-    private let mutedText = Color(red: 0x7A/255, green: 0x76/255, blue: 0x70/255)
-    private let dimText = Color(red: 0x5C/255, green: 0x58/255, blue: 0x52/255)
-    private var accent: Color { NormaPalette.lavender }
+    init() {}
 
-    private var symbol: String { NormaPalette.currencySymbol(for: currencyCode) }
-
-    private var parsedAmount: Double { Double(amountText.filter { $0.isNumber || $0 == "." }) ?? 0 }
-    private var canSave: Bool { parsedAmount > 0 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            amountField
-            cadencePicker
-            detailControl
-                .animation(.easeInOut(duration: 0.2), value: type)
-            saveButton
-        }
-        .onAppear(perform: hydrate)
-    }
-
-    // MARK: - Amount
-
-    private var amountField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            fieldLabel("amount per paycheck")
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(symbol)
-                    .font(.custom(FontFamily.Rubik.bold, size: 34))
-                    .foregroundStyle(mutedText)
-                TextField("0", text: $amountText)
-                    .font(.custom(FontFamily.Rubik.bold, size: 44))
-                    .foregroundStyle(cream)
-                    .tint(accent)
-                    .keyboardType(.decimalPad)
-                    .focused($amountFocused)
-            }
+    init(_ cadence: IncomeCadence) {
+        switch cadence {
+        case .weekly(let weekday):        kind = .weekly; self.weekday = weekday
+        case .biweekly(let anchor):       kind = .biweekly; lastPayday = anchor
+        case .semiMonthly(let a, let b):  kind = .semiMonthly; day1 = a; day2 = b
+        case .monthly(let day):           kind = .monthly; monthlyDay = day
+        case .irregular:                  kind = .irregular
         }
     }
 
-    // MARK: - Cadence
-
-    private var cadencePicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            fieldLabel("how often do you get paid?")
-            FlowChips(items: CadenceType.allCases, selected: type) { t in
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                withAnimation(.easeInOut(duration: 0.2)) { type = t }
-            } label: { $0.label }
-        }
-    }
-
-    @ViewBuilder
-    private var detailControl: some View {
-        switch type {
-        case .weekly:
-            VStack(alignment: .leading, spacing: 10) {
-                fieldLabel("which day?")
-                HStack(spacing: 6) {
-                    ForEach(1...7, id: \.self) { wd in
-                        dayLetterChip(wd)
-                    }
-                }
-            }
-        case .biweekly:
-            VStack(alignment: .leading, spacing: 10) {
-                fieldLabel("when was your last payday?")
-                DatePicker("", selection: $anchorDate, displayedComponents: .date)
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .tint(accent)
-                Text("we'll count every 2 weeks from there.")
-                    .font(.custom(FontFamily.Rubik.regular, size: 12))
-                    .foregroundStyle(dimText)
-            }
-        case .semiMonthly:
-            VStack(alignment: .leading, spacing: 10) {
-                fieldLabel("which two days?")
-                HStack(spacing: 10) {
-                    dayOfMonthMenu(selection: $day1)
-                    Text("&").foregroundStyle(mutedText)
-                    dayOfMonthMenu(selection: $day2)
-                }
-            }
-        case .monthly:
-            VStack(alignment: .leading, spacing: 10) {
-                fieldLabel("which day of the month?")
-                dayOfMonthMenu(selection: $monthlyDay)
-            }
-        case .irregular:
-            Text("no fixed schedule — we'll estimate from what lands and nudge you to check in.")
-                .font(.custom(FontFamily.Rubik.regular, size: 13))
-                .foregroundStyle(mutedText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var saveButton: some View {
-        Button {
-            let impact = UINotificationFeedbackGenerator()
-            impact.notificationOccurred(.success)
-            amountFocused = false
-            onSave(parsedAmount, assembledCadence)
-        } label: {
-            Text("save")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                .foregroundStyle(cream)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(Capsule().fill(canSave ? accent.opacity(0.18) : accent.opacity(0.06)))
-                .overlay(Capsule().stroke(accent.opacity(canSave ? 0.6 : 0.25), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSave)
-    }
-
-    // MARK: - Building blocks
-
-    private func fieldLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.custom(FontFamily.Rubik.semiBold, size: 11))
-            .tracking(0.8)
-            .textCase(.uppercase)
-            .foregroundStyle(mutedText)
-    }
-
-    private func dayLetterChip(_ wd: Int) -> some View {
-        let letters = ["S", "M", "T", "W", "T", "F", "S"]
-        let active = weekday == wd
-        return Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            weekday = wd
-        } label: {
-            Text(letters[wd - 1])
-                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
-                .foregroundStyle(active ? NormaPalette.canvas : cream)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(active ? accent : Color.white.opacity(0.05)))
-                .overlay(Circle().stroke(active ? accent : cream.opacity(0.15), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func dayOfMonthMenu(selection: Binding<Int>) -> some View {
-        Menu {
-            ForEach(1...28, id: \.self) { d in
-                Button("day \(d)") { selection.wrappedValue = d }
-            }
-            Button("last day") { selection.wrappedValue = 31 }
-        } label: {
-            HStack(spacing: 6) {
-                Text(selection.wrappedValue >= 29 ? "last day" : "day \(selection.wrappedValue)")
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                    .foregroundStyle(cream)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(mutedText)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(Capsule().fill(Color.white.opacity(0.05)))
-            .overlay(Capsule().stroke(cream.opacity(0.15), lineWidth: 1))
-        }
-    }
-
-    // MARK: - Logic
-
-    private var assembledCadence: IncomeCadence {
-        switch type {
+    var cadence: IncomeCadence {
+        switch kind {
         case .weekly:      return .weekly(weekday: weekday)
-        case .biweekly:    return .biweekly(anchor: anchorDate)
-        case .semiMonthly: return .semiMonthly(day1: day1, day2: day2)
+        case .biweekly:    return .biweekly(anchor: lastPayday)
+        case .semiMonthly: return .semiMonthly(day1: min(day1, day2), day2: max(day1, day2))
         case .monthly:     return .monthly(day: monthlyDay)
         case .irregular:   return .irregular
         }
     }
-
-    private func hydrate() {
-        if let amount = initialAmount, amount > 0 {
-            let whole = amount.truncatingRemainder(dividingBy: 1) == 0
-            amountText = String(format: whole ? "%.0f" : "%.2f", amount)
-        }
-        guard let cadence = initialCadence else { return }
-        switch cadence {
-        case .weekly(let wd):        type = .weekly;      weekday = wd
-        case .biweekly(let anchor):  type = .biweekly;    anchorDate = anchor
-        case .semiMonthly(let a, let b): type = .semiMonthly; day1 = a; day2 = b
-        case .monthly(let d):        type = .monthly;     monthlyDay = d
-        case .irregular:             type = .irregular
-        }
-    }
 }
 
-/// Small wrapping chip row with a solid/dashed capsule pattern (active = solid
-/// accent fill). Generic so the cadence picker and future pickers can reuse it.
-private struct FlowChips<Item: Hashable>: View {
-    let items: [Item]
-    let selected: Item
-    let onTap: (Item) -> Void
-    let label: (Item) -> String
-
-    private let cream = Color(red: 0xF2/255, green: 0xED/255, blue: 0xE2/255)
-    private var accent: Color { NormaPalette.lavender }
-    private var onAccent: Color { NormaPalette.canvas }
+struct CadencePicker: View {
+    @Binding var draft: CadenceDraft
+    /// Onboarding staggers the question and its detail in; sheets show both at once.
+    var isRevealed = true
+    var revealDelay: Double = 0
 
     var body: some View {
-        FlexWrap(spacing: 8, lineSpacing: 8) {
-            ForEach(items, id: \.self) { item in
-                let active = item == selected
-                Button { onTap(item) } label: {
-                    Text(label(item))
-                        .font(.custom(active ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 14))
-                        .foregroundStyle(active ? onAccent : cream)
-                        .padding(.horizontal, 15)
-                        .padding(.vertical, 9)
-                        .background { if active { Capsule().fill(accent) } }
-                        .overlay(
-                            Capsule().stroke(
-                                active ? accent : cream.opacity(0.28),
-                                style: active ? StrokeStyle(lineWidth: 1) : StrokeStyle(lineWidth: 1, dash: [3, 3])
-                            )
-                        )
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel("how often do you get paid?")
+                FlowLayout {
+                    ForEach(CadenceDraft.Kind.allCases, id: \.self) { kind in
+                        ChoicePill(label: kind.label, isActive: draft.kind == kind) { draft.kind = kind }
+                    }
                 }
-                .buttonStyle(.plain)
             }
+            .staggeredAppear(isRevealed, index: 0, baseDelay: revealDelay)
+
+            detail
+                .animation(.easeInOut(duration: 0.2), value: draft.kind)
+                .staggeredAppear(isRevealed, index: 1, baseDelay: revealDelay)
         }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch draft.kind {
+        case .weekly:
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel("which day?")
+                HStack(spacing: 6) {
+                    ForEach(1...7, id: \.self) { weekdayChip($0) }
+                }
+            }
+        case .biweekly:
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel("when was your last payday?")
+                DatePicker("", selection: $draft.lastPayday, in: ...Date(), displayedComponents: .date)
+                    .labelsHidden()
+                    .tint(NormaPalette.lavender)
+                caption("norma counts every 2 weeks from there.")
+            }
+        case .semiMonthly:
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel("which two days?")
+                HStack(spacing: 10) {
+                    dayOfMonthMenu($draft.day1)
+                    Text("&").foregroundStyle(NormaPalette.inkSubtle)
+                    dayOfMonthMenu($draft.day2)
+                }
+            }
+        case .monthly:
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel("which day of the month?")
+                dayOfMonthMenu($draft.monthlyDay)
+            }
+        case .irregular:
+            caption("no fixed schedule. enter about what you make in a typical month.")
+        }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.custom(FontFamily.Rubik.regular, size: 13))
+            .foregroundStyle(NormaPalette.inkSubtle)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func weekdayChip(_ weekday: Int) -> some View {
+        let isActive = draft.weekday == weekday
+        let symbol = Calendar.current.veryShortWeekdaySymbols[weekday - 1]
+        return Button {
+            Haptics.tap()
+            draft.weekday = weekday
+        } label: {
+            Text(symbol)
+                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                .foregroundStyle(isActive ? NormaPalette.onAccent : NormaPalette.ink)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(isActive ? NormaPalette.lavender : Color.white.opacity(0.05)))
+                .overlay(Circle().strokeBorder(isActive ? NormaPalette.lavender : NormaPalette.ink.opacity(0.15)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
+    }
+
+    private func dayOfMonthMenu(_ selection: Binding<Int>) -> some View {
+        Menu {
+            ForEach(1...28, id: \.self) { day in
+                Button(Self.dayLabel(day)) { selection.wrappedValue = day }
+            }
+            Button("last day") { selection.wrappedValue = 31 }
+        } label: {
+            HStack(spacing: 6) {
+                Text(Self.dayLabel(selection.wrappedValue))
+                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .foregroundStyle(NormaPalette.ink)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(NormaPalette.inkSubtle)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Capsule().fill(Color.white.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(NormaPalette.ink.opacity(0.15)))
+        }
+    }
+
+    static func dayLabel(_ day: Int) -> String {
+        day >= 29 ? "last day" : "the \(day.ordinal)"
     }
 }
 
-/// Minimal wrapping HStack (chips flow onto new lines).
-private struct FlexWrap: Layout {
-    var spacing: CGFloat = 8
-    var lineSpacing: CGFloat = 8
+/// Edits the profile's income from Settings, Home, or the calendar.
+struct IncomeEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var profiles: [UserProfile]
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
-        for sub in subviews {
-            let size = sub.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth && x > 0 {
-                x = 0; y += lineHeight + lineSpacing; lineHeight = 0
+    @State private var amountText = ""
+    @State private var draft = CadenceDraft()
+    @FocusState private var amountFocused: Bool
+
+    private var profile: UserProfile? { profiles.first }
+    private var currency: String { profile?.currency ?? "USD" }
+    private var amount: Double? { Money.parse(amountText) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 28) {
+                    HeroTitle(text: "your income", size: 44)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        FieldLabel(draft.kind == .irregular ? "about how much a month?" : "amount per paycheck, after tax")
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(Money.symbol(for: currency))
+                                .font(.custom(FontFamily.Rubik.bold, size: 34))
+                                .foregroundStyle(NormaPalette.inkMuted)
+                            TextField("0", text: $amountText)
+                                .font(.custom(FontFamily.Rubik.bold, size: 44))
+                                .foregroundStyle(NormaPalette.ink)
+                                .tint(NormaPalette.lavender)
+                                .keyboardType(.decimalPad)
+                                .focused($amountFocused)
+                        }
+                    }
+
+                    CadencePicker(draft: $draft)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
+            .background(NormaPalette.sheet.ignoresSafeArea())
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("cancel") { dismiss() }
+                        .foregroundStyle(NormaPalette.ink.opacity(0.85))
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("save", action: save)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(amount == nil ? NormaPalette.inkMuted : NormaPalette.lavender)
+                        .disabled(amount == nil)
+                }
+            }
         }
-        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + lineHeight)
+        .onAppear {
+            guard let profile else { return }
+            amountText = Money.editableText(profile.incomeAmount)
+            draft = CadenceDraft(profile.incomeCadence)
+        }
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let maxWidth = bounds.width
-        var x: CGFloat = bounds.minX, y: CGFloat = bounds.minY, lineHeight: CGFloat = 0
-        for sub in subviews {
-            let size = sub.sizeThatFits(.unspecified)
-            if x - bounds.minX + size.width > maxWidth && x > bounds.minX {
-                x = bounds.minX; y += lineHeight + lineSpacing; lineHeight = 0
-            }
-            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
+    private func save() {
+        guard let amount, let profile else { return }
+        profile.incomeAmount = amount
+        profile.incomeCadence = draft.cadence
+        try? modelContext.save()
+        Haptics.success()
+        dismiss()
+    }
+}
+
+extension Int {
+    /// "1st", "2nd", "11th", "23rd".
+    var ordinal: String {
+        let suffix: String
+        switch (self % 100, self % 10) {
+        case (11...13, _): suffix = "th"
+        case (_, 1):       suffix = "st"
+        case (_, 2):       suffix = "nd"
+        case (_, 3):       suffix = "rd"
+        default:           suffix = "th"
         }
+        return "\(self)\(suffix)"
     }
 }
