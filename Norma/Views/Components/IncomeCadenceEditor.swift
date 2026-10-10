@@ -87,8 +87,12 @@ struct CadencePicker: View {
         case .weekly:
             VStack(alignment: .leading, spacing: 10) {
                 FieldLabel("which day?")
-                HStack(spacing: 6) {
-                    ForEach(1...7, id: \.self) { weekdayChip($0) }
+                FlowLayout(spacing: 6, lineSpacing: 6) {
+                    ForEach(WeekdayOrder.ordered(firstWeekday: Calendar.current.firstWeekday), id: \.self) { weekday in
+                        WeekdayChip(weekday: weekday, isActive: draft.weekday == weekday) {
+                            draft.weekday = weekday
+                        }
+                    }
                 }
             }
         case .biweekly:
@@ -120,27 +124,9 @@ struct CadencePicker: View {
 
     private func caption(_ text: String) -> some View {
         Text(text)
-            .font(.custom(FontFamily.Rubik.regular, size: 13))
+            .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote)
             .foregroundStyle(NormaPalette.inkSubtle)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func weekdayChip(_ weekday: Int) -> some View {
-        let isActive = draft.weekday == weekday
-        let symbol = Calendar.current.veryShortWeekdaySymbols[weekday - 1]
-        return Button {
-            Haptics.tap()
-            draft.weekday = weekday
-        } label: {
-            Text(symbol)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
-                .foregroundStyle(isActive ? NormaPalette.onAccent : NormaPalette.ink)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(isActive ? NormaPalette.lavender : Color.white.opacity(0.05)))
-                .overlay(Circle().strokeBorder(isActive ? NormaPalette.lavender : NormaPalette.ink.opacity(0.15)))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
     }
 
     private func dayOfMonthMenu(_ selection: Binding<Int>) -> some View {
@@ -152,10 +138,10 @@ struct CadencePicker: View {
         } label: {
             HStack(spacing: 6) {
                 Text(Self.dayLabel(selection.wrappedValue))
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                    .rubik(FontFamily.Rubik.semiBold, size: 15, relativeTo: .body)
                     .foregroundStyle(NormaPalette.ink)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold, relativeTo: .caption))
                     .foregroundStyle(NormaPalette.inkSubtle)
             }
             .padding(.horizontal, 14)
@@ -194,10 +180,10 @@ struct IncomeEditSheet: View {
                         FieldLabel(draft.kind == .irregular ? "about how much a month?" : "amount per paycheck, after tax")
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text(Money.symbol(for: currency))
-                                .font(.custom(FontFamily.Rubik.bold, size: 34))
+                                .rubik(FontFamily.Rubik.bold, size: 34, relativeTo: .largeTitle)
                                 .foregroundStyle(NormaPalette.inkMuted)
                             TextField("0", text: $amountText)
-                                .font(.custom(FontFamily.Rubik.bold, size: 44))
+                                .rubik(FontFamily.Rubik.bold, size: 44, relativeTo: .largeTitle)
                                 .foregroundStyle(NormaPalette.ink)
                                 .tint(NormaPalette.lavender)
                                 .keyboardType(.decimalPad)
@@ -239,6 +225,35 @@ struct IncomeEditSheet: View {
         try? modelContext.save()
         Haptics.success()
         dismiss()
+    }
+}
+
+/// One weekday chip. `weekday` is the Gregorian value (Sunday = 1), not the
+/// chip's position, so the stored cadence doesn't change with locale.
+private struct WeekdayChip: View {
+    let weekday: Int
+    let isActive: Bool
+    let action: () -> Void
+
+    @ScaledMetric(relativeTo: .body) private var side: CGFloat = 38
+
+    var body: some View {
+        let symbol = Calendar.current.veryShortWeekdaySymbols[weekday - 1]
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            Text(symbol)
+                .rubik(FontFamily.Rubik.semiBold, size: 14, relativeTo: .body)
+                .foregroundStyle(isActive ? NormaPalette.onAccent : NormaPalette.ink)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .frame(width: side, height: side)
+                .background(Circle().fill(isActive ? NormaPalette.lavender : Color.white.opacity(0.05)))
+                .overlay(Circle().strokeBorder(isActive ? NormaPalette.lavender : NormaPalette.ink.opacity(0.15)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
     }
 }
 

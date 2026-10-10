@@ -16,6 +16,8 @@ struct LandingPageView: View {
     @State private var subtitleAppeared = false
     @State private var ctaAppeared = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
             NormaPalette.canvas.ignoresSafeArea()
@@ -52,7 +54,8 @@ struct LandingPageView: View {
                     .padding(.bottom, 18)
 
                 Text("add your bills and your paycheck. norma shows what's left each month. no account, and nothing leaves your phone.")
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, relativeTo: .subheadline))
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(NormaPalette.inkSubtle)
                     .lineSpacing(2)
                     .frame(maxWidth: 320, alignment: .leading)
@@ -70,6 +73,13 @@ struct LandingPageView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear {
+            if reduceMotion {
+                logoAppeared = true
+                heroAppeared = true
+                subtitleAppeared = true
+                ctaAppeared = true
+                return
+            }
             withAnimation(.easeOut(duration: 0.5).delay(0.10)) { logoAppeared = true }
             withAnimation(.easeOut(duration: 0.6).delay(0.25)) { heroAppeared = true }
             withAnimation(.easeOut(duration: 0.5).delay(0.45)) { subtitleAppeared = true }
@@ -88,12 +98,14 @@ struct LandingPageView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text("n")
-                    .font(.system(size: 36, weight: .black))
+                    .font(.system(size: 36, weight: .black, relativeTo: .title))
                     .foregroundStyle(NormaPalette.ink)
                 Text(".")
-                    .font(.system(size: 36, weight: .black))
+                    .font(.system(size: 36, weight: .black, relativeTo: .title))
                     .foregroundStyle(NormaPalette.lavender)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
             .offset(x: -1, y: 4)
         }
         .frame(width: 52, height: 52)
@@ -102,8 +114,9 @@ struct LandingPageView: View {
     private var heroText: some View {
         (Text("what's left\nafter bills").foregroundStyle(NormaPalette.ink)
             + Text(".").foregroundStyle(NormaPalette.lavender))
-            .font(.system(size: 56, weight: .bold))
+            .font(.system(size: 56, weight: .bold, relativeTo: .largeTitle))
             .tracking(-1.5)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var beginButton: some View {
@@ -113,9 +126,9 @@ struct LandingPageView: View {
         } label: {
             HStack(spacing: 8) {
                 Text("begin")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold, relativeTo: .headline))
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold, relativeTo: .headline))
             }
             .foregroundStyle(NormaPalette.onAccent)
             .padding(.horizontal, 22)

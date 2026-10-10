@@ -6,7 +6,7 @@
 //  background/canvas colors in NormaPalette stay static; only this hue is
 //  user-changeable. Selection persists via UserDefaults, and
 //  NormaPalette.lavender reads it directly so every existing call site
-//  (including the Metal dither "thinking" animation) picks up the choice
+//  (including the landing and celebration dither) picks up the choice
 //  without further wiring.
 //
 //  Presets are the original brand lavender plus four other color families,

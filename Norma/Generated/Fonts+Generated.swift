@@ -52,7 +52,7 @@ public struct FontConvertible {
 
   public func font(size: CGFloat) -> Font {
     guard let font = Font(font: self, size: size) else {
-      fatalError("Unable to initialize font '\(name)' (\(family))")
+      fatalError("Unable to initialize font '\(VariableFont.postScriptName(for: self))' (\(family)) at wght \(VariableFont.weightAxis(for: self))")
     }
     return font
   }
@@ -100,8 +100,10 @@ public struct FontConvertible {
 
 public extension FontConvertible.Font {
   convenience init?(font: FontConvertible, size: CGFloat) {
-    font.registerIfNeeded()
-    self.init(name: font.name, size: size)
+    // Rubik is a variable font. `font.name` for anything but Light
+    // (Rubik-Light_SemiBold and the rest) is not a real PostScript name.
+    guard let resolved = VariableFont.uiFont(font, size: size) else { return nil }
+    self.init(descriptor: resolved.fontDescriptor, size: size)
   }
 }
 
@@ -109,16 +111,14 @@ public extension FontConvertible.Font {
 @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
 public extension SwiftUI.Font {
   static func custom(_ font: FontConvertible, size: CGFloat) -> SwiftUI.Font {
-    font.registerIfNeeded()
-    return custom(font.name, size: size)
+    return VariableFont.swiftUIFont(font, size: size, relativeTo: nil, dynamicTypeSize: .large)
   }
 }
 
 @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
 public extension SwiftUI.Font {
   static func custom(_ font: FontConvertible, fixedSize: CGFloat) -> SwiftUI.Font {
-    font.registerIfNeeded()
-    return custom(font.name, fixedSize: fixedSize)
+    return VariableFont.swiftUIFont(font, size: fixedSize, relativeTo: nil, dynamicTypeSize: .large)
   }
 
   static func custom(
@@ -126,8 +126,12 @@ public extension SwiftUI.Font {
     size: CGFloat,
     relativeTo textStyle: SwiftUI.Font.TextStyle
   ) -> SwiftUI.Font {
-    font.registerIfNeeded()
-    return custom(font.name, size: size, relativeTo: textStyle)
+    return VariableFont.swiftUIFont(
+      font,
+      size: size,
+      relativeTo: textStyle,
+      dynamicTypeSize: .large
+    )
   }
 }
 #endif

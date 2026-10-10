@@ -53,7 +53,7 @@ struct WebViewSheet: View {
                 } else {
                     VStack(spacing: 20) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 50))
+                            .font(.system(size: 50, relativeTo: .largeTitle))
                             .foregroundColor(.orange)
                         
                         Text("Unable to load content")

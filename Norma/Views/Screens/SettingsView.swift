@@ -52,8 +52,9 @@ struct SettingsView: View {
 
                     section("your data", tint: NormaPalette.danger.opacity(0.9)) {
                         Text("no account and no servers. your bills and income live only on this iphone.")
-                            .font(.custom(FontFamily.Rubik.regular, size: 13).italic())
+                            .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote, italic: true)
                             .foregroundStyle(NormaPalette.inkMuted)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.vertical, 8)
                         Button {
                             Haptics.firm()
@@ -65,7 +66,7 @@ struct SettingsView: View {
                     }
 
                     Text("norma \(appVersion)")
-                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .rubik(FontFamily.Rubik.medium, size: 12, relativeTo: .caption)
                         .foregroundStyle(NormaPalette.inkMuted)
                         .frame(maxWidth: .infinity)
                 }
@@ -121,12 +122,13 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
                 Image(systemName: "paintpalette")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: .medium, relativeTo: .body))
                     .foregroundStyle(NormaPalette.lavender)
                     .frame(width: 22, alignment: .leading)
                 Text("accent color")
-                    .font(.custom(FontFamily.Rubik.medium, size: 15))
+                    .rubik(FontFamily.Rubik.medium, size: 15, relativeTo: .body)
                     .foregroundStyle(NormaPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 14) {
                 ForEach(AppTheme.presets) { theme in
@@ -152,7 +154,7 @@ struct SettingsView: View {
                 )
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 12, weight: .bold, relativeTo: .caption))
                         .foregroundStyle(NormaPalette.onAccent)
                 }
             }
@@ -183,29 +185,57 @@ struct SettingsView: View {
     }
 
     private func rowLabel(icon: String, title: String, detail: String? = nil, tint: Color? = nil, showsChevron: Bool = true) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(tint ?? NormaPalette.lavender)
-                .frame(width: 22, alignment: .leading)
-            Text(title)
-                .font(.custom(FontFamily.Rubik.semiBold, size: 15))
-                .foregroundStyle(tint ?? NormaPalette.ink)
-            Spacer(minLength: 8)
-            if let detail {
-                Text(detail)
-                    .font(.custom(FontFamily.Rubik.regular, size: 13))
-                    .foregroundStyle(NormaPalette.inkSubtle)
-                    .lineLimit(1)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                rowIcon(icon, tint: tint)
+                rowTitle(title, tint: tint)
+                Spacer(minLength: 8)
+                if let detail { rowDetail(detail) }
+                if showsChevron { rowChevron }
             }
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(NormaPalette.inkMuted)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 14) {
+                    rowIcon(icon, tint: tint)
+                    rowTitle(title, tint: tint)
+                    Spacer(minLength: 8)
+                    if showsChevron { rowChevron }
+                }
+                if let detail {
+                    rowDetail(detail)
+                        .padding(.leading, 36)
+                }
             }
         }
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+
+    private func rowIcon(_ icon: String, tint: Color?) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 14, weight: .medium, relativeTo: .body))
+            .foregroundStyle(tint ?? NormaPalette.lavender)
+            .frame(width: 22, alignment: .leading)
+    }
+
+    private func rowTitle(_ title: String, tint: Color?) -> some View {
+        Text(title)
+            .rubik(FontFamily.Rubik.semiBold, size: 15, relativeTo: .body)
+            .foregroundStyle(tint ?? NormaPalette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func rowDetail(_ detail: String) -> some View {
+        Text(detail)
+            .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote)
+            .foregroundStyle(NormaPalette.inkSubtle)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var rowChevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 12, weight: .medium, relativeTo: .caption))
+            .foregroundStyle(NormaPalette.inkMuted)
     }
 
     private var appVersion: String {
