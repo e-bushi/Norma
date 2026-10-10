@@ -1,9 +1,11 @@
 input_dir: .
 output_dir: Norma/Generated/
 
+# Rubik-Variable.ttf is the only face in the repo. It is a variable font:
+# PostScript name Rubik-Light, wght axis 300–900. Fonts+Generated.swift
+# applies that axis; SwiftGen's per-weight PostScript names are not real.
 fonts:
   inputs:
-    - Norma/Resources/Nunito-Variable.ttf
     - Norma/Resources/Rubik-Variable.ttf
   outputs:
     templateName: swift5

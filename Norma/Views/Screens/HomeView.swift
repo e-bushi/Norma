@@ -58,10 +58,16 @@ struct HomeView: View {
                 billSections(summary)
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 120)
+            .padding(.bottom, 24)
         }
         .background(NormaPalette.canvas.ignoresSafeArea())
-        .overlay(alignment: .bottom) { addBillButton }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            addBillButton
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity)
+                .background(NormaPalette.canvas)
+        }
         .sheet(item: $sheet, content: sheetContent)
         .task(id: bills.count) {
             await NotificationService.rescheduleAll(bills, currency: profile.currency)
@@ -85,7 +91,7 @@ struct HomeView: View {
             action()
         } label: {
             Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 16, weight: .medium, relativeTo: .body))
                 .foregroundStyle(NormaPalette.ink.opacity(0.9))
                 .frame(width: 44, height: 44)
                 .glassEffect(.regular.interactive(), in: Circle())
@@ -109,8 +115,9 @@ struct HomeView: View {
             emptyState
         } else if summary.occurrences.isEmpty {
             Text("no bills due \(monthOffset == 0 ? "this" : "next") month.")
-                .font(.custom(FontFamily.Rubik.medium, size: 14))
+                .rubik(FontFamily.Rubik.medium, size: 14, relativeTo: .subheadline)
                 .foregroundStyle(NormaPalette.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 8)
         } else {
             let overdue = summary.occurrences.filter { $0.isOverdue() }
@@ -133,7 +140,7 @@ struct HomeView: View {
                     FieldLabel(title, color: tint)
                     Spacer()
                     Text(Money.format(items.reduce(0) { $0 + $1.bill.amount }, currency: profile.currency))
-                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .rubik(FontFamily.Rubik.medium, size: 12, relativeTo: .caption)
                         .foregroundStyle(tint)
                 }
                 .padding(.bottom, 4)
@@ -154,10 +161,10 @@ struct HomeView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("no bills yet.")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                .rubik(FontFamily.Rubik.semiBold, size: 17, relativeTo: .body)
                 .foregroundStyle(NormaPalette.ink)
             Text("add rent, your phone, subscriptions — anything that comes due. norma subtracts them from your paycheck.")
-                .font(.custom(FontFamily.Rubik.regular, size: 14))
+                .rubik(FontFamily.Rubik.regular, size: 14, relativeTo: .subheadline)
                 .foregroundStyle(NormaPalette.inkSubtle)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -176,7 +183,7 @@ struct HomeView: View {
             sheet = .newBill(dueDate: nil)
         } label: {
             Label("add bill", systemImage: "plus")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold, relativeTo: .headline))
                 .foregroundStyle(NormaPalette.onAccent)
                 .padding(.horizontal, 22)
                 .padding(.vertical, 15)
@@ -184,7 +191,6 @@ struct HomeView: View {
                 .shadow(color: NormaPalette.lavender.opacity(0.4), radius: 18, y: 10)
         }
         .buttonStyle(PressableButtonStyle())
-        .padding(.bottom, 12)
     }
 
     // MARK: - Sheets
@@ -244,48 +250,70 @@ private struct LeftoverHeader: View {
             (Text(Money.format(summary.leftover, currency: currency, wholeUnits: true))
                 .foregroundStyle(summary.leftover < 0 ? NormaPalette.warning : NormaPalette.ink)
                 + Text(".").foregroundStyle(NormaPalette.lavender))
-                .font(.system(size: 64, weight: .heavy))
+                .font(.system(size: 64, weight: .heavy, relativeTo: .largeTitle))
                 .tracking(-2.5)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
+                // The accent period can drop to the next line. The number never
+                // shrinks to half; 0.75 is only the last-resort fit.
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .fixedSize(horizontal: false, vertical: true)
                 .contentTransition(.numericText(value: summary.leftover))
                 .animation(.snappy, value: summary.leftover)
 
             breakdown
 
             if summary.billsTotal > 0 {
-                SpendBar(summary: summary)
+                SpendBar(summary: summary, currency: currency)
                     .padding(.top, 6)
             }
         }
     }
 
     private var breakdown: some View {
-        HStack(spacing: 6) {
-            Button {
-                Haptics.tap()
-                onEditIncome()
-            } label: {
-                if hasIncome {
-                    Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
-                        .foregroundStyle(NormaPalette.income)
-                        .underline(color: NormaPalette.income.opacity(0.35))
-                } else {
-                    Text("add your income")
-                        .foregroundStyle(NormaPalette.lavender)
-                        .underline(color: NormaPalette.lavender.opacity(0.5))
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { incomeButton; dot; billsTotal }
+                VStack(alignment: .leading, spacing: 4) { incomeButton; billsTotal }
             }
-            .buttonStyle(.plain)
+            .rubik(FontFamily.Rubik.medium, size: 15, relativeTo: .subheadline)
+            .contentTransition(.numericText())
+            .animation(.snappy, value: summary.billsTotal)
 
-            Text("·").foregroundStyle(NormaPalette.inkMuted)
-
-            Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
-                .foregroundStyle(NormaPalette.inkSubtle)
+            if let paydayLine = PaydaySubtitle.line(for: summary.paydays) {
+                Text(paydayLine)
+                    .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote)
+                    .foregroundStyle(NormaPalette.inkSubtle)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .font(.custom(FontFamily.Rubik.medium, size: 15))
-        .contentTransition(.numericText())
-        .animation(.snappy, value: summary.billsTotal)
+    }
+
+    private var incomeButton: some View {
+        Button {
+            Haptics.tap()
+            onEditIncome()
+        } label: {
+            if hasIncome {
+                Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
+                    .foregroundStyle(NormaPalette.income)
+                    .underline(color: NormaPalette.income.opacity(0.35))
+            } else {
+                Text("add your income")
+                    .foregroundStyle(NormaPalette.lavender)
+                    .underline(color: NormaPalette.lavender.opacity(0.5))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dot: some View {
+        Text("·").foregroundStyle(NormaPalette.inkMuted)
+    }
+
+    private var billsTotal: some View {
+        Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
+            .foregroundStyle(NormaPalette.inkSubtle)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -293,6 +321,7 @@ private struct LeftoverHeader: View {
 /// bills outrun income the bar fills completely and turns to the warning color.
 private struct SpendBar: View {
     let summary: MonthSummary
+    let currency: String
 
     var body: some View {
         let total = max(summary.income, summary.billsTotal)
@@ -317,6 +346,20 @@ private struct SpendBar: View {
                 legend("to pay", color: fill.opacity(0.35))
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        let paid = Money.format(summary.paidTotal, currency: currency)
+        let unpaid = Money.format(summary.unpaidTotal, currency: currency)
+        let bills = Money.format(summary.billsTotal, currency: currency)
+        if summary.billsTotal > summary.income {
+            let over = Money.format(summary.billsTotal - summary.income, currency: currency)
+            return "Spend bar. Bills \(bills) are \(over) over income. \(paid) paid, \(unpaid) still to pay."
+        }
+        let left = Money.format(summary.leftover, currency: currency)
+        return "Spend bar. \(paid) paid, \(unpaid) still to pay, \(left) left."
     }
 
     private func segment(_ fraction: Double, width: CGFloat, color: Color) -> some View {
@@ -329,7 +372,7 @@ private struct SpendBar: View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(label)
-                .font(.custom(FontFamily.Rubik.medium, size: 11))
+                .rubik(FontFamily.Rubik.medium, size: 11, relativeTo: .caption2)
                 .foregroundStyle(NormaPalette.inkMuted)
         }
     }
@@ -347,45 +390,21 @@ private struct BillRow: View {
     private var bill: Bill { occurrence.bill }
 
     var body: some View {
-        HStack(spacing: 14) {
-            Button(action: onTogglePaid) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(
-                            occurrence.isPaid ? NormaPalette.lavender : statusColor.opacity(0.7),
-                            style: occurrence.isPaid ? StrokeStyle(lineWidth: 1.5) : StrokeStyle(lineWidth: 1.5, dash: [3, 3])
-                        )
-                    if occurrence.isPaid {
-                        Circle().fill(NormaPalette.lavender).padding(3)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(NormaPalette.onAccent)
-                    }
-                }
-                .frame(width: 26, height: 26)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(occurrence.isPaid ? "mark unpaid" : "mark paid")
-            .padding(.leading, -9)
+        HStack(alignment: .center, spacing: 14) {
+            paidMark
+                .padding(.leading, -9)
 
             Button(action: onEdit) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(bill.name.lowercased())
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                            .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
-                            .strikethrough(occurrence.isPaid, color: NormaPalette.inkMuted)
-                            .lineLimit(1)
-                        Text(dueLabel)
-                            .font(.custom(FontFamily.Rubik.medium, size: 12))
-                            .foregroundStyle(statusColor)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        details
+                        Spacer(minLength: 8)
+                        amount
                     }
-                    Spacer(minLength: 8)
-                    Text(Money.format(bill.amount, currency: currency))
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                        .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+                    VStack(alignment: .leading, spacing: 4) {
+                        details
+                        amount
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -397,6 +416,78 @@ private struct BillRow: View {
             Button("edit", systemImage: "pencil", action: onEdit)
             Button("delete", systemImage: "trash", role: .destructive, action: onDelete)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rowAccessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default) { onEdit() }
+        .accessibilityAction(named: occurrence.isPaid ? "Mark unpaid" : "Mark paid") { onTogglePaid() }
+        .accessibilityAction(named: "Edit") { onEdit() }
+        .accessibilityAction(named: "Delete") { onDelete() }
+    }
+
+    private var paidMark: some View {
+        Button(action: onTogglePaid) {
+            ZStack {
+                Circle()
+                    .strokeBorder(
+                        occurrence.isPaid ? NormaPalette.lavender : statusColor.opacity(0.7),
+                        style: occurrence.isPaid ? StrokeStyle(lineWidth: 1.5) : StrokeStyle(lineWidth: 1.5, dash: [3, 3])
+                    )
+                if occurrence.isPaid {
+                    Circle().fill(NormaPalette.lavender).padding(3)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold, relativeTo: .caption2))
+                        .foregroundStyle(NormaPalette.onAccent)
+                }
+            }
+            .frame(width: 26, height: 26)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHidden(true)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(bill.name.lowercased())
+                .rubik(FontFamily.Rubik.semiBold, size: 16, relativeTo: .body)
+                .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+                .strikethrough(occurrence.isPaid, color: NormaPalette.inkMuted)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let notesLine {
+                Text(notesLine)
+                    .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote)
+                    .foregroundStyle(NormaPalette.inkSubtle)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(dueLabel)
+                .rubik(FontFamily.Rubik.medium, size: 12, relativeTo: .caption)
+                .foregroundStyle(statusColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var amount: some View {
+        Text(Money.format(bill.amount, currency: currency))
+            .rubik(FontFamily.Rubik.semiBold, size: 16, relativeTo: .body)
+            .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+    }
+
+    private var notesLine: String? {
+        let trimmed = bill.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var rowAccessibilityLabel: String {
+        var parts = [bill.name.lowercased(), Money.format(bill.amount, currency: currency)]
+        if let notesLine { parts.append(notesLine) }
+        parts.append(dueLabel)
+        return parts.joined(separator: ", ")
     }
 
     private var statusColor: Color {

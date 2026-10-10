@@ -5,7 +5,8 @@
 //  The welcome at the end of onboarding. Dither shader blooms outward from
 //  center while each phrase waves in, holds, and crossfades to the next;
 //  after the last one the bloom collapses and hands off. Auto-advances; tap
-//  to skip ahead.
+//  to skip ahead. With VoiceOver on, each phrase is announced and waits
+//  for the continue button.
 //
 
 import SwiftUI
@@ -29,6 +30,11 @@ struct OnboardingCelebrationView: View {
     @State private var waveScale: CGFloat = 0
     @State private var phraseIndex: Int = 0
     @State private var didFinish: Bool = false
+    /// Mirrors VoiceOver so an in-flight auto-advance can see it turn on.
+    @State private var waitsForContinue = false
+
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
     /// Soft tick that fires per word as the celebration phrase waves in.
@@ -65,58 +71,69 @@ struct OnboardingCelebrationView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture { skipForward() }
+            if voiceOverEnabled {
+                VoiceOverPhrasePrompt(phrase: phrases[phraseIndex], onContinue: advance)
+            } else {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { skipForward() }
 
-            WaveTextView(
-                text: phrases[phraseIndex],
-                font: .system(size: 56, weight: .bold),
-                color: NormaPalette.ink,
-                isAnimating: true,
-                alignment: .leading,
-                tracking: -1.5,
-                wordSpacing: 12,
-                lineSpacing: 0,
-                onWordAppear: { _ in
-                    wordHaptic.impactOccurred(intensity: 0.55)
-                    wordHaptic.prepare()
-                }
-            )
-            .id(phraseIndex)
-            .transition(.opacity)
-            .padding(.horizontal, 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
+                WaveTextView(
+                    text: phrases[phraseIndex],
+                    font: .system(size: 56, weight: .bold, relativeTo: .largeTitle),
+                    color: NormaPalette.ink,
+                    isAnimating: true,
+                    alignment: .leading,
+                    tracking: -1.5,
+                    wordSpacing: 12,
+                    lineSpacing: 0,
+                    onWordAppear: { _ in
+                        wordHaptic.impactOccurred(intensity: 0.55)
+                        wordHaptic.prepare()
+                    }
+                )
+                .id(phraseIndex)
+                .transition(.opacity)
+                .padding(.horizontal, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .onAppear { runChoreography() }
+        .onChange(of: voiceOverEnabled) { _, on in
+            waitsForContinue = on
+            if !on { schedulePhase() }
+        }
     }
 
     // MARK: - Choreography
 
     private func runChoreography() {
+        waitsForContinue = voiceOverEnabled
         impactGenerator.prepare()
         wordHaptic.prepare()
 
-        // Bloom out from center.
-        withAnimation(.easeOut(duration: 0.7)) {
+        if reduceMotion || voiceOverEnabled {
             waveScale = 1.0
+        } else {
+            withAnimation(.easeOut(duration: 0.7)) {
+                waveScale = 1.0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                impactGenerator.impactOccurred()
+            }
         }
 
-        // Small thump as the bloom peaks.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            impactGenerator.impactOccurred()
-        }
-
-        schedulePhase()
+        if !voiceOverEnabled { schedulePhase() }
     }
 
     /// Hold the current phrase, then crossfade to the next one — or, on the
     /// last phrase, collapse the bloom and hand off.
     private func schedulePhase() {
+        guard !voiceOverEnabled else { return }
         let snapshot = phraseIndex
         DispatchQueue.main.asyncAfter(deadline: .now() + holdPerPhrase) {
-            guard !didFinish, phraseIndex == snapshot else { return }
+            guard !didFinish, !waitsForContinue, phraseIndex == snapshot else { return }
             advance()
         }
     }
@@ -125,10 +142,16 @@ struct OnboardingCelebrationView: View {
         guard !didFinish else { return }
         if phraseIndex < phrases.count - 1 {
             impactGenerator.impactOccurred()
-            withAnimation(.easeInOut(duration: 0.35)) {
+            if reduceMotion {
                 phraseIndex += 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    phraseIndex += 1
+                }
             }
-            schedulePhase()
+            if !voiceOverEnabled { schedulePhase() }
+        } else if voiceOverEnabled {
+            finish()
         } else {
             collapseAndFinish()
         }
@@ -137,7 +160,12 @@ struct OnboardingCelebrationView: View {
     private func collapseAndFinish() {
         guard !didFinish else { return }
         // Collapse the bloom before handing off so the next screen doesn't
-        // see a still-expanded dither field.
+        // see a still-expanded dither field. Reduce Motion skips the motion.
+        if reduceMotion {
+            waveScale = 0
+            finish()
+            return
+        }
         withAnimation(.easeIn(duration: 0.55)) {
             waveScale = 0
         }

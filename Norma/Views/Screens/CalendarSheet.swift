@@ -93,14 +93,15 @@ struct CalendarSheet: View {
     private func hero(_ summary: MonthSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(displayedMonth.formatted(.dateTime.month(.wide).year()).lowercased())
-                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                .rubik(FontFamily.Rubik.medium, size: 13, relativeTo: .footnote)
                 .foregroundStyle(NormaPalette.inkSubtle)
 
             HeroTitle(text: "\(summary.occurrences.count) \(summary.occurrences.count == 1 ? "bill" : "bills")")
 
             Text(nextUpText(summary))
-                .font(.custom(FontFamily.Rubik.regular, size: 15).italic())
+                .rubik(FontFamily.Rubik.regular, size: 15, relativeTo: .subheadline, italic: true)
                 .foregroundStyle(NormaPalette.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -126,8 +127,10 @@ struct CalendarSheet: View {
             HStack(spacing: 0) {
                 ForEach(symbols.indices, id: \.self) { index in
                     Text(symbols[index])
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 10))
+                        .rubik(FontFamily.Rubik.semiBold, size: 10, relativeTo: .caption2)
                         .foregroundStyle(NormaPalette.inkMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -162,8 +165,15 @@ struct CalendarSheet: View {
                         Circle().strokeBorder(NormaPalette.lavender.opacity(0.85), lineWidth: 1)
                     }
                     Text("\(day)")
-                        .font(.custom(isSelected || isToday ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 14))
+                        .accessibilityHidden(true)
+                        .rubik(
+                            isSelected || isToday ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium,
+                            size: 14,
+                            relativeTo: .body
+                        )
                         .foregroundStyle(isSelected ? NormaPalette.onAccent : (isToday ? NormaPalette.lavender : NormaPalette.ink))
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
                 }
                 .frame(width: 32, height: 32)
 
@@ -184,6 +194,15 @@ struct CalendarSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(
+            CalendarDayLabel.day(
+                date: date(forDay: day),
+                isPayday: isPayday,
+                bills: bills.map { CalendarDayLabel.Bill(name: $0.bill.name, isPaid: $0.isPaid) },
+                calendar: calendar
+            )
+        )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Day detail
@@ -203,6 +222,7 @@ struct CalendarSheet: View {
                 detailRow(
                     title: occurrence.bill.name.lowercased(),
                     subtitle: occurrence.isPaid ? "paid" : (occurrence.isOverdue() ? "overdue" : occurrence.bill.frequency.label),
+                    notes: occurrence.bill.notes,
                     amount: Money.format(occurrence.bill.amount, currency: profile.currency),
                     tint: occurrence.isOverdue() ? NormaPalette.warning : NormaPalette.lavender
                 ) { sheet = .editBill(occurrence.bill) }
@@ -210,7 +230,7 @@ struct CalendarSheet: View {
 
             if bills.isEmpty && !isPayday {
                 Text("nothing due.")
-                    .font(.custom(FontFamily.Rubik.medium, size: 13))
+                    .rubik(FontFamily.Rubik.medium, size: 13, relativeTo: .footnote)
                     .foregroundStyle(NormaPalette.inkMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
@@ -221,8 +241,10 @@ struct CalendarSheet: View {
         }
     }
 
-    private func detailRow(title: String, subtitle: String, amount: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button {
+    private func detailRow(title: String, subtitle: String, notes: String? = nil, amount: String, tint: Color, action: @escaping () -> Void) -> some View {
+        let notesLine = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visibleNotes = (notesLine?.isEmpty == false) ? notesLine : nil
+        return Button {
             Haptics.tap()
             action()
         } label: {
@@ -232,16 +254,26 @@ struct CalendarSheet: View {
                     .frame(width: 3, height: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                        .rubik(FontFamily.Rubik.semiBold, size: 16, relativeTo: .body)
                         .foregroundStyle(NormaPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let visibleNotes {
+                        Text(visibleNotes)
+                            .rubik(FontFamily.Rubik.regular, size: 13, relativeTo: .footnote)
+                            .foregroundStyle(NormaPalette.inkSubtle)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(subtitle)
-                        .font(.custom(FontFamily.Rubik.medium, size: 12))
+                        .rubik(FontFamily.Rubik.medium, size: 12, relativeTo: .caption)
                         .foregroundStyle(tint)
                 }
                 Spacer(minLength: 8)
                 Text(amount)
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 17))
+                    .rubik(FontFamily.Rubik.semiBold, size: 17, relativeTo: .body)
                     .foregroundStyle(NormaPalette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -259,7 +291,7 @@ struct CalendarSheet: View {
             sheet = .newBill(selected)
         } label: {
             Label("add a bill on \(selected.formatted(.dateTime.month(.abbreviated).day()).lowercased())", systemImage: "plus")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 14))
+                .rubik(FontFamily.Rubik.semiBold, size: 14, relativeTo: .subheadline)
                 .foregroundStyle(NormaPalette.lavender)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

@@ -71,7 +71,7 @@ struct OnboardingCurrencyIncomeView: View {
     private var titleView: some View {
         WaveTextView(
             text: "what's your rhythm",
-            font: .system(size: 56, weight: .bold),
+            font: .system(size: 56, weight: .bold, relativeTo: .largeTitle),
             color: NormaPalette.ink,
             isAnimating: true,
             alignment: .leading,
@@ -97,13 +97,13 @@ struct OnboardingCurrencyIncomeView: View {
             } label: {
                 HStack(spacing: 10) {
                     Text(Money.flag(for: currency))
-                        .font(.system(size: 18))
+                        .font(.system(size: 18, relativeTo: .body))
                     Text(currency)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold, relativeTo: .body))
                         .foregroundStyle(NormaPalette.ink)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(NormaPalette.ink.opacity(0.7))
+                        .font(.system(size: 11, weight: .semibold, relativeTo: .caption))
+                        .foregroundStyle(NormaPalette.inkSubtle)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -120,18 +120,18 @@ struct OnboardingCurrencyIncomeView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(Money.symbol(for: currency))
-                    .font(.system(size: 56, weight: .bold))
+                    .font(.system(size: 56, weight: .bold, relativeTo: .largeTitle))
                     .foregroundStyle(NormaPalette.inkMuted)
 
                 ZStack(alignment: .leading) {
                     if amountText.isEmpty {
                         Text("0")
-                            .font(.system(size: 56, weight: .bold))
-                            .foregroundStyle(NormaPalette.inkMuted.opacity(0.5))
+                            .font(.system(size: 56, weight: .bold, relativeTo: .largeTitle))
+                            .foregroundStyle(NormaPalette.inkMuted)
                             .allowsHitTesting(false)
                     }
                     TextField("", text: $amountText)
-                        .font(.system(size: 56, weight: .bold))
+                        .font(.system(size: 56, weight: .bold, relativeTo: .largeTitle))
                         .foregroundStyle(NormaPalette.ink)
                         .tint(NormaPalette.lavender)
                         .keyboardType(.numberPad)

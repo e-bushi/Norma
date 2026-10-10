@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Big lowercase headline ending in the accent-colored period.
 struct HeroTitle: View {
@@ -17,8 +18,9 @@ struct HeroTitle: View {
     var body: some View {
         (Text(text).foregroundStyle(NormaPalette.ink)
             + Text(".").foregroundStyle(NormaPalette.lavender))
-            .font(.system(size: size, weight: .heavy))
+            .font(.system(size: size, weight: .heavy, relativeTo: .largeTitle))
             .tracking(-size * 0.04)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -34,10 +36,11 @@ struct FieldLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.custom(FontFamily.Rubik.semiBold, size: 11))
+            .rubik(FontFamily.Rubik.semiBold, size: 11, relativeTo: .caption2)
             .tracking(0.88)
             .textCase(.uppercase)
             .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -54,7 +57,11 @@ struct ChoicePill: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { action() }
         } label: {
             Text(label)
-                .font(.custom(isActive ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium, size: 14))
+                .rubik(
+                    isActive ? FontFamily.Rubik.semiBold : FontFamily.Rubik.medium,
+                    size: 14,
+                    relativeTo: .subheadline
+                )
                 .foregroundStyle(isActive ? NormaPalette.onAccent : NormaPalette.ink)
                 .padding(.horizontal, 15)
                 .padding(.vertical, 9)
@@ -86,10 +93,10 @@ struct PrimaryButton: View {
         } label: {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold, relativeTo: .headline))
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold, relativeTo: .headline))
                 }
             }
             .foregroundStyle(NormaPalette.onAccent)
@@ -135,6 +142,37 @@ extension View {
     /// Stagger position `index` in a sequence that starts after `baseDelay`.
     func staggeredAppear(_ isVisible: Bool, index: Int, baseDelay: Double = 0, step: Double = 0.07) -> some View {
         modifier(StaggeredAppear(isVisible: isVisible, delay: baseDelay + Double(index) * step))
+    }
+}
+
+/// Intro and celebration copy when VoiceOver is on: the phrase stays on
+/// screen, is announced, and advances only from the continue button.
+struct VoiceOverPhrasePrompt: View {
+    let phrase: String
+    let onContinue: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                Text(phrase)
+                    .font(.system(size: 40, weight: .bold, relativeTo: .largeTitle))
+                    .foregroundStyle(NormaPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                PrimaryButton(title: "continue", systemImage: "arrow.right", action: onContinue)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 32)
+        }
+        .onAppear { announce(phrase) }
+        .onChange(of: phrase) { _, newValue in announce(newValue) }
+    }
+
+    private func announce(_ phrase: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            UIAccessibility.post(notification: .announcement, argument: phrase)
+        }
     }
 }
 

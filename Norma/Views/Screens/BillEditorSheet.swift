@@ -40,7 +40,7 @@ struct BillEditorSheet: View {
 
                     field("name") {
                         TextField("", text: $name, prompt: Text("rent, phone, netflix…").foregroundStyle(NormaPalette.inkMuted))
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 24))
+                            .rubik(FontFamily.Rubik.semiBold, size: 24, relativeTo: .title2)
                             .foregroundStyle(NormaPalette.ink)
                             .tint(NormaPalette.lavender)
                             .textInputAutocapitalization(.never)
@@ -51,10 +51,10 @@ struct BillEditorSheet: View {
                     field("amount") {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text(Money.symbol(for: currency))
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 20))
+                                .rubik(FontFamily.Rubik.semiBold, size: 20, relativeTo: .title3)
                                 .foregroundStyle(NormaPalette.inkSubtle)
                             TextField("0", text: $amountText)
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 24))
+                                .rubik(FontFamily.Rubik.semiBold, size: 24, relativeTo: .title2)
                                 .foregroundStyle(NormaPalette.ink)
                                 .tint(NormaPalette.lavender)
                                 .keyboardType(.decimalPad)
@@ -82,11 +82,12 @@ struct BillEditorSheet: View {
                     Toggle(isOn: $isReminderOn) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("reminders")
-                                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                                .rubik(FontFamily.Rubik.semiBold, size: 16, relativeTo: .body)
                                 .foregroundStyle(NormaPalette.ink)
                             Text("a nudge the day before and the morning it's due")
-                                .font(.custom(FontFamily.Rubik.medium, size: 13))
+                                .rubik(FontFamily.Rubik.medium, size: 13, relativeTo: .footnote)
                                 .foregroundStyle(NormaPalette.inkSubtle)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .tint(NormaPalette.lavender)
@@ -96,7 +97,7 @@ struct BillEditorSheet: View {
 
                     field("notes") {
                         TextField("", text: $notes, prompt: Text("account number, autopay, anything").foregroundStyle(NormaPalette.inkMuted), axis: .vertical)
-                            .font(.custom(FontFamily.Rubik.medium, size: 16))
+                            .rubik(FontFamily.Rubik.medium, size: 16, relativeTo: .body)
                             .foregroundStyle(NormaPalette.ink)
                             .tint(NormaPalette.lavender)
                             .lineLimit(1...4)
@@ -170,17 +171,21 @@ struct BillEditorSheet: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(label)
-                    .font(.custom(FontFamily.Rubik.semiBold, size: 13))
+                    .rubik(FontFamily.Rubik.semiBold, size: 13, relativeTo: .footnote)
                     .foregroundStyle(NormaPalette.ink.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
                 if let caption {
                     Text(caption)
-                        .font(.custom(FontFamily.Rubik.medium, size: 11))
+                        .rubik(FontFamily.Rubik.medium, size: 11, relativeTo: .caption2)
                         .foregroundStyle(NormaPalette.inkSubtle)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 12)
             Text(value)
-                .font(.custom(FontFamily.Rubik.bold, size: 20))
+                .rubik(FontFamily.Rubik.bold, size: 20, relativeTo: .title3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .foregroundStyle(NormaPalette.lavender)
         }
         .padding(.vertical, 8)
@@ -201,7 +206,7 @@ struct BillEditorSheet: View {
             showDeleteConfirm = true
         } label: {
             Text("delete bill")
-                .font(.custom(FontFamily.Rubik.semiBold, size: 15))
+                .rubik(FontFamily.Rubik.semiBold, size: 15, relativeTo: .body)
                 .foregroundStyle(NormaPalette.danger)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)

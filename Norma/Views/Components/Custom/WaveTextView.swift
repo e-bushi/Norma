@@ -7,21 +7,10 @@
 
 import SwiftUI
 
-/// A token for `WaveTextView`'s structured initializer — either a word or an
-/// SF Symbol, each with an optional per-token color override (falls back to
-/// the view's base color when nil).
-struct WaveTextToken {
-    enum Kind {
-        case word(String)
-        case symbol(String)
-    }
-    let kind: Kind
-    var color: Color? = nil
-}
-
 /// A text view that animates words with a cascading rise + blur effect.
 /// Each word starts low and blurred, then rises up and comes into focus
 /// with staggered timing to create a wave traveling through the text.
+/// Reduce Motion shows the finished line immediately, with no blur or rise.
 struct WaveTextView: View {
     let text: String
     let font: Font
@@ -40,12 +29,8 @@ struct WaveTextView: View {
     var lineSpacing: CGFloat = 6
     /// Optional per-word callback fired in sync with each word's reveal.
     /// Used by callers (e.g. onboarding interstitials) to layer haptics on
-    /// top of the visual wave.
+    /// top of the visual wave. Not called when Reduce Motion is on.
     var onWordAppear: ((Int) -> Void)? = nil
-    /// Structured content — when set, takes precedence over `text`/`accentSuffix`
-    /// and lets callers mix per-word colors and inline SF Symbols (e.g. a
-    /// lavender "+" and a lavender waveform glyph) while keeping the wave.
-    var tokens: [WaveTextToken]? = nil
 
     /// Animation configuration
     private let wordDelay: Double = 0.06
@@ -53,30 +38,20 @@ struct WaveTextView: View {
     private let initialOffset: CGFloat = 18
     private let initialBlur: CGFloat = 5
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animatedWordCount: Int = 0
 
     private struct Segment {
         let text: String
-        let symbol: String?
         let color: Color
     }
 
     private var segments: [Segment] {
-        if let tokens {
-            return tokens.map { token in
-                switch token.kind {
-                case .word(let word):
-                    return Segment(text: word, symbol: nil, color: token.color ?? color)
-                case .symbol(let name):
-                    return Segment(text: "", symbol: name, color: token.color ?? color)
-                }
-            }
-        }
         var segs = text
             .split(separator: " ")
-            .map { Segment(text: String($0), symbol: nil, color: color) }
+            .map { Segment(text: String($0), color: color) }
         if let suffix = accentSuffix, !suffix.isEmpty {
-            segs.append(Segment(text: suffix, symbol: nil, color: accentColor))
+            segs.append(Segment(text: suffix, color: accentColor))
         }
         return segs
     }
@@ -86,17 +61,18 @@ struct WaveTextView: View {
             ForEach(Array(segments.enumerated()), id: \.offset) { index, seg in
                 WaveWord(
                     word: seg.text,
-                    symbolName: seg.symbol,
                     font: font,
                     color: seg.color,
                     tracking: tracking,
-                    isAnimated: index < animatedWordCount,
+                    isAnimated: reduceMotion || index < animatedWordCount,
                     initialOffset: initialOffset,
                     initialBlur: initialBlur,
                     animationDuration: animationDuration
                 )
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenText)
         .onChange(of: isAnimating) { _, newValue in
             if newValue {
                 startAnimation()
@@ -109,13 +85,20 @@ struct WaveTextView: View {
         }
     }
 
+    private var spokenText: String {
+        if let suffix = accentSuffix, !suffix.isEmpty {
+            return "\(text)\(suffix)"
+        }
+        return text
+    }
+
     private func startAnimation() {
-        // Reset
+        guard !reduceMotion else { return }
         animatedWordCount = 0
 
-        // Animate each word with staggered delay
         for index in 0..<segments.count {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * wordDelay) {
+                guard !reduceMotion else { return }
                 withAnimation(.spring(response: animationDuration, dampingFraction: 0.75)) {
                     animatedWordCount = index + 1
                 }
@@ -128,7 +111,6 @@ struct WaveTextView: View {
 /// Individual word view with rise + blur animation
 private struct WaveWord: View {
     let word: String
-    var symbolName: String? = nil
     let font: Font
     let color: Color
     var tracking: CGFloat = 0
@@ -138,21 +120,13 @@ private struct WaveWord: View {
     let animationDuration: Double
 
     var body: some View {
-        Group {
-            if let symbolName {
-                Image(systemName: symbolName)
-                    .font(font)
-                    .foregroundColor(color)
-            } else {
-                Text(word)
-                    .font(font)
-                    .tracking(tracking)
-                    .foregroundColor(color)
-            }
-        }
-        .opacity(isAnimated ? 1 : 0)
-        .offset(y: isAnimated ? 0 : initialOffset)
-        .blur(radius: isAnimated ? 0 : initialBlur)
+        Text(word)
+            .font(font)
+            .tracking(tracking)
+            .foregroundColor(color)
+            .opacity(isAnimated ? 1 : 0)
+            .offset(y: isAnimated ? 0 : initialOffset)
+            .blur(radius: isAnimated ? 0 : initialBlur)
     }
 }
 
@@ -243,7 +217,7 @@ private struct WaveFlowLayout: Layout {
 #Preview {
     WaveTextView(
         text: "what's your rhythm",
-        font: .system(size: 56, weight: .bold),
+        font: .system(size: 56, weight: .bold, relativeTo: .largeTitle),
         color: NormaPalette.ink,
         isAnimating: true,
         alignment: .leading,
