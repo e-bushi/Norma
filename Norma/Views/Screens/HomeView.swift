@@ -18,6 +18,8 @@ struct HomeView: View {
 
     @State private var monthOffset = 0
     @State private var sheet: Sheet?
+    @State private var pendingDeleteID: UUID?
+    @State private var saveError: String?
 
     private enum Sheet: Identifiable {
         case settings, calendar, income
@@ -48,7 +50,12 @@ struct HomeView: View {
                     topBar
                         .padding(.bottom, 40)
 
-                    LeftoverHeader(summary: summary, currency: profile.currency, hasIncome: profile.hasIncome) {
+                    LeftoverHeader(
+                        summary: summary,
+                        currency: profile.currency,
+                        hasIncome: profile.hasIncome,
+                        collisionNote: profile.hasIncome ? profile.incomeCadence.collisionNote(inMonthOf: summary.month) : nil
+                    ) {
                         sheet = .income
                     }
                     .padding(.bottom, 24)
@@ -73,10 +80,38 @@ struct HomeView: View {
         .overlay(alignment: .bottom) { addBillButton }
         .modifier(ScreenshotHomeMarker())
         .sheet(item: $sheet, content: sheetContent)
+        .alert(
+            "delete \(billPendingDelete?.name.lowercased() ?? "this bill")?",
+            isPresented: Binding(
+                get: { pendingDeleteID != nil },
+                set: { if !$0 { pendingDeleteID = nil } }
+            ),
+            presenting: billPendingDelete
+        ) { bill in
+            Button("cancel", role: .cancel) {}
+            Button("delete", role: .destructive) { delete(bill) }
+        } message: { _ in
+            Text("it'll be removed from every month. there's no backup.")
+        }
+        .alert(
+            "couldn't save",
+            isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )
+        ) {
+            Button("ok", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
         .task(id: bills.count) {
             guard !ScreenshotMode.isActive else { return }
             await NotificationService.rescheduleAll(bills, currency: profile.currency)
         }
+    }
+
+    private var billPendingDelete: Bill? {
+        bills.first { $0.id == pendingDeleteID }
     }
 
     // MARK: - Top
@@ -106,9 +141,18 @@ struct HomeView: View {
     }
 
     private var monthPills: some View {
-        HStack(spacing: 8) {
+        FlowLayout {
+            ChoicePill(label: "last month", isActive: monthOffset == -1) { monthOffset = -1 }
             ChoicePill(label: "this month", isActive: monthOffset == 0) { monthOffset = 0 }
             ChoicePill(label: "next month", isActive: monthOffset == 1) { monthOffset = 1 }
+        }
+    }
+
+    private var monthWord: String {
+        switch monthOffset {
+        case ..<0: return "last"
+        case 0: return "this"
+        default: return "next"
         }
     }
 
@@ -116,25 +160,34 @@ struct HomeView: View {
 
     @ViewBuilder
     private func billSections(_ summary: MonthSummary) -> some View {
+        let today = ScreenshotMode.now
+        let overdue = overdueItems(in: summary, today: today)
+        let upcoming = summary.occurrences.filter { !$0.isPaid && !$0.isOverdue(today: today) }
+        let paid = summary.occurrences.filter(\.isPaid)
+
         if bills.isEmpty {
             emptyState
-        } else if summary.occurrences.isEmpty {
-            Text("no bills due \(monthOffset == 0 ? "this" : "next") month.")
+        } else if summary.occurrences.isEmpty && overdue.isEmpty {
+            Text("no bills due \(monthWord) month.")
                 .font(.custom(FontFamily.Rubik.medium, size: 14))
                 .foregroundStyle(NormaPalette.inkMuted)
                 .padding(.vertical, 8)
         } else {
-            let today = ScreenshotMode.now
-            let overdue = summary.occurrences.filter { $0.isOverdue(today: today) }
-            let upcoming = summary.occurrences.filter { !$0.isPaid && !$0.isOverdue(today: today) }
-            let paid = summary.occurrences.filter(\.isPaid)
-
             VStack(alignment: .leading, spacing: 28) {
                 section("overdue", overdue, tint: NormaPalette.warning)
                 section("coming up", upcoming)
                 section("paid", paid)
             }
         }
+    }
+
+    /// This month also keeps unpaid occurrences from earlier months in Overdue.
+    private func overdueItems(in summary: MonthSummary, today: Date) -> [BillOccurrence] {
+        let carried =
+            Calendar.current.isDate(summary.month, equalTo: today, toGranularity: .month)
+            ? summary.earlierUnpaid
+            : []
+        return carried + summary.occurrences.filter { $0.isOverdue(today: today) }
     }
 
     @ViewBuilder
@@ -144,12 +197,10 @@ struct HomeView: View {
                 HStack {
                     FieldLabel(title, color: tint)
                     Spacer()
-                    Text(Money.format(items.reduce(0) { $0 + $1.bill.amount }, currency: profile.currency))
+                    Text(Money.format(minorUnits: totalMinor(items), currency: profile.currency))
                         .font(.custom(FontFamily.Rubik.medium, size: 12))
                         .foregroundStyle(tint)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .layoutPriority(1)
+                        .amountStaysOneLine()
                 }
                 .padding(.bottom, 4)
 
@@ -159,7 +210,7 @@ struct HomeView: View {
                     } onEdit: {
                         sheet = .editBill(occurrence.bill)
                     } onDelete: {
-                        delete(occurrence.bill)
+                        pendingDeleteID = occurrence.bill.id
                     }
                 }
             }
@@ -222,20 +273,31 @@ struct HomeView: View {
 
     // MARK: - Actions
 
+    private func totalMinor(_ items: [BillOccurrence]) -> Int {
+        items.reduce(0) { $0 + Money.minorUnits(fromMajor: $1.bill.amount, currency: profile.currency) }
+    }
+
     private func togglePaid(_ occurrence: BillOccurrence) {
         let bill = occurrence.bill
         withAnimation(.snappy) {
             bill.setPaid(!occurrence.isPaid, for: occurrence.date)
         }
-        try? modelContext.save()
+        guard Persistence.save(modelContext) else {
+            saveError = Persistence.saveFailure
+            return
+        }
         if !occurrence.isPaid { Haptics.success() } else { Haptics.tap() }
         Task { await NotificationService.scheduleReminders(for: bill, currency: profile.currency) }
     }
 
     private func delete(_ bill: Bill) {
-        NotificationService.cancelReminders(for: bill)
+        let billID = bill.id
         withAnimation(.snappy) { modelContext.delete(bill) }
-        try? modelContext.save()
+        guard Persistence.save(modelContext) else {
+            saveError = Persistence.saveFailure
+            return
+        }
+        NotificationService.cancelReminders(forBillID: billID)
     }
 }
 
@@ -248,6 +310,7 @@ private struct LeftoverHeader: View {
     let summary: MonthSummary
     let currency: String
     let hasIncome: Bool
+    var collisionNote: String? = nil
     let onEditIncome: () -> Void
 
     private var monthName: String {
@@ -258,8 +321,8 @@ private struct LeftoverHeader: View {
         VStack(alignment: .leading, spacing: 14) {
             FieldLabel("\(monthName) · left after bills")
 
-            (Text(Money.format(summary.leftover, currency: currency, wholeUnits: true))
-                .foregroundStyle(summary.leftover < 0 ? NormaPalette.warning : NormaPalette.ink)
+            (Text(Money.format(minorUnits: summary.leftoverMinor, currency: currency))
+                .foregroundStyle(summary.isShortfall ? NormaPalette.warning : NormaPalette.ink)
                 + Text(".").foregroundStyle(NormaPalette.lavender))
                 .font(.system(size: 64, weight: .heavy))
                 .tracking(-2.5)
@@ -267,12 +330,24 @@ private struct LeftoverHeader: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
-                .contentTransition(.numericText(value: summary.leftover))
-                .animation(ScreenshotMode.animation, value: summary.leftover)
+                .contentTransition(.numericText(value: Double(summary.leftoverMinor)))
+                .animation(ScreenshotMode.animation, value: summary.leftoverMinor)
+
+            Text("income minus every bill due this month.")
+                .font(.custom(FontFamily.Rubik.regular, size: 13))
+                .foregroundStyle(NormaPalette.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
 
             breakdown
 
-            if summary.billsTotal > 0 {
+            if let collisionNote {
+                Text(collisionNote)
+                    .font(.custom(FontFamily.Rubik.regular, size: 13))
+                    .foregroundStyle(NormaPalette.inkSubtle)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if summary.billsMinor > 0 {
                 SpendBar(summary: summary)
                     .padding(.top, 6)
             }
@@ -296,7 +371,7 @@ private struct LeftoverHeader: View {
         }
         .font(.custom(FontFamily.Rubik.medium, size: 15))
         .contentTransition(.numericText())
-        .animation(ScreenshotMode.animation, value: summary.billsTotal)
+        .animation(ScreenshotMode.animation, value: summary.billsMinor)
     }
 
     private var incomeLabel: some View {
@@ -305,7 +380,7 @@ private struct LeftoverHeader: View {
             onEditIncome()
         } label: {
             if hasIncome {
-                Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
+                Text("\(Money.format(minorUnits: summary.incomeMinor, currency: currency)) in")
                     .foregroundStyle(NormaPalette.income)
                     .underline(color: NormaPalette.income.opacity(0.35))
                     .amountStaysOneLine()
@@ -320,7 +395,7 @@ private struct LeftoverHeader: View {
     }
 
     private var billsLabel: some View {
-        Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
+        Text("\(Money.format(minorUnits: summary.billsMinor, currency: currency)) in bills")
             .foregroundStyle(NormaPalette.inkSubtle)
             .amountStaysOneLine()
     }
@@ -332,28 +407,33 @@ private struct SpendBar: View {
     let summary: MonthSummary
 
     var body: some View {
-        let total = max(summary.income, summary.billsTotal)
-        let overspent = summary.billsTotal > summary.income
+        let total = max(summary.incomeMinor, summary.billsMinor)
+        let overspent = summary.billsMinor > summary.incomeMinor
         let fill = overspent ? NormaPalette.warning : NormaPalette.lavender
 
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
-                    segment(summary.paidTotal / total, width: geo.size.width, color: fill)
-                    segment(summary.unpaidTotal / total, width: geo.size.width, color: fill.opacity(0.35))
+                    segment(fraction(summary.paidMinor, total), width: geo.size.width, color: fill)
+                    segment(fraction(summary.unpaidMinor, total), width: geo.size.width, color: fill.opacity(0.35))
                     if !overspent {
-                        segment(summary.leftover / total, width: geo.size.width, color: NormaPalette.ink.opacity(0.08))
+                        segment(fraction(summary.leftoverMinor, total), width: geo.size.width, color: NormaPalette.ink.opacity(0.08))
                     }
                 }
             }
             .frame(height: 6)
-            .animation(ScreenshotMode.animation, value: summary.paidTotal)
+            .animation(ScreenshotMode.animation, value: summary.paidMinor)
 
             HStack(spacing: 14) {
                 legend("paid", color: fill)
                 legend("to pay", color: fill.opacity(0.35))
             }
         }
+    }
+
+    private func fraction(_ part: Int, _ total: Int) -> Double {
+        guard total > 0 else { return 0 }
+        return Double(part) / Double(total)
     }
 
     private func segment(_ fraction: Double, width: CGFloat, color: Color) -> some View {

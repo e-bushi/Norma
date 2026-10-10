@@ -12,7 +12,8 @@ import SwiftData
 @Model
 final class UserProfile {
     var currency: String = "USD"
-    /// Amount received per paycheck, after tax — not a monthly figure.
+    /// Amount received per paycheck, after tax, in major units — not a monthly
+    /// figure. Month totals convert this to minor units before multiplying.
     var incomeAmount: Double = 0
 
     // The cadence is stored flat so SwiftData can persist it; read and write

@@ -9,6 +9,7 @@
 
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct BillEditorSheet: View {
     /// nil adds a new bill.
@@ -22,13 +23,22 @@ struct BillEditorSheet: View {
     @State private var name = ""
     @State private var amountText = ""
     @State private var dueDate = Date()
+    /// The occurrence the date picker showed when the sheet opened. Saving
+    /// keeps the original anchor unless the user picks a different day.
+    @State private var displayedDueDate = Date()
     @State private var frequency: BillFrequency = .monthly
     @State private var notes = ""
     @State private var isReminderOn = true
     @State private var showDeleteConfirm = false
+    @State private var showReminderSettings = false
+    @State private var dismissAfterReminderAlert = false
+    @State private var saveError: String?
+    @State private var isSaving = false
+    /// Set once a new bill has been inserted, so a second save edits it.
+    @State private var createdBill: Bill?
     @FocusState private var nameFocused: Bool
 
-    private var amount: Double? { Money.parse(amountText) }
+    private var amount: Double? { Money.parse(amountText, currency: currency) }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canSave: Bool { !trimmedName.isEmpty && amount != nil }
 
@@ -91,7 +101,8 @@ struct BillEditorSheet: View {
                     }
                     .tint(NormaPalette.lavender)
                     .onChange(of: isReminderOn) { _, isOn in
-                        if isOn { Task { await NotificationService.ensurePermission() } }
+                        guard isOn else { return }
+                        Task { await requestReminderPermission(dismissOnDenial: false) }
                     }
 
                     field("notes") {
@@ -122,7 +133,7 @@ struct BillEditorSheet: View {
                     Button(bill == nil ? "add" : "save", action: save)
                         .fontWeight(.semibold)
                         .foregroundStyle(canSave ? NormaPalette.lavender : NormaPalette.inkMuted)
-                        .disabled(!canSave)
+                        .disabled(!canSave || isSaving)
                 }
             }
             .alert("delete \(trimmedName.lowercased())?", isPresented: $showDeleteConfirm) {
@@ -130,6 +141,28 @@ struct BillEditorSheet: View {
                 Button("delete", role: .destructive, action: delete)
             } message: {
                 Text("it'll be removed from every month.")
+            }
+            .alert("reminders are off", isPresented: $showReminderSettings) {
+                Button("open settings") {
+                    openNotificationSettings()
+                    if dismissAfterReminderAlert { dismiss() }
+                }
+                Button("ok", role: .cancel) {
+                    if dismissAfterReminderAlert { dismiss() }
+                }
+            } message: {
+                Text("turn on notifications in settings to get a nudge the day before a bill is due.")
+            }
+            .alert(
+                "couldn't save",
+                isPresented: Binding(
+                    get: { saveError != nil },
+                    set: { if !$0 { saveError = nil } }
+                )
+            ) {
+                Button("ok", role: .cancel) { saveError = nil }
+            } message: {
+                Text(saveError ?? "")
             }
         }
         .onAppear(perform: hydrate)
@@ -144,18 +177,23 @@ struct BillEditorSheet: View {
         let today = calendar.startOfDay(for: Date())
         let year = calendar.component(.year, from: today)
         let endOfYear = calendar.date(from: DateComponents(year: year, month: 12, day: 31)) ?? today
-        let remaining = frequency.occurrences(anchor: dueDate, from: today, through: endOfYear, calendar: calendar).count
+        let anchor =
+            bill.map {
+                Bill.anchorToSave(existingAnchor: $0.dueDate, displayedDay: displayedDueDate, pickedDay: dueDate, calendar: calendar)
+            } ?? dueDate
+        let remaining = frequency.occurrences(anchor: anchor, from: today, through: endOfYear, calendar: calendar).count
         let perYear = 12 / (frequency.monthsBetweenOccurrences ?? 12)
+        let minor = Money.minorUnits(fromMajor: amount, currency: currency)
 
         return VStack(spacing: 0) {
             projectionRow(
                 label: "rest of \(String(year))",
                 caption: "\(remaining) \(remaining == 1 ? "payment" : "payments") left",
-                value: Money.format(Double(remaining) * amount, currency: currency)
+                value: Money.format(minorUnits: minor * remaining, currency: currency)
             )
             if frequency != .oneTime {
                 Divider().overlay(NormaPalette.ink.opacity(0.08))
-                projectionRow(label: "per year", caption: nil, value: Money.format(Double(perYear) * amount, currency: currency))
+                projectionRow(label: "per year", caption: nil, value: Money.format(minorUnits: minor * perYear, currency: currency))
             }
         }
         .padding(.horizontal, 16)
@@ -222,50 +260,109 @@ struct BillEditorSheet: View {
             return
         }
         name = bill.name
-        amountText = Money.editableText(bill.amount)
+        amountText = Money.editableText(bill.amount, currency: currency)
         // Editing shows the next upcoming occurrence rather than the original
-        // anchor, which may be months in the past.
-        dueDate = bill.nextOccurrence(onOrAfter: Date()) ?? bill.dueDate
+        // anchor, which may be months in the past. `displayedDueDate` is what
+        // save compares against so a frequency change doesn't rewrite the anchor.
+        let shown = bill.nextOccurrence(onOrAfter: Date()) ?? bill.dueDate
+        displayedDueDate = shown
+        dueDate = shown
         frequency = bill.frequency
         notes = bill.notes ?? ""
         isReminderOn = bill.isReminderOn
     }
 
     private func save() {
-        guard canSave, let amount else { return }
-        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isSaving, canSave, let amount else { return }
+        isSaving = true
+        Task {
+            await commit(amount: amount)
+            isSaving = false
+        }
+    }
 
+    private func commit(amount: Double) async {
+        if isReminderOn {
+            let allowed = await requestReminderPermission(dismissOnDenial: true)
+            guard allowed else { return }
+        }
+        guard write(amount: amount, reminders: isReminderOn) else { return }
+        dismiss()
+    }
+
+    /// Returns true when reminders may stay on. A denial turns the toggle off,
+    /// saves the bill that way, and offers Settings.
+    private func requestReminderPermission(dismissOnDenial: Bool) async -> Bool {
+        let decision = await NotificationService.permissionDecision()
+        guard decision == .turnOffAndOpenSettings else { return true }
+        isReminderOn = false
+        dismissAfterReminderAlert = dismissOnDenial
+        if dismissOnDenial, let amount {
+            guard write(amount: amount, reminders: false) else { return false }
+        }
+        showReminderSettings = true
+        return false
+    }
+
+    @discardableResult
+    private func write(amount: Double, reminders: Bool) -> Bool {
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let target: Bill
+        let insertedNew: Bool
         if let bill {
             target = bill
-            let dueDayChanged = !Calendar.current.isDate(
-                bill.nextOccurrence(onOrAfter: Date()) ?? bill.dueDate,
-                inSameDayAs: dueDate
+            insertedNew = false
+            target.dueDate = Bill.anchorToSave(
+                existingAnchor: bill.dueDate,
+                displayedDay: displayedDueDate,
+                pickedDay: dueDate
             )
-            if dueDayChanged || bill.frequency != frequency {
-                target.dueDate = dueDate
-            }
+            target.name = trimmedName
+            target.amount = amount
+            target.frequency = frequency
+        } else if let createdBill {
+            target = createdBill
+            insertedNew = false
+            target.dueDate = dueDate
             target.name = trimmedName
             target.amount = amount
             target.frequency = frequency
         } else {
             target = Bill(name: trimmedName, amount: amount, dueDate: dueDate, frequency: frequency)
+            createdBill = target
+            insertedNew = true
             modelContext.insert(target)
         }
         target.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
-        target.isReminderOn = isReminderOn
-        try? modelContext.save()
-
+        target.isReminderOn = reminders
+        guard Persistence.save(modelContext) else {
+            if insertedNew { createdBill = nil }
+            saveError = Persistence.saveFailure
+            return false
+        }
         Haptics.success()
-        Task { await NotificationService.scheduleReminders(for: target, currency: currency) }
-        dismiss()
+        if reminders {
+            Task { await NotificationService.scheduleReminders(for: target, currency: currency) }
+        } else {
+            NotificationService.cancelReminders(for: target)
+        }
+        return true
     }
 
     private func delete() {
         guard let bill else { return }
-        NotificationService.cancelReminders(for: bill)
+        let billID = bill.id
         modelContext.delete(bill)
-        try? modelContext.save()
+        guard Persistence.save(modelContext) else {
+            saveError = Persistence.saveFailure
+            return
+        }
+        NotificationService.cancelReminders(forBillID: billID)
         dismiss()
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
