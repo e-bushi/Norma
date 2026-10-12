@@ -7,8 +7,8 @@
 //  Shared by onboarding and the income sheet.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 /// Editable form state for an `IncomeCadence`. Remembers every detail field
 /// so switching cadence back and forth doesn't lose what was picked.
@@ -18,11 +18,11 @@ struct CadenceDraft: Equatable {
 
         var label: String {
             switch self {
-            case .weekly:      return "weekly"
-            case .biweekly:    return "every 2 weeks"
+            case .weekly: return "weekly"
+            case .biweekly: return "every 2 weeks"
             case .semiMonthly: return "twice a month"
-            case .monthly:     return "monthly"
-            case .irregular:   return "it varies"
+            case .monthly: return "monthly"
+            case .irregular: return "it varies"
             }
         }
     }
@@ -38,21 +38,30 @@ struct CadenceDraft: Equatable {
 
     init(_ cadence: IncomeCadence) {
         switch cadence {
-        case .weekly(let weekday):        kind = .weekly; self.weekday = weekday
-        case .biweekly(let anchor):       kind = .biweekly; lastPayday = anchor
-        case .semiMonthly(let a, let b):  kind = .semiMonthly; day1 = a; day2 = b
-        case .monthly(let day):           kind = .monthly; monthlyDay = day
-        case .irregular:                  kind = .irregular
+        case .weekly(let weekday):
+            kind = .weekly
+            self.weekday = weekday
+        case .biweekly(let anchor):
+            kind = .biweekly
+            lastPayday = anchor
+        case .semiMonthly(let a, let b):
+            kind = .semiMonthly
+            day1 = a
+            day2 = b
+        case .monthly(let day):
+            kind = .monthly
+            monthlyDay = day
+        case .irregular: kind = .irregular
         }
     }
 
     var cadence: IncomeCadence {
         switch kind {
-        case .weekly:      return .weekly(weekday: weekday)
-        case .biweekly:    return .biweekly(anchor: lastPayday)
+        case .weekly: return .weekly(weekday: weekday)
+        case .biweekly: return .biweekly(anchor: lastPayday)
         case .semiMonthly: return .semiMonthly(day1: min(day1, day2), day2: max(day1, day2))
-        case .monthly:     return .monthly(day: monthlyDay)
-        case .irregular:   return .irregular
+        case .monthly: return .monthly(day: monthlyDay)
+        case .irregular: return .irregular
         }
     }
 }
@@ -248,10 +257,10 @@ extension Int {
         let suffix: String
         switch (self % 100, self % 10) {
         case (11...13, _): suffix = "th"
-        case (_, 1):       suffix = "st"
-        case (_, 2):       suffix = "nd"
-        case (_, 3):       suffix = "rd"
-        default:           suffix = "th"
+        case (_, 1): suffix = "st"
+        case (_, 2): suffix = "nd"
+        case (_, 3): suffix = "rd"
+        default: suffix = "th"
         }
         return "\(self)\(suffix)"
     }

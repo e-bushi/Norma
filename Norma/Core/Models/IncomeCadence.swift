@@ -11,19 +11,19 @@
 import Foundation
 
 enum IncomeCadence: Equatable, Hashable {
-    case weekly(weekday: Int)              // 1 = Sun … 7 = Sat
-    case biweekly(anchor: Date)            // every 14 days from a known payday
+    case weekly(weekday: Int)  // 1 = Sun … 7 = Sat
+    case biweekly(anchor: Date)  // every 14 days from a known payday
     case semiMonthly(day1: Int, day2: Int)
-    case monthly(day: Int)                 // days past the month's end clamp to its last day
+    case monthly(day: Int)  // days past the month's end clamp to its last day
     case irregular
 
     var label: String {
         switch self {
-        case .weekly:      return "weekly"
-        case .biweekly:    return "every 2 weeks"
+        case .weekly: return "weekly"
+        case .biweekly: return "every 2 weeks"
         case .semiMonthly: return "twice a month"
-        case .monthly:     return "monthly"
-        case .irregular:   return "it varies"
+        case .monthly: return "monthly"
+        case .irregular: return "it varies"
         }
     }
 
@@ -78,7 +78,8 @@ enum IncomeCadence: Equatable, Hashable {
         guard amountPerPaycheck > 0 else { return 0 }
         if case .irregular = self { return amountPerPaycheck }
         guard let interval = calendar.dateInterval(of: .month, for: month),
-              let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) else { return 0 }
+            let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end)
+        else { return 0 }
         return Double(paydays(from: interval.start, through: lastDay, calendar: calendar).count) * amountPerPaycheck
     }
 

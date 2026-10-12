@@ -56,7 +56,7 @@ struct OnboardingCelebrationView: View {
             RadialGradient(
                 colors: [
                     NormaPalette.canvas.opacity(0),
-                    NormaPalette.canvas.opacity(0.55)
+                    NormaPalette.canvas.opacity(0.55),
                 ],
                 center: .center,
                 startRadius: 80,

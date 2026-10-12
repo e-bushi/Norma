@@ -26,11 +26,11 @@ struct LandingPageView: View {
 
             LinearGradient(
                 stops: [
-                    .init(color: NormaPalette.canvas.opacity(0),    location: 0.00),
-                    .init(color: NormaPalette.canvas.opacity(0),    location: 0.18),
+                    .init(color: NormaPalette.canvas.opacity(0), location: 0.00),
+                    .init(color: NormaPalette.canvas.opacity(0), location: 0.18),
                     .init(color: NormaPalette.canvas.opacity(0.55), location: 0.40),
                     .init(color: NormaPalette.canvas.opacity(0.85), location: 0.62),
-                    .init(color: NormaPalette.canvas,               location: 0.88)
+                    .init(color: NormaPalette.canvas, location: 0.88),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

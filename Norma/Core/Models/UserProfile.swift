@@ -34,11 +34,11 @@ final class UserProfile {
     var incomeCadence: IncomeCadence {
         get {
             switch incomeCadenceRaw {
-            case "weekly":      return .weekly(weekday: incomeWeekday ?? 6)
-            case "biweekly":    return .biweekly(anchor: incomeAnchorDate ?? createdAt)
+            case "weekly": return .weekly(weekday: incomeWeekday ?? 6)
+            case "biweekly": return .biweekly(anchor: incomeAnchorDate ?? createdAt)
             case "semiMonthly": return .semiMonthly(day1: incomeDay1 ?? 15, day2: incomeDay2 ?? 31)
-            case "irregular":   return .irregular
-            default:            return .monthly(day: incomeDay1 ?? 1)
+            case "irregular": return .irregular
+            default: return .monthly(day: incomeDay1 ?? 1)
             }
         }
         set {

@@ -20,19 +20,19 @@ enum BillFrequency: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .oneTime:   return "one-time"
-        case .monthly:   return "monthly"
+        case .oneTime: return "one-time"
+        case .monthly: return "monthly"
         case .quarterly: return "quarterly"
-        case .yearly:    return "yearly"
+        case .yearly: return "yearly"
         }
     }
 
     var monthsBetweenOccurrences: Int? {
         switch self {
-        case .oneTime:   return nil
-        case .monthly:   return 1
+        case .oneTime: return nil
+        case .monthly: return 1
         case .quarterly: return 3
-        case .yearly:    return 12
+        case .yearly: return 12
         }
     }
 
@@ -95,7 +95,8 @@ final class Bill {
 
     func occurrences(inMonthOf month: Date, calendar: Calendar = .current) -> [Date] {
         guard let interval = calendar.dateInterval(of: .month, for: month),
-              let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) else { return [] }
+            let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end)
+        else { return [] }
         return occurrences(from: interval.start, through: lastDay, calendar: calendar)
     }
 

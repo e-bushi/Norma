@@ -32,5 +32,8 @@ fastlane/test_output
 .Spotlight-V100
 .Trashes
 
+# Screenshot re-record flag. scripts/ci.sh record-screenshots creates this.
+ScreenshotBaselines/.record
+
 # Secrets
 .secrets

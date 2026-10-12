@@ -7,8 +7,8 @@
 //  RootView over to home. Quitting mid-way leaves nothing behind.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct OnboardingFlowView: View {
     private enum Step { case landing, intro, rhythm, welcome }

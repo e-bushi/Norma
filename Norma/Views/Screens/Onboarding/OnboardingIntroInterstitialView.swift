@@ -15,7 +15,7 @@ struct OnboardingIntroInterstitialView: View {
         "first, how you get paid.",
         "then your bills. that's the whole setup.",
         "oh, and all your data stays on your device where it's safe.",
-        "let's get started."
+        "let's get started.",
     ]
     /// How long each phrase lingers after its wave-in completes.
     var holdDuration: Double = 1.7
