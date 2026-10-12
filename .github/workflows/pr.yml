@@ -1,6 +1,5 @@
-# PR gate from VERIFICATION.md section 1.
-# Runs on Chris's Mac. Register the self-hosted runner with the default
-# labels self-hosted, macOS, and ARM64. Do not remove them.
+# Style is the only GitHub-hosted app check. Build, unit tests, screenshots,
+# and smoke run on Chris's Mac through scripts/ci.sh. See VERIFICATION.md.
 name: PR
 
 on:
@@ -14,62 +13,50 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
-
 jobs:
-  build:
-    name: Build
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Build
-        run: bash scripts/ci.sh build
-      - name: Delete DerivedData
-        if: always()
-        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
-
-  unit-tests:
-    name: Unit tests
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Unit tests
-        run: bash scripts/ci.sh unit-tests
-      - name: Delete DerivedData
-        if: always()
-        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
-
   style:
     name: Style
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: SwiftLint and swift-format
-        run: bash scripts/ci.sh style
-      - name: Delete DerivedData
-        if: always()
-        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
-
-  screenshot:
-    name: Screenshot
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Home screen, dark, default Dynamic Type, iPhone 17
-        run: bash scripts/ci.sh screenshot
-      - name: Delete DerivedData
-        if: always()
-        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
+      - name: Install SwiftLint 0.61.0 and swift-format 6.2.3
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            binutils \
+            gnupg2 \
+            libc6-dev \
+            libcurl4-openssl-dev \
+            libedit2 \
+            libgcc-13-dev \
+            libpython3-dev \
+            libsqlite3-0 \
+            libstdc++-13-dev \
+            libxml2-dev \
+            libz3-dev \
+            pkg-config \
+            tzdata \
+            unzip \
+            zlib1g-dev
+          curl -fL --retry 3 -o /tmp/swiftlint.zip \
+            https://github.com/realm/SwiftLint/releases/download/0.61.0/swiftlint_linux_amd64.zip
+          rm -rf /tmp/swiftlint
+          unzip -q /tmp/swiftlint.zip -d /tmp/swiftlint
+          sudo install -m 755 "$(find /tmp/swiftlint -type f -name swiftlint -print -quit)" /usr/local/bin/swiftlint
+          test "$(swiftlint version)" = "0.61.0"
+          curl -fL --retry 3 -o /tmp/swift.tar.gz \
+            https://download.swift.org/swift-6.2.3-release/ubuntu2404/swift-6.2.3-RELEASE/swift-6.2.3-RELEASE-ubuntu24.04.tar.gz
+          sudo tar -xzf /tmp/swift.tar.gz -C /opt
+          tool=/opt/swift-6.2.3-RELEASE-ubuntu24.04/usr/bin/swift-format
+          test "$("$tool" --version)" = "6.2.3"
+          echo "/opt/swift-6.2.3-RELEASE-ubuntu24.04/usr/bin" >> "$GITHUB_PATH"
+      - name: SwiftLint and swift-format
+        run: |
+          set -euo pipefail
+          swiftlint lint --strict --config .swiftlint.yml
+          mapfile -t sources < <(find Norma NormaTests NormaUITests -name '*.swift' -not -path '*/Generated/*')
+          swift-format lint --strict --configuration .swift-format "${sources[@]}"
