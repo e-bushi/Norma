@@ -6,8 +6,8 @@
 //  Tapping a day lists what lands on it, and any day can start a new bill.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct CalendarSheet: View {
     let profile: UserProfile
@@ -24,8 +24,8 @@ struct CalendarSheet: View {
 
         var id: String {
             switch self {
-            case .income:             return "income"
-            case .newBill:            return "newBill"
+            case .income: return "income"
+            case .newBill: return "newBill"
             case .editBill(let bill): return "edit-\(bill.id)"
             }
         }

@@ -1,0 +1,7 @@
+# Screenshot baselines need Designer Dan's review before merge.
+# Dan does not have a GitHub login on this repo yet, so the review request
+# lands on the repo owner. The required check "Screenshot baselines / Designer Dan"
+# stays red until the PR carries the design-approved label and a
+# "Screenshot change:" sentence. When Dan has write access, replace @e-bushi
+# with his login.
+/NormaUITests/ScreenshotBaselines/** @e-bushi

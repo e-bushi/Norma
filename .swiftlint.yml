@@ -1,0 +1,56 @@
+# Strict PR gate (swiftlint lint --strict).
+# SwiftGen output is generated; do not lint it.
+excluded:
+  - Norma/Generated
+  - build
+  - .build
+
+disabled_rules:
+  # Stored properties in this repo are written `var notes: String? = nil`.
+  - implicit_optional_initialization
+  # Multi-line collections keep a trailing comma.
+  - trailing_comma
+  # A couple of files silence a whole region on purpose.
+  - blanket_disable_command
+  # XCTest requires `override class var` on final test classes.
+  - static_over_final_class
+
+line_length:
+  warning: 200
+  error: 250
+  ignores_comments: true
+  ignores_urls: true
+
+# Local math uses x, y, i, a, b.
+identifier_name:
+  min_length: 1
+  max_length: 60
+  excluded:
+    - id
+    - x
+    - y
+    - i
+    - a
+    - b
+
+file_length:
+  warning: 800
+  error: 1500
+
+type_body_length:
+  warning: 500
+  error: 800
+
+function_body_length:
+  warning: 200
+  error: 300
+
+cyclomatic_complexity:
+  warning: 25
+  error: 35
+
+large_tuple:
+  warning: 4
+  error: 6
+
+reporter: xcode

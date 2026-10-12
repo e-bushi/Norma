@@ -72,7 +72,8 @@ struct WaveTextView: View {
                 }
             }
         }
-        var segs = text
+        var segs =
+            text
             .split(separator: " ")
             .map { Segment(text: String($0), symbol: nil, color: color) }
         if let suffix = accentSuffix, !suffix.isEmpty {

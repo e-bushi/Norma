@@ -70,7 +70,7 @@ enum NotificationService {
     static func cancelReminders(for bill: Bill) {
         center.removePendingNotificationRequests(withIdentifiers: [
             identifier(for: bill, suffix: "due"),
-            identifier(for: bill, suffix: "before")
+            identifier(for: bill, suffix: "before"),
         ])
     }
 

@@ -6,8 +6,8 @@
 //  as a sheet from the home gear.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct SettingsView: View {
     let profile: UserProfile
@@ -100,13 +100,16 @@ struct SettingsView: View {
 
     private var currencyRow: some View {
         Menu {
-            Picker("currency", selection: Binding(
-                get: { profile.currency },
-                set: { newValue in
-                    profile.currency = newValue
-                    try? modelContext.save()
-                }
-            )) {
+            Picker(
+                "currency",
+                selection: Binding(
+                    get: { profile.currency },
+                    set: { newValue in
+                        profile.currency = newValue
+                        try? modelContext.save()
+                    }
+                )
+            ) {
                 ForEach(Money.currencies) { entry in
                     Text("\(entry.flag) \(entry.code)").tag(entry.code)
                 }

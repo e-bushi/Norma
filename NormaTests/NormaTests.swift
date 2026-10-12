@@ -10,6 +10,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Norma
 
 private let utc: Calendar = {

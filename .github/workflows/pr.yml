@@ -1,0 +1,52 @@
+# PR gate from VERIFICATION.md section 1.
+# Runs on Chris's Mac. Register the self-hosted runner with the default
+# labels self-hosted, macOS, and ARM64. Do not remove them.
+name: PR
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: norma-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: bash scripts/ci.sh build
+
+  unit-tests:
+    name: Unit tests
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: bash scripts/ci.sh unit-tests
+
+  style:
+    name: Style
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: SwiftLint and swift-format
+        run: bash scripts/ci.sh style
+
+  screenshot:
+    name: Screenshot
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Home screen, light, default Dynamic Type, iPhone 17
+        run: bash scripts/ci.sh screenshot

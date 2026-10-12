@@ -7,8 +7,8 @@
 //  attention. Settings and the calendar open as sheets.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct HomeView: View {
     let profile: UserProfile
@@ -26,17 +26,17 @@ struct HomeView: View {
 
         var id: String {
             switch self {
-            case .settings:          return "settings"
-            case .calendar:          return "calendar"
-            case .income:            return "income"
-            case .newBill:           return "newBill"
+            case .settings: return "settings"
+            case .calendar: return "calendar"
+            case .income: return "income"
+            case .newBill: return "newBill"
             case .editBill(let bill): return "edit-\(bill.id)"
             }
         }
     }
 
     private var displayedMonth: Date {
-        Calendar.current.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .month, value: monthOffset, to: ScreenshotMode.now) ?? ScreenshotMode.now
     }
 
     var body: some View {
@@ -62,8 +62,10 @@ struct HomeView: View {
         }
         .background(NormaPalette.canvas.ignoresSafeArea())
         .overlay(alignment: .bottom) { addBillButton }
+        .modifier(ScreenshotHomeMarker())
         .sheet(item: $sheet, content: sheetContent)
         .task(id: bills.count) {
+            guard !ScreenshotMode.isActive else { return }
             await NotificationService.rescheduleAll(bills, currency: profile.currency)
         }
     }
@@ -113,8 +115,9 @@ struct HomeView: View {
                 .foregroundStyle(NormaPalette.inkMuted)
                 .padding(.vertical, 8)
         } else {
-            let overdue = summary.occurrences.filter { $0.isOverdue() }
-            let upcoming = summary.occurrences.filter { !$0.isPaid && !$0.isOverdue() }
+            let today = ScreenshotMode.now
+            let overdue = summary.occurrences.filter { $0.isOverdue(today: today) }
+            let upcoming = summary.occurrences.filter { !$0.isPaid && !$0.isOverdue(today: today) }
             let paid = summary.occurrences.filter(\.isPaid)
 
             VStack(alignment: .leading, spacing: 28) {
@@ -249,7 +252,7 @@ private struct LeftoverHeader: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .contentTransition(.numericText(value: summary.leftover))
-                .animation(.snappy, value: summary.leftover)
+                .animation(ScreenshotMode.animation, value: summary.leftover)
 
             breakdown
 
@@ -285,7 +288,7 @@ private struct LeftoverHeader: View {
         }
         .font(.custom(FontFamily.Rubik.medium, size: 15))
         .contentTransition(.numericText())
-        .animation(.snappy, value: summary.billsTotal)
+        .animation(ScreenshotMode.animation, value: summary.billsTotal)
     }
 }
 
@@ -310,7 +313,7 @@ private struct SpendBar: View {
                 }
             }
             .frame(height: 6)
-            .animation(.snappy, value: summary.paidTotal)
+            .animation(ScreenshotMode.animation, value: summary.paidTotal)
 
             HStack(spacing: 14) {
                 legend("paid", color: fill)
@@ -401,7 +404,7 @@ private struct BillRow: View {
 
     private var statusColor: Color {
         if occurrence.isPaid { return NormaPalette.inkMuted }
-        if occurrence.isOverdue() { return NormaPalette.warning }
+        if occurrence.isOverdue(today: ScreenshotMode.now) { return NormaPalette.warning }
         return NormaPalette.inkSubtle
     }
 
@@ -410,8 +413,8 @@ private struct BillRow: View {
         let date = occurrence.date.formatted(.dateTime.month(.abbreviated).day()).lowercased()
         let frequency = bill.frequency == .oneTime ? "" : " · \(bill.frequency.label)"
         if occurrence.isPaid { return "paid · \(date)" }
-        if occurrence.isOverdue() {
-            let days = calendar.dateComponents([.day], from: occurrence.date, to: calendar.startOfDay(for: Date())).day ?? 0
+        if occurrence.isOverdue(today: ScreenshotMode.now) {
+            let days = calendar.dateComponents([.day], from: occurrence.date, to: calendar.startOfDay(for: ScreenshotMode.now)).day ?? 0
             return "\(date) · \(days) \(days == 1 ? "day" : "days") late"
         }
         if calendar.isDateInToday(occurrence.date) { return "due today" + frequency }

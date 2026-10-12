@@ -30,14 +30,16 @@ struct MonthSummary {
     let occurrences: [BillOccurrence]
 
     init(month: Date, bills: [Bill], profile: UserProfile?, calendar: Calendar = .current) {
-        let interval = calendar.dateInterval(of: .month, for: month)
+        let interval =
+            calendar.dateInterval(of: .month, for: month)
             ?? DateInterval(start: month, duration: 0)
         let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
 
         self.month = interval.start
         self.income = profile?.income(inMonthOf: interval.start, calendar: calendar) ?? 0
         self.paydays = profile?.paydays(from: interval.start, through: lastDay, calendar: calendar) ?? []
-        self.occurrences = bills
+        self.occurrences =
+            bills
             .flatMap { bill in
                 bill.occurrences(from: interval.start, through: lastDay, calendar: calendar).map { date in
                     BillOccurrence(bill: bill, date: date, isPaid: bill.isPaid(date, calendar: calendar))

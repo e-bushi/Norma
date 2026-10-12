@@ -1,0 +1,27 @@
+# Flags screenshot-baseline edits for Designer Dan.
+# Runs on GitHub-hosted Ubuntu so the check reports before the Mac runner
+# is registered. It passes when the PR does not touch baselines.
+name: Screenshot baselines
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  designer-dan:
+    name: Designer Dan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Require Designer Dan's sign-off when baselines change
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/check-baseline-review.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}

@@ -7,8 +7,8 @@
 //  changes.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct BillEditorSheet: View {
     /// nil adds a new bill.
@@ -238,8 +238,11 @@ struct BillEditorSheet: View {
         let target: Bill
         if let bill {
             target = bill
-            if !Calendar.current.isDate(bill.nextOccurrence(onOrAfter: Date()) ?? bill.dueDate, inSameDayAs: dueDate)
-                || bill.frequency != frequency {
+            let dueDayChanged = !Calendar.current.isDate(
+                bill.nextOccurrence(onOrAfter: Date()) ?? bill.dueDate,
+                inSameDayAs: dueDate
+            )
+            if dueDayChanged || bill.frequency != frequency {
                 target.dueDate = dueDate
             }
             target.name = trimmedName

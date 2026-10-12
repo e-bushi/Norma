@@ -6,8 +6,8 @@
 //  profile, which lands the user back on the landing screen.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct RootView: View {
     @Query private var profiles: [UserProfile]

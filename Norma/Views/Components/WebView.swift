@@ -10,11 +10,11 @@ import WebKit
 
 struct WebView: UIViewRepresentable {
     let url: URL
-    
+
     func makeUIView(context: Context) -> WKWebView {
         WKWebView()
     }
-    
+
     func updateUIView(_ webView: WKWebView, context: Context) {
         let request = URLRequest(url: url)
         webView.load(request)
@@ -26,7 +26,7 @@ struct WebViewSheet: View {
     let title: String
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
-    
+
     var body: some View {
         NavigationStack {
             Group {
@@ -55,10 +55,10 @@ struct WebViewSheet: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 50))
                             .foregroundColor(.orange)
-                        
+
                         Text("Unable to load content")
                             .font(.headline)
-                        
+
                         Text("The requested page could not be loaded.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
