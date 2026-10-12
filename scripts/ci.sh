@@ -69,26 +69,28 @@ case "$cmd" in
     xcrun swift-format format --configuration .swift-format -i $(swift_sources)
     ;;
   screenshot)
-    # PR gate: light mode, default Dynamic Type, one screen size.
+    # PR gate: dark mode, default Dynamic Type, one screen size.
+    # Also fails if the app renders light while the system appearance is light.
     rm -rf "$RESULTS/screenshot.xcresult"
     if [[ "${RECORD_SCREENSHOTS:-}" == "1" ]]; then
       xcode test \
         -destination "$(destination "iPhone 17")" \
-        -only-testing:NormaUITests/ScreenshotTests/testHomeLightDefault \
+        -only-testing:NormaUITests/ScreenshotTests/testHomeDarkDefault \
         SCREENSHOT_DEVICE=iphone-17 \
         RECORD_SCREENSHOTS=1 \
         -resultBundlePath "$RESULTS/screenshot.xcresult"
     else
       xcode test \
         -destination "$(destination "iPhone 17")" \
-        -only-testing:NormaUITests/ScreenshotTests/testHomeLightDefault \
+        -only-testing:NormaUITests/ScreenshotTests/testHomeDarkDefault \
+        -only-testing:NormaUITests/NormaUITests/testStaysDarkWhenTheSystemIsLight \
         SCREENSHOT_DEVICE=iphone-17 \
         -resultBundlePath "$RESULTS/screenshot.xcresult"
     fi
     refuse_skips "$RESULTS/screenshot.xcresult"
     ;;
   screenshot-matrix)
-    # Full matrix: light/dark × default/accessibility, small and large phones.
+    # Full matrix: dark mode, default and accessibility Dynamic Type, small and large phones.
     run_device() {
       local name="$1"
       local slug="$2"
@@ -118,6 +120,7 @@ case "$cmd" in
     xcode test \
       -destination "$(destination "iPhone 17")" \
       -only-testing:NormaUITests/NormaUITests/testOnboardAddBillAndSeeWhatsLeft \
+      -only-testing:NormaUITests/NormaUITests/testStaysDarkWhenTheSystemIsLight \
       -resultBundlePath "$RESULTS/smoke.xcresult"
     ;;
   record-screenshots)

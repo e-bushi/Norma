@@ -40,16 +40,24 @@ struct NormaApp: App {
 
     @ViewBuilder
     private var root: some View {
-        let base = RootView()
-            .preferredColorScheme(ScreenshotMode.isActive ? ScreenshotMode.colorScheme : .dark)
+        // Dark mode is locked with UIUserInterfaceStyle in Info.plist so the
+        // keyboard, alerts, and share sheets follow the app. A root-view
+        // preferredColorScheme does not reach those.
         if ScreenshotMode.isActive {
-            base
+            RootView()
                 .dynamicTypeSize(ScreenshotMode.dynamicTypeSize)
                 .statusBarHidden(true)
                 .persistentSystemOverlays(.hidden)
                 .transaction { $0.disablesAnimations = true }
         } else {
-            base
+            RootView()
+                .background(alignment: .topLeading) {
+                    if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+                        InterfaceStyleProbe()
+                            .frame(width: 1, height: 1)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
     }
 }

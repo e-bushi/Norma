@@ -25,10 +25,6 @@ enum ScreenshotMode {
 
     static var now: Date { isActive ? referenceDate : Date() }
 
-    static var colorScheme: ColorScheme {
-        argument(prefixed: "--color-scheme=") == "light" ? .light : .dark
-    }
-
     /// Default Dynamic Type is `.large`. Accessibility is AX5, the largest size.
     static var dynamicTypeSize: DynamicTypeSize {
         argument(prefixed: "--dynamic-type=") == "accessibility" ? .accessibility5 : .large

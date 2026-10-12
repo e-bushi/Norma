@@ -2,10 +2,9 @@
 //  ScreenshotTests.swift
 //  NormaUITests
 //
-//  One home-screen baseline per config. The PR gate runs light / default
-//  Dynamic Type on iPhone 17. The main and nightly workflow runs the full
-//  matrix: light and dark, default and accessibility Dynamic Type, on a
-//  small phone and a large phone.
+//  Norma is dark only. The PR gate runs dark / default Dynamic Type on
+//  iPhone 17. The main and nightly workflow runs dark mode at default and
+//  accessibility Dynamic Type, on a small phone and a large phone.
 //
 
 import UIKit
@@ -18,37 +17,26 @@ final class ScreenshotTests: XCTestCase {
     }
 
     @MainActor
-    func testHomeLightDefault() throws {
-        try assertHome(colorScheme: "light", dynamicType: "default", name: "home-light-default")
-    }
-
-    @MainActor
     func testHomeDarkDefault() throws {
-        try assertHome(colorScheme: "dark", dynamicType: "default", name: "home-dark-default")
-    }
-
-    @MainActor
-    func testHomeLightAccessibility() throws {
-        try assertHome(colorScheme: "light", dynamicType: "accessibility", name: "home-light-accessibility")
+        try assertHome(dynamicType: "default", name: "home-dark-default")
     }
 
     @MainActor
     func testHomeDarkAccessibility() throws {
-        try assertHome(colorScheme: "dark", dynamicType: "accessibility", name: "home-dark-accessibility")
+        try assertHome(dynamicType: "accessibility", name: "home-dark-accessibility")
     }
 
     @MainActor
-    private func assertHome(colorScheme: String, dynamicType: String, name: String) throws {
+    private func assertHome(dynamicType: String, name: String) throws {
         let device = try deviceSlug()
         let record = shouldRecord
 
-        XCUIDevice.shared.appearance = colorScheme == "light" ? .light : .dark
+        XCUIDevice.shared.appearance = .dark
 
         let app = XCUIApplication()
         app.launchArguments = [
             "--ui-testing",
             "--screenshot",
-            "--color-scheme=\(colorScheme)",
             "--dynamic-type=\(dynamicType)",
             "--reference-date=2026-10-15",
             "-AppleLanguages", "(en)",

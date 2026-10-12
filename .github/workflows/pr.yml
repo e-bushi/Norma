@@ -48,5 +48,5 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Home screen, light, default Dynamic Type, iPhone 17
+      - name: Home screen, dark, default Dynamic Type, iPhone 17
         run: bash scripts/ci.sh screenshot
