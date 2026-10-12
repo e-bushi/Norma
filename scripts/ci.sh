@@ -8,10 +8,25 @@ cd "$(dirname "$0")/.."
 
 export PATH="/opt/homebrew/bin:${PATH:-}"
 
-DERIVED="${DERIVED_DATA_PATH:-/tmp/norma-derived}"
+# Pinned in VERIFICATION.md. Override DEVELOPER_DIR only to point at this Xcode.
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+hash -r
+echo "DEVELOPER_DIR=${DEVELOPER_DIR}"
+xcodebuild -version
+
+# One DerivedData directory per Actions run and job. Local runs keep a stable path.
+if [[ -n "${GITHUB_RUN_ID:-}" ]]; then
+  default_derived="/tmp/norma-derived-${GITHUB_RUN_ID}-${GITHUB_JOB:-job}"
+else
+  default_derived="/tmp/norma-derived"
+fi
+DERIVED="${DERIVED_DATA_PATH:-$default_derived}"
 RESULTS="${RESULTS_PATH:-/tmp/norma-results}"
 mkdir -p "$RESULTS"
-DESTINATION_OS="${DESTINATION_OS:-latest}"
+# iOS 26.2, not OS=latest. Recorded in VERIFICATION.md.
+DESTINATION_OS="${DESTINATION_OS:-26.2}"
+echo "DESTINATION_OS=${DESTINATION_OS}"
+echo "DERIVED=${DERIVED}"
 
 destination() {
   echo "platform=iOS Simulator,name=$1,OS=${DESTINATION_OS}"

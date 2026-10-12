@@ -13,6 +13,13 @@ AI makes changes cheap and frequent, and without strong safety nets that hurts s
 - Determinism: clock, date, UUID, and randomness all go through swift-dependencies, and an un-overridden live dependency fails the test.
 - Assertions on structured values use `expectNoDifference` (swift-custom-dump) so a failure prints a readable diff.
 
+## Norma CI pin
+Recorded for the self-hosted macOS runner:
+
+- Xcode 26.2 (17C52). `DEVELOPER_DIR` is `/Applications/Xcode.app/Contents/Developer`. `scripts/ci.sh` prints `xcodebuild -version` before each command.
+- Simulator runtime iOS 26.2 (`OS=26.2`), not `OS=latest`. The PR device is iPhone 17. The matrix devices are iPhone 16e and iPhone 17 Pro Max.
+- DerivedData for a GitHub Actions run is `/tmp/norma-derived-<run id>-<job>`. The workflow deletes that directory in an `always()` step.
+
 ## 2. Agent contract (part of every ticket's done criteria)
 - One ticket per PR, kept small.
 - The ticket names the tests that have to exist, and the agent adds or updates them in the same PR.

@@ -14,6 +14,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
 jobs:
   build:
     name: Build
@@ -21,8 +24,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Build
         run: bash scripts/ci.sh build
+      - name: Delete DerivedData
+        if: always()
+        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
 
   unit-tests:
     name: Unit tests
@@ -30,8 +38,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Unit tests
         run: bash scripts/ci.sh unit-tests
+      - name: Delete DerivedData
+        if: always()
+        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
 
   style:
     name: Style
@@ -39,8 +52,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: SwiftLint and swift-format
         run: bash scripts/ci.sh style
+      - name: Delete DerivedData
+        if: always()
+        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"
 
   screenshot:
     name: Screenshot
@@ -48,5 +66,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Home screen, dark, default Dynamic Type, iPhone 17
         run: bash scripts/ci.sh screenshot
+      - name: Delete DerivedData
+        if: always()
+        run: rm -rf "/tmp/norma-derived-${{ github.run_id }}-${{ github.job }}"

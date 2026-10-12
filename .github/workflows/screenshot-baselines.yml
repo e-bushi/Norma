@@ -1,6 +1,9 @@
 # Flags screenshot-baseline edits for Designer Dan.
 # Runs on GitHub-hosted Ubuntu so the check reports before the Mac runner
 # is registered. It passes when the PR does not touch baselines.
+#
+# The review script is the copy on the BASE commit. The head commit is
+# fetched only so git can diff it. Nothing from the head tree is executed.
 name: Screenshot baselines
 
 on:
@@ -9,19 +12,57 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   designer-dan:
     name: Designer Dan
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the head commit for the diff only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c "http.extraheader=AUTHORIZATION: bearer ${GH_TOKEN}" \
+            fetch --no-tags origin "pull/${{ github.event.pull_request.number }}/head"
+          test "$(git rev-parse FETCH_HEAD)" = "${{ github.event.pull_request.head.sha }}"
       - name: Require Designer Dan's sign-off when baselines change
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: bash scripts/check-baseline-review.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+
+  clear-design-approval:
+    name: Clear design approval
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove the design-approved label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          output=$(gh api --method DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/design-approved" 2>&1)
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "removed design-approved"
+            exit 0
+          fi
+          if printf '%s\n' "$output" | grep -q 'HTTP 404'; then
+            echo "design-approved was not on the pull request"
+            exit 0
+          fi
+          printf '%s\n' "$output" >&2
+          exit 1
