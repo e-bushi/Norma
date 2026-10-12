@@ -42,23 +42,32 @@ struct HomeView: View {
     var body: some View {
         let summary = MonthSummary(month: displayedMonth, bills: bills, profile: profile)
 
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                topBar
-                    .padding(.bottom, 40)
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    topBar
+                        .padding(.bottom, 40)
 
-                LeftoverHeader(summary: summary, currency: profile.currency, hasIncome: profile.hasIncome) {
-                    sheet = .income
+                    LeftoverHeader(summary: summary, currency: profile.currency, hasIncome: profile.hasIncome) {
+                        sheet = .income
+                    }
+                    .padding(.bottom, 24)
+
+                    monthPills
+                        .padding(.bottom, 28)
+
+                    billSections(summary)
                 }
-                .padding(.bottom, 24)
-
-                monthPills
-                    .padding(.bottom, 28)
-
-                billSections(summary)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 120)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 120)
+            .task {
+                // Accessibility type pushes the first bill under the add button.
+                // Scroll it to the center so the whole row is in the screenshot.
+                guard ScreenshotMode.isActive, ScreenshotMode.dynamicTypeSize.isAccessibilitySize else { return }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                proxy.scrollTo("bill-row-rent", anchor: .center)
+            }
         }
         .background(NormaPalette.canvas.ignoresSafeArea())
         .overlay(alignment: .bottom) { addBillButton }
@@ -138,6 +147,9 @@ struct HomeView: View {
                     Text(Money.format(items.reduce(0) { $0 + $1.bill.amount }, currency: profile.currency))
                         .font(.custom(FontFamily.Rubik.medium, size: 12))
                         .foregroundStyle(tint)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(1)
                 }
                 .padding(.bottom, 4)
 
@@ -231,6 +243,8 @@ struct HomeView: View {
 
 /// "october · left after bills", the big number, and the in/out breakdown.
 private struct LeftoverHeader: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let summary: MonthSummary
     let currency: String
     let hasIncome: Bool
@@ -251,6 +265,8 @@ private struct LeftoverHeader: View {
                 .tracking(-2.5)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
                 .contentTransition(.numericText(value: summary.leftover))
                 .animation(ScreenshotMode.animation, value: summary.leftover)
 
@@ -264,31 +280,49 @@ private struct LeftoverHeader: View {
     }
 
     private var breakdown: some View {
-        HStack(spacing: 6) {
-            Button {
-                Haptics.tap()
-                onEditIncome()
-            } label: {
-                if hasIncome {
-                    Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
-                        .foregroundStyle(NormaPalette.income)
-                        .underline(color: NormaPalette.income.opacity(0.35))
-                } else {
-                    Text("add your income")
-                        .foregroundStyle(NormaPalette.lavender)
-                        .underline(color: NormaPalette.lavender.opacity(0.5))
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    incomeLabel
+                    billsLabel
+                }
+            } else {
+                HStack(spacing: 6) {
+                    incomeLabel
+                    Text("·").foregroundStyle(NormaPalette.inkMuted)
+                    billsLabel
                 }
             }
-            .buttonStyle(.plain)
-
-            Text("·").foregroundStyle(NormaPalette.inkMuted)
-
-            Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
-                .foregroundStyle(NormaPalette.inkSubtle)
         }
         .font(.custom(FontFamily.Rubik.medium, size: 15))
         .contentTransition(.numericText())
         .animation(ScreenshotMode.animation, value: summary.billsTotal)
+    }
+
+    private var incomeLabel: some View {
+        Button {
+            Haptics.tap()
+            onEditIncome()
+        } label: {
+            if hasIncome {
+                Text("\(Money.format(summary.income, currency: currency, wholeUnits: true)) in")
+                    .foregroundStyle(NormaPalette.income)
+                    .underline(color: NormaPalette.income.opacity(0.35))
+                    .amountStaysOneLine()
+            } else {
+                Text("add your income")
+                    .foregroundStyle(NormaPalette.lavender)
+                    .underline(color: NormaPalette.lavender.opacity(0.5))
+                    .amountStaysOneLine()
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var billsLabel: some View {
+        Text("\(Money.format(summary.billsTotal, currency: currency, wholeUnits: true)) in bills")
+            .foregroundStyle(NormaPalette.inkSubtle)
+            .amountStaysOneLine()
     }
 }
 
@@ -341,6 +375,8 @@ private struct SpendBar: View {
 // MARK: - Bill row
 
 private struct BillRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let occurrence: BillOccurrence
     let currency: String
     let onTogglePaid: () -> Void
@@ -350,7 +386,7 @@ private struct BillRow: View {
     private var bill: Bill { occurrence.bill }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 14) {
             Button(action: onTogglePaid) {
                 ZStack {
                     Circle()
@@ -374,32 +410,56 @@ private struct BillRow: View {
             .padding(.leading, -9)
 
             Button(action: onEdit) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(bill.name.lowercased())
-                            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                            .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
-                            .strikethrough(occurrence.isPaid, color: NormaPalette.inkMuted)
-                            .lineLimit(1)
-                        Text(dueLabel)
-                            .font(.custom(FontFamily.Rubik.medium, size: 12))
-                            .foregroundStyle(statusColor)
-                    }
-                    Spacer(minLength: 8)
-                    Text(Money.format(bill.amount, currency: currency))
-                        .font(.custom(FontFamily.Rubik.semiBold, size: 16))
-                        .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
-                }
-                .contentShape(Rectangle())
+                details
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
+        .id("bill-row-\(bill.name.lowercased())")
         .padding(.vertical, 2)
         .contextMenu {
             Button(occurrence.isPaid ? "mark unpaid" : "mark paid", systemImage: occurrence.isPaid ? "circle" : "checkmark.circle", action: onTogglePaid)
             Button("edit", systemImage: "pencil", action: onEdit)
             Button("delete", systemImage: "trash", role: .destructive, action: onDelete)
         }
+    }
+
+    @ViewBuilder
+    private var details: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 3) {
+                nameAndDate
+                amountLabel
+            }
+        } else {
+            HStack(spacing: 12) {
+                nameAndDate
+                Spacer(minLength: 8)
+                amountLabel
+            }
+        }
+    }
+
+    private var nameAndDate: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(bill.name.lowercased())
+                .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+                .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+                .strikethrough(occurrence.isPaid, color: NormaPalette.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(dueLabel)
+                .font(.custom(FontFamily.Rubik.medium, size: 12))
+                .foregroundStyle(statusColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var amountLabel: some View {
+        Text(Money.format(bill.amount, currency: currency))
+            .font(.custom(FontFamily.Rubik.semiBold, size: 16))
+            .foregroundStyle(occurrence.isPaid ? NormaPalette.inkSubtle : NormaPalette.ink)
+            .amountStaysOneLine()
+            .accessibilityIdentifier("bill-amount-\(bill.name.lowercased())")
     }
 
     private var statusColor: Color {
@@ -420,5 +480,14 @@ private struct BillRow: View {
         if calendar.isDateInToday(occurrence.date) { return "due today" + frequency }
         if calendar.isDateInTomorrow(occurrence.date) { return "due tomorrow" + frequency }
         return date + frequency
+    }
+}
+
+extension View {
+    /// An amount never breaks across lines. The name and date beside it wrap.
+    fileprivate func amountStaysOneLine() -> some View {
+        lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
     }
 }

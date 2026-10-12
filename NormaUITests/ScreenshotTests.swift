@@ -5,6 +5,8 @@
 //  Norma is dark only. The PR gate runs dark / default Dynamic Type on
 //  iPhone 17. The main and nightly workflow runs dark mode at default and
 //  accessibility Dynamic Type, on a small phone and a large phone.
+//  Accessibility screenshots scroll the rent row fully into view. The 16e
+//  also snapshots $12,345.67 at accessibilityExtraExtraExtraLarge.
 //
 
 import UIKit
@@ -23,18 +25,37 @@ final class ScreenshotTests: XCTestCase {
 
     @MainActor
     func testHomeDarkAccessibility() throws {
-        try assertHome(dynamicType: "accessibility", name: "home-dark-accessibility")
+        try assertHome(dynamicType: "accessibility", name: "home-dark-accessibility", scrollRentIntoView: true)
+    }
+
+    /// Longest realistic amount at accessibilityExtraExtraExtraLarge (`.accessibility5`) on iPhone 16e.
+    @MainActor
+    func testLongAmountStaysOneLineAtAccessibilitySize() throws {
+        let device = try deviceSlug()
+        guard device == "iphone-16e" else { return }
+        try assertHome(
+            dynamicType: "accessibility",
+            name: "long-amount-accessibility",
+            extraArguments: ["--bill-amount=12345.67"],
+            scrollRentIntoView: true,
+            requireSingleLineAmount: "$12,345.67"
+        )
     }
 
     @MainActor
-    private func assertHome(dynamicType: String, name: String) throws {
+    private func assertHome(
+        dynamicType: String,
+        name: String,
+        extraArguments: [String] = [],
+        scrollRentIntoView: Bool = false,
+        requireSingleLineAmount: String? = nil
+    ) throws {
         let device = try deviceSlug()
         let record = shouldRecord
 
         XCUIDevice.shared.appearance = .dark
 
-        let app = XCUIApplication()
-        app.launchArguments = [
+        var arguments = [
             "--ui-testing",
             "--screenshot",
             "--dynamic-type=\(dynamicType)",
@@ -42,10 +63,32 @@ final class ScreenshotTests: XCTestCase {
             "-AppleLanguages", "(en)",
             "-AppleLocale", "en_US",
         ]
+        arguments.append(contentsOf: extraArguments)
+        let app = XCUIApplication()
+        app.launchArguments = arguments
         app.launch()
 
         let marker = app.descendants(matching: .any)["screenshot-home"]
         XCTAssertTrue(marker.waitForExistence(timeout: 20), "seeded home screen should appear")
+
+        if scrollRentIntoView {
+            let rent = app.staticTexts["rent"]
+            let amount = app.staticTexts["bill-amount-rent"]
+            XCTAssertTrue(rent.waitForExistence(timeout: 5), "rent row should exist")
+            XCTAssertTrue(amount.waitForExistence(timeout: 5), "rent amount should exist")
+            XCTAssertTrue(rentRowIsFullyVisible(rent, amount, in: app), "rent row is clipped")
+        }
+
+        if let expected = requireSingleLineAmount {
+            let amount = app.staticTexts["bill-amount-rent"]
+            XCTAssertEqual(amount.label, expected)
+            let frame = amount.frame
+            XCTAssertGreaterThan(
+                frame.width,
+                frame.height * 2,
+                "amount wrapped onto more than one line: \(frame)"
+            )
+        }
 
         let settled = expectation(description: "layout settles")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { settled.fulfill() }
@@ -81,6 +124,22 @@ final class ScreenshotTests: XCTestCase {
         if let difference = pixelDifference(image, baseline) {
             XCTFail("\(device)/\(name): \(difference). Re-record only if the change is intended, and get Designer Dan's review.")
         }
+    }
+
+    /// The app scrolls the rent row to center for accessibility screenshots.
+    private func rentRowIsFullyVisible(_ rent: XCUIElement, _ amount: XCUIElement, in app: XCUIApplication) -> Bool {
+        let window = app.windows.firstMatch
+        guard window.waitForExistence(timeout: 5) else { return false }
+        for _ in 0..<12 {
+            let minY = min(rent.frame.minY, amount.frame.minY)
+            let maxY = max(rent.frame.maxY, amount.frame.maxY)
+            let visible = window.frame.inset(by: UIEdgeInsets(top: 4, left: 0, bottom: 140, right: 0))
+            if minY >= visible.minY && maxY <= visible.maxY { return true }
+            let settled = expectation(description: "wait for the rent row to scroll into view")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { settled.fulfill() }
+            wait(for: [settled], timeout: 1)
+        }
+        return false
     }
 
     private func deviceSlug() throws -> String {

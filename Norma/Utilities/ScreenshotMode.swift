@@ -25,9 +25,15 @@ enum ScreenshotMode {
 
     static var now: Date { isActive ? referenceDate : Date() }
 
-    /// Default Dynamic Type is `.large`. Accessibility is AX5, the largest size.
+    /// Default Dynamic Type is `.large`. Accessibility is `.accessibility5`,
+    /// which is `accessibilityExtraExtraExtraLarge`.
     static var dynamicTypeSize: DynamicTypeSize {
         argument(prefixed: "--dynamic-type=") == "accessibility" ? .accessibility5 : .large
+    }
+
+    /// Optional rent amount for the long-amount screenshot. Absent means $1,500.
+    static var billAmount: Double {
+        Double(argument(prefixed: "--bill-amount=") ?? "") ?? 1500
     }
 
     static var animation: Animation? { isActive ? nil : .snappy }
@@ -47,7 +53,7 @@ enum ScreenshotMode {
         let profile = UserProfile(incomeAmount: 4000, incomeCadence: .monthly(day: 1))
         context.insert(profile)
 
-        let rent = Bill(name: "rent", amount: 1500, dueDate: day(1), frequency: .monthly, isReminderOn: false)
+        let rent = Bill(name: "rent", amount: billAmount, dueDate: day(1), frequency: .monthly, isReminderOn: false)
         let internet = Bill(name: "internet", amount: 60, dueDate: day(5), frequency: .monthly, isReminderOn: false)
         let phone = Bill(name: "phone", amount: 80, dueDate: day(20), frequency: .monthly, isReminderOn: false)
         context.insert(rent)
