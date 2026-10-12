@@ -18,7 +18,7 @@ if [[ -z "$base" ]]; then
   exit 1
 fi
 
-changed=$(git diff --name-only "$base" "$head" -- NormaUITests/ScreenshotBaselines || true)
+changed=$(git diff --name-only "$base" "$head" -- ScreenshotBaselines || true)
 if [[ -z "$changed" ]]; then
   echo "No screenshot baseline changes."
   exit 0

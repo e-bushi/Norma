@@ -26,6 +26,19 @@ xcode() {
     "$@"
 }
 
+# A skipped screenshot test exits 0 from xcodebuild. That would make the gate green
+# without comparing a baseline, so treat any skip as a failure.
+refuse_skips() {
+  local bundle="$1"
+  local skipped
+  skipped=$(xcrun xcresulttool get test-results summary --path "$bundle" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("skippedTests", 0))')
+  if [[ "$skipped" != "0" ]]; then
+    echo "screenshot tests skipped ($skipped). SCREENSHOT_DEVICE did not reach the test runner." >&2
+    exit 1
+  fi
+}
+
 swift_sources() {
   find Norma NormaTests NormaUITests -name '*.swift' -not -path '*/Generated/*'
 }
@@ -62,16 +75,17 @@ case "$cmd" in
       xcode test \
         -destination "$(destination "iPhone 17")" \
         -only-testing:NormaUITests/ScreenshotTests/testHomeLightDefault \
-        TEST_RUNNER_SCREENSHOT_DEVICE=iphone-17 \
-        TEST_RUNNER_RECORD_SCREENSHOTS=1 \
+        SCREENSHOT_DEVICE=iphone-17 \
+        RECORD_SCREENSHOTS=1 \
         -resultBundlePath "$RESULTS/screenshot.xcresult"
     else
       xcode test \
         -destination "$(destination "iPhone 17")" \
         -only-testing:NormaUITests/ScreenshotTests/testHomeLightDefault \
-        TEST_RUNNER_SCREENSHOT_DEVICE=iphone-17 \
+        SCREENSHOT_DEVICE=iphone-17 \
         -resultBundlePath "$RESULTS/screenshot.xcresult"
     fi
+    refuse_skips "$RESULTS/screenshot.xcresult"
     ;;
   screenshot-matrix)
     # Full matrix: light/dark × default/accessibility, small and large phones.
@@ -84,16 +98,17 @@ case "$cmd" in
         xcode test \
           -destination "$(destination "$name")" \
           -only-testing:NormaUITests/ScreenshotTests \
-          TEST_RUNNER_SCREENSHOT_DEVICE="$slug" \
-          TEST_RUNNER_RECORD_SCREENSHOTS=1 \
+          SCREENSHOT_DEVICE="$slug" \
+          RECORD_SCREENSHOTS=1 \
           -resultBundlePath "$bundle"
       else
         xcode test \
           -destination "$(destination "$name")" \
           -only-testing:NormaUITests/ScreenshotTests \
-          TEST_RUNNER_SCREENSHOT_DEVICE="$slug" \
+          SCREENSHOT_DEVICE="$slug" \
           -resultBundlePath "$bundle"
       fi
+      refuse_skips "$bundle"
     }
     run_device "iPhone 16e" "iphone-16e"
     run_device "iPhone 17 Pro Max" "iphone-17-pro-max"
@@ -106,8 +121,16 @@ case "$cmd" in
       -resultBundlePath "$RESULTS/smoke.xcresult"
     ;;
   record-screenshots)
+    mkdir -p ScreenshotBaselines
+    touch ScreenshotBaselines/.record
+    set +e
     RECORD_SCREENSHOTS=1 bash "$0" screenshot
+    status=$?
     RECORD_SCREENSHOTS=1 bash "$0" screenshot-matrix
+    status=$((status + $?))
+    set -e
+    rm -f ScreenshotBaselines/.record
+    exit "$status"
     ;;
   *)
     echo "usage: scripts/ci.sh {build|unit-tests|style|format|screenshot|screenshot-matrix|smoke|record-screenshots}" >&2

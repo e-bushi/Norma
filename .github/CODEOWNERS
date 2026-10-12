@@ -4,4 +4,4 @@
 # stays red until the PR carries the design-approved label and a
 # "Screenshot change:" sentence. When Dan has write access, replace @e-bushi
 # with his login.
-/NormaUITests/ScreenshotBaselines/** @e-bushi
+/ScreenshotBaselines/** @e-bushi

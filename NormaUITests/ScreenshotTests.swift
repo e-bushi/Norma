@@ -39,9 +39,8 @@ final class ScreenshotTests: XCTestCase {
 
     @MainActor
     private func assertHome(colorScheme: String, dynamicType: String, name: String) throws {
-        guard let device = ProcessInfo.processInfo.environment["SCREENSHOT_DEVICE"], !device.isEmpty else {
-            throw XCTSkip("SCREENSHOT_DEVICE is set by scripts/ci.sh")
-        }
+        let device = try deviceSlug()
+        let record = shouldRecord
 
         XCUIDevice.shared.appearance = colorScheme == "light" ? .light : .dark
 
@@ -71,7 +70,7 @@ final class ScreenshotTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        if ProcessInfo.processInfo.environment["RECORD_SCREENSHOTS"] == "1" {
+        if record {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
@@ -96,8 +95,45 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    private func deviceSlug() throws -> String {
+        let supplied = ProcessInfo.processInfo.environment["SCREENSHOT_DEVICE"] ?? ""
+        if !supplied.isEmpty && !supplied.hasPrefix("$(") {
+            return supplied
+        }
+        let env = ProcessInfo.processInfo.environment
+        let width = whole(env["SIMULATOR_MAINSCREEN_WIDTH"])
+        let height = whole(env["SIMULATOR_MAINSCREEN_HEIGHT"])
+        let key = "\(width)x\(height)"
+        let known = [
+            "1206x2622": "iphone-17",
+            "1170x2532": "iphone-16e",
+            "1320x2868": "iphone-17-pro-max",
+        ]
+        if let slug = known[key] { return slug }
+        XCTFail("Unknown simulator screen \(key). Add it to the screenshot device map.")
+        throw XCTSkip("unknown screen \(key)")
+    }
+
+    private func whole(_ raw: String?) -> String {
+        guard let raw, let value = Double(raw) else { return raw ?? "" }
+        return String(Int(value.rounded()))
+    }
+
+    private var shouldRecord: Bool {
+        if ProcessInfo.processInfo.environment["RECORD_SCREENSHOTS"] == "1" { return true }
+        return FileManager.default.fileExists(atPath: recordFlag.path)
+    }
+
+    private var recordFlag: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ScreenshotBaselines/.record")
+    }
+
     private func baselineURL(device: String, name: String) -> URL {
         URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("ScreenshotBaselines", isDirectory: true)
             .appendingPathComponent(device, isDirectory: true)
