@@ -7,3 +7,11 @@
 /.github/ @e-bushi
 /scripts/ @e-bushi
 /ScreenshotBaselines/** @e-bushi
+
+# Paths the foreman gate also rejects.
+# On plans that enforce CODEOWNERS, require the owner before these can change.
+# Confirm @e-bushi is the GitHub handle that should approve them.
+.github/** @e-bushi
+CODEOWNERS @e-bushi
+
+
