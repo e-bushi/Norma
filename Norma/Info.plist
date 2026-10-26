@@ -44,6 +44,11 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>Rubik-Variable.ttf</string>
+		<string>InstrumentSans-Regular.ttf</string>
+		<string>InstrumentSans-Medium.ttf</string>
+		<string>InstrumentSans-Bold.ttf</string>
+		<string>CommitMono-400-Regular.otf</string>
+		<string>CommitMono-700-Regular.otf</string>
 	</array>
 </dict>
 </plist>

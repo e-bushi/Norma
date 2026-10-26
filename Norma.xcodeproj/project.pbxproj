@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B94F0C010000000000000001 /* InstrumentSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B010000000000000001 /* InstrumentSans-Regular.ttf */; };
+		B94F0C020000000000000001 /* InstrumentSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B020000000000000001 /* InstrumentSans-Medium.ttf */; };
+		B94F0C030000000000000001 /* InstrumentSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B030000000000000001 /* InstrumentSans-Bold.ttf */; };
+		B94F0C040000000000000001 /* InstrumentSans-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B040000000000000001 /* InstrumentSans-OFL.txt */; };
+		B94F0C050000000000000001 /* CommitMono-400-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B050000000000000001 /* CommitMono-400-Regular.otf */; };
+		B94F0C060000000000000001 /* CommitMono-700-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B060000000000000001 /* CommitMono-700-Regular.otf */; };
+		B94F0C070000000000000001 /* CommitMono-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B94F0B070000000000000001 /* CommitMono-OFL.txt */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		F6638D502DCD6C40009D95C3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +34,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B94F0B010000000000000001 /* InstrumentSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InstrumentSans-Regular.ttf; sourceTree = "<group>"; };
+		B94F0B020000000000000001 /* InstrumentSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InstrumentSans-Medium.ttf; sourceTree = "<group>"; };
+		B94F0B030000000000000001 /* InstrumentSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InstrumentSans-Bold.ttf; sourceTree = "<group>"; };
+		B94F0B040000000000000001 /* InstrumentSans-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = InstrumentSans-OFL.txt; sourceTree = "<group>"; };
+		B94F0B050000000000000001 /* CommitMono-400-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = CommitMono-400-Regular.otf; sourceTree = "<group>"; };
+		B94F0B060000000000000001 /* CommitMono-700-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = CommitMono-700-Regular.otf; sourceTree = "<group>"; };
+		B94F0B070000000000000001 /* CommitMono-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CommitMono-OFL.txt; sourceTree = "<group>"; };
 		F6638D402DCD6C3F009D95C3 /* Norma.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Norma.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6638D4F2DCD6C40009D95C3 /* NormaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NormaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6638D592DCD6C40009D95C3 /* NormaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NormaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -85,9 +102,40 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B94F0A010000000000000001 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				B94F0A030000000000000001 /* CommitMono */,
+				B94F0A020000000000000001 /* InstrumentSans */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		B94F0A020000000000000001 /* InstrumentSans */ = {
+			isa = PBXGroup;
+			children = (
+				B94F0B030000000000000001 /* InstrumentSans-Bold.ttf */,
+				B94F0B020000000000000001 /* InstrumentSans-Medium.ttf */,
+				B94F0B040000000000000001 /* InstrumentSans-OFL.txt */,
+				B94F0B010000000000000001 /* InstrumentSans-Regular.ttf */,
+			);
+			path = InstrumentSans;
+			sourceTree = "<group>";
+		};
+		B94F0A030000000000000001 /* CommitMono */ = {
+			isa = PBXGroup;
+			children = (
+				B94F0B050000000000000001 /* CommitMono-400-Regular.otf */,
+				B94F0B060000000000000001 /* CommitMono-700-Regular.otf */,
+				B94F0B070000000000000001 /* CommitMono-OFL.txt */,
+			);
+			path = CommitMono;
+			sourceTree = "<group>";
+		};
 		F6638D372DCD6C3F009D95C3 = {
 			isa = PBXGroup;
 			children = (
+				B94F0A010000000000000001 /* Fonts */,
 				F6638D422DCD6C3F009D95C3 /* Norma */,
 				F6638D522DCD6C40009D95C3 /* NormaTests */,
 				F6638D5C2DCD6C40009D95C3 /* NormaUITests */,
@@ -227,6 +275,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B94F0C050000000000000001 /* CommitMono-400-Regular.otf in Resources */,
+				B94F0C060000000000000001 /* CommitMono-700-Regular.otf in Resources */,
+				B94F0C070000000000000001 /* CommitMono-OFL.txt in Resources */,
+				B94F0C030000000000000001 /* InstrumentSans-Bold.ttf in Resources */,
+				B94F0C020000000000000001 /* InstrumentSans-Medium.ttf in Resources */,
+				B94F0C040000000000000001 /* InstrumentSans-OFL.txt in Resources */,
+				B94F0C010000000000000001 /* InstrumentSans-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
