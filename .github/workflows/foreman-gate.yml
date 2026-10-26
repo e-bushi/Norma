@@ -1,0 +1,22 @@
+
+name: gate
+
+# Copied from foreman/templates/app-repo. Set `project` to the slug in foreman.
+# Runs the trusted workflow on the default branch. Do not switch this to pull_request.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    uses: e-bushi/Foreman/.github/workflows/gate.yml@main
+    with:
+      project: norma
+      foreman_ref: main
+    secrets: inherit
+
+

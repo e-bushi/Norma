@@ -1,0 +1,21 @@
+
+name: rebase
+
+# Copied from foreman/templates/app-repo. Set `project` to the slug in foreman.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  rebase:
+    uses: e-bushi/Foreman/.github/workflows/rebase.yml@main
+    with:
+      project: norma
+      foreman_ref: main
+    secrets: inherit
+
+
