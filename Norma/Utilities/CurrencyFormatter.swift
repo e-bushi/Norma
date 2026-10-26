@@ -28,13 +28,4 @@ enum CurrencyFormatter {
         let formatted = formatter.string(from: number) ?? "\(magnitude)"
         return (isNegative ? "-" : "") + formatted
     }
-
-    /// Binary floating-point amounts. The `Decimal` overload is exact.
-    static func format(
-        _ amount: Double,
-        currencyCode: String = "USD",
-        locale: Locale = Locale(identifier: "en_US")
-    ) -> String {
-        format(Decimal(amount), currencyCode: currencyCode, locale: locale)
-    }
 }
