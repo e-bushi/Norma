@@ -68,7 +68,25 @@ struct NormaThemeTests {
     @Test func realBalanceUsesCommitMonoBold() {
         #expect(NormaTheme.realBalance.kind == .realBalance)
         #expect(NormaTheme.realBalance.postScriptName == "CommitMono-Bold")
+        #expect(NormaTheme.realBalance.size == 48)
         #expect(NormaTheme.typeStyles == NormaTheme.textStyles + NormaTheme.numberStyles + [NormaTheme.realBalance])
+    }
+
+    @Test func typeRampSizesAreLocked() {
+        #expect(NormaTheme.title.size == 28)
+        #expect(NormaTheme.title.postScriptName == "InstrumentSans-Bold")
+        #expect(NormaTheme.body.size == 17)
+        #expect(NormaTheme.body.postScriptName == "InstrumentSans-Regular")
+        #expect(NormaTheme.label.size == 13)
+        #expect(NormaTheme.label.postScriptName == "InstrumentSans-Medium")
+        #expect(NormaTheme.caption.size == 12)
+        #expect(NormaTheme.caption.kind == .text)
+        #expect(NormaTheme.caption.postScriptName == "InstrumentSans-Regular")
+        #expect(NormaTheme.number.size == 17)
+        #expect(NormaTheme.number.postScriptName == "CommitMono-Regular")
+        #expect(NormaTheme.numberLarge.size == 28)
+        #expect(NormaTheme.numberLarge.postScriptName == "CommitMono-Regular")
+        #expect(NormaTheme.textStyles == [NormaTheme.title, NormaTheme.body, NormaTheme.label, NormaTheme.caption])
     }
 
     @Test func radiiAreCard36AndPanel28() {

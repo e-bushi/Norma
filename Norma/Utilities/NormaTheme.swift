@@ -51,6 +51,9 @@ enum NormaTheme {
         }
 
         var sample: String {
+            if name == "caption" {
+                return "Oct 26"
+            }
             switch kind {
             case .text:
                 return "The quick brown fox"
@@ -98,12 +101,14 @@ enum NormaTheme {
     static let title = TypeStyle(name: "title", kind: .text, postScriptName: "InstrumentSans-Bold", size: 28)
     static let body = TypeStyle(name: "body", kind: .text, postScriptName: "InstrumentSans-Regular", size: 17)
     static let label = TypeStyle(name: "label", kind: .text, postScriptName: "InstrumentSans-Medium", size: 13)
+    /// Small notes: dates, and the label above the real balance.
+    static let caption = TypeStyle(name: "caption", kind: .text, postScriptName: "InstrumentSans-Regular", size: 12)
     static let number = TypeStyle(name: "number", kind: .number, postScriptName: "CommitMono-Regular", size: 17)
     static let numberLarge = TypeStyle(name: "number large", kind: .number, postScriptName: "CommitMono-Regular", size: 28)
     /// Heaviest number style. CommitMono-Bold is the heaviest Commit Mono face bundled.
-    static let realBalance = TypeStyle(name: "real balance", kind: .realBalance, postScriptName: "CommitMono-Bold", size: 40)
+    static let realBalance = TypeStyle(name: "real balance", kind: .realBalance, postScriptName: "CommitMono-Bold", size: 48)
 
-    static let textStyles: [TypeStyle] = [title, body, label]
+    static let textStyles: [TypeStyle] = [title, body, label, caption]
     static let numberStyles: [TypeStyle] = [number, numberLarge]
     static let typeStyles: [TypeStyle] = textStyles + numberStyles + [realBalance]
 
@@ -192,6 +197,11 @@ private struct NormaThemePreview: View {
             sectionTitle("Type")
             ForEach(NormaTheme.typeStyles) { style in
                 VStack(alignment: .leading, spacing: NormaTheme.spacing4) {
+                    if style.kind == .realBalance {
+                        Text("Real balance")
+                            .font(NormaTheme.caption.font)
+                            .foregroundStyle(NormaTheme.ink.color)
+                    }
                     Text(style.sample)
                         .font(style.font)
                         .foregroundStyle(NormaTheme.ink.color)
