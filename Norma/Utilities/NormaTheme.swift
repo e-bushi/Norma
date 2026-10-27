@@ -98,11 +98,53 @@ enum NormaTheme {
         pressedTagButtonCoral,
     ]
 
+    // Stories row and composer. Off `swatches` so the core ramp APP-94 locked
+    // stays the same list. Components read these by name.
+    /// #E8EAEC
+    static let storyWell = Swatch(name: "story well", hex: 0xE8EAEC)
+    /// #C2C8CE
+    static let idleRing = Swatch(name: "idle ring", hex: 0xC2C8CE)
+    /// #AFC3A9
+    static let stash = Swatch(name: "stash", hex: 0xAFC3A9)
+    /// #AEBCCA
+    static let ratio = Swatch(name: "ratio", hex: 0xAEBCCA)
+    /// #CBAE9F
+    static let bills = Swatch(name: "bills", hex: 0xCBAE9F)
+    /// #C0AEC7
+    static let oakline = Swatch(name: "oakline", hex: 0xC0AEC7)
+    /// #ECE4D7
+    static let addFill = Swatch(name: "add fill", hex: 0xECE4D7)
+    /// #FFFDF9
+    static let fieldFill = Swatch(name: "field fill", hex: 0xFFFDF9)
+    /// #D9D0C2
+    static let fieldStroke = Swatch(name: "field stroke", hex: 0xD9D0C2)
+    /// #9AA0A6
+    static let placeholder = Swatch(name: "placeholder", hex: 0x9AA0A6)
+    /// #FFFFFF
+    static let white = Swatch(name: "white", hex: 0xFFFFFF)
+
+    static let componentSwatches: [Swatch] = [
+        storyWell,
+        idleRing,
+        stash,
+        ratio,
+        bills,
+        oakline,
+        addFill,
+        fieldFill,
+        fieldStroke,
+        placeholder,
+        white,
+    ]
+
     static let title = TypeStyle(name: "title", kind: .text, postScriptName: "InstrumentSans-Bold", size: 28)
     static let body = TypeStyle(name: "body", kind: .text, postScriptName: "InstrumentSans-Regular", size: 17)
     static let label = TypeStyle(name: "label", kind: .text, postScriptName: "InstrumentSans-Medium", size: 13)
     /// Small notes: dates, and the label above the real balance.
     static let caption = TypeStyle(name: "caption", kind: .text, postScriptName: "InstrumentSans-Regular", size: 12)
+    /// Composer field. Instrument Sans Regular 16. The composer sets a 20pt line.
+    /// Kept off `textStyles` so the locked ramp stays put.
+    static let message = TypeStyle(name: "message", kind: .text, postScriptName: "InstrumentSans-Regular", size: 16)
     static let number = TypeStyle(name: "number", kind: .number, postScriptName: "CommitMono-Regular", size: 17)
     static let numberLarge = TypeStyle(name: "number large", kind: .number, postScriptName: "CommitMono-Regular", size: 28)
     /// Heaviest number style. CommitMono-Bold is the heaviest Commit Mono face bundled.
@@ -170,7 +212,7 @@ private struct NormaThemePreview: View {
     private var swatchSection: some View {
         VStack(alignment: .leading, spacing: NormaTheme.spacing12) {
             sectionTitle("Swatches")
-            ForEach(NormaTheme.swatches) { swatch in
+            ForEach(NormaTheme.swatches + NormaTheme.componentSwatches) { swatch in
                 HStack(spacing: NormaTheme.spacing12) {
                     NormaTheme.shape(NormaTheme.spacing12)
                         .fill(swatch.color)
