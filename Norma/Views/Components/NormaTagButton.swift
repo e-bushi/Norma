@@ -69,10 +69,17 @@ struct NormaTagButton: View {
     }
 
     /// One cell of `#Preview("NormaTagButton")`: a variant at rest or pressed.
-    struct PreviewSample: Equatable {
+    struct PreviewSample: Equatable, Identifiable {
         var title: String
         var variant: Variant
         var isPressed: Bool
+
+        var id: String {
+            switch variant {
+            case .navy: return "navy-\(isPressed)"
+            case .coral: return "coral-\(isPressed)"
+            }
+        }
     }
 
     /// Both variants, at rest and pressed. The preview renders this list.
@@ -177,7 +184,7 @@ private struct NormaTagButtonPreview: View {
             Text(title)
                 .font(NormaTheme.label.font)
                 .foregroundStyle(NormaTheme.plum.color)
-            for item in samples {
+            ForEach(samples) { item in
                 labeled(caption(item.variant)) {
                     control(item)
                 }

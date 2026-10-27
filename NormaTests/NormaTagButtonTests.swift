@@ -99,13 +99,19 @@ struct NormaTagButtonTests {
     }
 
     @Test("AC-7: the preview shows navy and coral at rest and pressed")
-    func previewShowsBothVariantsAtRestAndPressed() {
+    func previewShowsBothVariantsAtRestAndPressed() throws {
         // AC-7
         let samples = NormaTagButton.previewSamples
         #expect(samples.filter { $0.variant == .navy && $0.isPressed == false }.count == 1)
         #expect(samples.filter { $0.variant == .coral && $0.isPressed == false }.count == 1)
         #expect(samples.filter { $0.variant == .navy && $0.isPressed }.count == 1)
         #expect(samples.filter { $0.variant == .coral && $0.isPressed }.count == 1)
+        #expect(Set(samples.map(\.id)).count == samples.count)
+
+        let preview = previewSource(in: try normaTagButtonSource())
+        #expect(preview.contains("ForEach"))
+        #expect(preview.contains("previewSamples"))
+        #expect(preview.contains("for item in") == false)
     }
 
     @Test("AC-6: a hosted NormaTagButton exposes its title and the button trait")
@@ -199,6 +205,11 @@ struct NormaTagButtonTests {
         guard let array = object.perform(selector)?.takeUnretainedValue() as? NSArray else { return [] }
         return array.compactMap { $0 as? NSObject }.filter { $0 !== object }
     }
+}
+
+private func previewSource(in source: String) -> String {
+    guard let range = source.range(of: "#Preview") else { return "" }
+    return String(source[range.lowerBound...])
 }
 
 private func normaTagButtonSource() throws -> String {
