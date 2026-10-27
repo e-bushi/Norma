@@ -86,6 +86,30 @@ enum NormaTheme {
     static let pressedTagButtonNavy = Swatch(name: "pressed tag-button navy", hex: 0x13191F)
     /// Pressed tag-button coral, #70382A.
     static let pressedTagButtonCoral = Swatch(name: "pressed tag-button coral", hex: 0x70382A)
+    /// Card fill under the warm activity gradient, #FFFFFF.
+    static let paper = Swatch(name: "paper", hex: 0xFFFFFF)
+    /// Activity gradient top, #FFFDF9.
+    static let paperHighlight = Swatch(name: "paper highlight", hex: 0xFFFDF9)
+    /// Activity gradient at 35%, #F7F2EA.
+    static let paperMid = Swatch(name: "paper mid", hex: 0xF7F2EA)
+    /// Activity gradient bottom, #ECE3D5.
+    static let paperShade = Swatch(name: "paper shade", hex: 0xECE3D5)
+    /// Activity card stroke, #DED6CA.
+    static let paperStroke = Swatch(name: "paper stroke", hex: 0xDED6CA)
+    /// Activity rail stroke, #D6CEC1.
+    static let paperRail = Swatch(name: "paper rail", hex: 0xD6CEC1)
+    /// Activity entry dot, #B3AA9C.
+    static let paperDot = Swatch(name: "paper dot", hex: 0xB3AA9C)
+    /// Active insight ring, #FCF9F3.
+    static let paperRing = Swatch(name: "paper ring", hex: 0xFCF9F3)
+    /// Day dot fill, #F5EFE5.
+    static let paperDay = Swatch(name: "paper day", hex: 0xF5EFE5)
+    /// Alternate day dot fill, #F1E9DD.
+    static let paperDayAlt = Swatch(name: "paper day alt", hex: 0xF1E9DD)
+    /// Secondary activity title, #4A5058.
+    static let graphite = Swatch(name: "graphite", hex: 0x4A5058)
+    /// Dates, summaries, and quiet meta, #8A9199.
+    static let mist = Swatch(name: "mist", hex: 0x8A9199)
 
     static let swatches: [Swatch] = [
         silver,
@@ -96,6 +120,18 @@ enum NormaTheme {
         coral,
         pressedTagButtonNavy,
         pressedTagButtonCoral,
+        paper,
+        paperHighlight,
+        paperMid,
+        paperShade,
+        paperStroke,
+        paperRail,
+        paperDot,
+        paperRing,
+        paperDay,
+        paperDayAlt,
+        graphite,
+        mist,
     ]
 
     // Agent thread sheet. Off `swatches` so the core ramp APP-94 locked stays the same list.

@@ -23,6 +23,18 @@ struct NormaThemeTests {
         expectLocked(NormaTheme.coral, hex: 0xCC664D, hexString: "#CC664D")
         expectLocked(NormaTheme.pressedTagButtonNavy, hex: 0x13191F, hexString: "#13191F")
         expectLocked(NormaTheme.pressedTagButtonCoral, hex: 0x70382A, hexString: "#70382A")
+        expectLocked(NormaTheme.paper, hex: 0xFFFFFF, hexString: "#FFFFFF")
+        expectLocked(NormaTheme.paperHighlight, hex: 0xFFFDF9, hexString: "#FFFDF9")
+        expectLocked(NormaTheme.paperMid, hex: 0xF7F2EA, hexString: "#F7F2EA")
+        expectLocked(NormaTheme.paperShade, hex: 0xECE3D5, hexString: "#ECE3D5")
+        expectLocked(NormaTheme.paperStroke, hex: 0xDED6CA, hexString: "#DED6CA")
+        expectLocked(NormaTheme.paperRail, hex: 0xD6CEC1, hexString: "#D6CEC1")
+        expectLocked(NormaTheme.paperDot, hex: 0xB3AA9C, hexString: "#B3AA9C")
+        expectLocked(NormaTheme.paperRing, hex: 0xFCF9F3, hexString: "#FCF9F3")
+        expectLocked(NormaTheme.paperDay, hex: 0xF5EFE5, hexString: "#F5EFE5")
+        expectLocked(NormaTheme.paperDayAlt, hex: 0xF1E9DD, hexString: "#F1E9DD")
+        expectLocked(NormaTheme.graphite, hex: 0x4A5058, hexString: "#4A5058")
+        expectLocked(NormaTheme.mist, hex: 0x8A9199, hexString: "#8A9199")
         #expect(
             NormaTheme.swatches.map(\.name) == [
                 "silver",
@@ -33,6 +45,18 @@ struct NormaThemeTests {
                 "coral",
                 "pressed tag-button navy",
                 "pressed tag-button coral",
+                "paper",
+                "paper highlight",
+                "paper mid",
+                "paper shade",
+                "paper stroke",
+                "paper rail",
+                "paper dot",
+                "paper ring",
+                "paper day",
+                "paper day alt",
+                "graphite",
+                "mist",
             ])
         #expect(
             NormaTheme.swatches.map(\.hex) == [
@@ -44,6 +68,18 @@ struct NormaThemeTests {
                 NormaTheme.coral.hex,
                 NormaTheme.pressedTagButtonNavy.hex,
                 NormaTheme.pressedTagButtonCoral.hex,
+                NormaTheme.paper.hex,
+                NormaTheme.paperHighlight.hex,
+                NormaTheme.paperMid.hex,
+                NormaTheme.paperShade.hex,
+                NormaTheme.paperStroke.hex,
+                NormaTheme.paperRail.hex,
+                NormaTheme.paperDot.hex,
+                NormaTheme.paperRing.hex,
+                NormaTheme.paperDay.hex,
+                NormaTheme.paperDayAlt.hex,
+                NormaTheme.graphite.hex,
+                NormaTheme.mist.hex,
             ])
     }
 
