@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Testing
+import UIKit
 
 @testable import Norma
 
@@ -84,14 +85,95 @@ struct NormaTagButtonTests {
         #expect(shape.cornerSize == CGSize(width: 16, height: 16))
     }
 
-    @Test("AC-6: the control's title is what VoiceOver reads on the button")
+    @Test("AC-6: a hosted NormaTagButton exposes its title and the button trait")
     func voiceOverReadsTheTitle() {
-        // AC-6: the body is a Button labeled with `title`, plus the button trait.
-        let button = NormaTagButton(title: "Approve", variant: .coral) {}
-        #expect(button.title == "Approve")
+        // AC-6
+        expectHostedButton(title: "Approve", variant: .coral)
+        expectHostedButton(title: "Skip", variant: .navy)
     }
 
     private func confirmButtonStyle<S: ButtonStyle>(_ style: S) {
         _ = style
+    }
+
+    /// Fails unless a window-hosted button exposes `title` and the button trait.
+    private func expectHostedButton(title: String, variant: NormaTagButton.Variant) {
+        let buttonLabels = hostedAccessibility(of: NormaTagButton(title: title, variant: variant) {})
+            .filter { $0.traits.contains(.button) }
+            .compactMap(\.label)
+        #expect(buttonLabels.contains(title))
+    }
+
+    private struct HostedAccessibility {
+        var label: String?
+        var traits: UIAccessibilityTraits
+    }
+
+    private func hostedAccessibility<V: View>(of view: V) -> [HostedAccessibility] {
+        let frame = CGRect(x: 0, y: 0, width: 320, height: 180)
+        let controller = UIHostingController(rootView: view)
+        let window = hostingWindow(frame: frame)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.view.frame = frame
+        controller.view.layoutIfNeeded()
+
+        var visited: Set<ObjectIdentifier> = []
+        let nodes = accessibilityNodes(of: controller.view, visited: &visited)
+        window.isHidden = true
+        window.rootViewController = nil
+        return nodes
+    }
+
+    private func hostingWindow(frame: CGRect) -> UIWindow {
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            let window = UIWindow(windowScene: scene)
+            window.frame = frame
+            return window
+        }
+        return UIWindow(frame: frame)
+    }
+
+    private func accessibilityNodes(of object: NSObject, visited: inout Set<ObjectIdentifier>) -> [HostedAccessibility] {
+        guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }
+
+        var nodes: [HostedAccessibility] = []
+        if object.isAccessibilityElement || object.accessibilityLabel != nil {
+            nodes.append(HostedAccessibility(label: object.accessibilityLabel, traits: object.accessibilityTraits))
+        }
+
+        let children = accessibilityChildren(of: object).filter { visited.contains(ObjectIdentifier($0)) == false }
+        if children.isEmpty, let view = object as? UIView {
+            for subview in view.subviews {
+                nodes.append(contentsOf: accessibilityNodes(of: subview, visited: &visited))
+            }
+        } else {
+            for child in children {
+                nodes.append(contentsOf: accessibilityNodes(of: child, visited: &visited))
+            }
+        }
+        return nodes
+    }
+
+    /// User-testing children when UIKit exposes them, otherwise the public container children.
+    private func accessibilityChildren(of object: NSObject) -> [NSObject] {
+        let testingChildren = userTestingChildren(of: object)
+        if !testingChildren.isEmpty { return testingChildren }
+
+        let count = min(object.accessibilityElementCount(), 64)
+        guard count > 0 else { return [] }
+        var children: [NSObject] = []
+        for index in 0..<count {
+            guard let child = object.accessibilityElement(at: index) as? NSObject, child !== object else { continue }
+            children.append(child)
+        }
+        return children
+    }
+
+    private func userTestingChildren(of object: NSObject) -> [NSObject] {
+        let selector = NSSelectorFromString("_accessibilityUserTestingChildren")
+        guard object.responds(to: selector) else { return [] }
+        guard let array = object.perform(selector)?.takeUnretainedValue() as? NSArray else { return [] }
+        return array.compactMap { $0 as? NSObject }.filter { $0 !== object }
     }
 }
