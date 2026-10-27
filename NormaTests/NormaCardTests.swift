@@ -41,7 +41,7 @@ struct NormaCardTests {
         #expect(NormaTheme.cardRadius == 36)
     }
 
-    @Test func borderWidthIsTheHairlineToken() {
+    @Test func borderWidthIsTheHairlineToken() throws {
         // AC-3
         let card = NormaCard { Text("rent") }
         let scales: [CGFloat] = [1, 2, 3]
@@ -52,6 +52,10 @@ struct NormaCardTests {
         #expect(card.borderWidth(displayScale: 1) == 1)
         #expect(card.borderWidth(displayScale: 2) == 0.5)
         #expect(card.borderWidth(displayScale: 3) == 1 / CGFloat(3))
+
+        let body = viewBody(in: strippingStringsAndComments(try normaCardSource()))
+        #expect(body.hasPrefix("{"))
+        #expect(body.contains(".shadow") == false)
     }
 
     @Test func defaultPaddingIsSpacing16() {
@@ -122,6 +126,27 @@ private func normaCardSource() throws -> String {
 private func previewSource(in source: String) -> String {
     guard let range = source.range(of: "#Preview") else { return "" }
     return String(source[range.lowerBound...])
+}
+
+/// The `body` of `NormaCard`, including its braces. Comments must already be stripped.
+private func viewBody(in code: String) -> String {
+    guard let declaration = code.range(of: "var body") else { return "" }
+    guard let open = code[declaration.upperBound...].firstIndex(of: "{") else { return "" }
+    var depth = 0
+    var index = open
+    while index < code.endIndex {
+        let character = code[index]
+        if character == "{" {
+            depth += 1
+        } else if character == "}" {
+            depth -= 1
+            if depth == 0 {
+                return String(code[open...index])
+            }
+        }
+        index = code.index(after: index)
+    }
+    return ""
 }
 
 /// Code with comments and string literals removed, so token names such as
