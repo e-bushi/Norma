@@ -85,6 +85,16 @@ struct NormaTagButtonTests {
         #expect(shape.cornerSize == CGSize(width: 16, height: 16))
     }
 
+    @Test("AC-7: the preview shows navy and coral at rest and pressed")
+    func previewShowsBothVariantsAtRestAndPressed() {
+        // AC-7
+        let samples = NormaTagButton.previewSamples
+        #expect(samples.filter { $0.variant == .navy && $0.isPressed == false }.count == 1)
+        #expect(samples.filter { $0.variant == .coral && $0.isPressed == false }.count == 1)
+        #expect(samples.filter { $0.variant == .navy && $0.isPressed }.count == 1)
+        #expect(samples.filter { $0.variant == .coral && $0.isPressed }.count == 1)
+    }
+
     @Test("AC-6: a hosted NormaTagButton exposes its title and the button trait")
     func voiceOverReadsTheTitle() {
         // AC-6

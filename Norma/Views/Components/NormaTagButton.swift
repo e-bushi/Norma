@@ -68,6 +68,21 @@ struct NormaTagButton: View {
         }
     }
 
+    /// One cell of `#Preview("NormaTagButton")`: a variant at rest or pressed.
+    struct PreviewSample: Equatable {
+        var title: String
+        var variant: Variant
+        var isPressed: Bool
+    }
+
+    /// Both variants, at rest and pressed. The preview renders this list.
+    static let previewSamples: [PreviewSample] = [
+        PreviewSample(title: "Skip", variant: .navy, isPressed: false),
+        PreviewSample(title: "Approve", variant: .coral, isPressed: false),
+        PreviewSample(title: "Skip", variant: .navy, isPressed: true),
+        PreviewSample(title: "Approve", variant: .coral, isPressed: true),
+    ]
+
     let title: String
     let variant: Variant
     let action: () -> Void
@@ -157,16 +172,23 @@ private struct NormaTagButtonPreview: View {
     }
 
     private func column(title: String, isPressed: Bool) -> some View {
-        VStack(alignment: .leading, spacing: NormaTheme.spacing16) {
+        let samples = NormaTagButton.previewSamples.filter { $0.isPressed == isPressed }
+        return VStack(alignment: .leading, spacing: NormaTheme.spacing16) {
             Text(title)
                 .font(NormaTheme.label.font)
                 .foregroundStyle(NormaTheme.plum.color)
-            labeled("Navy") {
-                sample(title: "Skip", variant: .navy, isPressed: isPressed)
+            for item in samples {
+                labeled(caption(item.variant)) {
+                    control(item)
+                }
             }
-            labeled("Coral") {
-                sample(title: "Approve", variant: .coral, isPressed: isPressed)
-            }
+        }
+    }
+
+    private func caption(_ variant: NormaTagButton.Variant) -> String {
+        switch variant {
+        case .navy: return "Navy"
+        case .coral: return "Coral"
         }
     }
 
@@ -180,11 +202,11 @@ private struct NormaTagButtonPreview: View {
     }
 
     @ViewBuilder
-    private func sample(title: String, variant: NormaTagButton.Variant, isPressed: Bool) -> some View {
-        if isPressed {
-            NormaTagButtonFace(variant: variant, isPressed: true, label: Text(title))
+    private func control(_ item: NormaTagButton.PreviewSample) -> some View {
+        if item.isPressed {
+            NormaTagButtonFace(variant: item.variant, isPressed: true, label: Text(item.title))
         } else {
-            NormaTagButton(title: title, variant: variant) {}
+            NormaTagButton(title: item.title, variant: item.variant) {}
         }
     }
 }
