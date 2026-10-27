@@ -98,6 +98,53 @@ enum NormaTheme {
         pressedTagButtonCoral,
     ]
 
+    // Agent thread sheet. Off `swatches` so the core ramp APP-94 locked stays the same list.
+    /// #FFFDF9
+    static let threadSheetStart = Swatch(name: "thread sheet start", hex: 0xFFFDF9)
+    /// #F7F2EA
+    static let threadSheetMid = Swatch(name: "thread sheet mid", hex: 0xF7F2EA)
+    /// #ECE3D5
+    static let threadSheetEnd = Swatch(name: "thread sheet end", hex: 0xECE3D5)
+    /// #DED6CA
+    static let threadStroke = Swatch(name: "thread stroke", hex: 0xDED6CA)
+    /// #8A9199
+    static let threadMuted = Swatch(name: "thread muted", hex: 0x8A9199)
+    /// #F1EADF
+    static let threadChip = Swatch(name: "thread chip", hex: 0xF1EADF)
+    /// #4A5058
+    static let threadSecondary = Swatch(name: "thread secondary", hex: 0x4A5058)
+    /// #FAF6EF
+    static let threadFaceRing = Swatch(name: "thread face ring", hex: 0xFAF6EF)
+    /// #CDB3A6
+    static let threadFaceWarm = Swatch(name: "thread face warm", hex: 0xCDB3A6)
+    /// #B8C3D1
+    static let threadFaceCool = Swatch(name: "thread face cool", hex: 0xB8C3D1)
+    /// #EDE6DA
+    static let threadAgentBubble = Swatch(name: "thread agent bubble", hex: 0xEDE6DA)
+    /// #FCF9F3
+    static let threadCream = Swatch(name: "thread cream", hex: 0xFCF9F3)
+    /// #D6CEC1
+    static let threadRail = Swatch(name: "thread rail", hex: 0xD6CEC1)
+    /// #B7C4AE
+    static let threadStash = Swatch(name: "thread stash", hex: 0xB7C4AE)
+
+    static let threadSwatches: [Swatch] = [
+        threadSheetStart,
+        threadSheetMid,
+        threadSheetEnd,
+        threadStroke,
+        threadMuted,
+        threadChip,
+        threadSecondary,
+        threadFaceRing,
+        threadFaceWarm,
+        threadFaceCool,
+        threadAgentBubble,
+        threadCream,
+        threadRail,
+        threadStash,
+    ]
+
     static let title = TypeStyle(name: "title", kind: .text, postScriptName: "InstrumentSans-Bold", size: 28)
     static let body = TypeStyle(name: "body", kind: .text, postScriptName: "InstrumentSans-Regular", size: 17)
     static let label = TypeStyle(name: "label", kind: .text, postScriptName: "InstrumentSans-Medium", size: 13)
