@@ -166,6 +166,31 @@ struct AgentComposerTests {
 }
 
 @MainActor
+struct AgentBuildSurfaceTests {
+    @Test func projectBuildsAndExistingTestsPass() {
+        // AC-8
+        let stories = AgentStoriesRow(agents: AgentStory.board)
+        let composer = AgentComposer(text: .constant(""), onAdd: {}, onSend: {})
+        #expect(stories.agents.map(\.name) == AgentStory.board.map(\.name))
+        #expect(composer.text.isEmpty)
+        #expect(!AgentComposer.canSend(composer.text))
+        #expect(
+            NormaTheme.swatches.map(\.name) == [
+                "silver",
+                "ink",
+                "navy",
+                "slate",
+                "plum",
+                "coral",
+                "pressed tag-button navy",
+                "pressed tag-button coral",
+            ])
+        #expect(NormaTheme.textStyles.map(\.name) == ["title", "body", "label", "caption"])
+        #expect(NormaTheme.typeStyles == NormaTheme.textStyles + NormaTheme.numberStyles + [NormaTheme.realBalance])
+    }
+}
+
+@MainActor
 struct AgentComponentTokenTests {
     @Test func componentColorsAreNamedTokens() {
         // AC-4
