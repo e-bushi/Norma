@@ -87,7 +87,7 @@ struct AgentStoriesRowTests {
         #expect(AgentStoriesMetrics.scrollAxis == .horizontal)
     }
 
-    @Test func boardPreviewListsTheFiveAgents() {
+    @Test func boardPreviewListsTheFiveAgents() throws {
         // AC-7
         #expect(AgentStory.board.map(\.name) == ["Norma", "Stash", "Ratio", "Bills", "Oakline"])
         #expect(AgentStory.board.map(\.isActive) == [true, true, true, false, false])
@@ -100,6 +100,12 @@ struct AgentStoriesRowTests {
                 NormaTheme.oakline,
             ])
         #expect(AgentStory.board.filter(\.showsMark).map(\.name) == ["Norma"])
+
+        let source = try componentSource("AgentStoriesRow.swift")
+        let rendersBoard = previewBlocks(in: source).contains { block in
+            block.contains("AgentStoriesRow(") && block.contains("AgentStory.board")
+        }
+        #expect(rendersBoard)
     }
 }
 
@@ -158,10 +164,12 @@ struct AgentComposerTests {
         #expect(AgentComposer.sendAccessibilityLabel == "Send")
     }
 
-    @Test func composerPreviewsCoverEmptyAndTyped() {
+    @Test func composerPreviewsCoverEmptyAndTyped() throws {
         // AC-7
-        #expect(!AgentComposer.canSend(""))
-        #expect(AgentComposer.canSend("On my way"))
+        let source = try componentSource("AgentComposer.swift")
+        let texts = composerPreviewTexts(in: source)
+        #expect(texts.contains(""))
+        #expect(texts.contains { !$0.isEmpty })
     }
 }
 
@@ -272,6 +280,96 @@ struct AgentComponentTokenTests {
     private func byte(_ component: CGFloat) -> Int {
         Int((component * 255).rounded())
     }
+}
+
+/// Bodies of `#Preview` blocks. Removing a preview drops it from this list.
+private func previewBlocks(in source: String) -> [String] {
+    var blocks: [String] = []
+    var search = source.startIndex
+    while let marker = source.range(of: "#Preview", range: search..<source.endIndex) {
+        guard let open = source[marker.upperBound...].firstIndex(of: "{") else { break }
+        guard let close = closingBrace(in: source, open: open) else { break }
+        let bodyStart = source.index(after: open)
+        blocks.append(String(source[bodyStart..<close]))
+        search = source.index(after: close)
+    }
+    return blocks
+}
+
+/// Text values shown by previews that actually render `AgentComposer`.
+/// A struct that is not referenced from a `#Preview` does not count.
+private func composerPreviewTexts(in source: String) -> [String] {
+    previewBlocks(in: source).flatMap { block in
+        textsForComposerPreview(block, source: source)
+    }
+}
+
+private func textsForComposerPreview(_ block: String, source: String) -> [String] {
+    var texts: [String] = []
+    if block.contains("AgentComposer(") {
+        texts += textLiterals(in: block)
+    }
+    for name in calledTypeNames(in: block) {
+        guard let body = typeBody(named: name, source: source) else { continue }
+        guard body.contains("AgentComposer(") else { continue }
+        texts += textLiterals(in: body)
+    }
+    return texts
+}
+
+private func calledTypeNames(in source: String) -> [String] {
+    guard let regex = try? NSRegularExpression(pattern: #"\b([A-Z][A-Za-z0-9_]*)\s*\("#) else {
+        return []
+    }
+    let range = NSRange(source.startIndex..., in: source)
+    return regex.matches(in: source, range: range).compactMap { match in
+        guard let swiftRange = Range(match.range(at: 1), in: source) else { return nil }
+        return String(source[swiftRange])
+    }
+}
+
+private func typeBody(named name: String, source: String) -> String? {
+    guard let regex = try? NSRegularExpression(pattern: #"\bstruct\s+\#(name)\b"#) else { return nil }
+    let range = NSRange(source.startIndex..., in: source)
+    guard let match = regex.firstMatch(in: source, range: range),
+        let matchEnd = Range(match.range, in: source)?.upperBound,
+        let open = source[matchEnd...].firstIndex(of: "{"),
+        let close = closingBrace(in: source, open: open)
+    else { return nil }
+    let bodyStart = source.index(after: open)
+    return String(source[bodyStart..<close])
+}
+
+private func textLiterals(in source: String) -> [String] {
+    let patterns = [
+        #"text\s*=\s*"((?:\\.|[^"\\])*)""#,
+        #"\.constant\(\s*"((?:\\.|[^"\\])*)"\s*\)"#,
+    ]
+    var found: [String] = []
+    for pattern in patterns {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+        let range = NSRange(source.startIndex..., in: source)
+        for match in regex.matches(in: source, range: range) {
+            guard let swiftRange = Range(match.range(at: 1), in: source) else { continue }
+            found.append(String(source[swiftRange]))
+        }
+    }
+    return found
+}
+
+private func closingBrace(in source: String, open: String.Index) -> String.Index? {
+    var depth = 0
+    var index = open
+    while index < source.endIndex {
+        let character = source[index]
+        if character == "{" { depth += 1 }
+        if character == "}" {
+            depth -= 1
+            if depth == 0 { return index }
+        }
+        index = source.index(after: index)
+    }
+    return nil
 }
 
 private func repoRoot() -> URL {
