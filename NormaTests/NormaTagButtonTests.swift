@@ -6,6 +6,7 @@
 //  acceptance check. AC-8: these cover variant colors and the press offset.
 //
 
+import Foundation
 import SwiftUI
 import Testing
 import UIKit
@@ -27,7 +28,7 @@ struct NormaTagButtonTests {
     }
 
     @Test("AC-2: face and base colors are NormaTheme tokens")
-    func variantColorsComeFromThemeTokens() {
+    func variantColorsComeFromThemeTokens() throws {
         // AC-2
         #expect(NormaTagButton.Variant.navy.face == NormaTheme.navy)
         #expect(NormaTagButton.Variant.navy.base == NormaTheme.pressedTagButtonNavy)
@@ -39,6 +40,10 @@ struct NormaTagButtonTests {
         #expect(NormaTagButton.Variant.coral.base.hex == 0x70382A)
         #expect(NormaTagButton.Variant.navy.face.hex != NormaTagButton.Variant.navy.base.hex)
         #expect(NormaTagButton.Variant.coral.face.hex != NormaTagButton.Variant.coral.base.hex)
+
+        let source = try normaTagButtonSource()
+        #expect(source.contains("struct NormaTagButton"))
+        #expect(hexLiterals(in: strippingStringsAndComments(source)) == [])
     }
 
     @Test("AC-3: rest has a 2pt lip and shadow; pressed offsets 2pt and drops the shadow")
@@ -68,12 +73,20 @@ struct NormaTagButtonTests {
         #expect(rest.shadowOpacity > 0)
     }
 
-    @Test("AC-4: NormaTagButtonStyle is a ButtonStyle")
-    func styleIsAButtonStyle() {
-        // AC-4: makeBody passes configuration.isPressed into the face.
+    @Test("AC-4: makeBody passes configuration.isPressed into the face")
+    func styleIsAButtonStyle() throws {
+        // AC-4
         let style = NormaTagButtonStyle(variant: .coral)
         #expect(style.variant == .coral)
         confirmButtonStyle(style)
+
+        let code = strippingStringsAndComments(try normaTagButtonSource())
+        let arguments = firstCallArguments(
+            callee: "NormaTagButtonFace",
+            in: functionBody(startingAt: "func makeBody", in: code)
+        )
+        let pressed = argument(named: "isPressed", in: arguments ?? "")
+        #expect(pressed == "configuration.isPressed")
     }
 
     @Test("AC-5: corners use continuous style")
@@ -186,4 +199,170 @@ struct NormaTagButtonTests {
         guard let array = object.perform(selector)?.takeUnretainedValue() as? NSArray else { return [] }
         return array.compactMap { $0 as? NSObject }.filter { $0 !== object }
     }
+}
+
+private func normaTagButtonSource() throws -> String {
+    let url =
+        URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Norma", isDirectory: true)
+        .appendingPathComponent("Views", isDirectory: true)
+        .appendingPathComponent("Components", isDirectory: true)
+        .appendingPathComponent("NormaTagButton.swift")
+    return try String(contentsOf: url, encoding: .utf8)
+}
+
+/// Code with comments and string literals removed, so a hex color in either does not count.
+private func strippingStringsAndComments(_ source: String) -> String {
+    var result = ""
+    var index = source.startIndex
+    while index < source.endIndex {
+        let next = source.index(after: index)
+        if source[index] == "/", next < source.endIndex, source[next] == "/" {
+            index = source[index...].firstIndex(of: "\n") ?? source.endIndex
+            continue
+        }
+        if source[index] == "/", next < source.endIndex, source[next] == "*" {
+            let searchFrom = source.index(after: next)
+            if let end = source[searchFrom...].range(of: "*/") {
+                index = end.upperBound
+            } else {
+                index = source.endIndex
+            }
+            continue
+        }
+        if source[index] == "\"" {
+            index = next
+            while index < source.endIndex {
+                if source[index] == "\\" {
+                    index = source.index(after: index)
+                    if index < source.endIndex {
+                        index = source.index(after: index)
+                    }
+                    continue
+                }
+                if source[index] == "\"" {
+                    index = source.index(after: index)
+                    break
+                }
+                index = source.index(after: index)
+            }
+            result.append("\"\"")
+            continue
+        }
+        result.append(source[index])
+        index = next
+    }
+    return result
+}
+
+private func hexLiterals(in code: String) -> [String] {
+    var literals: [String] = []
+    var index = code.startIndex
+    while index < code.endIndex {
+        if code[index] == "0" {
+            let marker = code.index(after: index)
+            if marker < code.endIndex, code[marker] == "x" || code[marker] == "X" {
+                var end = code.index(after: marker)
+                while end < code.endIndex, isHexDigit(code[end]) {
+                    end = code.index(after: end)
+                }
+                if end > code.index(after: marker) {
+                    literals.append(String(code[index..<end]))
+                    index = end
+                    continue
+                }
+            }
+        }
+        if code[index] == "#" {
+            var end = code.index(after: index)
+            var count = 0
+            while end < code.endIndex, count < 8, isHexDigit(code[end]) {
+                end = code.index(after: end)
+                count += 1
+            }
+            let stopped = end == code.endIndex || !isHexDigit(code[end])
+            if stopped && (count == 3 || count == 4 || count == 6 || count == 8) {
+                literals.append(String(code[index..<end]))
+                index = end
+                continue
+            }
+        }
+        index = code.index(after: index)
+    }
+    return literals
+}
+
+private func isHexDigit(_ character: Character) -> Bool {
+    guard let ascii = character.asciiValue else { return false }
+    return (ascii >= 48 && ascii <= 57) || (ascii >= 65 && ascii <= 70) || (ascii >= 97 && ascii <= 102)
+}
+
+private func functionBody(startingAt needle: String, in code: String) -> String {
+    guard let declaration = code.range(of: needle) else { return "" }
+    guard let open = code[declaration.upperBound...].firstIndex(of: "{") else { return "" }
+    var depth = 0
+    var index = open
+    while index < code.endIndex {
+        let character = code[index]
+        if character == "{" {
+            depth += 1
+        } else if character == "}" {
+            depth -= 1
+            if depth == 0 {
+                return String(code[open...index])
+            }
+        }
+        index = code.index(after: index)
+    }
+    return ""
+}
+
+private func firstCallArguments(callee: String, in code: String) -> String? {
+    let marker = callee + "("
+    guard let start = code.range(of: marker) else { return nil }
+    var depth = 1
+    var index = start.upperBound
+    while index < code.endIndex {
+        let character = code[index]
+        if character == "(" {
+            depth += 1
+        } else if character == ")" {
+            depth -= 1
+            if depth == 0 {
+                return String(code[start.upperBound..<index])
+            }
+        }
+        index = code.index(after: index)
+    }
+    return nil
+}
+
+private func argument(named name: String, in arguments: String) -> String? {
+    var depth = 0
+    var parts: [String] = []
+    var current = ""
+    for character in arguments {
+        if character == "(" || character == "[" || character == "{" {
+            depth += 1
+        } else if character == ")" || character == "]" || character == "}" {
+            depth -= 1
+        }
+        if character == ",", depth == 0 {
+            parts.append(current)
+            current = ""
+            continue
+        }
+        current.append(character)
+    }
+    parts.append(current)
+
+    let prefix = name + ":"
+    for part in parts {
+        let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix(prefix) else { continue }
+        return String(trimmed.dropFirst(prefix.count)).filter { !$0.isWhitespace }
+    }
+    return nil
 }
