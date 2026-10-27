@@ -100,7 +100,6 @@ struct NormaThemeTests {
         let radii: [CGFloat] = [0, 7, 28, 36, 100]
         for radius in radii {
             let shape = NormaTheme.shape(radius)
-            #expect(shape == RoundedRectangle(cornerRadius: radius, style: .continuous))
             #expect(shape.style == .continuous)
             #expect(shape.cornerSize == CGSize(width: radius, height: radius))
         }
@@ -130,7 +129,7 @@ struct NormaThemeTests {
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
         let uiColor = UIColor(swatch.color)
-        #expect(uiColor.getRed(&red, &green, &blue, &alpha))
+        #expect(uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
         #expect(byte(red) == Int((hex >> 16) & 0xFF))
         #expect(byte(green) == Int((hex >> 8) & 0xFF))
         #expect(byte(blue) == Int(hex & 0xFF))
