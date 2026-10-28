@@ -14,8 +14,7 @@ struct NormaTagButton: View {
     enum Variant: Equatable {
         /// Navy face on the darker navy lip.
         case navy
-        /// Coral face on the darker coral lip, with an ink label. Approve and
-        /// money moments only.
+        /// Coral face on the darker coral lip. Approve and money moments only.
         case coral
 
         var face: NormaTheme.Swatch {
@@ -32,10 +31,11 @@ struct NormaTagButton: View {
             }
         }
 
+        /// Instrument Sans label color. Navy and coral both use silver.
         var label: NormaTheme.Swatch {
             switch self {
             case .navy: return NormaTheme.silver
-            case .coral: return NormaTheme.ink
+            case .coral: return NormaTheme.silver
             }
         }
     }
