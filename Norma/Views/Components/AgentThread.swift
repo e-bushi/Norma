@@ -14,13 +14,6 @@ import UIKit
 struct AgentThreadModel: Equatable {
     var rows: [AgentThreadRow]
 
-    var spacerHeights: [CGFloat] {
-        rows.compactMap { row in
-            if case .spacer(let height) = row.kind { return height }
-            return nil
-        }
-    }
-
     var events: [AgentThreadEvent] {
         rows.compactMap { row in
             if case .event(let event) = row.kind { return event }
@@ -35,67 +28,47 @@ struct AgentThreadModel: Equatable {
         }
     }
 
-    /// Sample thread: header, yesterday, today with an idle and an active event,
-    /// Stash, Ratio, and Norma, then You. Spacers between those groups are 10, 20, 12, 16.
+    /// Board order: header, yesterday, today, then each reply under the event it answers.
     static let board = AgentThreadModel(rows: [
         AgentThreadRow(id: "header", kind: .header(AgentThreadHeader(title: "Everyone", agentCount: 5))),
-        AgentThreadRow(id: "spacer-after-header", kind: .spacer(AgentThreadMetrics.spacerAfterHeader)),
         AgentThreadRow(
             id: "yesterday",
             kind: .yesterday(
                 AgentThreadYesterday(
                     title: "Yesterday",
-                    date: "Oct 26",
-                    amount: "$146.20",
-                    summary: "Rent cleared. Stash set $40 aside.",
+                    date: "Tue, Oct 20",
+                    amount: "-$124.15",
+                    summary: "Phone bill paid · 3 messages",
                     faces: [NormaTheme.threadFaceWarm, NormaTheme.threadFaceCool, NormaTheme.ink]
                 ))
         ),
-        AgentThreadRow(id: "spacer-after-yesterday", kind: .spacer(AgentThreadMetrics.spacerAfterYesterday)),
         AgentThreadRow(
             id: "today",
-            kind: .day(AgentThreadDay(title: "Today", date: "Oct 27", total: "$84.00"))
+            kind: .day(AgentThreadDay(title: "Today", date: "Wed, Oct 21", total: "-$86.40"))
         ),
         AgentThreadRow(
-            id: "event-idle",
-            kind: .event(AgentThreadEvent(title: "Grocery run", time: "8:40 AM", isActive: false))
+            id: "event-stash",
+            kind: .event(AgentThreadEvent(title: "Stash moved $42.10 to savings", time: "9:12 AM", isActive: false))
         ),
-        AgentThreadRow(
-            id: "event-active",
-            kind: .event(AgentThreadEvent(title: "Paycheck landed", time: "9:15 AM", isActive: true))
-        ),
-        AgentThreadRow(id: "spacer-after-today", kind: .spacer(AgentThreadMetrics.spacerAfterToday)),
         AgentThreadRow(
             id: "reply-stash",
-            kind: .reply(
-                AgentThreadReply(
-                    name: "Stash",
-                    message: "Set $40 aside from yesterday's rent.",
-                    mark: .stash
-                ))
+            kind: .reply(AgentThreadReply(name: "Stash", message: "Round-ups from this week.", mark: .stash))
+        ),
+        AgentThreadRow(
+            id: "event-food",
+            kind: .event(AgentThreadEvent(title: "Food spend is down 30%.", time: "9:40 AM", isActive: true))
         ),
         AgentThreadRow(
             id: "reply-ratio",
-            kind: .reply(
-                AgentThreadReply(
-                    name: "Ratio",
-                    message: "That leaves 12 days at this pace.",
-                    mark: .ratio
-                ))
+            kind: .reply(AgentThreadReply(name: "Ratio", message: "Mostly fewer delivery nights.", mark: .ratio))
         ),
         AgentThreadRow(
             id: "reply-norma",
-            kind: .reply(
-                AgentThreadReply(
-                    name: "Norma",
-                    message: "Grocery is still open. Paycheck landed, so today is covered.",
-                    mark: .norma
-                ))
+            kind: .reply(AgentThreadReply(name: "Norma", message: "That covers your phone bill.", mark: .norma))
         ),
-        AgentThreadRow(id: "spacer-before-you", kind: .spacer(AgentThreadMetrics.spacerBeforeYou)),
         AgentThreadRow(
             id: "you",
-            kind: .you(AgentThreadYou(label: "You", message: "Move another $20."))
+            kind: .you(AgentThreadYou(label: "You · 9:52 AM", message: "Can I do a $90 dinner Friday?"))
         ),
     ])
 
@@ -113,9 +86,12 @@ struct AgentThreadRow: Identifiable, Equatable {
 
     var railMark: AgentThreadRailMark? {
         switch kind {
+        case .yesterday: return .yesterdayRing
+        case .day: return .todayDot
+        case .event(let event): return event.isActive ? .eventActive : .eventIdle
         case .reply(let reply): return reply.mark
         case .you: return .you
-        case .header, .yesterday, .day, .event, .spacer: return nil
+        case .header: return nil
         }
     }
 
@@ -127,7 +103,6 @@ struct AgentThreadRow: Identifiable, Equatable {
         case .event(let event): return event.voiceOverLabel
         case .reply(let reply): return reply.voiceOverLabel
         case .you(let you): return you.voiceOverLabel
-        case .spacer: return ""
         }
     }
 }
@@ -139,7 +114,6 @@ enum AgentThreadRowKind: Equatable {
     case event(AgentThreadEvent)
     case reply(AgentThreadReply)
     case you(AgentThreadYou)
-    case spacer(CGFloat)
 }
 
 struct AgentThreadHeader: Equatable {
@@ -196,6 +170,10 @@ struct AgentThreadYou: Equatable {
 }
 
 enum AgentThreadRailMark: Equatable {
+    case yesterdayRing
+    case todayDot
+    case eventIdle
+    case eventActive
     case stash
     case ratio
     case norma
@@ -206,9 +184,10 @@ struct AgentThreadEventStyle: Equatable {
     var title: NormaTheme.Swatch
     var time: NormaTheme.Swatch
 
+    /// Active time is ink. Coral stays on the rail dot (APP-103).
     static func resolve(_ isActive: Bool) -> AgentThreadEventStyle {
         if isActive {
-            return AgentThreadEventStyle(title: NormaTheme.ink, time: NormaTheme.coral)
+            return AgentThreadEventStyle(title: NormaTheme.ink, time: NormaTheme.ink)
         }
         return AgentThreadEventStyle(title: NormaTheme.threadSecondary, time: NormaTheme.threadMuted)
     }
@@ -218,9 +197,9 @@ struct AgentThreadRailStyle: Equatable {
     var fill: NormaTheme.Swatch
     var stroke: NormaTheme.Swatch
     var strokeWidth: CGFloat
-    var radius: CGFloat
+    var diameter: CGFloat
 
-    var diameter: CGFloat { radius * 2 }
+    var radius: CGFloat { diameter / 2 }
 }
 
 /// Board weight 600 is Instrument Sans SemiBold. The bundle ships Regular 400,
@@ -290,28 +269,35 @@ enum AgentThreadMetrics {
     static let headerDotSize: CGFloat = 8
     static let headerDot = NormaTheme.ink
 
+    static var headerBlockHeight: CGFloat {
+        headerPaddingTop + everyone.lineHeight + headerPaddingBottom
+    }
+
     static let chipRadius: CGFloat = 14
     static let chipPaddingVertical: CGFloat = 8
     static let chipPaddingHorizontal: CGFloat = 14
     static let chipGap: CGFloat = 6
     static let chipFill = NormaTheme.threadChip
-    static let yesterdayHeight: CGFloat = 60
+    static let yesterdayLineGap: CGFloat = 8
+    static let yesterdayLine2Height: CGFloat = 18
     static let yesterdayPaddingLeading: CGFloat = 22
     static let faceSize: CGFloat = 18
-    static let faceOverlap: CGFloat = 6
+    /// Centers of the stacked faces, 12pt apart.
+    static let faceCenterSpacing: CGFloat = 12
     static let faceStrokeWidth: CGFloat = 1.5
     static let faceRing = NormaTheme.threadFaceRing
+    static let yesterdayFacesOnSecondLine = true
 
     static let dayHeight: CGFloat = 36
     static let dayPaddingLeading: CGFloat = 22
-    static let eventHeight: CGFloat = 34
     static let eventPaddingLeading: CGFloat = 38
     static let titleDateGap: CGFloat = 8
+    static let eventTimeBelowTitle = true
+    static let eventTimeGap: CGFloat = 0
 
     static let replyPaddingLeading: CGFloat = 54
     static let replyGap: CGFloat = 2
     static let namePaddingLeading: CGFloat = 11
-    static let youHeight: CGFloat = 48
     static let youPaddingLeading: CGFloat = 38
 
     static let bubbleRadius: CGFloat = 16
@@ -321,27 +307,75 @@ enum AgentThreadMetrics {
     static let agentBubbleFill = NormaTheme.threadAgentBubble
     static let youBubbleFill = NormaTheme.ink
 
-    static let spacerAfterHeader: CGFloat = 10
-    static let spacerAfterYesterday: CGFloat = 20
-    static let spacerAfterToday: CGFloat = 12
-    static let spacerBeforeYou: CGFloat = 16
-    static let groupSpacers: [CGFloat] = [
-        spacerAfterHeader,
-        spacerAfterYesterday,
-        spacerAfterToday,
-        spacerBeforeYou,
-    ]
+    static let gapAfterYesterday: CGFloat = 18
+    static let gapBeforeFirstEvent: CGFloat = 12
+    static let gapTimeToSender: CGFloat = 12
+    static let gapBubbleToEvent: CGFloat = 18
+    static let gapBubbleToSender: CGFloat = 4
+
+    static func rowGap(from previous: AgentThreadRowKind, to next: AgentThreadRowKind) -> CGFloat {
+        switch (previous, next) {
+        case (.yesterday(_), .day(_)):
+            return gapAfterYesterday
+        case (.day(_), .event(_)):
+            return gapBeforeFirstEvent
+        case (.event(_), .reply(_)):
+            return gapTimeToSender
+        case (.reply(_), .reply(_)):
+            return gapBubbleToSender
+        case (.reply(_), .event(_)), (.reply(_), .you(_)):
+            return gapBubbleToEvent
+        default:
+            return 0
+        }
+    }
+
+    /// Day, event, and reply columns, measured from the list's leading edge.
+    static let dayColumnX: CGFloat = 5
+    static let eventColumnX: CGFloat = 21
+    static let replyColumnX: CGFloat = 37
+
+    static func columnX(_ mark: AgentThreadRailMark) -> CGFloat {
+        switch mark {
+        case .yesterdayRing, .todayDot: return dayColumnX
+        case .eventIdle, .eventActive, .you: return eventColumnX
+        case .stash, .ratio, .norma: return replyColumnX
+        }
+    }
+
+    /// Measured rail y=0 is 10pt above the Yesterday card, which starts when the header ends.
+    static var railOriginY: CGFloat {
+        headerBlockHeight + yesterdayTitleCenterInCard - AgentThreadBoardRail.dashEndY
+    }
+
+    static var yesterdayTitleCenterInCard: CGFloat {
+        chipPaddingVertical + yesterdayTitle.lineHeight / 2
+    }
 
     static let railWidth: CGFloat = 60
     static let railHeight: CGFloat = 496
-    /// Sits in the header gap (pad 6 + 8pt dot, then the 8pt gap) so the stroke stays left of type that starts at 22.
-    static let railLineX: CGFloat = 18
     static let railStrokeWidth: CGFloat = 1.25
     static let railLineCap: CGLineCap = .round
-    static let railDash: [CGFloat] = [2, 4]
+    static let railLineJoin: CGLineJoin = .round
     static let openingSegmentDashed = true
     static let railColor = NormaTheme.threadRail
-    static let chevron = ">"
+
+    static let chevronSymbol = "chevron.right"
+    static let chevronSize: CGFloat = 12
+    static let chevronGapAfterSummary: CGFloat = 8
+    static let chevronColor = NormaTheme.threadMuted
+
+    static let yesterdayRingDiameter: CGFloat = 8
+    static let yesterdayRingStroke: CGFloat = 1.5
+    static let todayDotDiameter: CGFloat = 8
+    static let idleDotDiameter: CGFloat = 6
+    static let activeDotDiameter: CGFloat = 10
+    static let activeDotStroke: CGFloat = 2.5
+    static let replyDotDiameter: CGFloat = 20
+    static let replyDotStroke: CGFloat = 2
+    static let normaDotStroke: CGFloat = 1.5
+    static let youDotDiameter: CGFloat = 8
+    static let youDotStroke: CGFloat = 2
 
     static let emphasisFace = "InstrumentSans-Medium"
     static let textFace = "InstrumentSans-Regular"
@@ -359,8 +393,6 @@ enum AgentThreadMetrics {
         name: "amount", postScriptName: numberFace, size: 12, lineHeight: 16, weight: 400, color: NormaTheme.ink)
     static let summary = AgentThreadText(
         name: "summary", postScriptName: textFace, size: 13, lineHeight: 18, weight: 400, color: NormaTheme.threadSecondary)
-    static let chevronText = AgentThreadText(
-        name: "chevron", postScriptName: numberFace, size: 12, lineHeight: 16, weight: 400, color: NormaTheme.threadMuted)
     static let dayTitle = AgentThreadText(
         name: "day title", postScriptName: emphasisFace, size: 16, lineHeight: 20, weight: 600, color: NormaTheme.ink)
     static let dayTotal = AgentThreadText(
@@ -378,14 +410,62 @@ enum AgentThreadMetrics {
 
     static func railStyle(_ mark: AgentThreadRailMark) -> AgentThreadRailStyle {
         switch mark {
+        case .yesterdayRing:
+            return AgentThreadRailStyle(
+                fill: NormaTheme.threadRingFill,
+                stroke: NormaTheme.threadMuted,
+                strokeWidth: yesterdayRingStroke,
+                diameter: yesterdayRingDiameter
+            )
+        case .todayDot:
+            return AgentThreadRailStyle(
+                fill: NormaTheme.ink,
+                stroke: NormaTheme.ink,
+                strokeWidth: 0,
+                diameter: todayDotDiameter
+            )
+        case .eventIdle:
+            return AgentThreadRailStyle(
+                fill: NormaTheme.threadIdleDot,
+                stroke: NormaTheme.threadIdleDot,
+                strokeWidth: 0,
+                diameter: idleDotDiameter
+            )
+        case .eventActive:
+            return AgentThreadRailStyle(
+                fill: NormaTheme.coral,
+                stroke: NormaTheme.threadCream,
+                strokeWidth: activeDotStroke,
+                diameter: activeDotDiameter
+            )
         case .stash:
-            return AgentThreadRailStyle(fill: NormaTheme.threadStash, stroke: NormaTheme.threadCream, strokeWidth: 2, radius: 10)
+            return AgentThreadRailStyle(
+                fill: NormaTheme.threadStash,
+                stroke: NormaTheme.threadCream,
+                strokeWidth: replyDotStroke,
+                diameter: replyDotDiameter
+            )
         case .ratio:
-            return AgentThreadRailStyle(fill: NormaTheme.threadFaceCool, stroke: NormaTheme.threadCream, strokeWidth: 2, radius: 10)
+            return AgentThreadRailStyle(
+                fill: NormaTheme.threadFaceCool,
+                stroke: NormaTheme.threadCream,
+                strokeWidth: replyDotStroke,
+                diameter: replyDotDiameter
+            )
         case .norma:
-            return AgentThreadRailStyle(fill: NormaTheme.ink, stroke: NormaTheme.threadMuted, strokeWidth: 1.5, radius: 10)
+            return AgentThreadRailStyle(
+                fill: NormaTheme.ink,
+                stroke: NormaTheme.threadMuted,
+                strokeWidth: normaDotStroke,
+                diameter: replyDotDiameter
+            )
         case .you:
-            return AgentThreadRailStyle(fill: NormaTheme.ink, stroke: NormaTheme.threadCream, strokeWidth: 2, radius: 4)
+            return AgentThreadRailStyle(
+                fill: NormaTheme.ink,
+                stroke: NormaTheme.threadCream,
+                strokeWidth: youDotStroke,
+                diameter: youDotDiameter
+            )
         }
     }
 
@@ -425,21 +505,20 @@ struct AgentThread: View {
 
     private var rows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(model.rows) { row in
+            ForEach(Array(model.rows.enumerated()), id: \.element.id) { index, row in
                 AgentThreadRowView(row: row)
+                    .padding(.top, topGap(at: index))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .backgroundPreferenceValue(AgentThreadRailAnchorKey.self) { anchors in
-            GeometryReader { proxy in
-                AgentThreadRail(
-                    marks: anchors.map { item in
-                        AgentThreadRailPlacement(id: item.id, y: proxy[item.anchor].midY, mark: item.mark)
-                    },
-                    height: proxy.size.height
-                )
-            }
+            AgentThreadRailOverlay(anchors: anchors)
         }
+    }
+
+    private func topGap(at index: Int) -> CGFloat {
+        guard index > 0 else { return 0 }
+        return AgentThreadMetrics.rowGap(from: model.rows[index - 1].kind, to: model.rows[index].kind)
     }
 
     private var sheetFill: some View {
@@ -461,16 +540,9 @@ private struct AgentThreadRowView: View {
     let row: AgentThreadRow
 
     var body: some View {
-        if case .spacer(let height) = row.kind {
-            Color.clear
-                .frame(height: height)
-                .accessibilityHidden(true)
-        } else {
-            rowContent
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.voiceOverLabel)
-                .modifier(AgentThreadRailAnchorModifier(row: row))
-        }
+        rowContent
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(row.voiceOverLabel)
     }
 
     @ViewBuilder
@@ -479,17 +551,15 @@ private struct AgentThreadRowView: View {
         case .header(let header):
             AgentThreadHeaderView(header: header)
         case .yesterday(let yesterday):
-            AgentThreadYesterdayView(yesterday: yesterday)
+            AgentThreadYesterdayView(id: row.id, yesterday: yesterday)
         case .day(let day):
-            AgentThreadDayView(day: day)
+            AgentThreadDayView(id: row.id, day: day)
         case .event(let event):
-            AgentThreadEventView(event: event)
+            AgentThreadEventView(id: row.id, event: event)
         case .reply(let reply):
-            AgentThreadReplyView(reply: reply)
+            AgentThreadReplyView(id: row.id, reply: reply)
         case .you(let you):
-            AgentThreadYouView(you: you)
-        case .spacer:
-            EmptyView()
+            AgentThreadYouView(id: row.id, you: you)
         }
     }
 }
@@ -515,29 +585,31 @@ private struct AgentThreadHeaderView: View {
 }
 
 private struct AgentThreadYesterdayView: View {
+    let id: String
     let yesterday: AgentThreadYesterday
 
     var body: some View {
-        HStack(alignment: .center, spacing: AgentThreadMetrics.chipGap) {
-            AgentThreadFaces(faces: yesterday.faces)
-            VStack(alignment: .leading, spacing: AgentThreadMetrics.chipGap) {
-                HStack(alignment: .firstTextBaseline, spacing: AgentThreadMetrics.titleDateGap) {
-                    Text(yesterday.title)
-                        .thread(AgentThreadMetrics.yesterdayTitle)
-                    Text(yesterday.date)
-                        .thread(AgentThreadMetrics.date)
-                    Spacer(minLength: AgentThreadMetrics.titleDateGap)
-                    Text(yesterday.amount)
-                        .thread(AgentThreadMetrics.amount)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: AgentThreadMetrics.chipGap) {
-                    Text(yesterday.summary)
-                        .thread(AgentThreadMetrics.summary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(AgentThreadMetrics.chevron)
-                        .thread(AgentThreadMetrics.chevronText)
-                }
+        VStack(alignment: .leading, spacing: AgentThreadMetrics.yesterdayLineGap) {
+            HStack(alignment: .firstTextBaseline, spacing: AgentThreadMetrics.titleDateGap) {
+                Text(yesterday.title)
+                    .thread(AgentThreadMetrics.yesterdayTitle)
+                Text(yesterday.date)
+                    .thread(AgentThreadMetrics.date)
+                Spacer(minLength: AgentThreadMetrics.titleDateGap)
+                Text(yesterday.amount)
+                    .thread(AgentThreadMetrics.amount)
             }
+            .agentThreadMarker(id: id, mark: .yesterdayRing)
+            HStack(alignment: .center, spacing: AgentThreadMetrics.chipGap) {
+                AgentThreadFaces(faces: yesterday.faces)
+                Text(yesterday.summary)
+                    .thread(AgentThreadMetrics.summary)
+                Spacer(minLength: AgentThreadMetrics.chevronGapAfterSummary)
+                Image(systemName: AgentThreadMetrics.chevronSymbol)
+                    .font(.system(size: AgentThreadMetrics.chevronSize, weight: .semibold))
+                    .foregroundStyle(AgentThreadMetrics.chevronColor.color)
+            }
+            .frame(minHeight: AgentThreadMetrics.yesterdayLine2Height, alignment: .center)
         }
         .padding(.horizontal, AgentThreadMetrics.chipPaddingHorizontal)
         .padding(.vertical, AgentThreadMetrics.chipPaddingVertical)
@@ -547,7 +619,6 @@ private struct AgentThreadYesterdayView: View {
                 .fill(AgentThreadMetrics.chipFill.color)
         }
         .padding(.leading, AgentThreadMetrics.yesterdayPaddingLeading)
-        .frame(minHeight: AgentThreadMetrics.yesterdayHeight, alignment: .center)
     }
 }
 
@@ -556,8 +627,8 @@ private struct AgentThreadFaces: View {
 
     var body: some View {
         let size = AgentThreadMetrics.faceSize
-        let step = size - AgentThreadMetrics.faceOverlap
-        let width = faces.isEmpty ? 0 : size + step * CGFloat(faces.count - 1)
+        let step = AgentThreadMetrics.faceCenterSpacing
+        let width = faces.isEmpty ? 0 : size + step * CGFloat(max(faces.count - 1, 0))
         ZStack(alignment: .leading) {
             ForEach(Array(faces.enumerated()), id: \.offset) { index, face in
                 NormaTheme.shape(size / 2)
@@ -576,6 +647,7 @@ private struct AgentThreadFaces: View {
 }
 
 private struct AgentThreadDayView: View {
+    let id: String
     let day: AgentThreadDay
 
     var body: some View {
@@ -589,30 +661,31 @@ private struct AgentThreadDayView: View {
                 .thread(AgentThreadMetrics.dayTotal)
         }
         .padding(.leading, AgentThreadMetrics.dayPaddingLeading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: AgentThreadMetrics.dayHeight, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: AgentThreadMetrics.dayHeight, alignment: .center)
+        .agentThreadMarker(id: id, mark: .todayDot)
     }
 }
 
 private struct AgentThreadEventView: View {
+    let id: String
     let event: AgentThreadEvent
 
     var body: some View {
         let style = AgentThreadEventStyle.resolve(event.isActive)
-        HStack(alignment: .firstTextBaseline, spacing: AgentThreadMetrics.titleDateGap) {
+        VStack(alignment: .leading, spacing: AgentThreadMetrics.eventTimeGap) {
             Text(event.title)
                 .thread(AgentThreadMetrics.eventTitle.colored(style.title))
-            Spacer(minLength: AgentThreadMetrics.titleDateGap)
+                .agentThreadMarker(id: id, mark: event.isActive ? .eventActive : .eventIdle)
             Text(event.time)
                 .thread(AgentThreadMetrics.eventTime.colored(style.time))
         }
         .padding(.leading, AgentThreadMetrics.eventPaddingLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: AgentThreadMetrics.eventHeight, alignment: .center)
     }
 }
 
 private struct AgentThreadReplyView: View {
+    let id: String
     let reply: AgentThreadReply
 
     var body: some View {
@@ -621,6 +694,7 @@ private struct AgentThreadReplyView: View {
                 .thread(AgentThreadMetrics.name)
                 .padding(.leading, AgentThreadMetrics.namePaddingLeading)
             AgentThreadBubble(message: reply.message, fill: AgentThreadMetrics.agentBubbleFill, text: AgentThreadMetrics.agentBody)
+                .agentThreadMarker(id: id, mark: reply.mark)
         }
         .padding(.leading, AgentThreadMetrics.replyPaddingLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -628,6 +702,7 @@ private struct AgentThreadReplyView: View {
 }
 
 private struct AgentThreadYouView: View {
+    let id: String
     let you: AgentThreadYou
 
     var body: some View {
@@ -635,9 +710,10 @@ private struct AgentThreadYouView: View {
             Text(you.label)
                 .thread(AgentThreadMetrics.name)
             AgentThreadBubble(message: you.message, fill: AgentThreadMetrics.youBubbleFill, text: AgentThreadMetrics.youBody)
+                .agentThreadMarker(id: id, mark: .you)
         }
         .padding(.leading, AgentThreadMetrics.youPaddingLeading)
-        .frame(maxWidth: .infinity, minHeight: AgentThreadMetrics.youHeight, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -667,108 +743,19 @@ extension Text {
     }
 }
 
-// MARK: - Rail
-
-private struct AgentThreadRailAnchor {
-    let id: String
-    let mark: AgentThreadRailMark
-    let anchor: Anchor<CGRect>
-}
-
-private struct AgentThreadRailAnchorKey: PreferenceKey {
-    static var defaultValue: [AgentThreadRailAnchor] = []
-
-    static func reduce(value: inout [AgentThreadRailAnchor], nextValue: () -> [AgentThreadRailAnchor]) {
-        value.append(contentsOf: nextValue())
-    }
-}
-
-private struct AgentThreadRailAnchorModifier: ViewModifier {
-    let row: AgentThreadRow
-
-    func body(content: Content) -> some View {
-        if let mark = row.railMark {
-            content.anchorPreference(key: AgentThreadRailAnchorKey.self, value: .bounds) { anchor in
-                [AgentThreadRailAnchor(id: row.id, mark: mark, anchor: anchor)]
-            }
-        } else {
-            content
-        }
-    }
-}
-
-private struct AgentThreadRailPlacement: Identifiable {
-    let id: String
-    let y: CGFloat
-    let mark: AgentThreadRailMark
-}
-
-private struct AgentThreadRail: View {
-    let marks: [AgentThreadRailPlacement]
-    let height: CGFloat
-
-    var body: some View {
-        let sorted = marks.sorted { $0.y < $1.y }
-        let openingEnd = sorted.first?.y ?? height
-        ZStack(alignment: .topLeading) {
-            segment(from: 0, to: openingEnd, isOpening: true)
-            segment(from: openingEnd, to: height, isOpening: false)
-            ForEach(sorted) { placement in
-                AgentThreadRailMarkView(mark: placement.mark)
-                    .position(x: AgentThreadMetrics.railLineX, y: placement.y)
-            }
-        }
-        .frame(width: AgentThreadMetrics.railWidth, height: height, alignment: .topLeading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-    }
-
-    private func segment(from start: CGFloat, to end: CGFloat, isOpening: Bool) -> some View {
-        AgentThreadRailLine(x: AgentThreadMetrics.railLineX, start: start, end: end)
-            .stroke(
-                AgentThreadMetrics.railColor.color,
-                style: StrokeStyle(
-                    lineWidth: AgentThreadMetrics.railStrokeWidth,
-                    lineCap: AgentThreadMetrics.railLineCap,
-                    dash: AgentThreadMetrics.segmentIsDashed(isOpening: isOpening) ? AgentThreadMetrics.railDash : []
-                )
-            )
-            .frame(width: AgentThreadMetrics.railWidth, height: height, alignment: .topLeading)
-    }
-}
-
-private struct AgentThreadRailLine: Shape {
-    var x: CGFloat
-    var start: CGFloat
-    var end: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard end > start else { return path }
-        path.move(to: CGPoint(x: x, y: start))
-        path.addLine(to: CGPoint(x: x, y: end))
-        return path
-    }
-}
-
-private struct AgentThreadRailMarkView: View {
-    let mark: AgentThreadRailMark
-
-    var body: some View {
-        let style = AgentThreadMetrics.railStyle(mark)
-        NormaTheme.shape(style.radius)
-            .fill(style.fill.color)
-            .overlay {
-                NormaTheme.shape(style.radius)
-                    .strokeBorder(style.stroke.color, lineWidth: style.strokeWidth)
-            }
-            .frame(width: style.diameter, height: style.diameter)
-    }
-}
-
-// AC-7
+// AC-7 AC-20
 #Preview("Agent thread") {
-    AgentThread(model: .board)
-        .frame(width: AgentThreadMetrics.threadWidth, height: AgentThreadMetrics.threadHeight)
+    HStack(alignment: .top, spacing: NormaTheme.spacing16) {
+        Image("AgentsBoard")
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: AgentThreadMetrics.threadWidth)
+            .accessibilityHidden(true)
+        AgentThread(model: .board)
+            .frame(width: AgentThreadMetrics.threadWidth, height: AgentThreadMetrics.threadHeight)
+    }
+    .padding(NormaTheme.spacing16)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background(NormaTheme.ink.color)
 }

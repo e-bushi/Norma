@@ -17,22 +17,16 @@ struct AgentThreadModelTests {
     @Test func boardRendersEveryRowToTheMeasuredValues() {
         // AC-1
         let board = AgentThreadModel.board
-        #expect(board.spacerHeights == [10, 20, 12, 16])
-        #expect(board.spacerHeights == AgentThreadMetrics.groupSpacers)
         #expect(
             kindNames(board) == [
                 "header",
-                "spacer",
                 "yesterday",
-                "spacer",
                 "day",
                 "event",
+                "reply",
                 "event",
-                "spacer",
                 "reply",
                 "reply",
-                "reply",
-                "spacer",
                 "you",
             ])
 
@@ -59,11 +53,10 @@ struct AgentThreadModelTests {
 
         let yesterday = yesterday(in: board)
         #expect(yesterday?.title == "Yesterday")
-        #expect(yesterday?.date == "Oct 26")
-        #expect(yesterday?.amount == "$146.20")
-        #expect(yesterday?.summary == "Rent cleared. Stash set $40 aside.")
+        #expect(yesterday?.date == "Tue, Oct 20")
+        #expect(yesterday?.amount == "-$124.15")
+        #expect(yesterday?.summary == "Phone bill paid \u{00B7} 3 messages")
         #expect(yesterday?.faces == [NormaTheme.threadFaceWarm, NormaTheme.threadFaceCool, NormaTheme.ink])
-        #expect(AgentThreadMetrics.yesterdayHeight == 60)
         #expect(AgentThreadMetrics.yesterdayPaddingLeading == 22)
         #expect(AgentThreadMetrics.chipRadius == 14)
         #expect(AgentThreadMetrics.chipPaddingVertical == 8)
@@ -71,7 +64,8 @@ struct AgentThreadModelTests {
         #expect(AgentThreadMetrics.chipGap == 6)
         #expect(AgentThreadMetrics.chipFill == NormaTheme.threadChip)
         #expect(AgentThreadMetrics.faceSize == 18)
-        #expect(AgentThreadMetrics.faceOverlap == 6)
+        #expect(AgentThreadMetrics.faceCenterSpacing == 12)
+        #expect(AgentThreadMetrics.faceSize - AgentThreadMetrics.faceCenterSpacing == 6)
         #expect(AgentThreadMetrics.faceStrokeWidth == 1.5)
         #expect(AgentThreadMetrics.faceRing == NormaTheme.threadFaceRing)
         #expect(AgentThreadMetrics.yesterdayTitle.size == 15)
@@ -89,16 +83,14 @@ struct AgentThreadModelTests {
         #expect(AgentThreadMetrics.summary.weight == 400)
         #expect(AgentThreadMetrics.summary.postScriptName == "InstrumentSans-Regular")
         #expect(AgentThreadMetrics.summary.color == NormaTheme.threadSecondary)
-        #expect(AgentThreadMetrics.chevron == ">")
-        #expect(AgentThreadMetrics.chevronText.size == 12)
-        #expect(AgentThreadMetrics.chevronText.lineHeight == 16)
-        #expect(AgentThreadMetrics.chevronText.postScriptName == "CommitMono-Regular")
-        #expect(AgentThreadMetrics.chevronText.color == NormaTheme.threadMuted)
+        #expect(AgentThreadMetrics.chevronSymbol == "chevron.right")
+        #expect(AgentThreadMetrics.chevronSize == 12)
+        #expect(AgentThreadMetrics.chevronColor == NormaTheme.threadMuted)
 
         let day = day(in: board)
         #expect(day?.title == "Today")
-        #expect(day?.date == "Oct 27")
-        #expect(day?.total == "$84.00")
+        #expect(day?.date == "Wed, Oct 21")
+        #expect(day?.total == "-$86.40")
         #expect(AgentThreadMetrics.dayHeight == 36)
         #expect(AgentThreadMetrics.dayPaddingLeading == 22)
         #expect(AgentThreadMetrics.dayTitle.size == 16)
@@ -111,9 +103,9 @@ struct AgentThreadModelTests {
         #expect(AgentThreadMetrics.titleDateGap == 8)
 
         #expect(board.events.map(\.isActive) == [false, true])
-        #expect(board.events.map(\.title) == ["Grocery run", "Paycheck landed"])
-        #expect(board.events.map(\.time) == ["8:40 AM", "9:15 AM"])
-        #expect(AgentThreadMetrics.eventHeight == 34)
+        #expect(board.events.map(\.title) == ["Stash moved $42.10 to savings", "Food spend is down 30%."])
+        #expect(board.events.map(\.time) == ["9:12 AM", "9:40 AM"])
+        #expect(AgentThreadMetrics.eventTimeGap == 0)
         #expect(AgentThreadMetrics.eventPaddingLeading == 38)
         #expect(AgentThreadMetrics.eventTitle.size == 15)
         #expect(AgentThreadMetrics.eventTitle.lineHeight == 20)
@@ -126,7 +118,8 @@ struct AgentThreadModelTests {
         #expect(idle.title == NormaTheme.threadSecondary)
         #expect(idle.time == NormaTheme.threadMuted)
         #expect(active.title == NormaTheme.ink)
-        #expect(active.time == NormaTheme.coral)
+        // AC-14
+        #expect(active.time == NormaTheme.ink)
 
         #expect(board.replies.map(\.name) == ["Stash", "Ratio", "Norma"])
         #expect(board.replies.map(\.mark) == [.stash, .ratio, .norma])
@@ -143,9 +136,8 @@ struct AgentThreadModelTests {
         #expect(AgentThreadMetrics.agentBody.color == NormaTheme.ink)
 
         let you = you(in: board)
-        #expect(you?.label == "You")
-        #expect(you?.message == "Move another $20.")
-        #expect(AgentThreadMetrics.youHeight == 48)
+        #expect(you?.label == "You \u{00B7} 9:52 AM")
+        #expect(you?.message == "Can I do a $90 dinner Friday?")
         #expect(AgentThreadMetrics.youPaddingLeading == 38)
         #expect(AgentThreadMetrics.youBody.size == 14)
         #expect(AgentThreadMetrics.youBody.lineHeight == 20)
@@ -205,6 +197,8 @@ struct AgentThreadTokenTests {
         expectLocked(NormaTheme.threadCream, hex: 0xFCF9F3, hexString: "#FCF9F3")
         expectLocked(NormaTheme.threadRail, hex: 0xD6CEC1, hexString: "#D6CEC1")
         expectLocked(NormaTheme.threadStash, hex: 0xB7C4AE, hexString: "#B7C4AE")
+        expectLocked(NormaTheme.threadRingFill, hex: 0xF5EFE5, hexString: "#F5EFE5")
+        expectLocked(NormaTheme.threadIdleDot, hex: 0xB3AA9C, hexString: "#B3AA9C")
         #expect(NormaTheme.ink.hex == 0x111111)
         #expect(NormaTheme.coral.hex == 0xCC664D)
         #expect(
@@ -252,8 +246,8 @@ struct AgentThreadRailTests {
         // AC-4
         let board = AgentThreadModel.board
         let marks: [AgentThreadRailMark] = board.rows.compactMap(\.railMark)
-        #expect(marks == [.stash, .ratio, .norma, .you])
-        #expect(board.rows.filter { $0.railMark == nil }.count == board.rows.count - 4)
+        #expect(marks == [.yesterdayRing, .todayDot, .eventIdle, .stash, .eventActive, .ratio, .norma, .you])
+        #expect(board.rows.filter { $0.railMark == nil }.map(\.id) == ["header"])
 
         let stash: AgentThreadRailStyle = AgentThreadMetrics.railStyle(.stash)
         #expect(stash.fill == NormaTheme.threadStash)
@@ -290,7 +284,10 @@ struct AgentThreadRailTests {
         #expect(AgentThreadMetrics.railDash == [2, 4])
         #expect(AgentThreadMetrics.segmentIsDashed(isOpening: true))
         #expect(AgentThreadMetrics.segmentIsDashed(isOpening: false) == false)
-        #expect(AgentThreadMetrics.railLineX == 18)
+        #expect(AgentThreadMetrics.railLineJoin == .round)
+        #expect(AgentThreadMetrics.dayColumnX == 5)
+        #expect(AgentThreadMetrics.eventColumnX == 21)
+        #expect(AgentThreadMetrics.replyColumnX == 37)
     }
 }
 
@@ -298,28 +295,24 @@ struct AgentThreadRailTests {
 struct AgentThreadAccessibilityTests {
     @Test func voiceOverReadsNameThenMessageAndTitleThenTime() throws {
         // AC-5
-        let stash = AgentThreadReply(name: "Stash", message: "Set $40 aside from yesterday's rent.", mark: .stash)
-        let ratio = AgentThreadReply(name: "Ratio", message: "That leaves 12 days at this pace.", mark: .ratio)
-        let norma = AgentThreadReply(
-            name: "Norma",
-            message: "Grocery is still open. Paycheck landed, so today is covered.",
-            mark: .norma
-        )
-        let you = AgentThreadYou(label: "You", message: "Move another $20.")
-        let idle = AgentThreadEvent(title: "Grocery run", time: "8:40 AM", isActive: false)
-        let active = AgentThreadEvent(title: "Paycheck landed", time: "9:15 AM", isActive: true)
+        let stash = AgentThreadReply(name: "Stash", message: "Round-ups from this week.", mark: .stash)
+        let ratio = AgentThreadReply(name: "Ratio", message: "Mostly fewer delivery nights.", mark: .ratio)
+        let norma = AgentThreadReply(name: "Norma", message: "That covers your phone bill.", mark: .norma)
+        let you = AgentThreadYou(label: "You \u{00B7} 9:52 AM", message: "Can I do a $90 dinner Friday?")
+        let idle = AgentThreadEvent(title: "Stash moved $42.10 to savings", time: "9:12 AM", isActive: false)
+        let active = AgentThreadEvent(title: "Food spend is down 30%.", time: "9:40 AM", isActive: true)
 
-        #expect(stash.voiceOverLabel == "Stash, Set $40 aside from yesterday's rent.")
-        #expect(ratio.voiceOverLabel == "Ratio, That leaves 12 days at this pace.")
-        #expect(norma.voiceOverLabel == "Norma, Grocery is still open. Paycheck landed, so today is covered.")
-        #expect(you.voiceOverLabel == "You, Move another $20.")
-        #expect(idle.voiceOverLabel == "Grocery run, 8:40 AM")
-        #expect(active.voiceOverLabel == "Paycheck landed, 9:15 AM")
+        #expect(stash.voiceOverLabel == "Stash, Round-ups from this week.")
+        #expect(ratio.voiceOverLabel == "Ratio, Mostly fewer delivery nights.")
+        #expect(norma.voiceOverLabel == "Norma, That covers your phone bill.")
+        #expect(you.voiceOverLabel == "You \u{00B7} 9:52 AM, Can I do a $90 dinner Friday?")
+        #expect(idle.voiceOverLabel == "Stash moved $42.10 to savings, 9:12 AM")
+        #expect(active.voiceOverLabel == "Food spend is down 30%., 9:40 AM")
 
         let rows = AgentThreadModel.board.rows
         #expect(rows.first { $0.id == "reply-stash" }?.voiceOverLabel == stash.voiceOverLabel)
-        #expect(rows.first { $0.id == "event-idle" }?.voiceOverLabel == idle.voiceOverLabel)
-        #expect(rows.first { $0.id == "event-active" }?.voiceOverLabel == active.voiceOverLabel)
+        #expect(rows.first { $0.id == "event-stash" }?.voiceOverLabel == idle.voiceOverLabel)
+        #expect(rows.first { $0.id == "event-food" }?.voiceOverLabel == active.voiceOverLabel)
         #expect(rows.first { $0.id == "you" }?.voiceOverLabel == you.voiceOverLabel)
 
         let source = try agentThreadSource()
@@ -346,9 +339,7 @@ struct AgentThreadGrowthTests {
         #expect(source.contains("fixedSize(horizontal: false, vertical: true)"))
         #expect(source.contains("minHeight: style.lineHeight"))
         #expect(source.contains("minHeight: AgentThreadMetrics.dayHeight"))
-        #expect(source.contains("minHeight: AgentThreadMetrics.eventHeight"))
-        #expect(source.contains("minHeight: AgentThreadMetrics.yesterdayHeight"))
-        #expect(source.contains("minHeight: AgentThreadMetrics.youHeight"))
+        #expect(source.contains("minHeight: AgentThreadMetrics.yesterdayLine2Height"))
         #expect(source.contains("ScrollView"))
         #expect(source.contains("lineLimit") == false)
         #expect(source.contains("minimumScaleFactor") == false)
@@ -371,35 +362,35 @@ struct AgentThreadPreviewTests {
         #expect(preview.contains("AgentThreadMetrics.threadHeight"))
 
         let board = AgentThreadModel.board
+        #expect(preview.contains("Image(\"AgentsBoard\")"))
         #expect(header(in: board)?.countText == "\u{00B7} 5 agents")
         #expect(yesterday(in: board)?.title == "Yesterday")
         #expect(day(in: board)?.title == "Today")
         #expect(board.events.map(\.isActive) == [false, true])
         #expect(board.replies.map(\.name) == ["Stash", "Ratio", "Norma"])
-        #expect(you(in: board)?.label == "You")
-        #expect(board.spacerHeights == [10, 20, 12, 16])
+        #expect(you(in: board)?.label == "You \u{00B7} 9:52 AM")
         let rendered = [
             "Everyone",
             "\u{00B7} 5 agents",
             "Yesterday",
-            "Oct 26",
-            "$146.20",
-            "Rent cleared. Stash set $40 aside.",
+            "Tue, Oct 20",
+            "-$124.15",
+            "Phone bill paid \u{00B7} 3 messages",
             "Today",
-            "Oct 27",
-            "$84.00",
-            "Grocery run",
-            "8:40 AM",
-            "Paycheck landed",
-            "9:15 AM",
+            "Wed, Oct 21",
+            "-$86.40",
+            "Stash moved $42.10 to savings",
+            "9:12 AM",
+            "Food spend is down 30%.",
+            "9:40 AM",
             "Stash",
-            "Set $40 aside from yesterday's rent.",
+            "Round-ups from this week.",
             "Ratio",
-            "That leaves 12 days at this pace.",
+            "Mostly fewer delivery nights.",
             "Norma",
-            "Grocery is still open. Paycheck landed, so today is covered.",
-            "You",
-            "Move another $20.",
+            "That covers your phone bill.",
+            "You \u{00B7} 9:52 AM",
+            "Can I do a $90 dinner Friday?",
         ]
         for line in rendered {
             #expect(source.contains(line))
@@ -442,7 +433,6 @@ private func kindNames(_ model: AgentThreadModel) -> [String] {
         case .event: return "event"
         case .reply: return "reply"
         case .you: return "you"
-        case .spacer: return "spacer"
         }
     }
 }

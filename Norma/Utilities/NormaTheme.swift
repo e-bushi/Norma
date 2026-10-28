@@ -127,6 +127,10 @@ enum NormaTheme {
     static let threadRail = Swatch(name: "thread rail", hex: 0xD6CEC1)
     /// #B7C4AE
     static let threadStash = Swatch(name: "thread stash", hex: 0xB7C4AE)
+    /// #F5EFE5. Yesterday ring fill.
+    static let threadRingFill = Swatch(name: "thread ring fill", hex: 0xF5EFE5)
+    /// #B3AA9C. Idle event dot on the rail.
+    static let threadIdleDot = Swatch(name: "thread idle dot", hex: 0xB3AA9C)
 
     static let threadSwatches: [Swatch] = [
         threadSheetStart,
@@ -143,6 +147,8 @@ enum NormaTheme {
         threadCream,
         threadRail,
         threadStash,
+        threadRingFill,
+        threadIdleDot,
     ]
 
     static let title = TypeStyle(name: "title", kind: .text, postScriptName: "InstrumentSans-Bold", size: 28)
