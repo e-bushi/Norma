@@ -733,7 +733,7 @@ private struct AgentThreadBubble: View {
 }
 
 extension Text {
-    private func thread(_ style: AgentThreadText) -> some View {
+    func thread(_ style: AgentThreadText) -> some View {
         font(style.font)
             .foregroundStyle(style.color.color)
             .lineSpacing(style.extraLineSpacing)
@@ -746,12 +746,6 @@ extension Text {
 // AC-7 AC-20
 #Preview("Agent thread") {
     HStack(alignment: .top, spacing: NormaTheme.spacing16) {
-        Image("AgentsBoard")
-            .resizable()
-            .interpolation(.high)
-            .scaledToFit()
-            .frame(width: AgentThreadMetrics.threadWidth)
-            .accessibilityHidden(true)
         AgentThread(model: .board)
             .frame(width: AgentThreadMetrics.threadWidth, height: AgentThreadMetrics.threadHeight)
     }

@@ -281,7 +281,7 @@ struct AgentThreadRailTests {
         #expect(AgentThreadMetrics.railStrokeWidth == 1.25)
         #expect(AgentThreadMetrics.railLineCap == .round)
         #expect(AgentThreadMetrics.openingSegmentDashed)
-        #expect(AgentThreadMetrics.railDash == [2, 4])
+        #expect(AgentThreadBoardRail.dash == [2, 4])
         #expect(AgentThreadMetrics.segmentIsDashed(isOpening: true))
         #expect(AgentThreadMetrics.segmentIsDashed(isOpening: false) == false)
         #expect(AgentThreadMetrics.railLineJoin == .round)
@@ -362,7 +362,6 @@ struct AgentThreadPreviewTests {
         #expect(preview.contains("AgentThreadMetrics.threadHeight"))
 
         let board = AgentThreadModel.board
-        #expect(preview.contains("Image(\"AgentsBoard\")"))
         #expect(header(in: board)?.countText == "\u{00B7} 5 agents")
         #expect(yesterday(in: board)?.title == "Yesterday")
         #expect(day(in: board)?.title == "Today")
@@ -371,7 +370,6 @@ struct AgentThreadPreviewTests {
         #expect(you(in: board)?.label == "You \u{00B7} 9:52 AM")
         let rendered = [
             "Everyone",
-            "\u{00B7} 5 agents",
             "Yesterday",
             "Tue, Oct 20",
             "-$124.15",

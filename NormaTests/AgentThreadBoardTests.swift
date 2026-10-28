@@ -272,12 +272,12 @@ struct AgentThreadBoardRowTests {
         #expect(AgentThreadModel.board.rows.first { $0.id == "today" }?.railMark == .todayDot)
     }
 
-    @Test func previewSitsBesideTheBoardImage() throws {
+    @Test func previewShowsTheThreadWithoutTheBoardImage() throws {
         // AC-20
         let source = try threadSource()
         let preview = previewSource(in: source)
         #expect(preview.contains("#Preview(\"Agent thread\")"))
-        #expect(preview.contains("Image(\"AgentsBoard\")"))
+        #expect(!preview.contains("Image(\"AgentsBoard\")"))
         #expect(preview.contains("AgentThread(model: .board)"))
         #expect(preview.contains("width: AgentThreadMetrics.threadWidth"))
         #expect(AgentThreadMetrics.threadWidth == 391)
