@@ -92,7 +92,7 @@ struct AgentStoriesRow: View {
 
     var body: some View {
         ScrollView(AgentStoriesMetrics.scrollAxis, showsIndicators: false) {
-            HStack(spacing: AgentStoriesMetrics.columnGap) {
+            HStack(alignment: .top, spacing: AgentStoriesMetrics.columnGap) {
                 ForEach(agents) { agent in
                     AgentStoryColumn(agent: agent)
                 }

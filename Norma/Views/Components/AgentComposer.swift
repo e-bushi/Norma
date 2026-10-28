@@ -62,7 +62,7 @@ struct AgentComposer: View {
     let onSend: () -> Void
 
     var body: some View {
-        HStack(spacing: AgentComposerMetrics.rowGap) {
+        HStack(alignment: .bottom, spacing: AgentComposerMetrics.rowGap) {
             addButton
             field
         }
