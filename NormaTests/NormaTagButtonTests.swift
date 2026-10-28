@@ -196,12 +196,12 @@ struct NormaTagButtonTests {
             if let axLabel = snapshot["AXLabel"] as? String, !axLabel.isEmpty, publicLabelMissing {
                 label = axLabel
             }
-            traits.formUnion(traits(in: snapshot))
+            traits.formUnion(snapshotTraits(in: snapshot))
         }
         return HostedAccessibility(label: label, traits: traits)
     }
 
-    private func traits(in snapshot: [String: Any]) -> UIAccessibilityTraits {
+    private func snapshotTraits(in snapshot: [String: Any]) -> UIAccessibilityTraits {
         let raw = snapshot["AXTraits"]
         if let number = raw as? NSNumber {
             return UIAccessibilityTraits(rawValue: number.uint64Value)
