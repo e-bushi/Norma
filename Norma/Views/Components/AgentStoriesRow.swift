@@ -114,8 +114,10 @@ private struct AgentStoryColumn: View {
             Text(agent.name)
                 .font(AgentStoriesMetrics.labelStyle.font)
                 .foregroundStyle(style.label.color)
-                .lineLimit(1)
-                .frame(width: AgentStoriesMetrics.columnWidth, height: AgentStoriesMetrics.labelLineHeight)
+                .multilineTextAlignment(.center)
+                .lineLimit(4)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, minHeight: AgentStoriesMetrics.labelLineHeight)
         }
         .frame(width: AgentStoriesMetrics.columnWidth)
         .accessibilityElement(children: .ignore)

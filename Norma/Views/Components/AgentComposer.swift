@@ -96,7 +96,7 @@ struct AgentComposer: View {
             .font(AgentComposerMetrics.textStyle.font)
             .foregroundStyle(AgentComposerMetrics.typedText.color)
             .textFieldStyle(.plain)
-            .frame(height: AgentComposerMetrics.textLineHeight)
+            .frame(minHeight: AgentComposerMetrics.textLineHeight)
             .submitLabel(.send)
             .onSubmit(send)
 
@@ -105,7 +105,7 @@ struct AgentComposer: View {
         .padding(.leading, AgentComposerMetrics.fieldPaddingLeading)
         .padding(.trailing, AgentComposerMetrics.fieldPaddingTrailing)
         .frame(maxWidth: .infinity)
-        .frame(height: AgentComposerMetrics.fieldHeight)
+        .frame(minHeight: AgentComposerMetrics.fieldHeight)
         .background(
             AgentComposerMetrics.fieldFill.color,
             in: NormaTheme.shape(AgentComposerMetrics.fieldRadius)
