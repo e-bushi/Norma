@@ -14,7 +14,8 @@ struct NormaTagButton: View {
     enum Variant: Equatable {
         /// Navy face on the darker navy lip.
         case navy
-        /// Coral face on the darker coral lip. Approve and money moments only.
+        /// Coral face on the darker coral lip, with an ink label. Approve and
+        /// money moments only.
         case coral
 
         var face: NormaTheme.Swatch {
@@ -28,6 +29,13 @@ struct NormaTagButton: View {
             switch self {
             case .navy: return NormaTheme.pressedTagButtonNavy
             case .coral: return NormaTheme.pressedTagButtonCoral
+            }
+        }
+
+        var label: NormaTheme.Swatch {
+            switch self {
+            case .navy: return NormaTheme.silver
+            case .coral: return NormaTheme.ink
             }
         }
     }
@@ -143,7 +151,7 @@ private struct NormaTagButtonFace<Label: View>: View {
         // the face moves down onto the strip and the shadow is gone.
         label
             .font(NormaTheme.label.font)
-            .foregroundStyle(NormaTheme.silver.color)
+            .foregroundStyle(variant.label.color)
             .padding(.horizontal, NormaTheme.spacing16)
             .padding(.vertical, NormaTheme.spacing12)
             .background { shape.fill(variant.face.color) }

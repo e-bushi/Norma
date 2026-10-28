@@ -39,6 +39,9 @@ struct NormaTagButtonTests {
         #expect(NormaTagButton.Variant.coral.base.hex == 0x70382A)
         #expect(NormaTagButton.Variant.navy.face.hex != NormaTagButton.Variant.navy.base.hex)
         #expect(NormaTagButton.Variant.coral.face.hex != NormaTagButton.Variant.coral.base.hex)
+        #expect(NormaTagButton.Variant.navy.label == NormaTheme.silver)
+        #expect(NormaTagButton.Variant.coral.label == NormaTheme.ink)
+        #expect(NormaTagButton.Variant.coral.label.hex == 0x111111)
 
         let source = try normaTagButtonSource()
         #expect(source.contains("struct NormaTagButton"))
