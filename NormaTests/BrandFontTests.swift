@@ -14,6 +14,7 @@ struct BrandFontTests {
     @Test(arguments: [
         "InstrumentSans-Regular",
         "InstrumentSans-Medium",
+        "InstrumentSans-SemiBold",
         "InstrumentSans-Bold",
         "CommitMono-Regular",
         "CommitMono-Bold",
