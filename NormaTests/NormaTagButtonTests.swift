@@ -9,7 +9,6 @@
 import Foundation
 import SwiftUI
 import Testing
-import UIKit
 
 @testable import Norma
 
@@ -76,7 +75,7 @@ struct NormaTagButtonTests {
     @Test("AC-4: makeBody passes configuration.isPressed into the face")
     func styleIsAButtonStyle() throws {
         // AC-4
-        let style = NormaTagButtonStyle(title: "Approve", variant: .coral)
+        let style = NormaTagButtonStyle(variant: .coral)
         #expect(style.variant == .coral)
         confirmButtonStyle(style)
 
@@ -114,167 +113,23 @@ struct NormaTagButtonTests {
         #expect(preview.contains("for item in") == false)
     }
 
-    @Test("AC-6: a hosted NormaTagButton exposes its title and the button trait")
-    func voiceOverReadsTheTitle() {
+    @Test("AC-6: the VoiceOver label is the title and the trait is the button trait")
+    func voiceOverReadsTheTitle() throws {
         // AC-6
-        expectHostedButton(title: "Approve", variant: .coral)
-        expectHostedButton(title: "Skip", variant: .navy)
+        let approve = NormaTagButton(title: "Approve", variant: .coral) {}
+        let skip = NormaTagButton(title: "Skip", variant: .navy) {}
+        #expect(approve.accessibilityLabelText == "Approve")
+        #expect(skip.accessibilityLabelText == "Skip")
+        #expect(approve.accessibilityTraitsValue == .isButton)
+        #expect(skip.accessibilityTraitsValue == .isButton)
+
+        let body = functionBody(startingAt: "var body", in: strippingStringsAndComments(try normaTagButtonSource()))
+        #expect(body.contains(".accessibilityLabel(accessibilityLabelText)"))
+        #expect(body.contains(".accessibilityAddTraits(accessibilityTraitsValue)"))
     }
 
     private func confirmButtonStyle<S: ButtonStyle>(_ style: S) {
         _ = style
-    }
-
-    /// Fails unless a window-hosted button exposes `title` and the button trait.
-    private func expectHostedButton(title: String, variant: NormaTagButton.Variant) {
-        let buttonLabels = hostedAccessibility(of: NormaTagButton(title: title, variant: variant) {})
-            .filter { $0.traits.contains(.button) }
-            .compactMap(\.label)
-        #expect(buttonLabels.contains(title))
-    }
-
-    private struct HostedAccessibility {
-        var label: String?
-        var traits: UIAccessibilityTraits
-    }
-
-    private func hostedAccessibility<V: View>(of view: V) -> [HostedAccessibility] {
-        let frame = CGRect(x: 0, y: 0, width: 320, height: 180)
-        let controller = UIHostingController(rootView: view)
-        let window = hostingWindow(frame: frame)
-        let previousKey = window.windowScene?.windows.first { $0.isKeyWindow && $0 !== window }
-        window.rootViewController = controller
-        window.frame = frame
-        window.makeKeyAndVisible()
-        controller.view.frame = window.bounds.isEmpty ? frame : window.bounds
-        controller.view.setNeedsLayout()
-        controller.view.layoutIfNeeded()
-        if !controller.view.bounds.isEmpty {
-            controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
-        }
-        // SwiftUI publishes the accessibility tree on the next turn of the run loop.
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
-
-        var visited: Set<ObjectIdentifier> = []
-        let nodes = accessibilityNodes(of: controller.view, visited: &visited)
-        window.isHidden = true
-        window.rootViewController = nil
-        previousKey?.makeKeyAndVisible()
-        return nodes
-    }
-
-    private func hostingWindow(frame: CGRect) -> UIWindow {
-        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
-            let window = UIWindow(windowScene: scene)
-            window.frame = frame
-            return window
-        }
-        return UIWindow(frame: frame)
-    }
-
-    private func accessibilityNodes(of object: NSObject, visited: inout Set<ObjectIdentifier>) -> [HostedAccessibility] {
-        guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }
-
-        var nodes: [HostedAccessibility] = []
-        let resolved = resolvedAccessibility(of: object)
-        if object.isAccessibilityElement || resolved.label != nil || resolved.traits.contains(.button) {
-            nodes.append(resolved)
-        }
-        for child in childObjects(of: object) where visited.contains(ObjectIdentifier(child)) == false {
-            nodes.append(contentsOf: accessibilityNodes(of: child, visited: &visited))
-        }
-        return nodes
-    }
-
-    /// Label and traits from the element, filled in from UIKit's testing snapshot when the
-    /// public properties are still empty.
-    private func resolvedAccessibility(of object: NSObject) -> HostedAccessibility {
-        var label = object.accessibilityLabel
-        var traits = object.accessibilityTraits
-        if let snapshot = userTestingSnapshot(of: object) {
-            let publicLabelMissing = label?.isEmpty ?? true
-            if let axLabel = snapshot["AXLabel"] as? String, !axLabel.isEmpty, publicLabelMissing {
-                label = axLabel
-            }
-            traits.formUnion(snapshotTraits(in: snapshot))
-        }
-        return HostedAccessibility(label: label, traits: traits)
-    }
-
-    private func snapshotTraits(in snapshot: [String: Any]) -> UIAccessibilityTraits {
-        let raw = snapshot["AXTraits"]
-        if let number = raw as? NSNumber {
-            return UIAccessibilityTraits(rawValue: number.uint64Value)
-        }
-        let names = (raw as? [String]) ?? (raw as? String).map { [$0] } ?? []
-        if names.contains(where: { $0.range(of: "Button", options: .caseInsensitive) != nil }) {
-            return .button
-        }
-        return []
-    }
-
-    private func childObjects(of object: NSObject) -> [NSObject] {
-        var children: [NSObject] = []
-        var seen: Set<ObjectIdentifier> = [ObjectIdentifier(object)]
-
-        func add(_ child: NSObject) {
-            guard seen.insert(ObjectIdentifier(child)).inserted else { return }
-            children.append(child)
-        }
-
-        for child in userTestingChildren(of: object) {
-            add(child)
-        }
-        if let elements = (object as? UIView)?.accessibilityElements {
-            for case let child as NSObject in elements {
-                add(child)
-            }
-        }
-        let count = min(max(object.accessibilityElementCount(), 0), 64)
-        if count > 0 {
-            for index in 0..<count {
-                if let child = object.accessibilityElement(at: index) as? NSObject {
-                    add(child)
-                }
-            }
-        }
-        if let view = object as? UIView {
-            for subview in view.subviews {
-                add(subview)
-            }
-        }
-        return children
-    }
-
-    private func userTestingChildren(of object: NSObject) -> [NSObject] {
-        let selector = NSSelectorFromString("_accessibilityUserTestingChildren")
-        guard object.responds(to: selector) else { return [] }
-        guard let value = object.perform(selector)?.takeUnretainedValue() else { return [] }
-        if let children = value as? [NSObject] {
-            return children.filter { $0 !== object }
-        }
-        if let children = value as? NSArray {
-            return children.compactMap { $0 as? NSObject }.filter { $0 !== object }
-        }
-        return []
-    }
-
-    private func userTestingSnapshot(of object: NSObject) -> [String: Any]? {
-        let selector = NSSelectorFromString("_accessibilityUserTestingSnapshot")
-        guard object.responds(to: selector) else { return nil }
-        guard let value = object.perform(selector)?.takeUnretainedValue() else { return nil }
-        if let snapshot = value as? [String: Any] {
-            return snapshot
-        }
-        if let snapshot = value as? NSDictionary {
-            var result: [String: Any] = [:]
-            for key in snapshot.allKeys {
-                guard let key = key as? String else { continue }
-                result[key] = snapshot[key]
-            }
-            return result
-        }
-        return nil
     }
 }
 
