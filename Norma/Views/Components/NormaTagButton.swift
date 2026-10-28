@@ -98,8 +98,9 @@ struct NormaTagButton: View {
         Button(action: action) {
             Text(title)
         }
-        .buttonStyle(NormaTagButtonStyle(variant: variant))
-        // AC-6: VoiceOver reads `title` and the Button trait.
+        .buttonStyle(NormaTagButtonStyle(title: title, variant: variant))
+        // AC-6: one element, labeled with the title, with the button trait.
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
     }
@@ -107,11 +108,13 @@ struct NormaTagButton: View {
 
 /// Pressed state follows `configuration.isPressed`.
 struct NormaTagButtonStyle: ButtonStyle {
+    let title: String
     let variant: NormaTagButton.Variant
 
     func makeBody(configuration: Configuration) -> some View {
         // AC-4
         NormaTagButtonFace(
+            title: title,
             variant: variant,
             isPressed: configuration.isPressed,
             label: configuration.label
@@ -122,6 +125,7 @@ struct NormaTagButtonStyle: ButtonStyle {
 /// The face, the lip, and the shadow. Previews pass `isPressed` directly so
 /// rest and pressed can sit on screen together.
 private struct NormaTagButtonFace<Label: View>: View {
+    let title: String
     let variant: NormaTagButton.Variant
     let isPressed: Bool
     let label: Label
@@ -153,6 +157,9 @@ private struct NormaTagButtonFace<Label: View>: View {
             }
             .padding(.bottom, NormaTagButton.Metrics.lip)
             .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(.isButton)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isPressed)
     }
 }
@@ -211,7 +218,7 @@ private struct NormaTagButtonPreview: View {
     @ViewBuilder
     private func control(_ item: NormaTagButton.PreviewSample) -> some View {
         if item.isPressed {
-            NormaTagButtonFace(variant: item.variant, isPressed: true, label: Text(item.title))
+            NormaTagButtonFace(title: item.title, variant: item.variant, isPressed: true, label: Text(item.title))
         } else {
             NormaTagButton(title: item.title, variant: item.variant) {}
         }
