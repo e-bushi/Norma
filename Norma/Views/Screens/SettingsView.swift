@@ -18,6 +18,7 @@ struct SettingsView: View {
 
     @State private var showIncomeEditor = false
     @State private var showResetAlert = false
+    @State private var saveError: String?
     @State private var webPage: WebPage?
 
     private struct WebPage: Identifiable {
@@ -89,6 +90,17 @@ struct SettingsView: View {
         } message: {
             Text("every bill and your income will be erased from this iphone. there's no backup, so this can't be undone.")
         }
+        .alert(
+            "couldn't save",
+            isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )
+        ) {
+            Button("ok", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     // MARK: - Rows
@@ -105,8 +117,13 @@ struct SettingsView: View {
                 selection: Binding(
                     get: { profile.currency },
                     set: { newValue in
+                        let previous = profile.currency
                         profile.currency = newValue
-                        try? modelContext.save()
+                        guard Persistence.save(modelContext) else {
+                            profile.currency = previous
+                            saveError = Persistence.saveFailure
+                            return
+                        }
                     }
                 )
             ) {
@@ -218,11 +235,12 @@ struct SettingsView: View {
     // MARK: - Actions
 
     private func reset() {
-        dismiss()
         do {
             try LocalDataReset.wipeAll(in: modelContext)
+            dismiss()
         } catch {
-            assertionFailure("Reset failed: \(error)")
+            modelContext.rollback()
+            saveError = "couldn't erase your data. try again."
         }
     }
 }

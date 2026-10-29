@@ -13,9 +13,9 @@ import SwiftData
 @MainActor
 enum LocalDataReset {
     static func wipeAll(in context: ModelContext) throws {
-        NotificationService.cancelAll()
         try context.delete(model: Bill.self)
         try context.delete(model: UserProfile.self)
         try context.save()
+        NotificationService.cancelAll()
     }
 }

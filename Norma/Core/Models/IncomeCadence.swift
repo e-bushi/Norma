@@ -71,6 +71,19 @@ enum IncomeCadence: Equatable, Hashable {
         }
     }
 
+    /// When two chosen days clamp onto one date (the 28th and the last day
+    /// in a short February), one paycheck is counted. The returned sentence
+    /// is what the month should say; nil when each day has its own date.
+    func collisionNote(inMonthOf month: Date, calendar: Calendar = .current) -> String? {
+        guard case .semiMonthly(let day1, let day2) = self else { return nil }
+        guard let interval = calendar.dateInterval(of: .month, for: month) else { return nil }
+        let lastDay = calendar.range(of: .day, in: .month, for: interval.start)?.count ?? 28
+        let clamped1 = min(max(day1, 1), lastDay)
+        let clamped2 = min(max(day2, 1), lastDay)
+        guard clamped1 == clamped2 else { return nil }
+        return "both paydays land on the \(clamped1.ordinal), so this counts as one paycheck."
+    }
+
     /// Expected income for the calendar month containing `month`: one
     /// `amountPerPaycheck` per projected payday. Irregular income treats the
     /// amount as a rough monthly estimate.

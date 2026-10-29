@@ -22,7 +22,7 @@ struct OnboardingCurrencyIncomeView: View {
     private let formDelay = 0.5
     private let staggerStep = 0.07
 
-    private var canProceed: Bool { Money.parse(amountText) != nil }
+    private var canProceed: Bool { Money.parse(amountText, currency: currency) != nil }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -48,7 +48,7 @@ struct OnboardingCurrencyIncomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollDismissesKeyboard(.interactively)
-        // The number pad has no return key, so tapping anywhere outside the
+        // The decimal pad has no return key, so tapping anywhere outside the
         // amount row dismisses it. Child buttons and the row's own focus tap win.
         .contentShape(Rectangle())
         .onTapGesture { amountFocused = false }
@@ -118,45 +118,16 @@ struct OnboardingCurrencyIncomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             FieldLabel(cadence.kind == .irregular ? "about how much a month, after tax" : "amount per paycheck, after tax")
 
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(Money.symbol(for: currency))
-                    .font(.system(size: 56, weight: .bold))
-                    .foregroundStyle(NormaPalette.inkMuted)
-
-                ZStack(alignment: .leading) {
-                    if amountText.isEmpty {
-                        Text("0")
-                            .font(.system(size: 56, weight: .bold))
-                            .foregroundStyle(NormaPalette.inkMuted.opacity(0.5))
-                            .allowsHitTesting(false)
-                    }
-                    TextField("", text: $amountText)
-                        .font(.system(size: 56, weight: .bold))
-                        .foregroundStyle(NormaPalette.ink)
-                        .tint(NormaPalette.lavender)
-                        .keyboardType(.numberPad)
-                        .focused($amountFocused)
-                        .onChange(of: amountText) { _, newValue in
-                            let digits = newValue.filter(\.isNumber)
-                            let formatted = Double(digits).map(Self.grouped) ?? ""
-                            if formatted != amountText { amountText = formatted }
-                        }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .tracking(-1.2)
-            // An empty TextField has almost no hit area, so the whole row
-            // focuses it — including the "0" placeholder and the symbol.
-            .contentShape(Rectangle())
-            .onTapGesture { amountFocused = true }
+            MoneyAmountField(
+                currency: currency,
+                text: $amountText,
+                amountFont: .system(size: 56, weight: .bold),
+                symbolFont: .system(size: 56, weight: .bold),
+                tracking: -1.2,
+                isFocused: $amountFocused
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private static func grouped(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
 }
 

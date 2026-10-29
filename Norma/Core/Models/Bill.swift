@@ -65,6 +65,8 @@ enum BillFrequency: String, Codable, CaseIterable, Identifiable {
 final class Bill {
     var id: UUID = UUID()
     var name: String = ""
+    /// Major units (10.50 for $10.50). Sums convert this to minor units.
+    /// The column stays a Double so stores saved by older builds still open.
     var amount: Double = 0
     /// The first (anchor) occurrence. Recurring bills repeat from this date.
     var dueDate: Date = Date()
@@ -104,6 +106,25 @@ final class Bill {
     func nextOccurrence(onOrAfter date: Date, calendar: Calendar = .current) -> Date? {
         guard let horizon = calendar.date(byAdding: .year, value: 2, to: date) else { return nil }
         return occurrences(from: date, through: horizon, calendar: calendar).first
+    }
+
+    /// Unpaid occurrences from `date` forward, for reminder scheduling.
+    func upcomingUnpaidDates(from date: Date, calendar: Calendar = .current, yearsAhead: Int = 4) -> [Date] {
+        let start = calendar.startOfDay(for: date)
+        guard let horizon = calendar.date(byAdding: .year, value: yearsAhead, to: start) else { return [] }
+        return occurrences(from: start, through: horizon, calendar: calendar)
+            .filter { !isPaid($0, calendar: calendar) }
+    }
+
+    /// Anchor to persist after an edit. Keeping the date picker on the day
+    /// that was shown (the next occurrence, which may be clamped) leaves the
+    /// original anchor alone. A new day replaces it. Frequency is not an input:
+    /// changing only how often the bill repeats must not move the anchor.
+    static func anchorToSave(existingAnchor: Date, displayedDay: Date, pickedDay: Date, calendar: Calendar = .current) -> Date {
+        if calendar.isDate(displayedDay, inSameDayAs: pickedDay) {
+            return existingAnchor
+        }
+        return pickedDay
     }
 
     func isPaid(_ occurrence: Date, calendar: Calendar = .current) -> Bool {

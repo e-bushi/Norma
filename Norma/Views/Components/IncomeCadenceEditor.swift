@@ -187,11 +187,12 @@ struct IncomeEditSheet: View {
 
     @State private var amountText = ""
     @State private var draft = CadenceDraft()
+    @State private var saveError: String?
     @FocusState private var amountFocused: Bool
 
     private var profile: UserProfile? { profiles.first }
     private var currency: String { profile?.currency ?? "USD" }
-    private var amount: Double? { Money.parse(amountText) }
+    private var amount: Double? { Money.parse(amountText, currency: currency) }
 
     var body: some View {
         NavigationStack {
@@ -201,17 +202,13 @@ struct IncomeEditSheet: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         FieldLabel(draft.kind == .irregular ? "about how much a month?" : "amount per paycheck, after tax")
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(Money.symbol(for: currency))
-                                .font(.custom(FontFamily.Rubik.bold, size: 34))
-                                .foregroundStyle(NormaPalette.inkMuted)
-                            TextField("0", text: $amountText)
-                                .font(.custom(FontFamily.Rubik.bold, size: 44))
-                                .foregroundStyle(NormaPalette.ink)
-                                .tint(NormaPalette.lavender)
-                                .keyboardType(.decimalPad)
-                                .focused($amountFocused)
-                        }
+                        MoneyAmountField(
+                            currency: currency,
+                            text: $amountText,
+                            amountFont: .custom(FontFamily.Rubik.bold, size: 44),
+                            symbolFont: .custom(FontFamily.Rubik.bold, size: 34),
+                            isFocused: $amountFocused
+                        )
                     }
 
                     CadencePicker(draft: $draft)
@@ -233,10 +230,21 @@ struct IncomeEditSheet: View {
                         .disabled(amount == nil)
                 }
             }
+            .alert(
+                "couldn't save",
+                isPresented: Binding(
+                    get: { saveError != nil },
+                    set: { if !$0 { saveError = nil } }
+                )
+            ) {
+                Button("ok", role: .cancel) { saveError = nil }
+            } message: {
+                Text(saveError ?? "")
+            }
         }
         .onAppear {
             guard let profile else { return }
-            amountText = Money.editableText(profile.incomeAmount)
+            amountText = Money.editableText(profile.incomeAmount, currency: currency)
             draft = CadenceDraft(profile.incomeCadence)
         }
     }
@@ -245,9 +253,49 @@ struct IncomeEditSheet: View {
         guard let amount, let profile else { return }
         profile.incomeAmount = amount
         profile.incomeCadence = draft.cadence
-        try? modelContext.save()
+        guard Persistence.save(modelContext) else {
+            saveError = Persistence.saveFailure
+            return
+        }
         Haptics.success()
         dismiss()
+    }
+}
+
+/// Shared amount entry for onboarding and the income sheet: decimal pad, cents allowed.
+struct MoneyAmountField: View {
+    let currency: String
+    @Binding var text: String
+    var amountFont: Font
+    var symbolFont: Font
+    var symbolColor: Color = NormaPalette.inkMuted
+    var placeholder: String = "0"
+    var tracking: CGFloat = 0
+    @FocusState.Binding var isFocused: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(Money.symbol(for: currency))
+                .font(symbolFont)
+                .foregroundStyle(symbolColor)
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(amountFont)
+                        .foregroundStyle(symbolColor.opacity(0.5))
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $text)
+                    .font(amountFont)
+                    .foregroundStyle(NormaPalette.ink)
+                    .tint(NormaPalette.lavender)
+                    .keyboardType(.decimalPad)
+                    .focused($isFocused)
+            }
+        }
+        .tracking(tracking)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
     }
 }
 

@@ -56,11 +56,20 @@ struct CalendarSheet: View {
                 hero(summary)
                     .padding(.bottom, 18)
 
-                HStack(spacing: 8) {
+                FlowLayout {
+                    ChoicePill(label: "last month", isActive: monthOffset == -1) { select(offset: -1) }
                     ChoicePill(label: "this month", isActive: monthOffset == 0) { select(offset: 0) }
                     ChoicePill(label: "next month", isActive: monthOffset == 1) { select(offset: 1) }
                 }
                 .padding(.bottom, 22)
+
+                if let note = paydayCollisionNote {
+                    Text(note)
+                        .font(.custom(FontFamily.Rubik.regular, size: 13))
+                        .foregroundStyle(NormaPalette.inkSubtle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 22)
+                }
 
                 grid(billsByDay: billsByDay, paydays: paydays)
                     .padding(.bottom, 22)
@@ -267,6 +276,11 @@ struct CalendarSheet: View {
                 .overlay(Capsule().strokeBorder(NormaPalette.lavender.opacity(0.4)))
         }
         .buttonStyle(.plain)
+    }
+
+    private var paydayCollisionNote: String? {
+        guard profile.hasIncome else { return nil }
+        return profile.incomeCadence.collisionNote(inMonthOf: displayedMonth, calendar: calendar)
     }
 
     private func select(offset: Int) {

@@ -21,6 +21,7 @@ struct OnboardingFlowView: View {
     }()
     @State private var amountText = ""
     @State private var cadence = CadenceDraft()
+    @State private var saveError: String?
 
     var body: some View {
         ZStack {
@@ -46,6 +47,17 @@ struct OnboardingFlowView: View {
                 .transition(.opacity)
             }
         }
+        .alert(
+            "couldn't save",
+            isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )
+        ) {
+            Button("ok", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     private func advance(to next: Step) {
@@ -55,10 +67,13 @@ struct OnboardingFlowView: View {
     private func createProfile() {
         let profile = UserProfile(
             currency: currency,
-            incomeAmount: Money.parse(amountText) ?? 0,
+            incomeAmount: Money.parse(amountText, currency: currency) ?? 0,
             incomeCadence: cadence.cadence
         )
         modelContext.insert(profile)
-        try? modelContext.save()
+        guard Persistence.save(modelContext) else {
+            saveError = Persistence.saveFailure
+            return
+        }
     }
 }

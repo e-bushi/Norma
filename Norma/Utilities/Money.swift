@@ -2,7 +2,10 @@
 //  Money.swift
 //  Norma
 //
-//  Formatting and parsing for amounts shown in the user's chosen currency.
+//  Amounts are stored on Bill and UserProfile as major-unit Doubles so an
+//  existing SwiftData store still opens. Every sum and every label converts
+//  that Double to integer minor units (cents, or whole yen) first and rounds
+//  once to the currency's fraction digits.
 //
 
 import Foundation
@@ -53,30 +56,149 @@ enum Money {
         }
     }
 
-    /// "$1,400", "$14.99", "-€35". Cents appear only when the amount has
-    /// them, unless `wholeUnits` drops them for headline numbers.
-    static func format(_ amount: Double, currency: String, wholeUnits: Bool = false) -> String {
-        let magnitude = wholeUnits ? abs(amount).rounded() : (abs(amount) * 100).rounded() / 100
-        let hasCents = magnitude.truncatingRemainder(dividingBy: 1) != 0
+    /// Decimal places for the currency. Yen and won have none.
+    static func fractionDigits(for currency: String) -> Int {
+        switch currency.uppercased() {
+        case "JPY", "KRW", "VND": return 0
+        default: return 2
+        }
+    }
+
+    /// "$1,400", "$14.99", "-€0,40". Fraction digits follow the currency, and
+    /// a zero minor-unit amount never keeps a minus sign.
+    static func format(minorUnits: Int, currency: String, locale: Locale = .current) -> String {
+        let digits = fractionDigits(for: currency)
+        let negative = minorUnits < 0
+        let magnitude = abs(minorUnits)
+        let showsFraction = digits > 0 && magnitude % powerOfTen(digits) != 0
+        let major = majorDecimal(minorUnits: magnitude, fractionDigits: digits)
+
         let formatter = NumberFormatter()
+        formatter.locale = locale
         formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = hasCents ? 2 : 0
-        formatter.maximumFractionDigits = hasCents ? 2 : 0
-        let number = formatter.string(from: NSNumber(value: magnitude)) ?? "\(magnitude)"
-        return (amount < 0 && magnitude > 0 ? "-" : "") + symbol(for: currency) + number
+        formatter.minimumFractionDigits = showsFraction ? digits : 0
+        formatter.maximumFractionDigits = showsFraction ? digits : 0
+        let number = formatter.string(from: NSDecimalNumber(decimal: major)) ?? "0"
+        let sign = negative && magnitude > 0 ? "-" : ""
+        return sign + symbol(for: currency) + number
     }
 
-    /// Reads a typed amount, ignoring grouping separators: "1,400.50" → 1400.5.
-    static func parse(_ text: String) -> Double? {
-        let cleaned = text.filter { $0.isNumber || $0 == "." }
-        guard let value = Double(cleaned), value > 0 else { return nil }
-        return value
+    /// Major-unit convenience. Rounds to minor units before formatting.
+    static func format(_ amount: Double, currency: String, locale: Locale = .current) -> String {
+        format(minorUnits: minorUnits(fromMajor: amount, currency: currency), currency: currency, locale: locale)
     }
 
-    /// Text-field form of an amount: no symbol or grouping, cents only if present.
-    static func editableText(_ amount: Double) -> String {
-        guard amount > 0 else { return "" }
-        let isWhole = amount.truncatingRemainder(dividingBy: 1) == 0
-        return String(format: isWhole ? "%.0f" : "%.2f", amount)
+    /// Integer cents (or yen) for a stored major-unit amount.
+    static func minorUnits(fromMajor amount: Double, currency: String) -> Int {
+        let digits = fractionDigits(for: currency)
+        // String(Double) is the shortest round-trip, so 11.99 stays "11.99"
+        // instead of the binary expansion. Rounding to the currency scale
+        // then absorbs anything that still isn't exact.
+        let decimal = Decimal(string: String(amount), locale: posix) ?? Decimal(amount)
+        let rounded = round(decimal, scale: digits)
+        return minorUnits(fromRoundedMajor: rounded, fractionDigits: digits)
+    }
+
+    /// Reads a typed amount with the locale's decimal and grouping separators.
+    /// "10,50" in de_DE is 10.50. "2.000" in de_DE is 2000. Zero-fraction
+    /// currencies drop the fractional part. Empty, zero, and negative fail.
+    static func parse(_ text: String, locale: Locale = .current, currency: String? = nil) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("-") else { return nil }
+
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        let decimalSeparator = formatter.decimalSeparator ?? "."
+        let groupingSeparator = formatter.groupingSeparator ?? ","
+
+        var cleaned =
+            trimmed
+            .replacingOccurrences(of: "\u{00A0}", with: "")
+            .replacingOccurrences(of: "\u{202F}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+        if !groupingSeparator.isEmpty, groupingSeparator != decimalSeparator {
+            cleaned = cleaned.replacingOccurrences(of: groupingSeparator, with: "")
+        }
+        if decimalSeparator != "." {
+            cleaned = cleaned.replacingOccurrences(of: decimalSeparator, with: ".")
+        }
+
+        var numeric = ""
+        var sawDecimal = false
+        for character in cleaned {
+            if character.isNumber {
+                numeric.append(character)
+            } else if character == ".", !sawDecimal {
+                numeric.append(".")
+                sawDecimal = true
+            }
+        }
+        if numeric.hasSuffix(".") { numeric.removeLast() }
+        guard !numeric.isEmpty, let decimal = Decimal(string: numeric, locale: posix), decimal > 0 else {
+            return nil
+        }
+
+        let digits = fractionDigits(for: currency ?? "USD")
+        let rounded = round(decimal, scale: digits)
+        guard rounded > 0 else { return nil }
+        return NSDecimalNumber(decimal: rounded).doubleValue
+    }
+
+    /// Text-field form of an amount: no symbol or grouping, locale decimal
+    /// separator, cents only when the currency has them and the amount isn't whole.
+    static func editableText(_ amount: Double, locale: Locale = .current, currency: String = "USD") -> String {
+        let minor = minorUnits(fromMajor: amount, currency: currency)
+        guard minor > 0 else { return "" }
+        let digits = fractionDigits(for: currency)
+        let showsFraction = digits > 0 && minor % powerOfTen(digits) != 0
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = showsFraction ? digits : 0
+        formatter.maximumFractionDigits = showsFraction ? digits : 0
+        let major = majorDecimal(minorUnits: minor, fractionDigits: digits)
+        return formatter.string(from: NSDecimalNumber(decimal: major)) ?? ""
+    }
+
+    // MARK: - Decimal helpers
+
+    private static let posix = Locale(identifier: "en_US_POSIX")
+
+    private static func powerOfTen(_ digits: Int) -> Int {
+        var result = 1
+        for _ in 0..<digits { result *= 10 }
+        return result
+    }
+
+    private static func round(_ value: Decimal, scale: Int) -> Decimal {
+        var input = value
+        var result = Decimal()
+        NSDecimalRound(&result, &input, scale, .plain)
+        return result
+    }
+
+    private static func minorUnits(fromRoundedMajor value: Decimal, fractionDigits: Int) -> Int {
+        var minor = value
+        if fractionDigits > 0 {
+            var factor = Decimal(1)
+            for _ in 0..<fractionDigits { factor *= 10 }
+            minor *= factor
+        }
+        var whole = Decimal()
+        var source = minor
+        NSDecimalRound(&whole, &source, 0, .plain)
+        return Int(NSDecimalNumber(decimal: whole).int64Value)
+    }
+
+    private static func majorDecimal(minorUnits: Int, fractionDigits: Int) -> Decimal {
+        var major = Decimal(minorUnits)
+        if fractionDigits > 0 {
+            var factor = Decimal(1)
+            for _ in 0..<fractionDigits { factor *= 10 }
+            major /= factor
+        }
+        return major
     }
 }
