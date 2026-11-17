@@ -26,7 +26,11 @@ struct BillEditorSheet: View {
     @State private var notes = ""
     @State private var isReminderOn = true
     @State private var showDeleteConfirm = false
-    @FocusState private var nameFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case name, amount, notes
+    }
 
     private var amount: Double? { Money.parse(amountText) }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -45,7 +49,7 @@ struct BillEditorSheet: View {
                             .tint(NormaPalette.lavender)
                             .textInputAutocapitalization(.never)
                             .submitLabel(.next)
-                            .focused($nameFocused)
+                            .focused($focusedField, equals: .name)
                     }
 
                     field("amount") {
@@ -58,6 +62,7 @@ struct BillEditorSheet: View {
                                 .foregroundStyle(NormaPalette.ink)
                                 .tint(NormaPalette.lavender)
                                 .keyboardType(.decimalPad)
+                                .focused($focusedField, equals: .amount)
                         }
                     }
 
@@ -100,6 +105,7 @@ struct BillEditorSheet: View {
                             .foregroundStyle(NormaPalette.ink)
                             .tint(NormaPalette.lavender)
                             .lineLimit(1...4)
+                            .focused($focusedField, equals: .notes)
                     }
 
                     if bill != nil {
@@ -110,6 +116,8 @@ struct BillEditorSheet: View {
                 .padding(.top, 12)
                 .padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { focusedField = nil }
             }
             .background(NormaPalette.sheet.ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
@@ -218,7 +226,7 @@ struct BillEditorSheet: View {
     private func hydrate() {
         guard let bill else {
             dueDate = initialDueDate ?? Date()
-            nameFocused = true
+            focusedField = .name
             return
         }
         name = bill.name
