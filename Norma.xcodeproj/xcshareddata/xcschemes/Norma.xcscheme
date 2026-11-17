@@ -100,13 +100,16 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
-      <BuildableReference
-         BuildableIdentifier = "primary"
-         BlueprintIdentifier = "F6638D3F2DCD6C3F009D95C3"
-         BuildableName = "Norma.app"
-         BlueprintName = "Norma"
-         ReferencedContainer = "container:Norma.xcodeproj">
-      </BuildableReference>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "F6638D3F2DCD6C3F009D95C3"
+            BuildableName = "Norma.app"
+            BlueprintName = "Norma"
+            ReferencedContainer = "container:Norma.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -114,13 +117,16 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <BuildableReference
-         BuildableIdentifier = "primary"
-         BlueprintIdentifier = "F6638D3F2DCD6C3F009D95C3"
-         BuildableName = "Norma.app"
-         BlueprintName = "Norma"
-         ReferencedContainer = "container:Norma.xcodeproj">
-      </BuildableReference>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "F6638D3F2DCD6C3F009D95C3"
+            BuildableName = "Norma.app"
+            BlueprintName = "Norma"
+            ReferencedContainer = "container:Norma.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">
